@@ -1,0 +1,45 @@
+OpenShadingLanguage 1.00
+# Compiled by oslc 1.11.14
+# options: -o /tmp/tmp535dhvgr.oso -I/home/jmartin/local/blender-3.0.0-linux-x64/3.0/scripts/addons/cycles/shader
+shader phase_shader
+param	float	x	0		%read{1,5} %write{2147483647,-1}
+param	float	y	0		%read{2,5} %write{2147483647,-1}
+oparam	float	r	0		%read{2147483647,-1} %write{4,4}
+oparam	float	phi	0		%read{9,11} %write{8,11}
+local	float	pi	%read{7,7} %write{0,0}
+const	float	$const1	3.14159274		%read{0,0} %write{2147483647,-1}
+temp	float	$tmp1	%read{3,3} %write{1,1}
+temp	float	$tmp2	%read{3,3} %write{2,2}
+temp	float	$tmp3	%read{4,4} %write{3,3}
+temp	float	$tmp4	%read{6,6} %write{5,5}
+temp	float	$tmp5	%read{7,7} %write{6,6}
+const	float	$const3	2		%read{6,6} %write{2147483647,-1}
+temp	float	$tmp6	%read{8,8} %write{7,7}
+const	float	$const4	0.5		%read{8,8} %write{2147483647,-1}
+const	int	$const5	0		%read{9,9} %write{2147483647,-1}
+temp	int	$tmp7	%read{10,10} %write{9,9}
+const	float	$const7	1		%read{11,11} %write{2147483647,-1}
+code ___main___
+# blendermath/files/osl/phase_shader.osl:6
+# 
+	assign		pi $const1 	%filename{"blendermath/files/osl/phase_shader.osl"} %line{6} %argrw{"wr"}
+# blendermath/files/osl/phase_shader.osl:9
+#     phi = atan2(y,x)/2/pi+0.5;
+	mul		$tmp1 x x 	%line{9} %argrw{"wrr"}
+	mul		$tmp2 y y 	%argrw{"wrr"}
+	add		$tmp3 $tmp1 $tmp2 	%argrw{"wrr"}
+	sqrt		r $tmp3 	%argrw{"wr"}
+# blendermath/files/osl/phase_shader.osl:10
+#     if (phi<0){
+	atan2		$tmp4 y x 	%line{10} %argrw{"wrr"}
+	div		$tmp5 $tmp4 $const3 	%argrw{"wrr"}
+	div		$tmp6 $tmp5 pi 	%argrw{"wrr"}
+	add		phi $tmp6 $const4 	%argrw{"wrr"}
+# blendermath/files/osl/phase_shader.osl:11
+#         phi=phi+1;
+	lt		$tmp7 phi $const5 	%line{11} %argrw{"wrr"}
+	if		$tmp7 12 12 	%argrw{"r"}
+# blendermath/files/osl/phase_shader.osl:12
+#     }
+	add		phi phi $const7 	%line{12} %argrw{"wrr"}
+	end

@@ -1,0 +1,215 @@
+OpenShadingLanguage 1.00
+# Compiled by oslc 1.10.10
+# options: -o /tmp/tmp1fd13_g9.oso -I/home/jmartin/.local/lib/python3.7/site-packages/2.91/scripts/addons/cycles/shader
+shader zeta_function_shader
+param	vector	vec	0 0 0		%read{2,3} %write{0,0} %initexpr
+param	int	n	100		%read{23,23} %write{2147483647,-1}
+oparam	float	r	0		%read{2147483647,-1} %write{72,72}
+oparam	float	phi	0		%read{77,79} %write{76,79}
+local	float	pi	%read{75,75} %write{1,1}
+local	float	x	%read{4,56} %write{2,2}
+local	float	y	%read{8,56} %write{3,3}
+local	float	a	%read{13,62} %write{6,6}
+local	float	c	%read{14,63} %write{9,9}
+local	float	s	%read{60,65} %write{12,12}
+local	float	f	%read{72,72} %write{18,18}
+local	float	sum1	%read{23,65} %write{19,56}
+local	float	sum2	%read{23,64} %write{20,56}
+local	int	___363_i	%read{23,56} %write{22,56}
+local	float	___364_b	%read{23,56} %write{23,56}
+local	float	re	%read{68,73} %write{61,61}
+local	float	im	%read{69,73} %write{67,67}
+const	float	$const1	0		%read{0,0} %write{2147483647,-1}
+const	float	$const2	3.14159274		%read{1,1} %write{2147483647,-1}
+const	int	$const3	0		%read{2,77} %write{2147483647,-1}
+const	int	$const4	1		%read{3,56} %write{2147483647,-1}
+const	int	$const5	2		%read{28,28} %write{2147483647,-1}
+const	float	$const6	2		%read{6,74} %write{2147483647,-1}
+temp	float	$tmp1	%read{5,5} %write{4,4}
+temp	float	$tmp2	%read{6,6} %write{5,5}
+const	float	$const7	1		%read{5,79} %write{2147483647,-1}
+temp	float	$tmp3	%read{8,8} %write{7,7}
+temp	float	$tmp4	%read{9,9} %write{8,8}
+temp	float	$tmp5	%read{11,11} %write{10,10}
+temp	float	$tmp6	%read{12,12} %write{11,11}
+temp	float	$tmp7	%read{14,14} %write{13,13}
+temp	float	$tmp8	%read{15,15} %write{14,14}
+temp	float	$tmp9	%read{17,17} %write{15,15}
+temp	float	$tmp10	%read{17,17} %write{16,16}
+temp	float	$tmp11	%read{18,18} %write{17,17}
+temp	int	$tmp12	%read{23,56} %write{23,56}
+temp	int	$tmp13	%read{21,56} %write{22,56}
+temp	float	$tmp14	%read{23,56} %write{23,56}
+temp	float	$tmp15	%read{23,56} %write{23,56}
+temp	int	$tmp16	%read{23,56} %write{23,56}
+temp	int	$tmp17	%read{23,56} %write{23,56}
+temp	float	$tmp18	%read{23,56} %write{23,56}
+temp	float	$tmp19	%read{23,56} %write{23,56}
+temp	float	$tmp20	%read{23,56} %write{23,56}
+temp	float	$tmp21	%read{23,56} %write{23,56}
+temp	float	$tmp22	%read{23,56} %write{23,56}
+temp	float	$tmp23	%read{23,56} %write{23,56}
+temp	float	$tmp24	%read{23,56} %write{23,56}
+temp	float	$tmp25	%read{23,56} %write{23,56}
+temp	float	$tmp26	%read{23,56} %write{23,56}
+temp	float	$tmp27	%read{23,56} %write{23,56}
+temp	float	$tmp28	%read{23,56} %write{23,56}
+temp	float	$tmp29	%read{23,56} %write{23,56}
+temp	float	$tmp30	%read{23,56} %write{23,56}
+temp	float	$tmp31	%read{23,56} %write{23,56}
+temp	float	$tmp32	%read{23,56} %write{23,56}
+temp	float	$tmp33	%read{23,56} %write{23,56}
+temp	float	$tmp34	%read{23,56} %write{23,56}
+temp	float	$tmp35	%read{23,56} %write{23,56}
+temp	float	$tmp36	%read{23,56} %write{23,56}
+temp	float	$tmp37	%read{23,56} %write{23,56}
+temp	int	$tmp38	%read{2147483647,-1} %write{23,56}
+temp	float	$tmp39	%read{58,58} %write{57,57}
+temp	float	$tmp40	%read{59,59} %write{58,58}
+temp	float	$tmp41	%read{61,61} %write{59,59}
+temp	float	$tmp42	%read{61,61} %write{60,60}
+temp	float	$tmp43	%read{63,63} %write{62,62}
+temp	float	$tmp44	%read{64,64} %write{63,63}
+temp	float	$tmp45	%read{66,66} %write{64,64}
+temp	float	$tmp46	%read{66,66} %write{65,65}
+temp	float	$tmp47	%read{67,67} %write{66,66}
+temp	float	$tmp48	%read{72,72} %write{71,71}
+temp	float	$tmp49	%read{70,70} %write{68,68}
+temp	float	$tmp50	%read{70,70} %write{69,69}
+temp	float	$tmp51	%read{71,71} %write{70,70}
+temp	float	$tmp52	%read{74,74} %write{73,73}
+temp	float	$tmp53	%read{75,75} %write{74,74}
+temp	float	$tmp54	%read{76,76} %write{75,75}
+const	float	$const8	0.5		%read{76,76} %write{2147483647,-1}
+temp	int	$tmp55	%read{78,78} %write{77,77}
+code vec
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:2
+#     vector vec=(0.,0.,0.), int n = 100,
+	assign		vec $const1 	%filename{"/home/jmartin/blendermath/files/osl/zeta_function.osl"} %line{2} %argrw{"wr"}
+code ___main___
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:5
+#     float pi = 3.141592654;
+	assign		pi $const2 	%filename{"/home/jmartin/blendermath/files/osl/zeta_function.osl"} %line{5} %argrw{"wr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:6
+#     float x= vec[0];
+	compref		x vec $const3 	%line{6} %argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:7
+#     float y= vec[1];
+	compref		y vec $const4 	%line{7} %argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:9
+#     float a = pow(2,-x+1);
+	neg		$tmp1 x 	%line{9} %argrw{"wr"}
+	add		$tmp2 $tmp1 $const7 	%argrw{"wrr"}
+	pow		a $const6 $tmp2 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:10
+#     float c = cos(log(2)*y);
+	log		$tmp3 $const6 	%line{10} %argrw{"wr"}
+	mul		$tmp4 $tmp3 y 	%argrw{"wrr"}
+	cos		c $tmp4 	%argrw{"wr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:11
+#     float s = sin(log(2)*y);
+	log		$tmp5 $const6 	%line{11} %argrw{"wr"}
+	mul		$tmp6 $tmp5 y 	%argrw{"wrr"}
+	sin		s $tmp6 	%argrw{"wr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:12
+#     float f = a/(1-2*a*c+a*a);
+	mul		$tmp7 $const6 a 	%line{12} %argrw{"wrr"}
+	mul		$tmp8 $tmp7 c 	%argrw{"wrr"}
+	sub		$tmp9 $const7 $tmp8 	%argrw{"wrr"}
+	mul		$tmp10 a a 	%argrw{"wrr"}
+	add		$tmp11 $tmp9 $tmp10 	%argrw{"wrr"}
+	div		f a $tmp11 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:14
+#     float sum1 = 0;
+	assign		sum1 $const3 	%line{14} %argrw{"wr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:15
+#     float sum2 = 0;
+	assign		sum2 $const3 	%line{15} %argrw{"wr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:17
+#     for (int i=1;i<=n;i++){
+	for		$tmp13 23 25 55 57 	%line{17} %argrw{"r"}
+	assign		___363_i $const4 	%argrw{"wr"}
+	le		$tmp12 ___363_i n 	%argrw{"wrr"}
+	neq		$tmp13 $tmp12 $const3 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:18
+#         float b=pow(i,-x);
+	assign		$tmp14 ___363_i 	%line{18} %argrw{"wr"}
+	neg		$tmp15 x 	%argrw{"wr"}
+	pow		___364_b $tmp14 $tmp15 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:19
+#         if (i%2==0){
+	mod		$tmp16 ___363_i $const5 	%line{19} %argrw{"wrr"}
+	eq		$tmp17 $tmp16 $const3 	%argrw{"wrr"}
+	if		$tmp17 43 55 	%argrw{"r"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:20
+#         sum1 = sum1-cos(y*log(i))*b;
+	assign		$tmp20 ___363_i 	%line{20} %argrw{"wr"}
+	log		$tmp19 $tmp20 	%argrw{"wr"}
+	mul		$tmp21 y $tmp19 	%argrw{"wrr"}
+	cos		$tmp18 $tmp21 	%argrw{"wr"}
+	mul		$tmp22 $tmp18 ___364_b 	%argrw{"wrr"}
+	sub		sum1 sum1 $tmp22 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:21
+#         sum2 = sum2-sin(y*log(i))*b;
+	assign		$tmp25 ___363_i 	%line{21} %argrw{"wr"}
+	log		$tmp24 $tmp25 	%argrw{"wr"}
+	mul		$tmp26 y $tmp24 	%argrw{"wrr"}
+	sin		$tmp23 $tmp26 	%argrw{"wr"}
+	mul		$tmp27 $tmp23 ___364_b 	%argrw{"wrr"}
+	sub		sum2 sum2 $tmp27 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:24
+#         sum1 = sum1+cos(y*log(i))*b;
+	assign		$tmp30 ___363_i 	%line{24} %argrw{"wr"}
+	log		$tmp29 $tmp30 	%argrw{"wr"}
+	mul		$tmp31 y $tmp29 	%argrw{"wrr"}
+	cos		$tmp28 $tmp31 	%argrw{"wr"}
+	mul		$tmp32 $tmp28 ___364_b 	%argrw{"wrr"}
+	add		sum1 sum1 $tmp32 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:25
+#         sum2 = sum2+sin(y*log(i))*b;
+	assign		$tmp35 ___363_i 	%line{25} %argrw{"wr"}
+	log		$tmp34 $tmp35 	%argrw{"wr"}
+	mul		$tmp36 y $tmp34 	%argrw{"wrr"}
+	sin		$tmp33 $tmp36 	%argrw{"wr"}
+	mul		$tmp37 $tmp33 ___364_b 	%argrw{"wrr"}
+	add		sum2 sum2 $tmp37 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:17
+#     for (int i=1;i<=n;i++){
+	assign		$tmp38 ___363_i 	%line{17} %argrw{"wr"}
+	add		___363_i ___363_i $const4 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:29
+#     float re = (1/a-c)*sum1-s*sum2;
+	div		$tmp39 $const7 a 	%line{29} %argrw{"wrr"}
+	sub		$tmp40 $tmp39 c 	%argrw{"wrr"}
+	mul		$tmp41 $tmp40 sum1 	%argrw{"wrr"}
+	mul		$tmp42 s sum2 	%argrw{"wrr"}
+	sub		re $tmp41 $tmp42 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:30
+#     float im = -((1/a-c)*sum2+s*sum1);
+	div		$tmp43 $const7 a 	%line{30} %argrw{"wrr"}
+	sub		$tmp44 $tmp43 c 	%argrw{"wrr"}
+	mul		$tmp45 $tmp44 sum2 	%argrw{"wrr"}
+	mul		$tmp46 s sum1 	%argrw{"wrr"}
+	add		$tmp47 $tmp45 $tmp46 	%argrw{"wrr"}
+	neg		im $tmp47 	%argrw{"wr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:32
+#     r = f*sqrt(re*re+im*im);
+	mul		$tmp49 re re 	%line{32} %argrw{"wrr"}
+	mul		$tmp50 im im 	%argrw{"wrr"}
+	add		$tmp51 $tmp49 $tmp50 	%argrw{"wrr"}
+	sqrt		$tmp48 $tmp51 	%argrw{"wr"}
+	mul		r f $tmp48 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:33
+#     phi = atan2(im,re)/2/pi+0.5;
+	atan2		$tmp52 im re 	%line{33} %argrw{"wrr"}
+	div		$tmp53 $tmp52 $const6 	%argrw{"wrr"}
+	div		$tmp54 $tmp53 pi 	%argrw{"wrr"}
+	add		phi $tmp54 $const8 	%argrw{"wrr"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:34
+#     if (phi<0){
+	lt		$tmp55 phi $const3 	%line{34} %argrw{"wrr"}
+	if		$tmp55 80 80 	%argrw{"r"}
+# /home/jmartin/blendermath/files/osl/zeta_function.osl:35
+#         phi=phi+1;
+	add		phi phi $const7 	%line{35} %argrw{"wrr"}
+	end
