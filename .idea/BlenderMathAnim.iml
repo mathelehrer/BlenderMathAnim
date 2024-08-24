@@ -8,6 +8,33 @@
       <excludeFolder url="file://$MODULE_DIR$/video_penrose/data" />
       <excludeFolder url="file://$MODULE_DIR$/video_penrose2/appends" />
       <excludeFolder url="file://$MODULE_DIR$/video_penrose2/data" />
+      <excludeFolder url="file://$MODULE_DIR$/mathematics/geometry/data" />
+      <excludeFolder url="file://$MODULE_DIR$/mathematics/geometry/media" />
+      <excludeFolder url="file://$MODULE_DIR$/mathematics/groups/media/blend" />
+      <excludeFolder url="file://$MODULE_DIR$/mathematics/groups/media/raster" />
+      <excludeFolder url="file://$MODULE_DIR$/mathematics/mathematica/data" />
+      <excludeFolder url="file://$MODULE_DIR$/mathematics/mathematica/media" />
+      <excludeFolder url="file://$MODULE_DIR$/mathematics/parsing/data" />
+      <excludeFolder url="file://$MODULE_DIR$/mathematics/parsing/media" />
+      <excludeFolder url="file://$MODULE_DIR$/objects/tree/data" />
+      <excludeFolder url="file://$MODULE_DIR$/objects/tree/media" />
+      <excludeFolder url="file://$MODULE_DIR$/video_apollonian/data" />
+      <excludeFolder url="file://$MODULE_DIR$/video_apollonian/media" />
+      <excludeFolder url="file://$MODULE_DIR$/video_apollonian/media/blend" />
+      <excludeFolder url="file://$MODULE_DIR$/video_apollonian/media/raster" />
+      <excludeFolder url="file://$MODULE_DIR$/video_apollonian/media/svg" />
+      <excludeFolder url="file://$MODULE_DIR$/video_penrose/media/blend" />
+      <excludeFolder url="file://$MODULE_DIR$/video_penrose/media/svg" />
+      <excludeFolder url="file://$MODULE_DIR$/video_penrose/media/tex" />
+      <excludeFolder url="file://$MODULE_DIR$/video_penrose2/media/blend" />
+      <excludeFolder url="file://$MODULE_DIR$/video_penrose2/media/svg" />
+      <excludeFolder url="file://$MODULE_DIR$/video_penrose2/media/tex" />
+      <excludeFolder url="file://$MODULE_DIR$/video_riemann_spheres/media" />
+      <excludeFolder url="file://$MODULE_DIR$/video_short_moebius/media" />
+      <excludeFolder url="file://$MODULE_DIR$/video_short_moebius/media/blend" />
+      <excludeFolder url="file://$MODULE_DIR$/video_short_moebius/media/raster" />
+      <excludeFolder url="file://$MODULE_DIR$/video_short_moebius/media/svg" />
+      <excludeFolder url="file://$MODULE_DIR$/video_primes2/media" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.11 (BlenderMathAnim)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

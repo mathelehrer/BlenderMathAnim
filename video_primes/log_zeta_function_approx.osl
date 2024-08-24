@@ -1,0 +1,43 @@
+shader log_zeta_function_shader(
+    vector vec=(0.,0.,0.),float xmin = 0, float xmax = 10,float ymin = 0, float ymax = 10,int n = 10,
+   output float r=0., output float phi=0)
+{
+    float pi = 3.141592654;
+    float x= xmin+vec[0]*(xmax-xmin);
+    float y= ymin+vec[1]*(ymax-ymin);
+    
+    float a = pow(2,-x+1);
+    float c = cos(log(2)*y);
+    float s = sin(log(2)*y);
+    float f = a/(1-2*a*c+a*a);
+
+    float sum1 = 0;
+    float sum2 = 0;
+    
+    for (int i=1;i<=n;i++){
+        float b=pow(i,-x);
+        if (i%2==0){
+        sum1 = sum1-cos(y*log(i))*b;
+        sum2 = sum2-sin(y*log(i))*b;
+        }
+        else{
+        sum1 = sum1+cos(y*log(i))*b;
+        sum2 = sum2+sin(y*log(i))*b;
+        }
+    }
+    
+    float re = (1/a-c)*sum1-s*sum2;
+    float im = -((1/a-c)*sum2+s*sum1);
+     
+    float R = f*sqrt(re*re+im*im);
+    float Phi = atan2(im,re);
+    
+    //take the log
+    
+    re = log(R);
+    im = Phi;
+    
+    r = sqrt(re*re+im*im);
+    phi = 0.5+atan2(im,re)/2/pi;
+    
+}
