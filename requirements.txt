@@ -2,4 +2,5 @@ numpy
 scipy
 sympy
 anytree
+matplotlib
 

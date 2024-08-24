@@ -1,0 +1,68 @@
+OpenShadingLanguage 1.00
+# Compiled by oslc 1.10.10
+# options: -o /tmp/tmpswywy6k2.oso -I/home/jmartin/local/blender-2.92.0-linux64/2.92/scripts/addons/cycles/shader
+shader complex_function
+param	vector	vec	0 0 0		%read{5,7} %write{0,0} %initexpr
+oparam	vector	outVec	0 0 0		%read{2147483647,-1} %write{1,14} %initexpr
+local	vector	vx	%read{2147483647,-1} %write{2,2}
+local	vector	vy	%read{2147483647,-1} %write{3,3}
+local	vector	vz	%read{2147483647,-1} %write{4,4}
+local	float	x	%read{8,12} %write{5,5}
+local	float	y	%read{9,13} %write{6,6}
+local	float	z	%read{14,14} %write{7,7}
+local	float	X	%read{14,14} %write{11,11}
+local	float	Y	%read{14,14} %write{13,13}
+const	float	$const1	0		%read{0,1} %write{2147483647,-1}
+const	vector	$const2	1 0 0		%read{2,2} %write{2147483647,-1}
+const	vector	$const3	0 1 0		%read{3,3} %write{2147483647,-1}
+const	vector	$const4	0 0 1		%read{4,4} %write{2147483647,-1}
+const	int	$const5	0		%read{5,5} %write{2147483647,-1}
+const	int	$const6	1		%read{6,6} %write{2147483647,-1}
+const	int	$const7	2		%read{7,7} %write{2147483647,-1}
+temp	float	$tmp1	%read{10,10} %write{8,8}
+temp	float	$tmp2	%read{10,10} %write{9,9}
+temp	float	$tmp3	%read{11,11} %write{10,10}
+const	float	$const8	1		%read{11,11} %write{2147483647,-1}
+const	float	$const9	2		%read{12,12} %write{2147483647,-1}
+temp	float	$tmp4	%read{13,13} %write{12,12}
+code vec
+# /home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl:2
+#     vector vec=(0.,0.,0.),
+	assign		vec $const1 	%filename{"/home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl"} %line{2} %argrw{"wr"}
+code outVec
+# /home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl:3
+#     output vector outVec=(0.,0.,0.))
+	assign		outVec $const1 	%filename{"/home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl"} %line{3} %argrw{"wr"}
+code ___main___
+# /home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl:5
+#     vector vx=vector(1.,0.,0.);
+	assign		vx $const2 	%filename{"/home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl"} %line{5} %argrw{"wr"}
+# /home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl:6
+#     vector vy=vector(0.,1.,0.);
+	assign		vy $const3 	%line{6} %argrw{"wr"}
+# /home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl:7
+#     vector vz=vector(0.,0.,1.);
+	assign		vz $const4 	%line{7} %argrw{"wr"}
+# /home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl:9
+#     float x = vec[0];
+	compref		x vec $const5 	%line{9} %argrw{"wrr"}
+# /home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl:10
+#     float y = vec[1];
+	compref		y vec $const6 	%line{10} %argrw{"wrr"}
+# /home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl:11
+#     float z = vec[2];
+	compref		z vec $const7 	%line{11} %argrw{"wrr"}
+# /home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl:13
+#     float X = x*x-y*y-1.;
+	mul		$tmp1 x x 	%line{13} %argrw{"wrr"}
+	mul		$tmp2 y y 	%argrw{"wrr"}
+	sub		$tmp3 $tmp1 $tmp2 	%argrw{"wrr"}
+	sub		X $tmp3 $const8 	%argrw{"wrr"}
+# /home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl:14
+#     float Y = 2.*x*y;
+	mul		$tmp4 $const9 x 	%line{14} %argrw{"wrr"}
+	mul		Y $tmp4 y 	%argrw{"wrr"}
+# /home/jmartin/Dropbox/MyBlender/ComplexSurfaces/complexFunction.osl:16
+#     outVec = vector(X,Y,z);
+	vector		outVec X Y z 	%line{16} %argrw{"wrrr"}
+	end

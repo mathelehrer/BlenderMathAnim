@@ -1,0 +1,32 @@
+shader complex_function_mandelbrot(
+    vector vec=(0.,0.,0.), float xmin = -1., 
+    float xmax = 1.,float ymin = -1., float ymax = 1.,
+    int Nmax = 100,float cutoff = 1,
+   output float r=0., output float phi=0)
+{
+    //please work with object texture coordinates for the plane to scale
+    //the coordinates to the range that is required
+    float pi = 3.14159;
+    float X = xmin+(vec[0]+1.)/2*(xmax-xmin);
+    float Y = ymin+(vec[1]+1.)/2*(ymax-ymin);
+    
+    float c_x = X;
+    float c_y = Y;
+    float z_x = 0;
+    float z_y = 0;
+    int count = 0;
+    float c2 = cutoff*cutoff;
+    float dist = 0;
+    while(count<Nmax && dist<c2){
+        float tmp_x = z_x*z_x-z_y*z_y+c_x;
+        float tmp_y = 2.*z_x*z_y+c_y;
+        z_x = tmp_x;
+        z_y = tmp_y;
+        dist = z_x*z_x+z_y*z_y;
+        count++;
+    }
+       
+    r = 1.0*count/Nmax; 
+    
+
+}

@@ -1,0 +1,17 @@
+shader complex_function(
+    vector vec=(0.,0.,0.),
+    output vector outVec=(0.,0.,0.))
+{
+    vector vx=vector(1.,0.,0.);
+    vector vy=vector(0.,1.,0.);
+    vector vz=vector(0.,0.,1.);
+    
+    float x = vec[0];
+    float y = vec[1];
+    float z = vec[2];
+    
+    float X = cos(x)*cosh(y);
+    float Y = -sin(x)*sinh(y);
+    
+    outVec = vector(X,Y,z);
+}

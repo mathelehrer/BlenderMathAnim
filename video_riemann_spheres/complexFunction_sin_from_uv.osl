@@ -1,0 +1,22 @@
+shader complex_function_sin_riemann(
+    vector vec=(0.,0.,0.), float offset=0.,
+   output float r=0., output float phi=0)
+{
+    //convert to polar coordinates uv-projection
+    float pi = 3.141592654;
+    float x = sin(pi*vec[1])*cos(2*pi*vec[0]);
+    float y = sin(pi*vec[1])*sin(2*pi*vec[0]);
+    float z = cos(pi*vec[1]);
+    
+    //stereographic projection onto the complex plane
+    float U = 2.*x/(1.+z);
+    float V = 2.*y/(1.+z);
+    
+    //apply complex function
+    
+    float X = cosh(V)*cos(U);
+    float Y = -sinh(V)*sin(U);
+    
+    r = sqrt(X*X+Y*Y);
+    phi = atan2(Y,X)/2/pi+offset;
+}
