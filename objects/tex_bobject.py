@@ -1,6 +1,7 @@
 import collections
 import os
 import time
+import hashlib
 from copy import deepcopy
 from functools import partial
 
@@ -1912,7 +1913,8 @@ class Row:
 def tex_to_svg_file(expression, template_tex_file, typeface, text_only,recreate=False):
     path = os.path.join(
         SVG_DIR,
-        tex_title(expression, typeface)
+        # tex_title(expression, typeface)
+        hashed_tex(expression, typeface)
     ) + ".svg"
     if not recreate and  os.path.exists(path):
         return path
@@ -2014,11 +2016,16 @@ def tex_title(expression, typeface):
         name = name[0:200]
     return str(name)
 
+def hashed_tex(expression, typeface):
+    string = expression + typeface
+    hasher = hashlib.sha256(string.encode())
+    return hasher.hexdigest()[:16]
 
 def generate_tex_file(expression, template_tex_file, typeface, text_only,recreate):
     result = os.path.join(
         TEX_DIR,
-        tex_title(expression, typeface)
+        # tex_title(expression, typeface)
+        hashed_tex(expression, typeface)
     ) + ".tex"
 
     if recreate or not os.path.exists(result):
