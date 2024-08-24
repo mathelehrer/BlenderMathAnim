@@ -70,7 +70,10 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
                 obj.active_material = material
             else:
                 obj.active_material = shade_material(material, shading)
-
+                
+            if "opacity" in kwargs:
+                obj.active_material.diffuse_color[3] =  kwargs['opacity']
+                
             if 'brighter' in kwargs:
                 brighter = kwargs['brighter']
             else:
