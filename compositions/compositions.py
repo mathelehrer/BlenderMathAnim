@@ -53,3 +53,27 @@ def create_star_glow_composition():
 
     return glare
 
+def create_glow_composition(threshold=1,type='BLOOM',size=4):
+    """
+    create after render image processing
+    :return:
+    """
+
+    bpy.context.scene.use_nodes = True
+    nodes = bpy.context.scene.node_tree.nodes
+    links = bpy.context.scene.node_tree.links
+
+    composite = nodes["Composite"]
+    layers = nodes["Render Layers"]
+
+    glare = nodes.new(type='CompositorNodeGlare')
+    glare.glare_type = type
+    glare.quality='HIGH'
+    glare.size=size
+    glare.threshold =threshold
+
+    links.new(layers.outputs["Image"],glare.inputs["Image"])
+    links.new(glare.outputs["Image"],composite.inputs["Image"])
+
+    return glare
+

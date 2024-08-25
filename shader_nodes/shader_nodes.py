@@ -1,6 +1,8 @@
 import numpy as np
 from mathutils import Vector
 
+from utils.kwargs import get_from_kwargs
+
 pi = np.pi
 
 
@@ -30,7 +32,7 @@ class TextureCoordinate(ShaderNode):
         self.node = tree.nodes.new(type="ShaderNodeTexCoord")
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_out = self.node.outputs["UV"]
+        self.std_out = self.node.outputs[std_out]
 
 
 class MathNode(ShaderNode):
@@ -93,6 +95,40 @@ class Mapping(ShaderNode):
                 self.tree.links.new(rotation, self.node.inputs['Rotation'])
 
         self.std_out = self.node.outputs["Vector"]
+
+
+class GradientTexture(ShaderNode):
+    def __init__(self, tree, location=(0, 0), gradient_type='LINEAR', vector=None,
+                 std_out='Color', **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeTexGradient")
+        super().__init__(tree, location, **kwargs)
+
+        self.node.gradient_type = gradient_type
+
+        if vector is not None:
+            if isinstance(vector, (list, Vector)):
+                self.node.inputs['Vector'].default_value = vector
+            else:
+                self.tree.links.new(vector, self.node.inputs['Vector'])
+
+        self.std_out = self.node.outputs[std_out]
+
+class ImageTexture(ShaderNode):
+    def __init__(self, tree, location=(0, 0), image=None, vector=None,
+                 std_out='Color', **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeTexImage")
+        super().__init__(tree, location, **kwargs)
+
+        if image:
+            self.node.image=image
+
+        if vector is not None:
+            if isinstance(vector, (list, Vector)):
+                self.node.inputs['Vector'].default_value = vector
+            else:
+                self.tree.links.new(vector, self.node.inputs['Vector'])
+
+        self.std_out = self.node.outputs[std_out]
 
 
 class ColorRamp(ShaderNode):

@@ -67,9 +67,11 @@ def create_spectral_class(type,r=10000):
     sphere = IcoSphere(tree,location=(left,2),radius=50,subdivisions=2)
 
     left += 1
+    # pos_x is the magnitude of the star
+    # it is raised to some power 1.35 to damp faint stars
     conversion = make_function(tree, functions={
         "Position":"unit_x,pos,angle_projection,mul,rot,r,scale",
-        "Scale":"1,pos_x,1.5,**,1,max,/"
+        "Scale":"1,pos_x,1.15,**,1,max,/"
     }, name = "Conversion", hide = True, location = (left,-1),
                                inputs=["r","pos","unit_x","angle_projection"],outputs=["Position","Scale"],
                                scalars = ["r","Scale"],vectors=["pos","unit_x","Position","angle_projection"]

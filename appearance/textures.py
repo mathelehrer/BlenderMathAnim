@@ -16,7 +16,7 @@ from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import TextureCoordinate, Mapping, ColorRamp, AttributeNode, HueSaturationValueNode, \
-    MathNode, MixRGB, InputValue
+    MathNode, MixRGB, InputValue, GradientTexture, ImageTexture
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR
 from utils.kwargs import get_from_kwargs
 
@@ -70,10 +70,7 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
                 obj.active_material = material
             else:
                 obj.active_material = shade_material(material, shading)
-                
-            if "opacity" in kwargs:
-                obj.active_material.diffuse_color[3] =  kwargs['opacity']
-                
+
             if 'brighter' in kwargs:
                 brighter = kwargs['brighter']
             else:
@@ -83,7 +80,7 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
 
     if recursive:
         for child in obj.children:
-            apply_material(child, material, recursive=recursive, type_req=type_req)
+            apply_material(child, material, recursive=recursive, type_req=type_req,**kwargs)
 
     if intensity is not None and 'trans' in material:
         nodes = obj.active_material.node_tree.nodes
@@ -390,6 +387,70 @@ def pie_checker_material(colors=['drawing', 'joker'], name='PieChecker', **kwarg
     mixer.inputs[2].default_value = get_color_from_name(colors[1])
     mixer.location = (-200, 200)
     links.new(mixer.outputs[0], bsdf.inputs['Base Color'])
+    return mat
+
+def camera_gradient_rainbow(name="Rainbow",**kwargs):
+    """
+    create rainbow gradient across text
+    This is used in video_cmb
+
+    2024-08-25:
+    The scale and the translation of the gradient are hard-coded also that the coordinate system is based on the camera.
+    There should be more flexibility introduced to make it more universal
+    """
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+
+    mat.name = name
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+
+    customize_material(mat, **kwargs)
+    bsdf = nodes.get("Principled BSDF")
+
+    coords = TextureCoordinate(tree,location=(-4,0),std_out='Camera')
+    mapping = Mapping(tree,location=(-3,0),vector=coords.std_out,loc=Vector([0.5,0,0]),scale=Vector([0.3,1,1]))
+    gradient = GradientTexture(tree,location=(-2,0),gradient_type='EASING',vector=mapping.std_out,std_out=1)
+    ramp = ColorRamp(tree,location=(-1,0),factor=gradient.std_out)
+    ramp.node.color_ramp.elements.new(1)
+    ramp.node.color_ramp.elements[0].position = 0.05
+    ramp.node.color_ramp.elements[0].color = [1,0,0,1]
+    ramp.node.color_ramp.elements[1].position = 0.5
+    ramp.node.color_ramp.elements[1].color = [0, 1, 0, 1]
+    ramp.node.color_ramp.elements[2].position = 0.95
+    ramp.node.color_ramp.elements[2].color = [0, 0, 1, 1]
+    links.new(ramp.std_out, bsdf.inputs["Base Color"])
+    links.new(ramp.std_out, bsdf.inputs[EMISSION])
+    return mat
+
+def image_over_text(name="ImageOverText",**kwargs):
+    """
+    create an image texture across text
+    This is used in video_cmb
+
+    2024-08-25:
+    """
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+
+    mat.name = name
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+
+    customize_material(mat, **kwargs)
+    bsdf = nodes.get("Principled BSDF")
+
+    coords = TextureCoordinate(tree,location=(-4,0),std_out='Camera')
+    mapping = Mapping(tree,location=(-3,0),vector=coords.std_out,loc=Vector([0.5,0,0]),scale=Vector([0.3,1,1]))
+    src = get_from_kwargs(kwargs,'src',None)
+    if src is not None:
+        image =ibpy.get_image(src)
+        image_texture = ImageTexture(tree,location=(-2,0),image=image,vector=mapping.std_out,std_out='Color')
+
+        links.new(image_texture.std_out, bsdf.inputs["Base Color"])
+        links.new(image_texture.std_out, bsdf.inputs[EMISSION])
     return mat
 
 
@@ -2660,6 +2721,14 @@ def set_sky_background(**kwargs):
     sky.location=(-200,0)
     sky.altitude=altitude
     sky.sun_intensity=intensity
+
+    air = get_from_kwargs(kwargs, 'air_density', 1)
+    dust = get_from_kwargs(kwargs, 'dust_density', 1)
+    ozone = get_from_kwargs(kwargs, 'ozone_density', 1)
+
+    sky.air_density=air
+    sky.dust_density=dust
+    sky.ozone_density=ozone
 
     background = nodes.get("Background")
     background.location=(0,0)

@@ -235,7 +235,7 @@ class SVGBObject(BObject):
                 # apply_material(c, self.default_color)
 
             rendered_curve = BObject(obj=c, color=color, name="ren_"+c.name,
-                                     emission=0.5)
+                                     emission=0.5,**self.kwargs)
             rendered_curve.ref_obj.location = c.location
             rendered_curve.ref_obj.rotation_euler = c.rotation_euler
             self.rendered_objects.append(rendered_curve)

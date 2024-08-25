@@ -5723,6 +5723,11 @@ def add_mesh_modifier(bob, **kwargs):
         if 'segments' in kwargs:
             segments = kwargs.pop('segments')
             modifiers.segments= segments
+    if type == 'SUBSURF':
+        levels = get_from_kwargs(kwargs,"levels",1)
+        render_levels=get_from_kwargs(kwargs,"render_levels",2)
+        modifiers.levels=levels
+        modifiers.render_levels=render_levels
     if type == 'WIREFRAME':
         if 'thickness' in kwargs:
             thickness = kwargs.pop('thickness')
@@ -5768,9 +5773,6 @@ def add_mesh_modifier(bob, **kwargs):
                 attribute_names = kwargs.pop('attribute_names')
                 for i, name in enumerate(attribute_names):
                     modifiers["Output_" + str(i + 1) + "_attribute_name"] = name
-
-
-
 
 def apply_modifiers(bob):
     obj = get_obj(bob)
@@ -6752,3 +6754,6 @@ def append(filename):
     #         if obj.name in import_objects:
     #             link(obj,collection="Mountains")
 
+
+def get_image(src):
+    return  bpy.data.images.load(os.path.join(IMG_DIR, src))
