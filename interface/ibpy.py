@@ -10,7 +10,7 @@ import numpy as np
 from mathutils import Vector, Quaternion, Matrix
 
 from compositions.compositions import create_composition
-from interface.interface_constants import EMISSION, TRANSMISSION, BLENDER_EEVEE
+from interface.interface_constants import EMISSION, TRANSMISSION, BLENDER_EEVEE, blender_version
 from shader_nodes.shader_nodes import MixRGB
 from utils.constants import BLEND_DIR, FRAME_RATE, OBJECT_APPEARANCE_TIME, OSL_DIR, COLOR_NAMES, COLORS_SCALED, IMG_DIR, \
     DEFAULT_ANIMATION_TIME, RES_HDRI_DIR, FINAL_DIR, VID_DIR, COLOR_PREFIXES, SPECIALS, COLORS, APPEND_DIR
@@ -616,7 +616,10 @@ def add_torus(smooth=True, **kwargs):
 
 def add_reference_image(name,**kwargs):
     path = os.path.join(IMG_DIR,name)
-    bpy.ops.object.load_reference_image(filepath=path)
+    if blender_version()<(4,2):
+        bpy.ops.object.load_reference_image(filepath=path)
+    else:
+        bpy.ops.object.empty_image_add(filepath=path)
     return bpy.context.active_object
 
 def add_cube(smooth=True, **kwargs):
