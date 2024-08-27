@@ -1,4 +1,5 @@
 import collections
+import hashlib
 import os
 import time
 from copy import deepcopy
@@ -17,6 +18,7 @@ from objects.empties import EmptyCube
 from objects.svg_bobject import SVGBObject, equalize_spline_count, new_null_curve
 from utils.constants import FRAME_RATE, TEMPLATE_TEX_FILE, TEX_DIR, TEX_TEXT_TO_REPLACE, SVG_DIR, \
     OBJECT_APPEARANCE_TIME, CONTROL_POINTS_PER_SPLINE, DEFAULT_ANIMATION_TIME, TEMPLATE_TEXT_FILE
+from utils.kwargs import get_from_kwargs
 from utils.utils import to_vector
 
 
@@ -1912,7 +1914,8 @@ class Row:
 def tex_to_svg_file(expression, template_tex_file, typeface, text_only,recreate=False):
     path = os.path.join(
         SVG_DIR,
-        tex_title(expression, typeface)
+        # tex_title(expression, typeface)
+        hashed_tex(expression, typeface)
     ) + ".svg"
     if not recreate and  os.path.exists(path):
         return path
@@ -2014,11 +2017,16 @@ def tex_title(expression, typeface):
         name = name[0:200]
     return str(name)
 
+def hashed_tex(expression, typeface):
+    string = expression + typeface
+    hasher = hashlib.sha256(string.encode())
+    return hasher.hexdigest()[:16]
 
 def generate_tex_file(expression, template_tex_file, typeface, text_only,recreate):
     result = os.path.join(
         TEX_DIR,
-        tex_title(expression, typeface)
+        # tex_title(expression, typeface)
+        hashed_tex(expression, typeface)
     ) + ".tex"
 
     if recreate or not os.path.exists(result):
