@@ -34,6 +34,13 @@ class TextureCoordinate(ShaderNode):
 
         self.std_out = self.node.outputs[std_out]
 
+class SeparateXYZ(ShaderNode):
+    def __init__(self, tree, location=(0, 0), vector=None, **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeSeparateXYZ")
+        super().__init__(tree, location=location, **kwargs)
+
+        if vector:
+            tree.links.new(vector,self.node.inputs["Vector"])
 
 class MathNode(ShaderNode):
     def __init__(self, tree, location=(0, 0), operation='ADD', input0=None, input1=None, input2=None, **kwargs):

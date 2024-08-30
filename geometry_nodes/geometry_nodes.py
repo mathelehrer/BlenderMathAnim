@@ -13,7 +13,8 @@ from geometry_nodes.nodes import MeshLine, Grid, InstanceOnPoints, IcoSphere, Se
     ProjectionMap, DomainSize, SampleIndex, RepeatZone, MergeByDistance, MeshToPoints
 from interface.ibpy import Vector, create_group_from_vector_function, if_node, get_color_from_string, make_new_socket, \
     get_material, create_group_from_scalar_function
-from appearance.textures import penrose_material, create_material_for_e8_visuals, star_color, decay_mode_material
+from appearance.textures import penrose_material, create_material_for_e8_visuals, star_color, decay_mode_material, \
+    z_gradient
 from mathematics.groups.e8 import E8Lattice
 from mathematics.mathematica.mathematica import choose, tuples
 from physics.constants import decay_modes
@@ -34,6 +35,66 @@ def get_parameter(node_group, node_name, input=None, output=None):
         if output is not None:
             return node.outputs[output]
 
+
+def create_node_for_optimization():
+
+    node_tree = bpy.data.node_groups.new("SurfaceOfTheFunction", type='GeometryNodeTree')
+    tree = node_tree
+    nodes = node_tree.nodes
+    links = node_tree.links
+
+    left = -8
+    # boiler-plate code, create input and output sockets
+    group_outputs = nodes.new('NodeGroupOutput')
+    make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
+
+    # create grid, the (x,y) domain
+    grid = Grid(tree,location=(left,1),size_x=10,size_y=10,vertices_x=1000,vertices_y=1000)
+    # instead of using 1000 vertices in each direction, one could also use a subdivision node
+
+    # read in the original location of each vertex (the x,y coordinates are kept and the z coordinate is adjusted
+    # depending on the value of the function f(x,y)
+    pos = Position(tree,location=(left,0))
+
+    left+=1
+
+    # create the function, here is your function $\left(2(x-3)^2+(y-2)^2-1\right) \cdot(x-1)(y-1)+3$
+    surface = make_function(tree,functions={
+        "position": [
+            "pos_x", # x stays unchanged
+            "pos_y", # y stays unchanged
+            "2,pos_x,3,-,2,**,*,pos_y,2,-,2,**,+,1,-,pos_x,1,-,pos_y,1,-,*,*,3,+" # f(x,y)
+        ]
+    },name="Surface",location=(left,0),inputs=["pos"],outputs=["position"],vectors=["pos","position"])
+
+    links.new(pos.std_out,surface.inputs["pos"])
+    left+=1
+
+    # window: -5<=f(x,y)<=5
+    selector = make_function(tree,functions={
+        "deselect":"pos_z,-5,>,pos_z,5,<,and,not"
+    },name="Window",location=(left,1),inputs=["pos"],outputs=["deselect"],vectors=["pos"],scalars=["deselect"])
+    links.new(surface.outputs["position"],selector.inputs["pos"])
+
+    left+=1
+    del_geo = DeleteGeometry(tree, location=(left, 0), selection=selector.outputs["deselect"])
+
+    left += 1
+    # update the z-value for each mesh point
+    set_pos = SetPosition(tree,location=(left,0),position=surface.outputs["position"])
+
+    left += 1
+    smooth = SetShadeSmooth(tree, location=(left, 0))
+
+    left+=1
+
+    # custom material that is a gradient in z-direction
+    mat = SetMaterial(tree,location=(left,0),material=z_gradient,roughness=0.005,metallic=0.45,emission=0.1)
+    # connect all geometry nodes
+    create_geometry_line(tree,[grid,del_geo,set_pos,smooth,mat],out=group_outputs.inputs["Geometry"])
+
+
+    return node_tree
 
 def create_spectral_class(type,r=10000):
     """

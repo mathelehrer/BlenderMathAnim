@@ -16,7 +16,7 @@ from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import TextureCoordinate, Mapping, ColorRamp, AttributeNode, HueSaturationValueNode, \
-    MathNode, MixRGB, InputValue, GradientTexture, ImageTexture
+    MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR
 from utils.kwargs import get_from_kwargs
 
@@ -388,6 +388,40 @@ def pie_checker_material(colors=['drawing', 'joker'], name='PieChecker', **kwarg
     mixer.location = (-200, 200)
     links.new(mixer.outputs[0], bsdf.inputs['Base Color'])
     return mat
+
+def z_gradient(name="zGradient",**kwargs):
+    """
+    create a color gradient
+    just a quick simple implementation, lots of customization is possible
+    :param name:
+    :param kwargs:
+    :return:
+    """
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+
+    mat.name = name
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+
+    customize_material(mat, **kwargs)
+    bsdf = nodes.get("Principled BSDF")
+
+    coords = TextureCoordinate(tree, location=(-4, 0), std_out='Generated')
+    sep_xyz = SeparateXYZ(tree, location=(-3, 0), vector=coords.std_out)
+    ramp = ColorRamp(tree, location=(-1, 0), factor=sep_xyz.node.outputs['Z'])
+    ramp.node.color_ramp.elements.new(1)
+    ramp.node.color_ramp.elements[0].position = 0.00
+    ramp.node.color_ramp.elements[0].color = [0, 0, 1, 1]
+    ramp.node.color_ramp.elements[1].position = 0.555
+    ramp.node.color_ramp.elements[1].color = [0, 1, 0, 1]
+    ramp.node.color_ramp.elements[2].position = 1
+    ramp.node.color_ramp.elements[2].color = [1, 0, 0, 1]
+    links.new(ramp.std_out, bsdf.inputs["Base Color"])
+    links.new(ramp.std_out, bsdf.inputs[EMISSION])
+    return mat
+
 
 def camera_gradient_rainbow(name="Rainbow",**kwargs):
     """
