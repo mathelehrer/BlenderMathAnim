@@ -1,4 +1,8 @@
 ### This is a library file, where everything connected geometry notes should go in
+### The content is very project-dependent, should be excluded from the full library at some point
+### only for demonstation purposes
+
+
 from functools import partial
 
 import bpy
@@ -10,7 +14,7 @@ from geometry_nodes.nodes import MeshLine, Grid, InstanceOnPoints, IcoSphere, Se
     ConvexHull, \
     RayCast, BooleanMath, InsideConvexHull, DeleteGeometry, NamedAttribute, VectorMath, ScaleElements, make_function, \
     Rotation, Transpose, LinearMap, TransformGeometry, layout, CubeMesh, InsideConvexHull3D, CombineXYZ, E8Node, Matrix, \
-    ProjectionMap, DomainSize, SampleIndex, RepeatZone, MergeByDistance, MeshToPoints
+    ProjectionMap, DomainSize, SampleIndex, RepeatZone, MergeByDistance, MeshToPoints, Simulation
 from interface.ibpy import Vector, create_group_from_vector_function, if_node, get_color_from_string, make_new_socket, \
     get_material, create_group_from_scalar_function
 from appearance.textures import penrose_material, create_material_for_e8_visuals, star_color, decay_mode_material, \
@@ -20,6 +24,10 @@ from mathematics.mathematica.mathematica import choose, tuples
 from physics.constants import decay_modes
 from utils.utils import flatten
 
+
+############################
+### auxiliary functions ####
+############################
 
 def get_parameter(node_group, node_name, input=None, output=None):
     node = None
@@ -36,8 +44,42 @@ def get_parameter(node_group, node_name, input=None, output=None):
             return node.outputs[output]
 
 
-def create_node_for_optimization():
+def setup_geometry_nodes(name,group_input=False):
+    """
+    auxiliary function to provide boilerplate code
+    should be used more frequently,
+    haven't got accustomed to it yet
+    it's a little awkward, the group_output_node has to collected from the tree
+    for the creation of the geometry line
+    out = node_tree.nodes.get("Group Output"), when this function is used
+    """
+    node_tree = bpy.data.node_groups.new(name, type='GeometryNodeTree')
+    nodes = node_tree.nodes
 
+    nodes.new('NodeGroupOutput')
+    make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
+
+    if group_input:
+        nodes.new('NodeGroupInput')
+        make_new_socket(node_tree, name='Geometry', io='INPUT', type='NodeSocketGeometry')
+
+    return node_tree
+
+
+#######################
+### Example nodes #####
+#######################
+
+###
+## The following node constructions are usually restricted to one particular purpose
+## The reusability of these functions is highly unlikely
+## Maybe they should rather be collected in the project folders
+###
+
+######################
+## Demonstration of geometry nodes for displaying functions
+######################
+def create_node_for_optimization():
     node_tree = bpy.data.node_groups.new("SurfaceOfTheFunction", type='GeometryNodeTree')
     tree = node_tree
     nodes = node_tree.nodes
@@ -49,54 +91,57 @@ def create_node_for_optimization():
     make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
 
     # create grid, the (x,y) domain
-    grid = Grid(tree,location=(left,1),size_x=10,size_y=10,vertices_x=1000,vertices_y=1000)
+    grid = Grid(tree, location=(left, 1), size_x=10, size_y=10, vertices_x=1000, vertices_y=1000)
     # instead of using 1000 vertices in each direction, one could also use a subdivision node
 
     # read in the original location of each vertex (the x,y coordinates are kept and the z coordinate is adjusted
     # depending on the value of the function f(x,y)
-    pos = Position(tree,location=(left,0))
+    pos = Position(tree, location=(left, 0))
 
-    left+=1
+    left += 1
 
     # create the function, here is your function $\left(2(x-3)^2+(y-2)^2-1\right) \cdot(x-1)(y-1)+3$
-    surface = make_function(tree,functions={
+    surface = make_function(tree, functions={
         "position": [
-            "pos_x", # x stays unchanged
-            "pos_y", # y stays unchanged
-            "2,pos_x,3,-,2,**,*,pos_y,2,-,2,**,+,1,-,pos_x,1,-,pos_y,1,-,*,*,3,+" # f(x,y)
+            "pos_x",  # x stays unchanged
+            "pos_y",  # y stays unchanged
+            "2,pos_x,3,-,2,**,*,pos_y,2,-,2,**,+,1,-,pos_x,1,-,pos_y,1,-,*,*,3,+"  # f(x,y)
         ]
-    },name="Surface",location=(left,0),inputs=["pos"],outputs=["position"],vectors=["pos","position"])
+    }, name="Surface", location=(left, 0), inputs=["pos"], outputs=["position"], vectors=["pos", "position"])
 
-    links.new(pos.std_out,surface.inputs["pos"])
-    left+=1
+    links.new(pos.std_out, surface.inputs["pos"])
+    left += 1
 
     # window: -5<=f(x,y)<=5
-    selector = make_function(tree,functions={
-        "deselect":"pos_z,-5,>,pos_z,5,<,and,not"
-    },name="Window",location=(left,1),inputs=["pos"],outputs=["deselect"],vectors=["pos"],scalars=["deselect"])
-    links.new(surface.outputs["position"],selector.inputs["pos"])
+    selector = make_function(tree, functions={
+        "deselect": "pos_z,-5,>,pos_z,5,<,and,not"
+    }, name="Window", location=(left, 1), inputs=["pos"], outputs=["deselect"], vectors=["pos"], scalars=["deselect"])
+    links.new(surface.outputs["position"], selector.inputs["pos"])
 
-    left+=1
+    left += 1
     del_geo = DeleteGeometry(tree, location=(left, 0), selection=selector.outputs["deselect"])
 
     left += 1
     # update the z-value for each mesh point
-    set_pos = SetPosition(tree,location=(left,0),position=surface.outputs["position"])
+    set_pos = SetPosition(tree, location=(left, 0), position=surface.outputs["position"])
 
     left += 1
     smooth = SetShadeSmooth(tree, location=(left, 0))
 
-    left+=1
+    left += 1
 
     # custom material that is a gradient in z-direction
-    mat = SetMaterial(tree,location=(left,0),material=z_gradient,roughness=0.005,metallic=0.45,emission=0.1)
+    mat = SetMaterial(tree, location=(left, 0), material=z_gradient, roughness=0.005, metallic=0.45, emission=0.1)
     # connect all geometry nodes
-    create_geometry_line(tree,[grid,del_geo,set_pos,smooth,mat],out=group_outputs.inputs["Geometry"])
-
+    create_geometry_line(tree, [grid, del_geo, set_pos, smooth, mat], out=group_outputs.inputs["Geometry"])
 
     return node_tree
 
-def create_spectral_class(type,r=10000):
+
+######################
+## Nodes for the CMB project
+#######################
+def create_spectral_class(type, r=10000):
     """
     Create a sky-dome, that contains all stars of the catalog with the given spectral class
 
@@ -106,7 +151,7 @@ def create_spectral_class(type,r=10000):
     :return:
     """
 
-    node_tree = bpy.data.node_groups.new("SpectralClass"+str(type), type='GeometryNodeTree')
+    node_tree = bpy.data.node_groups.new("SpectralClass" + str(type), type='GeometryNodeTree')
     tree = node_tree
     nodes = node_tree.nodes
     links = node_tree.links
@@ -117,50 +162,147 @@ def create_spectral_class(type,r=10000):
     make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
 
     group_inputs = nodes.new('NodeGroupInput')
-    group_inputs.location=(left*200,0)
-    left+=1
-    make_new_socket(node_tree,name='Geometry',io='INPUT', type='NodeSocketGeometry')
+    group_inputs.location = (left * 200, 0)
+    left += 1
+    make_new_socket(node_tree, name='Geometry', io='INPUT', type='NodeSocketGeometry')
 
-    pos = Position(tree,location=(left,0))
-    unit_x = InputVector(tree,location=(left,-0.5),value=[1,0,0])
-    angle_projection = InputVector(tree,location=(left,-1),value=[0,-1,1]) # this vector projects out the two relevant components for declination and right ascension
-    radius = InputValue(tree,location=(left,0.5),value=r)
-    sphere = IcoSphere(tree,location=(left,2),radius=50,subdivisions=2)
+    pos = Position(tree, location=(left, 0))
+    unit_x = InputVector(tree, location=(left, -0.5), value=[1, 0, 0])
+    angle_projection = InputVector(tree, location=(left, -1), value=[0, -1,
+                                                                     1])  # this vector projects out the two relevant components for declination and right ascension
+    radius = InputValue(tree, location=(left, 0.5), value=r)
+    sphere = IcoSphere(tree, location=(left, 2), radius=50, subdivisions=2)
 
     left += 1
     # pos_x is the magnitude of the star
     # it is raised to some power 1.35 to damp faint stars
     conversion = make_function(tree, functions={
-        "Position":"unit_x,pos,angle_projection,mul,rot,r,scale",
-        "Scale":"1,pos_x,1.15,**,1,max,/"
-    }, name = "Conversion", hide = True, location = (left,-1),
-                               inputs=["r","pos","unit_x","angle_projection"],outputs=["Position","Scale"],
-                               scalars = ["r","Scale"],vectors=["pos","unit_x","Position","angle_projection"]
-    )
+        "Position": "unit_x,pos,angle_projection,mul,rot,r,scale",
+        "Scale": "1,pos_x,1.15,**,1,max,/"
+    }, name="Conversion", hide=True, location=(left, -1),
+                               inputs=["r", "pos", "unit_x", "angle_projection"], outputs=["Position", "Scale"],
+                               scalars=["r", "Scale"], vectors=["pos", "unit_x", "Position", "angle_projection"]
+                               )
 
-    for node, label in zip([radius,pos,unit_x,angle_projection],["r","pos","unit_x","angle_projection"]):
-        links.new(node.std_out,conversion.inputs[label])
+    for node, label in zip([radius, pos, unit_x, angle_projection], ["r", "pos", "unit_x", "angle_projection"]):
+        links.new(node.std_out, conversion.inputs[label])
 
-    left+=1
+    left += 1
 
-    iop = InstanceOnPoints(tree,location=(left,0),
+    iop = InstanceOnPoints(tree, location=(left, 0),
                            instance=sphere.geometry_out,
                            scale=conversion.outputs["Scale"],
                            points=group_inputs.outputs['Geometry'])
 
-
-    left+=1
-    set_pos = SetPosition(tree,location=(left,0),
+    left += 1
+    set_pos = SetPosition(tree, location=(left, 0),
                           position=conversion.outputs['Position'])
 
-    left+=1
+    left += 1
     material = partial(star_color, type=type, emission=1)
     set_mat = SetMaterial(tree, material=material, location=(left, 0))
-    left+=1
-    smooth = SetShadeSmooth(tree,location=(left,0))
-    create_geometry_line(tree,[iop,set_pos,set_mat,smooth],out=group_outputs.inputs['Geometry'])
+    left += 1
+    smooth = SetShadeSmooth(tree, location=(left, 0))
+    create_geometry_line(tree, [iop, set_pos, set_mat, smooth], out=group_outputs.inputs['Geometry'])
 
     return node_tree
+
+def create_pendulum_node():
+    tree= setup_geometry_nodes("Pendulum",group_input=True)
+    links = tree.links
+    left = -16
+
+    origin = Points(tree,location=(left,4),name="Origin")
+    point = Points(tree,location=(left,0),name="PendulumMass")
+    left+=1
+
+    simulation=Simulation(tree,location=(left,0))
+    simulation.add_socket(socket_type='FLOAT',name="theta") # elongation
+    simulation.add_socket(socket_type='FLOAT',name="omega") # angular velocity
+    out = tree.nodes.get("Group Output")
+    ins = tree.nodes.get("Group Input")
+    make_new_socket(tree,name="theta",io="INPUT")
+    make_new_socket(tree, name="omega", io="INPUT")
+    make_new_socket(tree, name="b", io="INPUT")# damping to compensate accumulating errors
+    ins.location=((left-1)*200,-200)
+    links.new(ins.outputs["omega"],simulation.simulation_input.inputs["omega"])
+    links.new(ins.outputs["theta"],simulation.simulation_input.inputs["theta"])
+
+    length = InputValue(tree, location=(left - 1, -4), value=2.5)
+
+    left+=2
+    update_omega=make_function(tree,functions={
+        "omega":"o,9.81,l,/,theta,sin,*,b,o,*,+,dt,*,-"
+    },name="updateOmega",location=(left,-0.5),hide=True,
+    outputs=["omega"],inputs=["dt","theta","o","l","b"],scalars=["omega","o","l","theta","dt","b"])
+
+    links.new(length.std_out,update_omega.inputs["l"])
+    links.new(ins.outputs["b"],update_omega.inputs["b"])
+    links.new(simulation.simulation_input.outputs["theta"],update_omega.inputs["theta"])
+    links.new(simulation.simulation_input.outputs["Delta Time"],update_omega.inputs["dt"])
+    links.new(update_omega.outputs["omega"],simulation.simulation_output.inputs["omega"])
+    links.new(simulation.simulation_input.outputs["omega"],update_omega.inputs["o"])
+
+    update_theta = make_function(tree, functions={
+        "theta": "th,omega,dt,*,+"
+    }, name="updateTheta", location=(left, -1.5),hide=True,
+                                 outputs=["theta"], inputs=["dt", "th", "omega"],
+                                 scalars=["theta", "th", "dt", "omega"])
+
+    links.new(simulation.simulation_input.outputs["theta"], update_theta.inputs["th"])
+    links.new(simulation.simulation_input.outputs["Delta Time"], update_theta.inputs["dt"])
+    links.new(update_theta.outputs["theta"], simulation.simulation_output.inputs["theta"])
+    links.new(simulation.simulation_input.outputs["omega"], update_theta.inputs["omega"])
+    left+=4
+
+
+    # convert angle into position
+    converter = make_function(tree,functions={
+        "position":["theta,sin,l,*","0","theta,cos,l,-1,*,*"]
+    },name="Angle2Position",inputs=["theta","l"],outputs=["position"],scalars=["l","theta"],vectors=["position"],
+                              location=(left,-1))
+    links.new(simulation.simulation_output.outputs["theta"],converter.inputs["theta"])
+    links.new(length.std_out,converter.inputs["l"])
+    left+=1
+
+    set_pos = SetPosition(tree,position=converter.outputs["position"],location=(left,-0.5))
+    left+=1
+    join = JoinGeometry(tree,location=(left,0))
+    create_geometry_line(tree,[origin,join])
+
+    left+=1
+    point2mesh = PointsToVertices(tree,location=(left,0))
+    left+=1
+    convex_hull =ConvexHull(tree,location=(left,0))
+    left += 1
+    wireframe = WireFrame(tree, location=(left, 0))
+    left+=1
+    mat = SetMaterial(tree,location=(left,0),material='joker')
+    left+=1
+    join2 = JoinGeometry(tree,location=(left,0))
+    left+=1
+    trafo = TransformGeometry(tree,location=(left,0),translation=[5,0,1])
+    left+=1
+    create_geometry_line(tree,[point,simulation,set_pos,join,point2mesh,
+                               convex_hull,wireframe,mat,join2,trafo],out=out.inputs["Geometry"])
+
+    # create branch for the mass
+    left-=6
+    pos = Position(tree,location =(left,-1) )
+    left+=1
+    length = VectorMath(tree,location=(left,-1),operation='LENGTH',inputs0=pos.std_out)# one vertex is at the origin
+    # only the vertex away from the origin has a non-zero length, this value is used to select the correct vertex for the instance on points
+    uv = IcoSphere(tree,location=(left,-2),radius=0.3,subdivisions=3)
+    left+=1
+    iop = InstanceOnPoints(tree,location=(left,-1),selection=length.std_out,instance=uv.geometry_out)
+    left+=1
+    mat2 = SetMaterial(tree,location=(left,-2),material='plastic_example')
+    create_geometry_line(tree,[point2mesh,iop,mat2,join2])
+    return tree
+
+#########################
+## Nuclide table (chemistry with ChemNerd44) pending
+##########################
 
 def create_nuclid_nodes(size=1):
     """
@@ -179,28 +321,30 @@ def create_nuclid_nodes(size=1):
     make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
 
     group_inputs = nodes.new('NodeGroupInput')
-    group_inputs.location=(left*200,0)
-    left+=1
-    make_new_socket(node_tree,name='Geometry',io='INPUT', type='NodeSocketGeometry')
+    group_inputs.location = (left * 200, 0)
+    left += 1
+    make_new_socket(node_tree, name='Geometry', io='INPUT', type='NodeSocketGeometry')
 
     # without this silly conversion the blender file crashes
-    mesh2points = MeshToPoints(tree,location=(left,0))
-    points2mesh = PointsToVertices(tree,location=(left+1,0))
+    mesh2points = MeshToPoints(tree, location=(left, 0))
+    points2mesh = PointsToVertices(tree, location=(left + 1, 0))
 
-    left+=2
+    left += 2
 
-    extrude =ExtrudeMesh(tree,mode='VERTICES',location=(left,0),offset=Vector([0.95*size,0,0]))
+    extrude = ExtrudeMesh(tree, mode='VERTICES', location=(left, 0), offset=Vector([0.95 * size, 0, 0]))
     height_attribute = NamedAttribute(tree, location=(left, -1), name='HalfLife')
     left += 1
-    extrude2 = ExtrudeMesh(tree, mode='EDGES', location=(left, 0), offset=Vector([0, 0.95*size, 0]))
-    combine = CombineXYZ(tree,location=(left,-1))
-    tree.links.new(height_attribute.std_out,combine.std_in[2])
-    left+=1
+    extrude2 = ExtrudeMesh(tree, mode='EDGES', location=(left, 0), offset=Vector([0, 0.95 * size, 0]))
+    combine = CombineXYZ(tree, location=(left, -1))
+    tree.links.new(height_attribute.std_out, combine.std_in[2])
+    left += 1
     extrude3 = ExtrudeMesh(tree, mode='FACES', location=(left, 0))
     tree.links.new(combine.std_out, extrude3.inputs["Offset"])
-    left+=1
-    set_mat = SetMaterial(tree,location=(left,0),material=partial(decay_mode_material,roughness=0.25,metallic=0.4,emission=1))
-    create_geometry_line(tree,[mesh2points,points2mesh,extrude,extrude2,extrude3,set_mat],ins= group_inputs.outputs["Geometry"],out=group_outputs.inputs['Geometry'])
+    left += 1
+    set_mat = SetMaterial(tree, location=(left, 0),
+                          material=partial(decay_mode_material, roughness=0.25, metallic=0.4, emission=1))
+    create_geometry_line(tree, [mesh2points, points2mesh, extrude, extrude2, extrude3, set_mat],
+                         ins=group_inputs.outputs["Geometry"], out=group_outputs.inputs['Geometry'])
 
     return node_tree
 
@@ -222,79 +366,84 @@ def create_flat_nuclid_nodes(size=1):
     make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
 
     group_inputs = nodes.new('NodeGroupInput')
-    group_inputs.location=(left*200,0)
-    left+=1
-    make_new_socket(node_tree,name='Geometry',io='INPUT', type='NodeSocketGeometry')
+    group_inputs.location = (left * 200, 0)
+    left += 1
+    make_new_socket(node_tree, name='Geometry', io='INPUT', type='NodeSocketGeometry')
 
     z_min = InputValue(tree, name="ZMin", value=0, location=(left, 0.5))
-    z_max = InputValue(tree, name="ZMax", value=0.9999*size, location=(left, 0.))
+    z_max = InputValue(tree, name="ZMax", value=0.9999 * size, location=(left, 0.))
 
-    stable_selector = InputBoolean(tree,name="Stable",value=True,location = (left+1,0.25))
-    growers= []
-    grower_labels=[]
+    stable_selector = InputBoolean(tree, name="Stable", value=True, location=(left + 1, 0.25))
+    growers = []
+    grower_labels = []
     for i, mode in enumerate(decay_modes):
-        if i>0: # skip stable mode
-            growers.append(InputValue(tree,name=mode+"Grower",value=40,location=(left,-i*0.5)))
-            grower_labels.append(mode+"Grower")
-
+        if i > 0:  # skip stable mode
+            growers.append(InputValue(tree, name=mode + "Grower", value=40, location=(left, -i * 0.5)))
+            grower_labels.append(mode + "Grower")
 
     attr_mode = NamedAttribute(tree, location=(left, -5), name='DecayMode')
     attr_time = NamedAttribute(tree, location=(left, -5.5), name='HalfLife')
-    position = Position(tree,location=(left,-6))
+    position = Position(tree, location=(left, -6))
 
-
-    left+=2
+    left += 2
 
     modi = list(decay_modes.keys())
-    term=""
-    for i,mode in enumerate(modi):
-        if i>0:
-            part = "attr_mode,"+str(i)+",=,attr_time,lg,"+grower_labels[i-1]+",>,and"
-        else:# the display of the stable isotopes is only controlled by z_min and z_max
-            part = "attr_mode,"+str(0)+",=,"+mode+",and"
-        if decay_modes[mode]>0:
-           term=term+","+part+",or"
+    term = ""
+    for i, mode in enumerate(modi):
+        if i > 0:
+            part = "attr_mode," + str(i) + ",=,attr_time,lg," + grower_labels[i - 1] + ",>,and"
+        else:  # the display of the stable isotopes is only controlled by z_min and z_max
+            part = "attr_mode," + str(0) + ",=," + mode + ",and"
+        if decay_modes[mode] > 0:
+            term = term + "," + part + ",or"
         else:
-            term=part
+            term = part
 
-    select_function=make_function(tree,functions={
-        "Selection":term+",pos_y,z_min,>,and,pos_y,z_max,<,and"
+    select_function = make_function(tree, functions={
+        "Selection": term + ",pos_y,z_min,>,and,pos_y,z_max,<,and"
     },
-                                  name="SelectionFunction",location=(left,-1),
-                                  inputs=["stable","z_min","z_max","pos","attr_mode","attr_time"]+grower_labels,scalars=["stable","z_min","z_max","Selection","attr_mode","attr_time"]+grower_labels,vectors=["pos"],outputs=["Selection"])
+                                    name="SelectionFunction", location=(left, -1),
+                                    inputs=["stable", "z_min", "z_max", "pos", "attr_mode",
+                                            "attr_time"] + grower_labels,
+                                    scalars=["stable", "z_min", "z_max", "Selection", "attr_mode",
+                                             "attr_time"] + grower_labels, vectors=["pos"], outputs=["Selection"])
 
-    links.new(attr_mode.std_out,select_function.inputs["attr_mode"])
-    links.new(attr_time.std_out,select_function.inputs["attr_time"])
+    links.new(attr_mode.std_out, select_function.inputs["attr_mode"])
+    links.new(attr_time.std_out, select_function.inputs["attr_time"])
 
-    links.new(stable_selector.std_out,select_function.inputs["stable"])
-    links.new(position.std_out,select_function.inputs["pos"])
-    for grower,label in zip(growers,grower_labels):
+    links.new(stable_selector.std_out, select_function.inputs["stable"])
+    links.new(position.std_out, select_function.inputs["pos"])
+    for grower, label in zip(growers, grower_labels):
         if grower:
-            links.new(grower.std_out,select_function.inputs[grower.name])
-    links.new(z_min.std_out,select_function.inputs["z_min"])
-    links.new(z_max.std_out,select_function.inputs["z_max"])
+            links.new(grower.std_out, select_function.inputs[grower.name])
+    links.new(z_min.std_out, select_function.inputs["z_min"])
+    links.new(z_max.std_out, select_function.inputs["z_max"])
 
     # without this silly conversion the blender file crashes
-    mesh2points = MeshToPoints(tree,location=(left,0),selection=select_function.outputs["Selection"])
-    points2mesh = PointsToVertices(tree,location=(left+1,0))
+    mesh2points = MeshToPoints(tree, location=(left, 0), selection=select_function.outputs["Selection"])
+    points2mesh = PointsToVertices(tree, location=(left + 1, 0))
 
-    left+=2
+    left += 2
 
-    extrude =ExtrudeMesh(tree,mode='VERTICES',location=(left,0),offset=Vector([0.95*size,0,0]))
+    extrude = ExtrudeMesh(tree, mode='VERTICES', location=(left, 0), offset=Vector([0.95 * size, 0, 0]))
 
     left += 1
-    extrude2 = ExtrudeMesh(tree, mode='EDGES', location=(left, 0), offset=Vector([0, 0.95*size, 0]))
+    extrude2 = ExtrudeMesh(tree, mode='EDGES', location=(left, 0), offset=Vector([0, 0.95 * size, 0]))
 
-    left+=1
-    extrude3 = ExtrudeMesh(tree, mode='FACES', location=(left, 0),offset=[0,0,1])
-    left+=1
-    set_mat = SetMaterial(tree,location=(left,0),material=partial(decay_mode_material,roughness=0.25,metallic=0.4))
-    create_geometry_line(tree,[mesh2points,points2mesh,extrude,extrude2,
-                               extrude3,
-                               set_mat],ins= group_inputs.outputs["Geometry"],out=group_outputs.inputs['Geometry'])
+    left += 1
+    extrude3 = ExtrudeMesh(tree, mode='FACES', location=(left, 0), offset=[0, 0, 1])
+    left += 1
+    set_mat = SetMaterial(tree, location=(left, 0), material=partial(decay_mode_material, roughness=0.25, metallic=0.4))
+    create_geometry_line(tree, [mesh2points, points2mesh, extrude, extrude2,
+                                extrude3,
+                                set_mat], ins=group_inputs.outputs["Geometry"], out=group_outputs.inputs['Geometry'])
 
     return node_tree
 
+
+##########################
+## E8 geometry (only a short so far)
+###########################
 
 def create_e8():
     """
@@ -312,141 +461,150 @@ def create_e8():
     make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
 
     # create E8 vertices (hard coded)
-    e8_node =E8Node(node_tree,location=(left+2,0))
+    e8_node = E8Node(node_tree, location=(left + 2, 0))
     e8 = E8Lattice()
 
-    for i in range(4,0,-1):
-        theta = InputValue(node_tree,name='theta_'+str(i),location=(left-2*i-1,-10))
-        print("Create rotation "+str(i)+"... ",end='')
-        rotation = Rotation(node_tree,dimension=8,angle=0,u=2*(i-1),v=2*i-1,location=(left-2*i,4),hide=False,name="Rotation"+str(i))
-        node_tree.links.new(theta.std_out,rotation.inputs['Angle'])
+    for i in range(4, 0, -1):
+        theta = InputValue(node_tree, name='theta_' + str(i), location=(left - 2 * i - 1, -10))
+        print("Create rotation " + str(i) + "... ", end='')
+        rotation = Rotation(node_tree, dimension=8, angle=0, u=2 * (i - 1), v=2 * i - 1, location=(left - 2 * i, 4),
+                            hide=False, name="Rotation" + str(i))
+        node_tree.links.new(theta.std_out, rotation.inputs['Angle'])
         print("done")
-        print("Create linear maps u and v "+str(i)+" ... ",end='')
-        linear_map_u = LinearMap(node_tree,dimension=8,location=(left-2*i,6),name="MapU"+str(i))
-        linear_map_v = LinearMap(node_tree,dimension=8,location=(left-2*i,3),name="MapV"+str(i))
+        print("Create linear maps u and v " + str(i) + " ... ", end='')
+        linear_map_u = LinearMap(node_tree, dimension=8, location=(left - 2 * i, 6), name="MapU" + str(i))
+        linear_map_v = LinearMap(node_tree, dimension=8, location=(left - 2 * i, 3), name="MapV" + str(i))
         print("done")
-        if i==4:
+        if i == 4:
             entries = e8.coxeter_plane()
-            linear_map_u.inputs["v_0"].default_value=entries[0][0:3]
-            linear_map_u.inputs["v_1"].default_value=entries[0][3:6]
-            linear_map_u.inputs["v_2"].default_value=entries[0][6:8]+[0]
+            linear_map_u.inputs["v_0"].default_value = entries[0][0:3]
+            linear_map_u.inputs["v_1"].default_value = entries[0][3:6]
+            linear_map_u.inputs["v_2"].default_value = entries[0][6:8] + [0]
 
             linear_map_v.inputs["v_0"].default_value = entries[1][0:3]
             linear_map_v.inputs["v_1"].default_value = entries[1][3:6]
-            linear_map_v.inputs["v_2"].default_value = entries[1][6:8]+[0]
+            linear_map_v.inputs["v_2"].default_value = entries[1][6:8] + [0]
         else:
             for j in range(3):
-                node_tree.links.new(old_v.outputs["v_"+str(j)],linear_map_v.inputs["v_"+str(j)])
-                node_tree.links.new(old_u.outputs["v_"+str(j)],linear_map_u.inputs["v_"+str(j)])
+                node_tree.links.new(old_v.outputs["v_" + str(j)], linear_map_v.inputs["v_" + str(j)])
+                node_tree.links.new(old_u.outputs["v_" + str(j)], linear_map_u.inputs["v_" + str(j)])
         old_u = linear_map_u
         old_v = linear_map_v
 
         for j in range(24):
-            node_tree.links.new(rotation.outputs[j],linear_map_u.inputs[j+1])
-            node_tree.links.new(rotation.outputs[j],linear_map_v.inputs[j+1])
+            node_tree.links.new(rotation.outputs[j], linear_map_u.inputs[j + 1])
+            node_tree.links.new(rotation.outputs[j], linear_map_v.inputs[j + 1])
 
-    projectionMap = ProjectionMap(node_tree,location = (left+2,-2),in_dimension=8,out_dimension=2,name='ProjectionMap')
-    namedAttribute1 = NamedAttribute(node_tree,location=(left,-1),data_type='FLOAT_VECTOR',name='comp123')
-    namedAttribute2 = NamedAttribute(node_tree,location=(left,-2),data_type='FLOAT_VECTOR',name='comp456')
-    namedAttribute3 = NamedAttribute(node_tree,location=(left,-3),data_type='FLOAT_VECTOR',name='comp78')
+    projectionMap = ProjectionMap(node_tree, location=(left + 2, -2), in_dimension=8, out_dimension=2,
+                                  name='ProjectionMap')
+    namedAttribute1 = NamedAttribute(node_tree, location=(left, -1), data_type='FLOAT_VECTOR', name='comp123')
+    namedAttribute2 = NamedAttribute(node_tree, location=(left, -2), data_type='FLOAT_VECTOR', name='comp456')
+    namedAttribute3 = NamedAttribute(node_tree, location=(left, -3), data_type='FLOAT_VECTOR', name='comp78')
 
-    links.new(namedAttribute1.std_out,projectionMap.inputs["vi_0"])
-    links.new(namedAttribute2.std_out,projectionMap.inputs["vi_1"])
-    links.new(namedAttribute3.std_out,projectionMap.inputs["vi_2"])
+    links.new(namedAttribute1.std_out, projectionMap.inputs["vi_0"])
+    links.new(namedAttribute2.std_out, projectionMap.inputs["vi_1"])
+    links.new(namedAttribute3.std_out, projectionMap.inputs["vi_2"])
 
     for i in range(3):
-        links.new(linear_map_u.outputs[i],projectionMap.inputs[i])
-        links.new(linear_map_v.outputs[i],projectionMap.inputs[i+3])
+        links.new(linear_map_u.outputs[i], projectionMap.inputs[i])
+        links.new(linear_map_v.outputs[i], projectionMap.inputs[i + 3])
 
-    left+=4
+    left += 4
 
-    offset = make_function(node_tree,location=(left-1,-3),
+    offset = make_function(node_tree, location=(left - 1, -3),
                            functions={
-                               "offset":["0","0","1,p,length,/,1,min"]
-                           },hide=True,vectors=["offset","p"],inputs=["p"],outputs=["offset"],name="Offset")
-    links.new(projectionMap.outputs["vo_0"],offset.inputs["p"])
-    set_pos = SetPosition(node_tree,location=(left,-2),position = projectionMap.outputs[0],offset=offset.outputs["offset"])
-    points2verts = PointsToVertices(node_tree,location=(left+1,-2))
-    scale_geo = TransformGeometry(node_tree,location=(left+2,-2),scale=[5,5,0.25])
+                               "offset": ["0", "0", "1,p,length,/,1,min"]
+                           }, hide=True, vectors=["offset", "p"], inputs=["p"], outputs=["offset"], name="Offset")
+    links.new(projectionMap.outputs["vo_0"], offset.inputs["p"])
+    set_pos = SetPosition(node_tree, location=(left, -2), position=projectionMap.outputs[0],
+                          offset=offset.outputs["offset"])
+    points2verts = PointsToVertices(node_tree, location=(left + 1, -2))
+    scale_geo = TransformGeometry(node_tree, location=(left + 2, -2), scale=[5, 5, 0.25])
 
-    left+=3
+    left += 3
 
-    idx = Index(node_tree,location=(left,0))
-    domain_size = DomainSize(node_tree,location=(left,-1))
-    create_geometry_line(node_tree,[points2verts,domain_size])
-    pos = Position(node_tree,location=(left,-3))
-    left+=1
+    idx = Index(node_tree, location=(left, 0))
+    domain_size = DomainSize(node_tree, location=(left, -1))
+    create_geometry_line(node_tree, [points2verts, domain_size])
+    pos = Position(node_tree, location=(left, -3))
+    left += 1
 
     # retrieve eight-dimensional coordinates for edge selection
-    e8coords=[]
-    for count,attr in enumerate(["comp123","comp456","comp78"]):
-        namedAttr = NamedAttribute(node_tree,location=(left,4-count),name=attr)
-        sampleIndex = SampleIndex(node_tree,location=(left+1,4-count),value = namedAttr.std_out,index = idx.std_out)
-        create_geometry_line(node_tree,[e8_node,sampleIndex])
+    e8coords = []
+    for count, attr in enumerate(["comp123", "comp456", "comp78"]):
+        namedAttr = NamedAttribute(node_tree, location=(left, 4 - count), name=attr)
+        sampleIndex = SampleIndex(node_tree, location=(left + 1, 4 - count), value=namedAttr.std_out, index=idx.std_out)
+        create_geometry_line(node_tree, [e8_node, sampleIndex])
         e8coords.append(sampleIndex)
 
     # pairing vertices with repeat zone
-    repeat = RepeatZone(node_tree,location=(left,0),width=5)
-    repeat.add_socket(socket_type="INT",name='i')
-    links.new(domain_size.outputs["Point Count"],repeat.inputs["Iterations"])
+    repeat = RepeatZone(node_tree, location=(left, 0), width=5)
+    repeat.add_socket(socket_type="INT", name='i')
+    links.new(domain_size.outputs["Point Count"], repeat.inputs["Iterations"])
     addOne = make_function(node_tree, functions={
         "out": "in,1,+"
     }, scalars=["in", "out"], inputs=["in"], outputs=["out"], hide=True, location=(left + 1, -0.25), name="i++")
-    links.new(repeat.repeat_input.outputs["i"],addOne.inputs["in"])
-    links.new(addOne.outputs["out"],repeat.repeat_output.inputs["i"])
-    e8coords2=[]
-    for count,attr in enumerate(["comp123","comp456","comp78"]):
-        namedAttr = NamedAttribute(node_tree,location=(left,-4-count),name=attr)
-        sampleIndex = SampleIndex(node_tree,location=(left+1,-4-count),value = namedAttr.std_out,index =repeat.outputs["i"])
-        create_geometry_line(node_tree,[e8_node,sampleIndex])
+    links.new(repeat.repeat_input.outputs["i"], addOne.inputs["in"])
+    links.new(addOne.outputs["out"], repeat.repeat_output.inputs["i"])
+    e8coords2 = []
+    for count, attr in enumerate(["comp123", "comp456", "comp78"]):
+        namedAttr = NamedAttribute(node_tree, location=(left, -4 - count), name=attr)
+        sampleIndex = SampleIndex(node_tree, location=(left + 1, -4 - count), value=namedAttr.std_out,
+                                  index=repeat.outputs["i"])
+        create_geometry_line(node_tree, [e8_node, sampleIndex])
         e8coords2.append(sampleIndex)
 
     # edge selection process
-    edge_selection = make_function(node_tree,name="EdgeSelection",location=(left+2,-2),functions={
-        "select":"v00,v10,sub,v00,v10,sub,dot,v01,v11,sub,v01,v11,sub,dot,add,v02,v12,sub,v01,v12,sub,dot,add,2.01,<,i,idx,>,and"
+    edge_selection = make_function(node_tree, name="EdgeSelection", location=(left + 2, -2), functions={
+        "select": "v00,v10,sub,v00,v10,sub,dot,v01,v11,sub,v01,v11,sub,dot,add,v02,v12,sub,v01,v12,sub,dot,add,2.01,<,i,idx,>,and"
     },
-    inputs=["v00","v01","v02","v10","v11","v12","i","idx"],outputs=["select"],vectors=["v00","v01","v02","v10","v11","v12"],
-                                   scalars=["select","i","idx"],hide=True)
+                                   inputs=["v00", "v01", "v02", "v10", "v11", "v12", "i", "idx"], outputs=["select"],
+                                   vectors=["v00", "v01", "v02", "v10", "v11", "v12"],
+                                   scalars=["select", "i", "idx"], hide=True)
 
-    links.new(e8coords[0].std_out,edge_selection.inputs["v00"])
-    links.new(e8coords[1].std_out,edge_selection.inputs["v01"])
-    links.new(e8coords[2].std_out,edge_selection.inputs["v02"])
-    links.new(e8coords2[0].std_out,edge_selection.inputs["v10"])
-    links.new(e8coords2[1].std_out,edge_selection.inputs["v11"])
-    links.new(e8coords2[2].std_out,edge_selection.inputs["v12"])
-    links.new(repeat.repeat_input.outputs["i"],edge_selection.inputs["i"])
-    links.new(idx.std_out,edge_selection.inputs["idx"])
+    links.new(e8coords[0].std_out, edge_selection.inputs["v00"])
+    links.new(e8coords[1].std_out, edge_selection.inputs["v01"])
+    links.new(e8coords[2].std_out, edge_selection.inputs["v02"])
+    links.new(e8coords2[0].std_out, edge_selection.inputs["v10"])
+    links.new(e8coords2[1].std_out, edge_selection.inputs["v11"])
+    links.new(e8coords2[2].std_out, edge_selection.inputs["v12"])
+    links.new(repeat.repeat_input.outputs["i"], edge_selection.inputs["i"])
+    links.new(idx.std_out, edge_selection.inputs["idx"])
 
     # extrude selected edges
-    sample_idx = SampleIndex(node_tree,location=(left+2,-3),index=repeat.repeat_input.outputs["i"],value=pos.std_out,geometry=scale_geo.geometry_out)
-    extrude = ExtrudeMesh(node_tree,location =(left+3,-2),selection=edge_selection.outputs['select'])
-    set_pos2 = SetPosition(node_tree,location=(left+4,-2),selection=extrude.outputs['Top'],position=sample_idx.std_out)
+    sample_idx = SampleIndex(node_tree, location=(left + 2, -3), index=repeat.repeat_input.outputs["i"],
+                             value=pos.std_out, geometry=scale_geo.geometry_out)
+    extrude = ExtrudeMesh(node_tree, location=(left + 3, -2), selection=edge_selection.outputs['select'])
+    set_pos2 = SetPosition(node_tree, location=(left + 4, -2), selection=extrude.outputs['Top'],
+                           position=sample_idx.std_out)
     # create repeat-zone interal geometry line
-    repeat.create_geometry_line([extrude,set_pos2])
+    repeat.create_geometry_line([extrude, set_pos2])
 
-
-    left+=6
+    left += 6
     # after configurations
-    merge = MergeByDistance(node_tree,location=(left,0))
-    #edges
-    wireframe = WireFrame(node_tree,location=(left+1,1),radius=0.0005)
-    mat = SetMaterial(node_tree,material='plastic_joker',location=(left+2,1),alpha=0.5)
-    #vertices pipe them in from scale_geo directly, to avoid averaged attributed from the MergeByDistance node
-    sphere = IcoSphere(node_tree,location=(left+0.5,-2),subdivisions=2,radius=0.075)
-    iop = InstanceOnPoints(node_tree,location=(left+1,-1),instance=sphere.geometry_out)
-    mat2= SetMaterial(node_tree,location=(left+2,-1),material=create_material_for_e8_visuals,attribute_names=["comp123","comp456","comp78"])
-    left+=3
-    join = JoinGeometry(node_tree,location=(left,0))
-    left+=1
-    group_outputs.location = (left*200, 0)
+    merge = MergeByDistance(node_tree, location=(left, 0))
+    # edges
+    wireframe = WireFrame(node_tree, location=(left + 1, 1), radius=0.0005)
+    mat = SetMaterial(node_tree, material='plastic_joker', location=(left + 2, 1), alpha=0.5)
+    # vertices pipe them in from scale_geo directly, to avoid averaged attributed from the MergeByDistance node
+    sphere = IcoSphere(node_tree, location=(left + 0.5, -2), subdivisions=2, radius=0.075)
+    iop = InstanceOnPoints(node_tree, location=(left + 1, -1), instance=sphere.geometry_out)
+    mat2 = SetMaterial(node_tree, location=(left + 2, -1), material=create_material_for_e8_visuals,
+                       attribute_names=["comp123", "comp456", "comp78"])
+    left += 3
+    join = JoinGeometry(node_tree, location=(left, 0))
+    left += 1
+    group_outputs.location = (left * 200, 0)
     create_geometry_line(node_tree, [e8_node, set_pos, points2verts, scale_geo, repeat])
-    create_geometry_line(node_tree, [repeat,merge,wireframe,mat,join], out=group_outputs.inputs['Geometry'])
-    create_geometry_line(node_tree, [scale_geo,iop,mat2,join], out=group_outputs.inputs['Geometry'])
-
+    create_geometry_line(node_tree, [repeat, merge, wireframe, mat, join], out=group_outputs.inputs['Geometry'])
+    create_geometry_line(node_tree, [scale_geo, iop, mat2, join], out=group_outputs.inputs['Geometry'])
 
     return node_tree
 
 
+##########################
+## Mandelbrot area
+###########################
 
 def polygon_group(radius=1, n_gon=6, name="PolygonGroup", colors=['text', 'gray_2']):
     """
@@ -842,6 +1000,9 @@ def integral_checker(functions=[], colors=[], name="IntegralChecker", mesh_point
     return node_tree
 
 
+##########################
+## Penrose tilings I
+############################
 def create_hexagon_tilings(name='HexagonTilings', material='drawing', level=1, scale=10, **kwargs):
     """
        create a group that places hexagons at each vertex point of the mesh
@@ -953,7 +1114,7 @@ def create_hexagon_tilings(name='HexagonTilings', material='drawing', level=1, s
     return node_tree
 
 
-def create_z3(name='Z3_generator', n=3,base="PENROSE",**kwargs):
+def create_z3(name='Z3_generator', n=3, base="PENROSE", **kwargs):
     """
     create a geometry node that generates Z5 tuples
 
@@ -972,7 +1133,7 @@ def create_z3(name='Z3_generator', n=3,base="PENROSE",**kwargs):
     length = 0
 
     group_outputs = nodes.new('NodeGroupOutput')
-    group_outputs.location = (-3*left, 0)
+    group_outputs.location = (-3 * left, 0)
     length += 1
 
     make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
@@ -989,68 +1150,69 @@ def create_z3(name='Z3_generator', n=3,base="PENROSE",**kwargs):
     tl = -20
     th = -2
     thetas = []
-    t_labels = ['t_'+str(i) for i in range(3)]
+    t_labels = ['t_' + str(i) for i in range(3)]
     for i in range(3):
-        thetas.append(InputValue(node_tree,location=(tl,th+2-0.5*i),value=0,name=t_labels[i],label=t_labels[i]))
-    tl+=1
+        thetas.append(
+            InputValue(node_tree, location=(tl, th + 2 - 0.5 * i), value=0, name=t_labels[i], label=t_labels[i]))
+    tl += 1
     rotations = []
     dirs = choose(list(range(3)), 2)
-    orientation=[1,-1,1] #account for  right-handedness of the rotation with respect to Euler angles
+    orientation = [1, -1, 1]  # account for  right-handedness of the rotation with respect to Euler angles
     for i in range(3):
-        rotations.append(Rotation(node_tree,location = (tl,th+1-0.4*i),
-                                  angle = thetas[2-i].std_out,u = dirs[i][0],v=dirs[i][1],
-                                  dimension =3,name='R_'+str(i),label='R_'+str(i),orientation=orientation[i],hide=True)
+        rotations.append(Rotation(node_tree, location=(tl, th + 1 - 0.4 * i),
+                                  angle=thetas[2 - i].std_out, u=dirs[i][0], v=dirs[i][1],
+                                  dimension=3, name='R_' + str(i), label='R_' + str(i), orientation=orientation[i],
+                                  hide=True)
                          )
 
-    tl+=1
+    tl += 1
 
     # create rotation marker
-    ml = tl+1
+    ml = tl + 1
     mh = 10
 
-    join_marker = JoinGeometry(node_tree,location=(ml+4,mh/2))
+    join_marker = JoinGeometry(node_tree, location=(ml + 4, mh / 2))
 
     for i in range(3):
-        grid = Grid(node_tree,location=(ml,mh-i),vertices_x=2,vertices_y=2,hide=True)
-        wire = WireFrame(node_tree,location=(ml+0.5,mh+0.25-i),
-                         radius=0.5,hide=True)
-        local_join = JoinGeometry(node_tree,location=(ml+1,mh+0.25-i),hide=True)
-        mat = SetMaterial(node_tree,location=(ml+1,mh-i),
-                          material='x'+str(dirs[i][0]+1)+str(dirs[i][1]+1)+"_color",hide=True)
+        grid = Grid(node_tree, location=(ml, mh - i), vertices_x=2, vertices_y=2, hide=True)
+        wire = WireFrame(node_tree, location=(ml + 0.5, mh + 0.25 - i),
+                         radius=0.5, hide=True)
+        local_join = JoinGeometry(node_tree, location=(ml + 1, mh + 0.25 - i), hide=True)
+        mat = SetMaterial(node_tree, location=(ml + 1, mh - i),
+                          material='x' + str(dirs[i][0] + 1) + str(dirs[i][1] + 1) + "_color", hide=True)
         comb_xyz = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
-        comb_xyz.location=((ml+1)*200,(mh-0.5-i)*200)
-        comb_xyz.inputs['X'].default_value=np.pi/2
-        comb_xyz.hide=True
-        node_tree.links.new(thetas[2-i].std_out,comb_xyz.inputs['Y'])
-        trans = TransformGeometry(node_tree,location=(ml+2,mh-i),
-                                  translation=[-6+0.88889*i,0,2.75],
-                                  rotation=comb_xyz.outputs['Vector'],scale=[0.05]*3,hide=True)
+        comb_xyz.location = ((ml + 1) * 200, (mh - 0.5 - i) * 200)
+        comb_xyz.inputs['X'].default_value = np.pi / 2
+        comb_xyz.hide = True
+        node_tree.links.new(thetas[2 - i].std_out, comb_xyz.inputs['Y'])
+        trans = TransformGeometry(node_tree, location=(ml + 2, mh - i),
+                                  translation=[-6 + 0.88889 * i, 0, 2.75],
+                                  rotation=comb_xyz.outputs['Vector'], scale=[0.05] * 3, hide=True)
 
-
-        create_geometry_line(node_tree, [grid, wire, local_join,trans,join_marker])
-        create_geometry_line(node_tree,[grid,mat,local_join])
+        create_geometry_line(node_tree, [grid, wire, local_join, trans, join_marker])
+        create_geometry_line(node_tree, [grid, mat, local_join])
 
     # create switch for rotation markers
     switch = InputBoolean(node_tree, location=(ml + 4, mh / 2 - 1), name='RotationPanelSwitch', value=True)
     del_rot_marker = DeleteGeometry(node_tree, location=(ml + 5, mh / 2), name="DeleteRotationMarker",
                                     selection=switch.std_out)
-    create_geometry_line(node_tree,[join_marker,del_rot_marker])
+    create_geometry_line(node_tree, [join_marker, del_rot_marker])
 
     # create the basis vectors
-    basis_labels = ["u",  "v", "n"]
+    basis_labels = ["u", "v", "n"]
     input_vecs = []
-    if base=="STANDARD":
-        u = [1,0,0]
-        v = [0,1,0]
-        n = [0,0,1]
-    elif base=="PENROSE":
+    if base == "STANDARD":
+        u = [1, 0, 0]
+        v = [0, 1, 0]
+        n = [0, 0, 1]
+    elif base == "PENROSE":
         r3 = np.sqrt(3)
-        u = [1/6*(3+r3),1/6*(-3+r3),-1/r3]
-        v = [1/6*(-3+r3),1/6*(3+r3),-1/r3]
-        n = [1/r3,1/r3,1/r3]
+        u = [1 / 6 * (3 + r3), 1 / 6 * (-3 + r3), -1 / r3]
+        v = [1 / 6 * (-3 + r3), 1 / 6 * (3 + r3), -1 / r3]
+        n = [1 / r3, 1 / r3, 1 / r3]
     basis = [u, v, n]
     for i, name in enumerate(basis_labels):
-        value= Vector(basis[i])
+        value = Vector(basis[i])
         input_vec = InputVector(
             node_tree,
             location=(tl, -1.5 - 0.25 * i),
@@ -1061,25 +1223,25 @@ def create_z3(name='Z3_generator', n=3,base="PENROSE",**kwargs):
         )
         input_vecs.append(input_vec)
 
-    tl+=1
+    tl += 1
 
     # create 9 linear maps to rotate the basis vectors
-    rot_labels = ["rotU","rotV","rotN"]
+    rot_labels = ["rotU", "rotV", "rotN"]
     input_vec_sockets = []
-    for i in range(0,3):
+    for i in range(0, 3):
         last_vec_socket = input_vecs[i].std_out
         for j in range(3):
-            lm = LinearMap(node_tree,location=(tl+j,th-0.4*i),dimension =3,
-                           name="LinearMap"+str(i)+str(2-j),label=rot_labels[i]+"_"+str(2-j),hide=True)
+            lm = LinearMap(node_tree, location=(tl + j, th - 0.4 * i), dimension=3,
+                           name="LinearMap" + str(i) + str(2 - j), label=rot_labels[i] + "_" + str(2 - j), hide=True)
             for k in range(3):
-                node_tree.links.new(rotations[2-j].outputs[k],lm.inputs[k+1])
-            node_tree.links.new(last_vec_socket,lm.inputs[4])
-            last_vec_socket=lm.outputs[0] # couple linear map with last one
-        input_vec_sockets +=[last_vec_socket]
+                node_tree.links.new(rotations[2 - j].outputs[k], lm.inputs[k + 1])
+            node_tree.links.new(last_vec_socket, lm.inputs[4])
+            last_vec_socket = lm.outputs[0]  # couple linear map with last one
+        input_vec_sockets += [last_vec_socket]
     # create sigmas
-    sigma_node = InputVector(node_tree,location=(-5+length,-4.25),
-                         value=Vector([0.2]*3),
-                         name='sigma',label='sigma',hide=True)
+    sigma_node = InputVector(node_tree, location=(-5 + length, -4.25),
+                             value=Vector([0.2] * 3),
+                             name='sigma', label='sigma', hide=True)
 
     length += 1
 
@@ -1100,17 +1262,17 @@ def create_z3(name='Z3_generator', n=3,base="PENROSE",**kwargs):
 
     line = []
 
-    points = Points(node_tree,location = (-5 + length, 1.5),radius=0.01,
-                    count =power.outputs['Value'])
+    points = Points(node_tree, location=(-5 + length, 1.5), radius=0.01,
+                    count=power.outputs['Value'])
     line.append(points)
 
-    index = Index(node_tree,location=(-5+(length-1),-1.5))
+    index = Index(node_tree, location=(-5 + (length - 1), -1.5))
 
-    index2tuple = make_function(nodes,functions={
-        "P":['index,base,2,**,/,floor,range,-','index,base,2,**,%,base,/,floor,range,-','index,base,%,range,-']
-    },name="Index2Tuple",inputs=["index","base","range"],outputs=["P"],scalars=["index","base","range"],
+    index2tuple = make_function(nodes, functions={
+        "P": ['index,base,2,**,/,floor,range,-', 'index,base,2,**,%,base,/,floor,range,-', 'index,base,%,range,-']
+    }, name="Index2Tuple", inputs=["index", "base", "range"], outputs=["P"], scalars=["index", "base", "range"],
                                 vectors=["P"])
-    index2tuple.location = (left + length * width,-300)
+    index2tuple.location = (left + length * width, -300)
     links.new(index.outputs[0], index2tuple.inputs['index'])
     links.new(two_n_plus_one.outputs[0], index2tuple.inputs['base'])
     links.new(n_value.outputs[0], index2tuple.inputs['range'])
@@ -1118,46 +1280,48 @@ def create_z3(name='Z3_generator', n=3,base="PENROSE",**kwargs):
     length += 1
 
     # project to the orthogonal 3 space
-    ortho_projection_pp = make_function(node_tree.nodes,functions={
-        'Vector':['0','0','n,P,sigma,sub,dot']
-    },name='OrthgonalProjector',
-    inputs=["n","sigma"]+["P"],outputs=['Vector'],vectors=["n","P",'sigma',"Vector"])
-    ortho_projection_pp.location =(left+length*200,0)
-    ortho_projection_pp.hide=True
-    node_tree.links.new(input_vec_sockets[2],ortho_projection_pp.inputs["n"])
-    node_tree.links.new(index2tuple.outputs["P"],ortho_projection_pp.inputs["P"])
-    node_tree.links.new(sigma_node.std_out,ortho_projection_pp.inputs['sigma'])
+    ortho_projection_pp = make_function(node_tree.nodes, functions={
+        'Vector': ['0', '0', 'n,P,sigma,sub,dot']
+    }, name='OrthgonalProjector',
+                                        inputs=["n", "sigma"] + ["P"], outputs=['Vector'],
+                                        vectors=["n", "P", 'sigma', "Vector"])
+    ortho_projection_pp.location = (left + length * 200, 0)
+    ortho_projection_pp.hide = True
+    node_tree.links.new(input_vec_sockets[2], ortho_projection_pp.inputs["n"])
+    node_tree.links.new(index2tuple.outputs["P"], ortho_projection_pp.inputs["P"])
+    node_tree.links.new(sigma_node.std_out, ortho_projection_pp.inputs['sigma'])
 
     # project to tiling plane
-    para_projection_pp = make_function(node_tree.nodes,functions={
-        'Vector':['u,P,sigma,sub,dot','v,P,sigma,sub,dot','0']
-    },name='ParaProjector',inputs=["u","v","sigma","P"],outputs=['Vector'],vectors=["u","v","sigma","P","Vector"])
-    para_projection_pp.location=(left+length*200,-50)
-    para_projection_pp.hide=True
-    node_tree.links.new(input_vec_sockets[0],para_projection_pp.inputs["u"])
-    node_tree.links.new(input_vec_sockets[1],para_projection_pp.inputs["v"])
-    node_tree.links.new(index2tuple.outputs["P"],para_projection_pp.inputs["P"])
-    node_tree.links.new(sigma_node.std_out,para_projection_pp.inputs["sigma"])
+    para_projection_pp = make_function(node_tree.nodes, functions={
+        'Vector': ['u,P,sigma,sub,dot', 'v,P,sigma,sub,dot', '0']
+    }, name='ParaProjector', inputs=["u", "v", "sigma", "P"], outputs=['Vector'],
+                                       vectors=["u", "v", "sigma", "P", "Vector"])
+    para_projection_pp.location = (left + length * 200, -50)
+    para_projection_pp.hide = True
+    node_tree.links.new(input_vec_sockets[0], para_projection_pp.inputs["u"])
+    node_tree.links.new(input_vec_sockets[1], para_projection_pp.inputs["v"])
+    node_tree.links.new(index2tuple.outputs["P"], para_projection_pp.inputs["P"])
+    node_tree.links.new(sigma_node.std_out, para_projection_pp.inputs["sigma"])
 
-    length+=1
+    length += 1
 
     # create attributes
-    attr = StoredNamedAttribute(node_tree, location = (-5 + length , 1.5),
-                                    data_type = 'FLOAT_VECTOR',
-                                    domain = 'POINT', name = name,
-                                    value=index2tuple.outputs["P"])
+    attr = StoredNamedAttribute(node_tree, location=(-5 + length, 1.5),
+                                data_type='FLOAT_VECTOR',
+                                domain='POINT', name=name,
+                                value=index2tuple.outputs["P"])
     line.append(attr)
     length += 1
 
-    ico_sphere = IcoSphere(node_tree,location=(-5+length,2),
-                           radius=0.025,subdivisions=2,hide=True)
+    ico_sphere = IcoSphere(node_tree, location=(-5 + length, 2),
+                           radius=0.025, subdivisions=2, hide=True)
 
-    set_pos = SetPosition(node_tree, location=(-5 + length , 1.5),
+    set_pos = SetPosition(node_tree, location=(-5 + length, 1.5),
                           position=ortho_projection_pp.outputs['Vector'],
                           label="ProjectionOrtho"
                           )
     line.append(set_pos)
-    length+=1
+    length += 1
 
     del_geo_3d = DeleteGeometry(node_tree, location=(-5 + length, 2))
     line.append(del_geo_3d)
@@ -1165,8 +1329,9 @@ def create_z3(name='Z3_generator', n=3,base="PENROSE",**kwargs):
 
     ico_instance = InstanceOnPoints(node_tree, location=(-5 + length, 1.5), instance=ico_sphere.geometry_out,
                                     hide=True)
-    ortho_projection_scale = InputValue(node_tree,location=(-5+length,1.25),name="OrthoProjectionScale",value=0)
-    shift2 = TransformGeometry(node_tree,location=(-4+length,1.5), translation=Vector([-2.5, 0, 1]),scale=ortho_projection_scale.std_out)
+    ortho_projection_scale = InputValue(node_tree, location=(-5 + length, 1.25), name="OrthoProjectionScale", value=0)
+    shift2 = TransformGeometry(node_tree, location=(-4 + length, 1.5), translation=Vector([-2.5, 0, 1]),
+                               scale=ortho_projection_scale.std_out)
     line.append(ico_instance)
     line.append(shift2)
 
@@ -1179,80 +1344,81 @@ def create_z3(name='Z3_generator', n=3,base="PENROSE",**kwargs):
                            label="Projection2D")
 
     line2.append(set_pos2)
-    length+=1
+    length += 1
 
     stored_index = StoredNamedAttribute(node_tree, location=(-5 + length, 0.5),
                                         name="SavedIndex",
                                         data_type='INT',
                                         value=index.std_out)
     line2.append(stored_index)
-    length+=1
+    length += 1
 
     # create 8 points the form the convex hull
     nl = 0
     nh = -3
 
-    points8 = Points(node_tree,location=(nl,nh),count=8)
-    idx = Index(node_tree,location=(nl-1,nh-1))
+    points8 = Points(node_tree, location=(nl, nh), count=8)
+    idx = Index(node_tree, location=(nl - 1, nh - 1))
 
     # this function works also for indices with an arbitrary offset. We don't have to worry,\
     # when the index doesn't start at 0
-    mod = make_function(node_tree.nodes,functions={
-        'p':[ 'index,8,%,4,/,floor','index,4,%,2,/,floor','index,2,%'],
-    },name="Mod8",inputs=['index'],outputs=['p'],scalars=['index'],vectors=['p'])
-    node_tree.links.new(idx.std_out,mod.inputs['index'])
-    mod.location = (nl*200,nh*200-200)
-    mod.hide=True
-    nl+=1
+    mod = make_function(node_tree.nodes, functions={
+        'p': ['index,8,%,4,/,floor', 'index,4,%,2,/,floor', 'index,2,%'],
+    }, name="Mod8", inputs=['index'], outputs=['p'], scalars=['index'], vectors=['p'])
+    node_tree.links.new(idx.std_out, mod.inputs['index'])
+    mod.location = (nl * 200, nh * 200 - 200)
+    mod.hide = True
+    nl += 1
 
     nline = [points8]
     # create attributes
-    attr = StoredNamedAttribute(node_tree, location = (nl, nh),
-                                    data_type='FLOAT_VECTOR', domain='POINT',
-                                    name=name, value=mod.outputs["p"])
+    attr = StoredNamedAttribute(node_tree, location=(nl, nh),
+                                data_type='FLOAT_VECTOR', domain='POINT',
+                                name=name, value=mod.outputs["p"])
     nline.append(attr)
     nl += 1
 
-    projection8 = make_function(node_tree.nodes,functions={
-        'Vector':['0','0','n,p,dot']
-    },name='OrthgonalProjector',
-    inputs=["n","p"],outputs=['Vector'],vectors=["n","p"]+['Vector'])
-    projection8.location =(nl*200,(nh-1)*200)
-    projection8.hide=True
+    projection8 = make_function(node_tree.nodes, functions={
+        'Vector': ['0', '0', 'n,p,dot']
+    }, name='OrthgonalProjector',
+                                inputs=["n", "p"], outputs=['Vector'], vectors=["n", "p"] + ['Vector'])
+    projection8.location = (nl * 200, (nh - 1) * 200)
+    projection8.hide = True
 
-    node_tree.links.new(input_vec_sockets[2],projection8.inputs["n"])
-    node_tree.links.new(mod.outputs["p"],projection8.inputs["p"])
+    node_tree.links.new(input_vec_sockets[2], projection8.inputs["n"])
+    node_tree.links.new(mod.outputs["p"], projection8.inputs["p"])
 
-    set_pos8 = SetPosition(node_tree,location=(nl,nh),
-                          position = projection8.outputs['Vector']
-                          )
+    set_pos8 = SetPosition(node_tree, location=(nl, nh),
+                           position=projection8.outputs['Vector']
+                           )
     nline.append(set_pos8)
-    nl+=1
+    nl += 1
     hull = ConvexHull(node_tree, location=(nl, nh))
-    hull_wire = WireFrame(node_tree,location=(nl+1,nh+0.25),radius=0.01)
-    hull_mat = SetMaterial(node_tree,location=(nl+3,nh),material='plastic_joker')
-    ico = IcoSphere(node_tree,location=(nl,nh-1),subdivisions=2,radius=0.05)
-    iop = InstanceOnPoints(node_tree, location=(nl + 1, nh),instance=ico.geometry_out)
-    ch_scale = InputValue(node_tree,location=(nl+1,nh-0.25),name='ConvexHullScale',value=0)
-    shift = TransformGeometry(node_tree,location=(nl+4,nh),translation = Vector([-2.5,0,1]),scale=ch_scale.std_out)
-    hull_join = JoinGeometry(node_tree,location=(nl+2,nh))
-    create_geometry_line(node_tree,[hull,hull_wire,hull_join])
-    nline+=[hull,iop,hull_join,hull_mat,shift]
-    nl+=2
+    hull_wire = WireFrame(node_tree, location=(nl + 1, nh + 0.25), radius=0.01)
+    hull_mat = SetMaterial(node_tree, location=(nl + 3, nh), material='plastic_joker')
+    ico = IcoSphere(node_tree, location=(nl, nh - 1), subdivisions=2, radius=0.05)
+    iop = InstanceOnPoints(node_tree, location=(nl + 1, nh), instance=ico.geometry_out)
+    ch_scale = InputValue(node_tree, location=(nl + 1, nh - 0.25), name='ConvexHullScale', value=0)
+    shift = TransformGeometry(node_tree, location=(nl + 4, nh), translation=Vector([-2.5, 0, 1]),
+                              scale=ch_scale.std_out)
+    hull_join = JoinGeometry(node_tree, location=(nl + 2, nh))
+    create_geometry_line(node_tree, [hull, hull_wire, hull_join])
+    nline += [hull, iop, hull_join, hull_mat, shift]
+    nl += 2
 
     # convex hull test
 
-    convex_hull_test = InsideConvexHull3D(node_tree, location=(1,-1.25),
-                        target_geometry=hull.geometry_out,
-                        source_position=ortho_projection_pp.outputs['Vector']
-                        )
+    convex_hull_test = InsideConvexHull3D(node_tree, location=(1, -1.25),
+                                          target_geometry=hull.geometry_out,
+                                          source_position=ortho_projection_pp.outputs['Vector']
+                                          )
 
-    node_tree.links.new(convex_hull_test.std_out,set_pos2.node.inputs['Selection'])
-    node_tree.links.new(convex_hull_test.std_out,set_pos.node.inputs['Selection'])
+    node_tree.links.new(convex_hull_test.std_out, set_pos2.node.inputs['Selection'])
+    node_tree.links.new(convex_hull_test.std_out, set_pos.node.inputs['Selection'])
 
     del_geo = DeleteGeometry(node_tree, location=(-5 + length, 0),
                              selection=convex_hull_test.outputs['Is Outside'])
-    links.new(convex_hull_test.outputs['Is Outside'],del_geo_3d.inputs['Selection'])
+    links.new(convex_hull_test.outputs['Is Outside'], del_geo_3d.inputs['Selection'])
 
     line2.append(del_geo)
 
@@ -1263,59 +1429,59 @@ def create_z3(name='Z3_generator', n=3,base="PENROSE",**kwargs):
     ml = 2
     mh = -0.5
 
-    input_dirs=[]
-    for i,dir in enumerate(dirs):
-        input_dirs.append(InputVector(node_tree,location=(ml,mh-0.25*i),
-                                      value=dir+[0],
-                                      name=str(dir),label=str(dir),hide=True)
+    input_dirs = []
+    for i, dir in enumerate(dirs):
+        input_dirs.append(InputVector(node_tree, location=(ml, mh - 0.25 * i),
+                                      value=dir + [0],
+                                      name=str(dir), label=str(dir), hide=True)
                           )
 
-    ml+=1
-    mh-=1
+    ml += 1
+    mh -= 1
 
-    sel_index = NamedAttribute(node_tree,location=(ml,mh),
+    sel_index = NamedAttribute(node_tree, location=(ml, mh),
                                data_type='INT',
-                      name="SavedIndex")
+                               name="SavedIndex")
 
-    ml+=1
+    ml += 1
 
     sel_index2tuple = make_function(nodes, functions={
-        "P":['index,base,2,**,/,floor,range,-','index,base,2,**,%,base,/,floor,range,-','index,base,%,range,-']
+        "P": ['index,base,2,**,/,floor,range,-', 'index,base,2,**,%,base,/,floor,range,-', 'index,base,%,range,-']
     }, name="SelectedIndex2Tuple", inputs=["index", "base", "range"], outputs=["P"], scalars=["index", "base", "range"],
-                                vectors=["P"])
-    sel_index2tuple.location = (ml * width, mh*width)
+                                    vectors=["P"])
+    sel_index2tuple.location = (ml * width, mh * width)
     links.new(sel_index.std_out, sel_index2tuple.inputs['index'])
     links.new(two_n_plus_one.outputs[0], sel_index2tuple.inputs['base'])
     links.new(n_value.outputs[0], sel_index2tuple.inputs['range'])
 
-    ml+=1
+    ml += 1
 
     line3 = []
     sub_join = JoinGeometry(node_tree, location=(nl + 4, 0))
 
-    scale_2d = InputValue(node_tree,location=(nl+4,-0.25),name='ScaleProjection',value=0)
-    scale_elements = ScaleElements(node_tree,location=(nl+5,0),
+    scale_2d = InputValue(node_tree, location=(nl + 4, -0.25), name='ScaleProjection', value=0)
+    scale_elements = ScaleElements(node_tree, location=(nl + 5, 0),
                                    scale=scale_2d.std_out)
 
     if 'final_translation' in kwargs:
         translation = kwargs.pop('final_translation')
     else:
-        translation=Vector()
+        translation = Vector()
     if 'final_rotation' in kwargs:
         rotation = kwargs.pop('final_rotation')
     else:
-        rotation=Vector()
+        rotation = Vector()
     if 'final_scale' in kwargs:
         scale = kwargs.pop('final_scale')
     else:
-        scale=Vector([1,1,1])
-    transform = TransformGeometry(node_tree,location=(nl+6,0),
-                                  translation=translation,rotation=rotation,scale=scale)
+        scale = Vector([1, 1, 1])
+    transform = TransformGeometry(node_tree, location=(nl + 6, 0),
+                                  translation=translation, rotation=rotation, scale=scale)
 
     line3.append(sub_join)
     line3.append(scale_elements)
     line3.append(transform)
-    join = JoinGeometry(node_tree,location=(nl+7,0))
+    join = JoinGeometry(node_tree, location=(nl + 7, 0))
     nline.append(join)
     line.append(join)
     # line2.append(join)
@@ -1325,118 +1491,124 @@ def create_z3(name='Z3_generator', n=3,base="PENROSE",**kwargs):
     create_geometry_line(node_tree, line2)
     create_geometry_line(node_tree, line3)
 
-    create_geometry_line(node_tree,[del_rot_marker,join])
+    create_geometry_line(node_tree, [del_rot_marker, join])
     links.new(join.geometry_out, group_outputs.inputs['Geometry'])
 
     # make face generation groups
 
-    ml+=1
+    ml += 1
     for i in range(3):
-        direction = str(dirs[i][0]+1)+str(dirs[i][1]+1)
-        face_generation_group = make_face_generation_group_3d(nodes,basis_labels,["sigma"],
-                                                           material='x'+direction+"_color",
-                                                           name="FaceGenerator"+str(dirs[i]))
-        face_generation_group.location=((ml+0.25*i)*200,(mh-0.25*i)*200)
-        face_generation_group.hide=True
+        direction = str(dirs[i][0] + 1) + str(dirs[i][1] + 1)
+        face_generation_group = make_face_generation_group_3d(nodes, basis_labels, ["sigma"],
+                                                              material='x' + direction + "_color",
+                                                              name="FaceGenerator" + str(dirs[i]))
+        face_generation_group.location = ((ml + 0.25 * i) * 200, (mh - 0.25 * i) * 200)
+        face_generation_group.hide = True
 
         node_tree.links.new(del_geo.geometry_out, face_generation_group.inputs['Geometry'])
         node_tree.links.new(input_dirs[i].std_out, face_generation_group.inputs['Direction'])
         node_tree.links.new(sel_index2tuple.outputs["P"], face_generation_group.inputs['P'])
         node_tree.links.new(face_generation_group.outputs["Geometry"], sub_join.inputs['Geometry'])
 
-        for j,label in enumerate(basis_labels):
+        for j, label in enumerate(basis_labels):
             node_tree.links.new(input_vec_sockets[j], face_generation_group.inputs[label])
 
         node_tree.links.new(sigma_node.std_out, face_generation_group.inputs["sigma"])
         node_tree.links.new(hull.geometry_out, face_generation_group.inputs['Convex Hull'])
 
+    # 3d visuals
 
-    #3d visuals
-
-    #adjusted normal, since the thetas are switched
-    combine = CombineXYZ(node_tree, location=(-11 + length, 3.5), x=thetas[0].std_out, y=thetas[1].std_out,z=thetas[2].std_out,
+    # adjusted normal, since the thetas are switched
+    combine = CombineXYZ(node_tree, location=(-11 + length, 3.5), x=thetas[0].std_out, y=thetas[1].std_out,
+                         z=thetas[2].std_out,
                          name="CombineEulerAngles")
 
-    join3d = JoinGeometry(node_tree,location=(length-1,5))
+    join3d = JoinGeometry(node_tree, location=(length - 1, 5))
     # grid
-    grow_scale = InputValue(node_tree,(-7+length,5),value=0,name="GrowthScale3D")
-    position = Position(node_tree,(-7+length,4.75),name="CubiePosition")
-    grow_grid = make_function(node_tree,functions={
-        'selection':'pos,length,r,<'
-    },inputs=['pos','r'],outputs=['selection'],scalars=['r','selection'],vectors=['pos'],name='GrowFunction',hide=True)
-    grow_grid.location=((-6+length)*200,5*200)
-    node_tree.links.new(grow_scale.std_out,grow_grid.inputs['r'])
-    node_tree.links.new(position.std_out,grow_grid.inputs['pos'])
-    points3d = Points(node_tree,location = (-5 + length,5),count =power.outputs['Value'])
-    cubies = CubeMesh(node_tree,location = (-5+length,4), size=[0.1,0.1,0.1],name="Cubies")
-    iop3d = InstanceOnPoints(node_tree,location=(-4+length,5),instance=cubies.geometry_out,selection=grow_grid.outputs['selection'])
-    set_pos3d = SetPosition(node_tree,location=(-3+length,5),position = index2tuple.outputs["P"],name="Pos3D")
-    create_geometry_line(node_tree,[points3d,set_pos3d,iop3d,join3d])
+    grow_scale = InputValue(node_tree, (-7 + length, 5), value=0, name="GrowthScale3D")
+    position = Position(node_tree, (-7 + length, 4.75), name="CubiePosition")
+    grow_grid = make_function(node_tree, functions={
+        'selection': 'pos,length,r,<'
+    }, inputs=['pos', 'r'], outputs=['selection'], scalars=['r', 'selection'], vectors=['pos'], name='GrowFunction',
+                              hide=True)
+    grow_grid.location = ((-6 + length) * 200, 5 * 200)
+    node_tree.links.new(grow_scale.std_out, grow_grid.inputs['r'])
+    node_tree.links.new(position.std_out, grow_grid.inputs['pos'])
+    points3d = Points(node_tree, location=(-5 + length, 5), count=power.outputs['Value'])
+    cubies = CubeMesh(node_tree, location=(-5 + length, 4), size=[0.1, 0.1, 0.1], name="Cubies")
+    iop3d = InstanceOnPoints(node_tree, location=(-4 + length, 5), instance=cubies.geometry_out,
+                             selection=grow_grid.outputs['selection'])
+    set_pos3d = SetPosition(node_tree, location=(-3 + length, 5), position=index2tuple.outputs["P"], name="Pos3D")
+    create_geometry_line(node_tree, [points3d, set_pos3d, iop3d, join3d])
 
     # selected
-    select_scale= InputValue(node_tree,location=(-5+length,6.75),value=0,name='SelectedScale')
-    sel_icos = IcoSphere(node_tree,location=(-5+length,7),radius=select_scale.std_out,subdivisions=2)
+    select_scale = InputValue(node_tree, location=(-5 + length, 6.75), value=0, name='SelectedScale')
+    sel_icos = IcoSphere(node_tree, location=(-5 + length, 7), radius=select_scale.std_out, subdivisions=2)
     set_pos3d_sel = SetPosition(node_tree, location=(-4 + length, 7),
                                 selection=convex_hull_test.outputs["Is Inside"],
                                 position=index2tuple.outputs["P"], name="Pos3DSelected")
-    stored_attr=StoredNamedAttribute(node_tree,location=(-3+length,7),data_type='INT',
-                                     name='SavedIndex2',value=index.std_out)
-    del_geo_3d_sel = DeleteGeometry(node_tree,location=(-2+length,7),
+    stored_attr = StoredNamedAttribute(node_tree, location=(-3 + length, 7), data_type='INT',
+                                       name='SavedIndex2', value=index.std_out)
+    del_geo_3d_sel = DeleteGeometry(node_tree, location=(-2 + length, 7),
                                     selection=convex_hull_test.outputs["Is Outside"])
-    iop_sel= InstanceOnPoints(node_tree,location=(-1+length,6.75),instance=sel_icos.geometry_out)
-    sel_mat = SetMaterial(node_tree,location=(length,7),material="plastic_example")
-    create_geometry_line(node_tree,[points3d,set_pos3d_sel,stored_attr,del_geo_3d_sel,iop_sel,sel_mat,join3d])
+    iop_sel = InstanceOnPoints(node_tree, location=(-1 + length, 6.75), instance=sel_icos.geometry_out)
+    sel_mat = SetMaterial(node_tree, location=(length, 7), material="plastic_example")
+    create_geometry_line(node_tree, [points3d, set_pos3d_sel, stored_attr, del_geo_3d_sel, iop_sel, sel_mat, join3d])
 
     # plane
-    scale_plane = InputValue(node_tree,(-6+length,2.75),name='PlaneScale',value = 0)
-    mesh = Grid(node_tree,location = (-5+length,3),size_x=scale_plane.std_out,size_y=scale_plane.std_out,vertices_x=11,vertices_y=11)
+    scale_plane = InputValue(node_tree, (-6 + length, 2.75), name='PlaneScale', value=0)
+    mesh = Grid(node_tree, location=(-5 + length, 3), size_x=scale_plane.std_out, size_y=scale_plane.std_out,
+                vertices_x=11, vertices_y=11)
 
-    rotate = TransformGeometry(node_tree,location=(-4+length,3),name="Rotation",rotation=combine.std_out)
-    wire = WireFrame(node_tree,geometry=mesh.geometry_out,location=(-3+length,3))
-    mesh_mat = SetMaterial(node_tree,location=(-2+length,3),material = 'plastic_custom1')
-    create_geometry_line(node_tree,[mesh,rotate,wire,mesh_mat,join3d])
+    rotate = TransformGeometry(node_tree, location=(-4 + length, 3), name="Rotation", rotation=combine.std_out)
+    wire = WireFrame(node_tree, geometry=mesh.geometry_out, location=(-3 + length, 3))
+    mesh_mat = SetMaterial(node_tree, location=(-2 + length, 3), material='plastic_custom1')
+    create_geometry_line(node_tree, [mesh, rotate, wire, mesh_mat, join3d])
 
     # ortho line
     scale_ortho_line = InputValue(node_tree, (-6 + length, 2.25), name='OrthoLineScale', value=0)
-    line = MeshLine(node_tree, location=(-5 + length, 2.5), count=10,start_location=Vector([0,0,-6]),end_location=Vector([0,0,6]),)
-    rotate_line = TransformGeometry(node_tree, location=(-4 + length, 2.5), name="RotationLine", scale=scale_ortho_line.std_out,rotation=combine.std_out)
+    line = MeshLine(node_tree, location=(-5 + length, 2.5), count=10, start_location=Vector([0, 0, -6]),
+                    end_location=Vector([0, 0, 6]), )
+    rotate_line = TransformGeometry(node_tree, location=(-4 + length, 2.5), name="RotationLine",
+                                    scale=scale_ortho_line.std_out, rotation=combine.std_out)
     wire_line = WireFrame(node_tree, geometry=line.geometry_out, location=(-3 + length, 2.5))
     mesh_mat_line = SetMaterial(node_tree, location=(-2 + length, 2.5), material='plastic_joker')
     create_geometry_line(node_tree, [line, rotate_line, wire_line, mesh_mat_line, join3d])
 
     # voronoi
-    scale_voronoi = InputValue(node_tree,location=(-6+length,5.75),name="VoronoiScale",value=0)
-    voronoi = CubeMesh(node_tree,location = (-5+length,6),name="Voronoi")
-    voronoi_shift = TransformGeometry(node_tree,location=(-4+length,6),translation=[0.5]*3,scale=scale_voronoi.std_out)
-    voronoi_wire = WireFrame(node_tree,location=(-3+length,6))
-    voronoi_mat = SetMaterial(node_tree,location=(-2+length,6),material='plastic_drawing')
-    create_geometry_line(node_tree,[voronoi,voronoi_shift,voronoi_wire,voronoi_mat,join3d])
+    scale_voronoi = InputValue(node_tree, location=(-6 + length, 5.75), name="VoronoiScale", value=0)
+    voronoi = CubeMesh(node_tree, location=(-5 + length, 6), name="Voronoi")
+    voronoi_shift = TransformGeometry(node_tree, location=(-4 + length, 6), translation=[0.5] * 3,
+                                      scale=scale_voronoi.std_out)
+    voronoi_wire = WireFrame(node_tree, location=(-3 + length, 6))
+    voronoi_mat = SetMaterial(node_tree, location=(-2 + length, 6), material='plastic_drawing')
+    create_geometry_line(node_tree, [voronoi, voronoi_shift, voronoi_wire, voronoi_mat, join3d])
 
-    sel_index_3d = NamedAttribute(node_tree, location=(-10+length,7),
-                               data_type='INT',
-                               name="SavedIndex2")
+    sel_index_3d = NamedAttribute(node_tree, location=(-10 + length, 7),
+                                  data_type='INT',
+                                  name="SavedIndex2")
 
     ml += 1
 
     sel_index2tuple_3d = make_function(nodes, functions={
         "P": ['index,base,2,**,/,floor,range,-', 'index,base,2,**,%,base,/,floor,range,-', 'index,base,%,range,-']
     }, name="SelectedIndex2Tuple", inputs=["index", "base", "range"], outputs=["P"], scalars=["index", "base", "range"],
-                                    vectors=["P"])
-    sel_index2tuple_3d.location = ((-9+length) * width, 1400)
+                                       vectors=["P"])
+    sel_index2tuple_3d.location = ((-9 + length) * width, 1400)
     links.new(sel_index_3d.std_out, sel_index2tuple_3d.inputs['index'])
     links.new(two_n_plus_one.outputs[0], sel_index2tuple_3d.inputs['base'])
     links.new(n_value.outputs[0], sel_index2tuple_3d.inputs['range'])
 
     # show faces
 
-    face_scale=InputValue(node_tree,location=(-6+length,9),name='FaceScale',value=0)
+    face_scale = InputValue(node_tree, location=(-6 + length, 9), name='FaceScale', value=0)
     for i in range(3):
-        direction = str(dirs[i][0]+1)+str(dirs[i][1]+1)
-        face_generation_group = make_face_generation_group_3d_unprojected(nodes,basis_labels,["sigma"],
-                                                           material='x'+direction+"_color",
-                                                           name="FaceGenerator"+str(dirs[i]))
-        face_generation_group.location=((-5+length)*200,(8.5-0.5*i)*200)
-        face_generation_group.hide=True
+        direction = str(dirs[i][0] + 1) + str(dirs[i][1] + 1)
+        face_generation_group = make_face_generation_group_3d_unprojected(nodes, basis_labels, ["sigma"],
+                                                                          material='x' + direction + "_color",
+                                                                          name="FaceGenerator" + str(dirs[i]))
+        face_generation_group.location = ((-5 + length) * 200, (8.5 - 0.5 * i) * 200)
+        face_generation_group.hide = True
 
         node_tree.links.new(del_geo_3d_sel.geometry_out, face_generation_group.inputs['Geometry'])
         node_tree.links.new(face_scale.std_out, face_generation_group.inputs['FaceScale'])
@@ -1444,28 +1616,29 @@ def create_z3(name='Z3_generator', n=3,base="PENROSE",**kwargs):
         node_tree.links.new(sel_index2tuple_3d.outputs["P"], face_generation_group.inputs['P'])
         node_tree.links.new(face_generation_group.outputs["Geometry"], join3d.inputs['Geometry'])
 
-        comps_u = [0,0,0]
-        comps_u[dirs[i][0]]=1
+        comps_u = [0, 0, 0]
+        comps_u[dirs[i][0]] = 1
         u = Vector(comps_u)
-        comps_v =[0,0,0]
-        comps_v[dirs[i][1]]=1
-        v= Vector(comps_v)
-        face_generation_group.inputs['u'].default_value=u
-        face_generation_group.inputs['v'].default_value=v
+        comps_v = [0, 0, 0]
+        comps_v[dirs[i][1]] = 1
+        v = Vector(comps_v)
+        face_generation_group.inputs['u'].default_value = u
+        face_generation_group.inputs['v'].default_value = v
         node_tree.links.new(input_vec_sockets[2], face_generation_group.inputs["n"])
 
         node_tree.links.new(sigma_node.std_out, face_generation_group.inputs["sigma"])
         node_tree.links.new(hull.geometry_out, face_generation_group.inputs['Convex Hull'])
 
     # connect to remaining geometry
-    view_rotation=InputVector(node_tree,location=(length-1,0.75),value=Vector(),name='ViewRotation')
-    transform_3d = TransformGeometry(node_tree, location=( length, 1), translation=Vector([0, 0, 0]),
+    view_rotation = InputVector(node_tree, location=(length - 1, 0.75), value=Vector(), name='ViewRotation')
+    transform_3d = TransformGeometry(node_tree, location=(length, 1), translation=Vector([0, 0, 0]),
                                      rotation=view_rotation.std_out,
                                      scale=[0.25] * 3, name="Transform3D")
-    create_geometry_line(node_tree,[join3d,transform_3d,join])
+    create_geometry_line(node_tree, [join3d, transform_3d, join])
     return node_tree
 
-def create_z5(name='Z5_generator', n=3,base="PENROSE",**kwargs):
+
+def create_z5(name='Z5_generator', n=3, base="PENROSE", **kwargs):
     """
     create a geometry node that generates Z5 tuples
 
@@ -1484,7 +1657,7 @@ def create_z5(name='Z5_generator', n=3,base="PENROSE",**kwargs):
     length = 0
 
     group_outputs = nodes.new('NodeGroupOutput')
-    group_outputs.location = (-3*left, 0)
+    group_outputs.location = (-3 * left, 0)
     length += 1
 
     make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
@@ -1501,56 +1674,57 @@ def create_z5(name='Z5_generator', n=3,base="PENROSE",**kwargs):
     tl = -20
     th = -2
     thetas = []
-    t_labels = ['t_'+str(i) for i in range(10)]
+    t_labels = ['t_' + str(i) for i in range(10)]
     for i in range(10):
-        thetas.append(InputValue(node_tree,location=(tl,th+2-0.5*i),value=0,name=t_labels[i],label=t_labels[i]))
-    tl+=1
+        thetas.append(
+            InputValue(node_tree, location=(tl, th + 2 - 0.5 * i), value=0, name=t_labels[i], label=t_labels[i]))
+    tl += 1
     rotations = []
     dirs = choose(list(range(5)), 2)
     for i in range(10):
-        rotations.append(Rotation(node_tree,location = (tl,th+1-0.4*i),
-                                  angle = thetas[i].std_out,u = dirs[i][0],v=dirs[i][1],
-                                  dimension =5,name='R_'+str(i),label='R_'+str(i),hide=True)
+        rotations.append(Rotation(node_tree, location=(tl, th + 1 - 0.4 * i),
+                                  angle=thetas[i].std_out, u=dirs[i][0], v=dirs[i][1],
+                                  dimension=5, name='R_' + str(i), label='R_' + str(i), hide=True)
                          )
 
-    tl+=1
+    tl += 1
 
     # create rotation marker
-    ml = tl+1
+    ml = tl + 1
     mh = 10
 
-    join_marker = JoinGeometry(node_tree,location=(ml+4,mh/2))
+    join_marker = JoinGeometry(node_tree, location=(ml + 4, mh / 2))
 
     for i in range(10):
-        grid = Grid(node_tree,location=(ml,mh-i),vertices_x=2,vertices_y=2,hide=True)
-        wire = WireFrame(node_tree,location=(ml+0.5,mh+0.25-i),
-                         radius=0.5,hide=True)
-        local_join = JoinGeometry(node_tree,location=(ml+1,mh+0.25-i),hide=True)
-        mat = SetMaterial(node_tree,location=(ml+1,mh-i),
-                          material='x'+str(dirs[i][0]+1)+str(dirs[i][1]+1)+"_color",hide=True)
+        grid = Grid(node_tree, location=(ml, mh - i), vertices_x=2, vertices_y=2, hide=True)
+        wire = WireFrame(node_tree, location=(ml + 0.5, mh + 0.25 - i),
+                         radius=0.5, hide=True)
+        local_join = JoinGeometry(node_tree, location=(ml + 1, mh + 0.25 - i), hide=True)
+        mat = SetMaterial(node_tree, location=(ml + 1, mh - i),
+                          material='x' + str(dirs[i][0] + 1) + str(dirs[i][1] + 1) + "_color", hide=True)
         comb_xyz = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
-        comb_xyz.location=((ml+1)*200,(mh-0.5-i)*200)
-        comb_xyz.inputs['X'].default_value=np.pi/2
-        comb_xyz.hide=True
-        node_tree.links.new(thetas[i].std_out,comb_xyz.inputs['Y'])
-        trans = TransformGeometry(node_tree,location=(ml+2,mh-i),
-                                  translation=[-6+0.88889*i,0,2.75],
-                                  rotation=comb_xyz.outputs['Vector'],scale=[0.05]*3,hide=True)
+        comb_xyz.location = ((ml + 1) * 200, (mh - 0.5 - i) * 200)
+        comb_xyz.inputs['X'].default_value = np.pi / 2
+        comb_xyz.hide = True
+        node_tree.links.new(thetas[i].std_out, comb_xyz.inputs['Y'])
+        trans = TransformGeometry(node_tree, location=(ml + 2, mh - i),
+                                  translation=[-6 + 0.88889 * i, 0, 2.75],
+                                  rotation=comb_xyz.outputs['Vector'], scale=[0.05] * 3, hide=True)
 
-        create_geometry_line(node_tree, [grid, wire, local_join,trans,join_marker])
-        create_geometry_line(node_tree,[grid,mat,local_join])
+        create_geometry_line(node_tree, [grid, wire, local_join, trans, join_marker])
+        create_geometry_line(node_tree, [grid, mat, local_join])
 
     # create the basis vectors
     basis_labels = ["u", "U", "v", "V", "n1", "m1", "n2", "m2", "n3", "m3"]
     ins = basis_labels[4:]
     input_vecs = []
-    if base=="STANDARD":
-        u_5d = [1,0,0,0,0]
-        v_5d = [0,1,0,0,0]
-        n1_5d = [0,0,1,0,0]
-        n2_5d = [0,0,0,1, 0]
-        n3_5d = [0,0,0,0,1]
-    elif base=="PENROSE":
+    if base == "STANDARD":
+        u_5d = [1, 0, 0, 0, 0]
+        v_5d = [0, 1, 0, 0, 0]
+        n1_5d = [0, 0, 1, 0, 0]
+        n2_5d = [0, 0, 0, 1, 0]
+        n3_5d = [0, 0, 0, 0, 1]
+    elif base == "PENROSE":
         r5 = np.sqrt(5)
         r2 = np.sqrt(2)
         r10 = r2 * r5
@@ -1580,33 +1754,34 @@ def create_z5(name='Z5_generator', n=3,base="PENROSE",**kwargs):
         )
         input_vecs.append(input_vec)
 
-    tl+=1
+    tl += 1
 
     # create 50 linear maps to rotate the basis vectors
-    rot_labels = ["rotU","rotV","rotN1","rotN2","rotN3"]
+    rot_labels = ["rotU", "rotV", "rotN1", "rotN2", "rotN3"]
     input_vec_sockets = []
-    for i in range(0,10,2):
-        last_vec_sockets = [input_vecs[i].std_out,input_vecs[i+1].std_out]
+    for i in range(0, 10, 2):
+        last_vec_sockets = [input_vecs[i].std_out, input_vecs[i + 1].std_out]
         for j in range(10):
-            lm = LinearMap(node_tree,location=(tl+j,th-0.4*i),dimension =5,
-                           name="LinearMap"+str(i)+str(9-j),label=rot_labels[i//2]+"_"+str(9-j),hide=True)
+            lm = LinearMap(node_tree, location=(tl + j, th - 0.4 * i), dimension=5,
+                           name="LinearMap" + str(i) + str(9 - j), label=rot_labels[i // 2] + "_" + str(9 - j),
+                           hide=True)
             for k in range(10):
-                node_tree.links.new(rotations[9-j].outputs[k],lm.inputs[k+1])
-            node_tree.links.new(last_vec_sockets[0],lm.inputs[11])
-            node_tree.links.new(last_vec_sockets[1],lm.inputs[12])
-            last_vec_sockets=[lm.outputs[0],lm.outputs[1]]
-        input_vec_sockets+=last_vec_sockets
+                node_tree.links.new(rotations[9 - j].outputs[k], lm.inputs[k + 1])
+            node_tree.links.new(last_vec_sockets[0], lm.inputs[11])
+            node_tree.links.new(last_vec_sockets[1], lm.inputs[12])
+            last_vec_sockets = [lm.outputs[0], lm.outputs[1]]
+        input_vec_sockets += last_vec_sockets
 
     # create sigmas
-    s1 = InputVector(node_tree,location=(-5+length,-4.25),
-                         value=Vector([0.2]*3),
-                         name='S1',label='S1',hide=True)
-    s2 = InputVector(node_tree,location=(-5+length,-4.5),
-                         value=Vector([0.2,0.2,0]),
-                         name='S2',label='S2',hide=True)
+    s1 = InputVector(node_tree, location=(-5 + length, -4.25),
+                     value=Vector([0.2] * 3),
+                     name='S1', label='S1', hide=True)
+    s2 = InputVector(node_tree, location=(-5 + length, -4.5),
+                     value=Vector([0.2, 0.2, 0]),
+                     name='S2', label='S2', hide=True)
 
-    sigmas= [s1,s2]
-    sigma_labels= ['S1','S2']
+    sigmas = [s1, s2]
+    sigma_labels = ['S1', 'S2']
     length += 1
 
     two_n_plus_one = nodes.new(type='ShaderNodeMath')
@@ -1626,18 +1801,19 @@ def create_z5(name='Z5_generator', n=3,base="PENROSE",**kwargs):
 
     line = []
 
-    points = Points(node_tree,location = (-5 + length, 1.5),radius=0.01,
-                    count =power.outputs['Value'])
+    points = Points(node_tree, location=(-5 + length, 1.5), radius=0.01,
+                    count=power.outputs['Value'])
     line.append(points)
 
-    index = Index(node_tree,location=(-5+(length-1),-1.5))
+    index = Index(node_tree, location=(-5 + (length - 1), -1.5))
 
-    index2tuple = make_function(nodes,functions={
-        "P1":['index,base,4,**,/,floor,range,-','index,base,4,**,%,base,3,**,/,floor,range,-','index,base,3,**,%,base,2,**,/,floor,range,-'],
-        "P2":['index,base,2,**,%,base,/,floor,range,-','index,base,%,range,-','0']
-    },name="Index2Tuple",inputs=["index","base","range"],outputs=["P1","P2"],scalars=["index","base","range"],
-                                vectors=["P1","P2"])
-    index2tuple.location = (left + length * width,-300)
+    index2tuple = make_function(nodes, functions={
+        "P1": ['index,base,4,**,/,floor,range,-', 'index,base,4,**,%,base,3,**,/,floor,range,-',
+               'index,base,3,**,%,base,2,**,/,floor,range,-'],
+        "P2": ['index,base,2,**,%,base,/,floor,range,-', 'index,base,%,range,-', '0']
+    }, name="Index2Tuple", inputs=["index", "base", "range"], outputs=["P1", "P2"], scalars=["index", "base", "range"],
+                                vectors=["P1", "P2"])
+    index2tuple.location = (left + length * width, -300)
     links.new(index.outputs[0], index2tuple.inputs['index'])
     links.new(two_n_plus_one.outputs[0], index2tuple.inputs['base'])
     links.new(n_value.outputs[0], index2tuple.inputs['range'])
@@ -1645,57 +1821,58 @@ def create_z5(name='Z5_generator', n=3,base="PENROSE",**kwargs):
     length += 1
 
     # project to the orthogonal 3 space
-    ortho_projection_pp = make_function(node_tree.nodes,functions={
-        'Vector':['n1,P1,S1,sub,dot,m1,P2,S2,sub,dot,+','n2,P1,S1,sub,dot,m2,P2,S2,sub,dot,+','n3,P1,S1,sub,dot,m3,P2,S2,sub,dot,+']
-    },name='OrthgonalProjector',
-    inputs=ins+sigma_labels+["P1","P2"],outputs=['Vector'],vectors=ins+["P1","P2"]+['Vector']+sigma_labels)
-    ortho_projection_pp.location =(left+length*200,0)
-    ortho_projection_pp.hide=True
+    ortho_projection_pp = make_function(node_tree.nodes, functions={
+        'Vector': ['n1,P1,S1,sub,dot,m1,P2,S2,sub,dot,+', 'n2,P1,S1,sub,dot,m2,P2,S2,sub,dot,+',
+                   'n3,P1,S1,sub,dot,m3,P2,S2,sub,dot,+']
+    }, name='OrthgonalProjector',
+                                        inputs=ins + sigma_labels + ["P1", "P2"], outputs=['Vector'],
+                                        vectors=ins + ["P1", "P2"] + ['Vector'] + sigma_labels)
+    ortho_projection_pp.location = (left + length * 200, 0)
+    ortho_projection_pp.hide = True
 
-    for i in range(4,10):
-        node_tree.links.new(input_vec_sockets[i],ortho_projection_pp.inputs[basis_labels[i]])
-    for name in ["P1","P2"]:
-        node_tree.links.new(index2tuple.outputs[name],ortho_projection_pp.inputs[name])
-    for node,label in zip(sigmas,sigma_labels):
-        node_tree.links.new(node.std_out,ortho_projection_pp.inputs[label])
+    for i in range(4, 10):
+        node_tree.links.new(input_vec_sockets[i], ortho_projection_pp.inputs[basis_labels[i]])
+    for name in ["P1", "P2"]:
+        node_tree.links.new(index2tuple.outputs[name], ortho_projection_pp.inputs[name])
+    for node, label in zip(sigmas, sigma_labels):
+        node_tree.links.new(node.std_out, ortho_projection_pp.inputs[label])
     # project to tiling plane
 
     para_ins = basis_labels[0:4]
-    para_projection_pp = make_function(node_tree.nodes,functions={
-        'Vector':['u,P1,S1,sub,dot,U,P2,S2,sub,dot,+','v,P1,S1,sub,dot,V,P2,S2,sub,dot,+','0']
-    },name='ParaProjector',inputs=para_ins+sigma_labels+["P1","P2"],outputs=['Vector'],vectors=para_ins+sigma_labels+["P1","P2","Vector"])
-    para_projection_pp.location=(left+length*200,-50)
-    para_projection_pp.hide=True
+    para_projection_pp = make_function(node_tree.nodes, functions={
+        'Vector': ['u,P1,S1,sub,dot,U,P2,S2,sub,dot,+', 'v,P1,S1,sub,dot,V,P2,S2,sub,dot,+', '0']
+    }, name='ParaProjector', inputs=para_ins + sigma_labels + ["P1", "P2"], outputs=['Vector'],
+                                       vectors=para_ins + sigma_labels + ["P1", "P2", "Vector"])
+    para_projection_pp.location = (left + length * 200, -50)
+    para_projection_pp.hide = True
 
-    for i in range(0,4):
-        node_tree.links.new(input_vec_sockets[i],para_projection_pp.inputs[basis_labels[i]])
-    for name in ["P1","P2"]:
-        node_tree.links.new(index2tuple.outputs[name],para_projection_pp.inputs[name])
-    for node,label in zip(sigmas,sigma_labels):
-        node_tree.links.new(node.std_out,para_projection_pp.inputs[label])
+    for i in range(0, 4):
+        node_tree.links.new(input_vec_sockets[i], para_projection_pp.inputs[basis_labels[i]])
+    for name in ["P1", "P2"]:
+        node_tree.links.new(index2tuple.outputs[name], para_projection_pp.inputs[name])
+    for node, label in zip(sigmas, sigma_labels):
+        node_tree.links.new(node.std_out, para_projection_pp.inputs[label])
 
-    length+=1
+    length += 1
 
     # create attributes
-    for i, name in enumerate(["P1","P2"]):
-        attr = StoredNamedAttribute(node_tree, location = (-5 + length , 1.5),
-                                    data_type = 'FLOAT_VECTOR',
-                                    domain = 'POINT', name = name,
+    for i, name in enumerate(["P1", "P2"]):
+        attr = StoredNamedAttribute(node_tree, location=(-5 + length, 1.5),
+                                    data_type='FLOAT_VECTOR',
+                                    domain='POINT', name=name,
                                     value=index2tuple.outputs[name])
         line.append(attr)
         length += 1
 
+    ico_sphere = IcoSphere(node_tree, location=(-5 + length, 2),
+                           radius=0.025, subdivisions=2, hide=True)
 
-    ico_sphere = IcoSphere(node_tree,location=(-5+length,2),
-                           radius=0.025,subdivisions=2,hide=True)
-
-
-    set_pos = SetPosition(node_tree, location=(-5 + length , 1.5),
+    set_pos = SetPosition(node_tree, location=(-5 + length, 1.5),
                           position=ortho_projection_pp.outputs['Vector'],
                           label="Projection3D"
                           )
     line.append(set_pos)
-    length+=1
+    length += 1
 
     del_geo_3d = DeleteGeometry(node_tree, location=(-5 + length, 2))
     line.append(del_geo_3d)
@@ -1714,80 +1891,83 @@ def create_z5(name='Z5_generator', n=3,base="PENROSE",**kwargs):
                            label="Projection2D")
 
     line2.append(set_pos2)
-    length+=1
+    length += 1
 
     stored_index = StoredNamedAttribute(node_tree, location=(-5 + length, 0.5),
                                         name="SavedIndex",
                                         data_type='INT',
                                         value=index.std_out)
     line2.append(stored_index)
-    length+=1
+    length += 1
 
     # create 32 points the form the convex hull with shift possibility
     nl = 0
     nh = -3
 
-    shift1 = InputVector(node_tree,location=(nl-1,nh))
-    shift2 = InputVector(node_tree,location=(nl-1,nh-0.25))
-    points32 = Points(node_tree,location=(nl,nh),count=32)
-    idx = Index(node_tree,location=(nl-1,nh-1))
+    shift1 = InputVector(node_tree, location=(nl - 1, nh))
+    shift2 = InputVector(node_tree, location=(nl - 1, nh - 0.25))
+    points32 = Points(node_tree, location=(nl, nh), count=32)
+    idx = Index(node_tree, location=(nl - 1, nh - 1))
 
     # this function works also for indices with an arbitrary offset. We don't have to worry,\
     # when the index doesn't start at 0
-    mod = make_function(node_tree.nodes,functions={
-        'p1':[ 'index,32,%,16,/,floor,0.,-,shift1_x,+','index,16,%,8,/,floor,0.,-,shift1_y,+','index,8,%,4,/,floor,0.,-,shift1_z,+'],
-        'p2': ['index,4,%,2,/,floor,0.,-,shift2_x,+','index,2,%,0.,-,shift2_y,+','0']
-    },name="Mod32",inputs=['index','shift1','shift2'],outputs=['p1','p2'],scalars=['index'],vectors=['p1','p2','shift1','shift2'])
-    node_tree.links.new(idx.std_out,mod.inputs['index'])
-    node_tree.links.new(shift1.std_out,mod.inputs['shift1'])
-    node_tree.links.new(shift2.std_out,mod.inputs['shift2'])
-    mod.location = (nl*200,nh*200-200)
-    mod.hide=True
-    nl+=1
+    mod = make_function(node_tree.nodes, functions={
+        'p1': ['index,32,%,16,/,floor,0.,-,shift1_x,+', 'index,16,%,8,/,floor,0.,-,shift1_y,+',
+               'index,8,%,4,/,floor,0.,-,shift1_z,+'],
+        'p2': ['index,4,%,2,/,floor,0.,-,shift2_x,+', 'index,2,%,0.,-,shift2_y,+', '0']
+    }, name="Mod32", inputs=['index', 'shift1', 'shift2'], outputs=['p1', 'p2'], scalars=['index'],
+                        vectors=['p1', 'p2', 'shift1', 'shift2'])
+    node_tree.links.new(idx.std_out, mod.inputs['index'])
+    node_tree.links.new(shift1.std_out, mod.inputs['shift1'])
+    node_tree.links.new(shift2.std_out, mod.inputs['shift2'])
+    mod.location = (nl * 200, nh * 200 - 200)
+    mod.hide = True
+    nl += 1
 
     nline = [points32]
     # create attributes
-    for  name in ['p1','p2']:
-        attr = StoredNamedAttribute(node_tree, location = (nl, nh),
+    for name in ['p1', 'p2']:
+        attr = StoredNamedAttribute(node_tree, location=(nl, nh),
                                     data_type='FLOAT_VECTOR', domain='POINT',
                                     name=name, value=mod.outputs[name])
         nline.append(attr)
         nl += 1
 
-    projection32 = make_function(node_tree.nodes,functions={
-        'Vector':['n1,p1,dot,m1,p2,dot,+','n2,p1,dot,m2,p2,dot,+','n3,p1,dot,m3,p2,dot,+']
-    },name='OrthgonalProjector',
-    inputs=ins+["p1","p2"],outputs=['Vector'],vectors=ins+["p1","p2"]+['Vector'])
-    projection32.location =(nl*200,(nh-1)*200)
-    projection32.hide=True
+    projection32 = make_function(node_tree.nodes, functions={
+        'Vector': ['n1,p1,dot,m1,p2,dot,+', 'n2,p1,dot,m2,p2,dot,+', 'n3,p1,dot,m3,p2,dot,+']
+    }, name='OrthgonalProjector',
+                                 inputs=ins + ["p1", "p2"], outputs=['Vector'], vectors=ins + ["p1", "p2"] + ['Vector'])
+    projection32.location = (nl * 200, (nh - 1) * 200)
+    projection32.hide = True
 
-    for i in range(4,10):
-        node_tree.links.new(input_vec_sockets[i],projection32.inputs[basis_labels[i]])
-    for name in ["p1","p2"]:
-        node_tree.links.new(mod.outputs[name],projection32.inputs[name])
+    for i in range(4, 10):
+        node_tree.links.new(input_vec_sockets[i], projection32.inputs[basis_labels[i]])
+    for name in ["p1", "p2"]:
+        node_tree.links.new(mod.outputs[name], projection32.inputs[name])
 
-    set_pos32 = SetPosition(node_tree,location=(nl,nh),
-                          position = projection32.outputs['Vector']
-                          )
+    set_pos32 = SetPosition(node_tree, location=(nl, nh),
+                            position=projection32.outputs['Vector']
+                            )
     nline.append(set_pos32)
-    nl+=1
+    nl += 1
     hull = ConvexHull(node_tree, location=(nl, nh))
-    nline+=[hull,WireFrame(node_tree, location=(nl + 1, nh)), SetMaterial(node_tree,location=(nl+2,nh),material='plastic_joker')]
-    nl+=2
+    nline += [hull, WireFrame(node_tree, location=(nl + 1, nh)),
+              SetMaterial(node_tree, location=(nl + 2, nh), material='plastic_joker')]
+    nl += 2
 
     # convex hull test with two rays
 
-    convex_hull_test = InsideConvexHull(node_tree, location=(1,-1.25),
-                        target_geometry=hull.geometry_out,
-                        source_position=ortho_projection_pp.outputs['Vector']
-                        )
+    convex_hull_test = InsideConvexHull(node_tree, location=(1, -1.25),
+                                        target_geometry=hull.geometry_out,
+                                        source_position=ortho_projection_pp.outputs['Vector']
+                                        )
 
-    node_tree.links.new(convex_hull_test.std_out,set_pos2.node.inputs['Selection'])
-    node_tree.links.new(convex_hull_test.std_out,set_pos.node.inputs['Selection'])
+    node_tree.links.new(convex_hull_test.std_out, set_pos2.node.inputs['Selection'])
+    node_tree.links.new(convex_hull_test.std_out, set_pos.node.inputs['Selection'])
 
     del_geo = DeleteGeometry(node_tree, location=(-5 + length, 0),
                              selection=convex_hull_test.outputs['Is Outside'])
-    links.new(convex_hull_test.outputs['Is Outside'],del_geo_3d.inputs['Selection'])
+    links.new(convex_hull_test.outputs['Is Outside'], del_geo_3d.inputs['Selection'])
 
     line2.append(del_geo)
 
@@ -1798,59 +1978,60 @@ def create_z5(name='Z5_generator', n=3,base="PENROSE",**kwargs):
     ml = 2
     mh = -0.5
 
-    input_dirs=[]
-    for i,dir in enumerate(dirs):
-        input_dirs.append(InputVector(node_tree,location=(ml,mh-0.25*i),
-                                      value=dir+[0],
-                                      name=str(dir),label=str(dir),hide=True)
+    input_dirs = []
+    for i, dir in enumerate(dirs):
+        input_dirs.append(InputVector(node_tree, location=(ml, mh - 0.25 * i),
+                                      value=dir + [0],
+                                      name=str(dir), label=str(dir), hide=True)
                           )
 
-    ml+=1
-    mh-=1
+    ml += 1
+    mh -= 1
 
-    sel_index = NamedAttribute(node_tree,location=(ml,mh),
+    sel_index = NamedAttribute(node_tree, location=(ml, mh),
                                data_type='INT',
-                      name="SavedIndex")
+                               name="SavedIndex")
 
-    ml+=1
+    ml += 1
 
     sel_index2tuple = make_function(nodes, functions={
         "P1": ['index,base,4,**,/,floor,range,-', 'index,base,4,**,%,base,3,**,/,floor,range,-',
                'index,base,3,**,%,base,2,**,/,floor,range,-'],
         "P2": ['index,base,2,**,%,base,/,floor,range,-', 'index,base,%,range,-', '0']
-    }, name="SelectedIndex2Tuple", inputs=["index", "base", "range"], outputs=["P1", "P2"], scalars=["index", "base", "range"],
-                                vectors=["P1", "P2"])
-    sel_index2tuple.location = (ml * width, mh*width)
+    }, name="SelectedIndex2Tuple", inputs=["index", "base", "range"], outputs=["P1", "P2"],
+                                    scalars=["index", "base", "range"],
+                                    vectors=["P1", "P2"])
+    sel_index2tuple.location = (ml * width, mh * width)
     links.new(sel_index.std_out, sel_index2tuple.inputs['index'])
     links.new(two_n_plus_one.outputs[0], sel_index2tuple.inputs['base'])
     links.new(n_value.outputs[0], sel_index2tuple.inputs['range'])
 
-    ml+=1
+    ml += 1
 
     line3 = []
     sub_join = JoinGeometry(node_tree, location=(nl + 4, 0))
-    scale_elements = ScaleElements(node_tree,location=(nl+5,0),
+    scale_elements = ScaleElements(node_tree, location=(nl + 5, 0),
                                    scale=0.95)
 
     if 'final_translation' in kwargs:
         translation = kwargs.pop('final_translation')
     else:
-        translation=Vector()
+        translation = Vector()
     if 'final_rotation' in kwargs:
         rotation = kwargs.pop('final_rotation')
     else:
-        rotation=Vector()
+        rotation = Vector()
     if 'final_scale' in kwargs:
         scale = kwargs.pop('final_scale')
     else:
-        scale=Vector([1,1,1])
-    transform = TransformGeometry(node_tree,location=(nl+6,0),
-                                  translation=translation,rotation=rotation,scale=scale)
+        scale = Vector([1, 1, 1])
+    transform = TransformGeometry(node_tree, location=(nl + 6, 0),
+                                  translation=translation, rotation=rotation, scale=scale)
 
     line3.append(sub_join)
     line3.append(scale_elements)
     line3.append(transform)
-    join = JoinGeometry(node_tree,location=(nl+7,0))
+    join = JoinGeometry(node_tree, location=(nl + 7, 0))
     nline.append(join)
     line.append(join)
     # line2.append(join)
@@ -1859,19 +2040,19 @@ def create_z5(name='Z5_generator', n=3,base="PENROSE",**kwargs):
     create_geometry_line(node_tree, line)
     create_geometry_line(node_tree, line2)
     create_geometry_line(node_tree, line3)
-    create_geometry_line(node_tree,[join_marker,join])
+    create_geometry_line(node_tree, [join_marker, join])
     links.new(join.geometry_out, group_outputs.inputs['Geometry'])
 
     # make face generation groups
 
-    ml+=1
+    ml += 1
     for i in range(10):
-        direction = str(dirs[i][0]+1)+str(dirs[i][1]+1)
-        face_generation_group = make_face_generation_group(nodes,basis_labels,sigma_labels,
-                                                           material='x'+direction+"_color",
-                                                           name="FaceGenerator"+str(dirs[i]))
-        face_generation_group.location=((ml+0.25*i)*200,(mh-0.25*i)*200)
-        face_generation_group.hide=True
+        direction = str(dirs[i][0] + 1) + str(dirs[i][1] + 1)
+        face_generation_group = make_face_generation_group(nodes, basis_labels, sigma_labels,
+                                                           material='x' + direction + "_color",
+                                                           name="FaceGenerator" + str(dirs[i]))
+        face_generation_group.location = ((ml + 0.25 * i) * 200, (mh - 0.25 * i) * 200)
+        face_generation_group.hide = True
 
         node_tree.links.new(del_geo.geometry_out, face_generation_group.inputs['Geometry'])
         node_tree.links.new(input_dirs[i].std_out, face_generation_group.inputs['Direction'])
@@ -1879,7 +2060,7 @@ def create_z5(name='Z5_generator', n=3,base="PENROSE",**kwargs):
         node_tree.links.new(sel_index2tuple.outputs["P2"], face_generation_group.inputs['P2'])
         node_tree.links.new(face_generation_group.outputs["Geometry"], sub_join.inputs['Geometry'])
 
-        for j,label in enumerate(basis_labels):
+        for j, label in enumerate(basis_labels):
             node_tree.links.new(input_vec_sockets[j], face_generation_group.inputs[label])
         for node, label in zip(sigmas, sigma_labels):
             node_tree.links.new(node.std_out, face_generation_group.inputs[label])
@@ -1887,14 +2068,15 @@ def create_z5(name='Z5_generator', n=3,base="PENROSE",**kwargs):
 
     return node_tree
 
-def make_face_generation_group(nodes,basis_labels,sigma_labels,material,
+
+def make_face_generation_group(nodes, basis_labels, sigma_labels, material,
                                name="FaceGenerator"):
     width = 200
     length = 0
 
     group = nodes.new(type='GeometryNodeGroup')
     node_tree = bpy.data.node_groups.new(name, type='GeometryNodeTree')
-    group.node_tree=node_tree
+    group.node_tree = node_tree
     nodes = node_tree.nodes
 
     group.name = name
@@ -1911,11 +2093,11 @@ def make_face_generation_group(nodes,basis_labels,sigma_labels,material,
     for label in basis_labels:
         make_new_socket(node_tree, name=label, io='INPUT', type='NodeSocketVector')
     for label in sigma_labels:
-        make_new_socket(node_tree,name=label, io='INPUT', type='NodeSocketVector')
+        make_new_socket(node_tree, name=label, io='INPUT', type='NodeSocketVector')
     make_new_socket(node_tree, name='Convex Hull', io='INPUT', type='NodeSocketGeometry')
     make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
 
-    ins = ["P1", "P2", "dir"] + basis_labels[4:]+sigma_labels
+    ins = ["P1", "P2", "dir"] + basis_labels[4:] + sigma_labels
     outs = ["p", "q", "r", "s"]
     # this looks more scary than it is
     # p is just the projection of the point (n1.P, n2.P, n3.P)
@@ -1923,7 +2105,8 @@ def make_face_generation_group(nodes,basis_labels,sigma_labels,material,
     # for r one goes one step in i and one in j direciton
     # for q one goes one step in j direction
     orth_face_projector = make_function(nodes, functions={
-        'p': ['P1,S1,sub,n1,dot,P2,S2,sub,m1,dot,+', 'P1,S1,sub,n2,dot,P2,S2,sub,m2,dot,+', 'P1,S1,sub,n3,dot,P2,S2,sub,m3,dot,+'],
+        'p': ['P1,S1,sub,n1,dot,P2,S2,sub,m1,dot,+', 'P1,S1,sub,n2,dot,P2,S2,sub,m2,dot,+',
+              'P1,S1,sub,n3,dot,P2,S2,sub,m3,dot,+'],
         'q': [
             'P1,S1,sub,n1,dot,P2,S2,sub,m1,dot,+,dir_x,0,=,n1_x,*,+,dir_x,1,=,n1_y,*,+,dir_x,2,=,n1_z,*,+,dir_x,3,=,m1_x,*,+,dir_x,4,=,m1_y,*,+',
             'P1,S1,sub,n2,dot,P2,S2,sub,m2,dot,+,dir_x,0,=,n2_x,*,+,dir_x,1,=,n2_y,*,+,dir_x,2,=,n2_z,*,+,dir_x,3,=,m2_x,*,+,dir_x,4,=,m2_y,*,+',
@@ -1942,13 +2125,13 @@ def make_face_generation_group(nodes,basis_labels,sigma_labels,material,
 
     orth_face_projector.location = (length * width, 0)
     for label in ins:
-        if label=='dir':
+        if label == 'dir':
             node_tree.links.new(group_inputs.outputs['Direction'], orth_face_projector.inputs[label])
         else:
             node_tree.links.new(group_inputs.outputs[label], orth_face_projector.inputs[label])
     orth_face_projector.hide = True
 
-    ins = ["P1", "P2", "dir"] + basis_labels[0:4]+sigma_labels
+    ins = ["P1", "P2", "dir"] + basis_labels[0:4] + sigma_labels
     outs = ["p", "q", "r", "s"]
     # this looks more scary than it is
     # p is just the projection of the point (u.P, v.P, 0)
@@ -1979,79 +2162,81 @@ def make_face_generation_group(nodes,basis_labels,sigma_labels,material,
         else:
             node_tree.links.new(group_inputs.outputs[label], para_face_projector.inputs[label])
     para_face_projector.hide = True
-    length+=1
+    length += 1
 
     # create for convex hull tests
     tests = []
-    points=['p','q','r','s']
+    points = ['p', 'q', 'r', 's']
     for i in range(4):
-        convex_hull_test = InsideConvexHull(node_tree,location=(length,0+0.25*i),
+        convex_hull_test = InsideConvexHull(node_tree, location=(length, 0 + 0.25 * i),
                                             target_geometry=group_inputs.outputs['Convex Hull'],
-                                            source_position=orth_face_projector.outputs[points[i]],hide=True)
+                                            source_position=orth_face_projector.outputs[points[i]], hide=True)
         tests.append(convex_hull_test)
 
-    length+=1
+    length += 1
 
-    #create and links
-    and_pq = BooleanMath(node_tree,location=(length,0),
+    # create and links
+    and_pq = BooleanMath(node_tree, location=(length, 0),
                          operation="AND",
                          inputs0=tests[0].std_out,
                          inputs1=tests[1].std_out,
-                         name="p and q",hide=True)
-    and_pqr = BooleanMath(node_tree,location=(length+0.25,-0.25),
+                         name="p and q", hide=True)
+    and_pqr = BooleanMath(node_tree, location=(length + 0.25, -0.25),
                           operation="AND",
                           inputs0=and_pq.std_out,
                           inputs1=tests[2].std_out,
-                          name="p,q and r",hide=True)
-    and_pqrs = BooleanMath(node_tree,location=(length+0.25,-0.25),
-                          operation="AND",
-                          inputs0=and_pqr.std_out,
-                          inputs1=tests[3].std_out,
-                          name="p,q and r",hide=True)
-    length+=1
+                          name="p,q and r", hide=True)
+    and_pqrs = BooleanMath(node_tree, location=(length + 0.25, -0.25),
+                           operation="AND",
+                           inputs0=and_pqr.std_out,
+                           inputs1=tests[3].std_out,
+                           name="p,q and r", hide=True)
+    length += 1
     # create geometry line
-    points_to_vertices = PointsToVertices(node_tree,location=(length,1),
-                                          selection=and_pqrs.std_out,hide=True)
+    points_to_vertices = PointsToVertices(node_tree, location=(length, 1),
+                                          selection=and_pqrs.std_out, hide=True)
 
-    q_minus_p = VectorMath(node_tree,location=(length,0.5),
+    q_minus_p = VectorMath(node_tree, location=(length, 0.5),
                            operation="SUBTRACT",
                            inputs0=para_face_projector.outputs["q"],
                            inputs1=para_face_projector.outputs["p"],
-                           name="q-p",hide=True)
-    length+=1
-    make_lines = ExtrudeMesh(node_tree,location=(length,1),
+                           name="q-p", hide=True)
+    length += 1
+    make_lines = ExtrudeMesh(node_tree, location=(length, 1),
                              mode='VERTICES',
                              offset=q_minus_p.std_out,
-                             name="MakeLines",hide=True)
-    length+=1
+                             name="MakeLines", hide=True)
+    length += 1
     s_minus_p = VectorMath(node_tree, location=(length, 0.5),
                            operation="SUBTRACT",
                            inputs0=para_face_projector.outputs["s"],
                            inputs1=para_face_projector.outputs["p"],
                            name="s-p", hide=True)
-    make_faces = ExtrudeMesh(node_tree,location=(length,1),
+    make_faces = ExtrudeMesh(node_tree, location=(length, 1),
                              mode='EDGES',
                              offset=s_minus_p.std_out,
-                             name="MakeLines",hide=True)
-    length+=1
-    set_material = SetMaterial(node_tree,location=(length,1),
+                             name="MakeLines", hide=True)
+    length += 1
+    set_material = SetMaterial(node_tree, location=(length, 1),
                                material=material
                                )
-    length+=1
+    length += 1
 
-    create_geometry_line(node_tree,[points_to_vertices,make_lines,make_faces,set_material],
-                         ins=group_inputs.outputs['Geometry'],out=group_outputs.inputs['Geometry'])
+    create_geometry_line(node_tree, [points_to_vertices, make_lines, make_faces, set_material],
+                         ins=group_inputs.outputs['Geometry'], out=group_outputs.inputs['Geometry'])
 
     group_outputs.location = (length * width, 0)
     return group
-def make_face_generation_group_3d(nodes,basis_labels,sigma_labels,material,
-                               name="FaceGenerator"):
+
+
+def make_face_generation_group_3d(nodes, basis_labels, sigma_labels, material,
+                                  name="FaceGenerator"):
     width = 200
     length = 0
 
     group = nodes.new(type='GeometryNodeGroup')
     node_tree = bpy.data.node_groups.new(name, type='GeometryNodeTree')
-    group.node_tree=node_tree
+    group.node_tree = node_tree
     nodes = node_tree.nodes
 
     group.name = name
@@ -2067,29 +2252,30 @@ def make_face_generation_group_3d(nodes,basis_labels,sigma_labels,material,
     for label in basis_labels:
         make_new_socket(node_tree, name=label, io='INPUT', type='NodeSocketVector')
     for label in sigma_labels:
-        make_new_socket(node_tree,name=label, io='INPUT', type='NodeSocketVector')
+        make_new_socket(node_tree, name=label, io='INPUT', type='NodeSocketVector')
     make_new_socket(node_tree, name='Convex Hull', io='INPUT', type='NodeSocketGeometry')
     make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
 
-    ins = ["P", "dir"] + ["n"]+sigma_labels
+    ins = ["P", "dir"] + ["n"] + sigma_labels
     outs = ["p", "q", "r", "s"]
     orth_face_projector = make_function(nodes, functions={
         'p': ['P,sigma,sub,n,dot'],
         'q':
             ['P,sigma,sub,n,dot,dir_x,0,=,n_x,*,+,dir_x,1,=,n_y,*,+,dir_x,2,=,n_z,*,+'],
-        'r':['P,sigma,sub,n,dot,dir_x,0,=,n_x,*,+,dir_x,1,=,n_y,*,+,dir_x,2,=,n_z,*,+,dir_y,0,=,n_x,*,+,dir_y,1,=,n_y,*,+,dir_y,2,=,n_z,*,+'],
-        's':['P,sigma,sub,n,dot,dir_y,0,=,n_x,*,+,dir_y,1,=,n_y,*,+,dir_y,2,=,n_z,*,+']
-    },inputs=ins, outputs=outs, vectors=ins,scalars=outs, name='FaceProjector3D')
+        'r': [
+            'P,sigma,sub,n,dot,dir_x,0,=,n_x,*,+,dir_x,1,=,n_y,*,+,dir_x,2,=,n_z,*,+,dir_y,0,=,n_x,*,+,dir_y,1,=,n_y,*,+,dir_y,2,=,n_z,*,+'],
+        's': ['P,sigma,sub,n,dot,dir_y,0,=,n_x,*,+,dir_y,1,=,n_y,*,+,dir_y,2,=,n_z,*,+']
+    }, inputs=ins, outputs=outs, vectors=ins, scalars=outs, name='FaceProjector3D')
 
     orth_face_projector.location = (length * width, 0)
     for label in ins:
-        if label=='dir':
+        if label == 'dir':
             node_tree.links.new(group_inputs.outputs['Direction'], orth_face_projector.inputs[label])
         else:
             node_tree.links.new(group_inputs.outputs[label], orth_face_projector.inputs[label])
     orth_face_projector.hide = True
 
-    ins = ["P", "dir","u","v"] +["n"]+sigma_labels
+    ins = ["P", "dir", "u", "v"] + ["n"] + sigma_labels
     outs = ["p", "q", "r", "s"]
     para_face_projector = make_function(nodes, functions={
         'p': ['u,P,sigma,sub,dot', 'v,P,sigma,sub,dot', '0'],
@@ -2116,79 +2302,81 @@ def make_face_generation_group_3d(nodes,basis_labels,sigma_labels,material,
         else:
             node_tree.links.new(group_inputs.outputs[label], para_face_projector.inputs[label])
     para_face_projector.hide = True
-    length+=1
+    length += 1
 
     # create for convex hull tests
     tests = []
-    points=['p','q','r','s']
+    points = ['p', 'q', 'r', 's']
     for i in range(4):
-        convex_hull_test = InsideConvexHull3D(node_tree,location=(length,0+0.25*i),
-                                            target_geometry=group_inputs.outputs['Convex Hull'],
-                                            source_position=orth_face_projector.outputs[points[i]],hide=True)
+        convex_hull_test = InsideConvexHull3D(node_tree, location=(length, 0 + 0.25 * i),
+                                              target_geometry=group_inputs.outputs['Convex Hull'],
+                                              source_position=orth_face_projector.outputs[points[i]], hide=True)
         tests.append(convex_hull_test)
 
-    length+=1
+    length += 1
 
-    #create and links
-    and_pq = BooleanMath(node_tree,location=(length,0),
+    # create and links
+    and_pq = BooleanMath(node_tree, location=(length, 0),
                          operation="AND",
                          inputs0=tests[0].std_out,
                          inputs1=tests[1].std_out,
-                         name="p and q",hide=True)
-    and_pqr = BooleanMath(node_tree,location=(length+0.25,-0.25),
+                         name="p and q", hide=True)
+    and_pqr = BooleanMath(node_tree, location=(length + 0.25, -0.25),
                           operation="AND",
                           inputs0=and_pq.std_out,
                           inputs1=tests[2].std_out,
-                          name="p,q and r",hide=True)
-    and_pqrs = BooleanMath(node_tree,location=(length+0.25,-0.25),
-                          operation="AND",
-                          inputs0=and_pqr.std_out,
-                          inputs1=tests[3].std_out,
-                          name="p,q and r",hide=True)
-    length+=1
+                          name="p,q and r", hide=True)
+    and_pqrs = BooleanMath(node_tree, location=(length + 0.25, -0.25),
+                           operation="AND",
+                           inputs0=and_pqr.std_out,
+                           inputs1=tests[3].std_out,
+                           name="p,q and r", hide=True)
+    length += 1
     # create geometry line
-    points_to_vertices = PointsToVertices(node_tree,location=(length,1),
-                                          selection=and_pqrs.std_out,hide=True)
+    points_to_vertices = PointsToVertices(node_tree, location=(length, 1),
+                                          selection=and_pqrs.std_out, hide=True)
 
-    q_minus_p = VectorMath(node_tree,location=(length,0.5),
+    q_minus_p = VectorMath(node_tree, location=(length, 0.5),
                            operation="SUBTRACT",
                            inputs0=para_face_projector.outputs["q"],
                            inputs1=para_face_projector.outputs["p"],
-                           name="q-p",hide=True)
-    length+=1
-    make_lines = ExtrudeMesh(node_tree,location=(length,1),
+                           name="q-p", hide=True)
+    length += 1
+    make_lines = ExtrudeMesh(node_tree, location=(length, 1),
                              mode='VERTICES',
                              offset=q_minus_p.std_out,
-                             name="MakeLines",hide=True)
-    length+=1
+                             name="MakeLines", hide=True)
+    length += 1
     s_minus_p = VectorMath(node_tree, location=(length, 0.5),
                            operation="SUBTRACT",
                            inputs0=para_face_projector.outputs["s"],
                            inputs1=para_face_projector.outputs["p"],
                            name="s-p", hide=True)
-    make_faces = ExtrudeMesh(node_tree,location=(length,1),
+    make_faces = ExtrudeMesh(node_tree, location=(length, 1),
                              mode='EDGES',
                              offset=s_minus_p.std_out,
-                             name="MakeLines",hide=True)
-    length+=1
-    set_material = SetMaterial(node_tree,location=(length,1),
+                             name="MakeLines", hide=True)
+    length += 1
+    set_material = SetMaterial(node_tree, location=(length, 1),
                                material=material
                                )
-    length+=1
+    length += 1
 
-    create_geometry_line(node_tree,[points_to_vertices,make_lines,make_faces,set_material],
-                         ins=group_inputs.outputs['Geometry'],out=group_outputs.inputs['Geometry'])
+    create_geometry_line(node_tree, [points_to_vertices, make_lines, make_faces, set_material],
+                         ins=group_inputs.outputs['Geometry'], out=group_outputs.inputs['Geometry'])
 
     group_outputs.location = (length * width, 0)
     return group
-def make_face_generation_group_3d_unprojected(nodes,basis_labels,sigma_labels,material,
-                               name="FaceGenerator"):
+
+
+def make_face_generation_group_3d_unprojected(nodes, basis_labels, sigma_labels, material,
+                                              name="FaceGenerator"):
     width = 200
     length = 0
 
     group = nodes.new(type='GeometryNodeGroup')
     node_tree = bpy.data.node_groups.new(name, type='GeometryNodeTree')
-    group.node_tree=node_tree
+    group.node_tree = node_tree
     nodes = node_tree.nodes
 
     group.name = name
@@ -2205,85 +2393,85 @@ def make_face_generation_group_3d_unprojected(nodes,basis_labels,sigma_labels,ma
     for label in basis_labels:
         make_new_socket(node_tree, name=label, io='INPUT', type='NodeSocketVector')
     for label in sigma_labels:
-        make_new_socket(node_tree,name=label, io='INPUT', type='NodeSocketVector')
+        make_new_socket(node_tree, name=label, io='INPUT', type='NodeSocketVector')
     make_new_socket(node_tree, name='Convex Hull', io='INPUT', type='NodeSocketGeometry')
     make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
 
-
-    ins = ["P", "dir"] + ["n"]+sigma_labels
+    ins = ["P", "dir"] + ["n"] + sigma_labels
     outs = ["p", "q", "r", "s"]
     orth_face_projector = make_function(nodes, functions={
         'p': ['P,sigma,sub,n,dot'],
         'q':
             ['P,sigma,sub,n,dot,dir_x,0,=,n_x,*,+,dir_x,1,=,n_y,*,+,dir_x,2,=,n_z,*,+'],
-        'r':['P,sigma,sub,n,dot,dir_x,0,=,n_x,*,+,dir_x,1,=,n_y,*,+,dir_x,2,=,n_z,*,+,dir_y,0,=,n_x,*,+,dir_y,1,=,n_y,*,+,dir_y,2,=,n_z,*,+'],
-        's':['P,sigma,sub,n,dot,dir_y,0,=,n_x,*,+,dir_y,1,=,n_y,*,+,dir_y,2,=,n_z,*,+']
-    },inputs=ins, outputs=outs, vectors=ins,scalars=outs, name='FaceProjector3D')
+        'r': [
+            'P,sigma,sub,n,dot,dir_x,0,=,n_x,*,+,dir_x,1,=,n_y,*,+,dir_x,2,=,n_z,*,+,dir_y,0,=,n_x,*,+,dir_y,1,=,n_y,*,+,dir_y,2,=,n_z,*,+'],
+        's': ['P,sigma,sub,n,dot,dir_y,0,=,n_x,*,+,dir_y,1,=,n_y,*,+,dir_y,2,=,n_z,*,+']
+    }, inputs=ins, outputs=outs, vectors=ins, scalars=outs, name='FaceProjector3D')
 
     orth_face_projector.location = (length * width, 0)
     for label in ins:
-        if label=='dir':
+        if label == 'dir':
             node_tree.links.new(group_inputs.outputs['Direction'], orth_face_projector.inputs[label])
         else:
             node_tree.links.new(group_inputs.outputs[label], orth_face_projector.inputs[label])
     orth_face_projector.hide = True
-    length+=1
+    length += 1
 
     # create for convex hull tests
     tests = []
-    points=['p','q','r','s']
+    points = ['p', 'q', 'r', 's']
     for i in range(4):
-        convex_hull_test = InsideConvexHull3D(node_tree,location=(length,0+0.25*i),
-                                            target_geometry=group_inputs.outputs['Convex Hull'],
-                                            source_position=orth_face_projector.outputs[points[i]],hide=True)
+        convex_hull_test = InsideConvexHull3D(node_tree, location=(length, 0 + 0.25 * i),
+                                              target_geometry=group_inputs.outputs['Convex Hull'],
+                                              source_position=orth_face_projector.outputs[points[i]], hide=True)
         tests.append(convex_hull_test)
 
-    length+=1
+    length += 1
 
-    #create and links
-    and_pq = BooleanMath(node_tree,location=(length,0),
+    # create and links
+    and_pq = BooleanMath(node_tree, location=(length, 0),
                          operation="AND",
                          inputs0=tests[0].std_out,
                          inputs1=tests[1].std_out,
-                         name="p and q",hide=True)
-    and_pqr = BooleanMath(node_tree,location=(length+0.25,-0.25),
+                         name="p and q", hide=True)
+    and_pqr = BooleanMath(node_tree, location=(length + 0.25, -0.25),
                           operation="AND",
                           inputs0=and_pq.std_out,
                           inputs1=tests[2].std_out,
-                          name="p,q and r",hide=True)
-    and_pqrs = BooleanMath(node_tree,location=(length+0.25,-0.25),
-                          operation="AND",
-                          inputs0=and_pqr.std_out,
-                          inputs1=tests[3].std_out,
-                          name="p,q and r",hide=True)
-    length+=1
+                          name="p,q and r", hide=True)
+    and_pqrs = BooleanMath(node_tree, location=(length + 0.25, -0.25),
+                           operation="AND",
+                           inputs0=and_pqr.std_out,
+                           inputs1=tests[3].std_out,
+                           name="p,q and r", hide=True)
+    length += 1
     # create geometry line
-    points_to_vertices = PointsToVertices(node_tree,location=(length,1),
-                                          selection=and_pqrs.std_out,hide=True)
+    points_to_vertices = PointsToVertices(node_tree, location=(length, 1),
+                                          selection=and_pqrs.std_out, hide=True)
 
-    length+=1
-    make_lines = ExtrudeMesh(node_tree,location=(length,1),
+    length += 1
+    make_lines = ExtrudeMesh(node_tree, location=(length, 1),
                              mode='VERTICES',
                              offset=group_inputs.outputs['u'],
-                             name="MakeLines",hide=True)
-    length+=1
-    make_faces = ExtrudeMesh(node_tree,location=(length,1),
+                             name="MakeLines", hide=True)
+    length += 1
+    make_faces = ExtrudeMesh(node_tree, location=(length, 1),
                              mode='EDGES',
                              offset=group_inputs.outputs['v'],
-                             name="MakeLines",hide=True)
-    length+=1
-    set_material = SetMaterial(node_tree,location=(length,1),
-                               material=material,emission=0.0
-                               )
-    length+=1
-
-    scale_element= ScaleElements(node_tree, location=(length, 1),
-                               scale=group_inputs.outputs['FaceScale'],
+                             name="MakeLines", hide=True)
+    length += 1
+    set_material = SetMaterial(node_tree, location=(length, 1),
+                               material=material, emission=0.0
                                )
     length += 1
 
-    create_geometry_line(node_tree,[points_to_vertices,make_lines,make_faces,scale_element,set_material],
-                         ins=group_inputs.outputs['Geometry'],out=group_outputs.inputs['Geometry'])
+    scale_element = ScaleElements(node_tree, location=(length, 1),
+                                  scale=group_inputs.outputs['FaceScale'],
+                                  )
+    length += 1
+
+    create_geometry_line(node_tree, [points_to_vertices, make_lines, make_faces, scale_element, set_material],
+                         ins=group_inputs.outputs['Geometry'], out=group_outputs.inputs['Geometry'])
 
     group_outputs.location = (length * width, 0)
     return group
@@ -2390,6 +2578,10 @@ def create_index2tuple_function(nodes, scalar_input_parameters=['index', 'base',
 
     return group
 
+
+###########################
+## Penrose Tiling De Bruijn unpublished
+###########################
 
 def de_bruijn(name='DeBruijnNode', k=3, tile_separation=0.05, base_color='drawing', **kwargs):
     """
@@ -3000,7 +3192,7 @@ def create_index2ijlm_function(nodes, scalar_input_parameters=['index', 'base', 
     return group
 
 
-def penrose_3D_analog(size=5, name="Penrose3DAnalog", radius=0.1, colors=None,plane_size=7):
+def penrose_3D_analog(size=5, name="Penrose3DAnalog", radius=0.1, colors=None, plane_size=7):
     node_tree = setup_geometry_nodes(name)
 
     length = 0
@@ -3036,9 +3228,9 @@ def penrose_3D_analog(size=5, name="Penrose3DAnalog", radius=0.1, colors=None,pl
     node_tree.links.new(rotatePlane.std_out, planeNormal.inputs['rotatePlane'])
 
     planeOrigin = InputVector(node_tree, location=(length, -4.5),
-                                value=Vector(),
-                                name='planeOrigin', label='planeOrigin',
-                                hide=True)
+                              value=Vector(),
+                              name='planeOrigin', label='planeOrigin',
+                              hide=True)
 
     mesh_line = MeshLine(node_tree, count=2 * size + 1, start_location=Vector([0, 0, -size]),
                          end_location=Vector([0, 0, size]),
@@ -3057,9 +3249,9 @@ def penrose_3D_analog(size=5, name="Penrose3DAnalog", radius=0.1, colors=None,pl
     realize_instances = RealizeInstances(node_tree, location=(length, 0.5))
     length += 1
 
-    cubie_scale = InputValue(node_tree,location = (length-1,-1.5),value=0.05,name="CubieScale")
+    cubie_scale = InputValue(node_tree, location=(length - 1, -1.5), value=0.05, name="CubieScale")
     cubies = CubeMesh(node_tree, location=(length, -1.5),
-                          size=cubie_scale.std_out)
+                      size=cubie_scale.std_out)
     length += 1
 
     set_material = SetMaterial(node_tree, material='gray_5',
@@ -3123,8 +3315,8 @@ def penrose_3D_analog(size=5, name="Penrose3DAnalog", radius=0.1, colors=None,pl
     projection = InputValue(node_tree, name='Projection', label='Projection', value=0, location=(length, -1))
     projector = make_function(node_tree.nodes, functions={
         'V': 'v,planeNormal,v,planeOrigin,sub,planeNormal,dot,projection,*,scale,sub'
-    }, name='Projector', inputs=['v', 'planeNormal','planeOrigin', 'projection'], outputs=['V'],
-                              vectors=['v', 'planeNormal','planeOrigin', 'V'], scalars=['projection'])
+    }, name='Projector', inputs=['v', 'planeNormal', 'planeOrigin', 'projection'], outputs=['V'],
+                              vectors=['v', 'planeNormal', 'planeOrigin', 'V'], scalars=['projection'])
     projector.location = (length * 200, 0)
     node_tree.links.new(projection.std_out, projector.inputs['projection'])
     node_tree.links.new(position.std_out, projector.inputs['v'])
@@ -3143,8 +3335,8 @@ def penrose_3D_analog(size=5, name="Penrose3DAnalog", radius=0.1, colors=None,pl
     shade_smooth = SetShadeSmooth(node_tree, location=(length, 0))
     length += 1
 
-    join2 = JoinGeometry(node_tree, location=(length,0) )
-    length+=1
+    join2 = JoinGeometry(node_tree, location=(length, 0))
+    length += 1
 
     out = node_tree.nodes.get("Group Output")
     create_geometry_line(node_tree, [
@@ -3163,15 +3355,16 @@ def penrose_3D_analog(size=5, name="Penrose3DAnalog", radius=0.1, colors=None,pl
     level = -3
     nlength = x_min.l
     point = Points(node_tree, location=(nlength, level + 1))
-    plane = Grid(node_tree, location=(nlength, level), size_x=2*plane_size, size_y=2*plane_size,vertices_x=2*plane_size+1,vertices_y=2*plane_size+1)
+    plane = Grid(node_tree, location=(nlength, level), size_x=2 * plane_size, size_y=2 * plane_size,
+                 vertices_x=2 * plane_size + 1, vertices_y=2 * plane_size + 1)
     nlength += 1
-    wireframe = WireFrame(node_tree,location=(nlength,level),radius=0.02,resolution=4)
-    nlength+=1
+    wireframe = WireFrame(node_tree, location=(nlength, level), radius=0.02, resolution=4)
+    nlength += 1
 
     set_material2 = SetMaterial(node_tree, location=(nlength, level),
                                 material='plastic_custom1', roughness=0.1, name='planeMaterial', label='planeMaterial')
     nlength += 1
-    create_geometry_line(node, [plane, wireframe,set_material2])
+    create_geometry_line(node, [plane, wireframe, set_material2])
 
     instance3 = InstanceOnPoints(node_tree, location=(nlength, level + 1),
                                  instance=set_material2.geometry_out,
@@ -3180,14 +3373,15 @@ def penrose_3D_analog(size=5, name="Penrose3DAnalog", radius=0.1, colors=None,pl
 
     nlength += 1
 
-    set_pos_plane = SetPosition(node_tree,location=(nlength,level+1),
+    set_pos_plane = SetPosition(node_tree, location=(nlength, level + 1),
                                 position=planeOrigin.std_out)
-    nlength+=1
+    nlength += 1
 
     # voronoi cell
-    cube_scale = InputValue(node_tree,location=(-1,length/4),value=1,name="CubeScale")
+    cube_scale = InputValue(node_tree, location=(-1, length / 4), value=1, name="CubeScale")
     cube = CubeMesh(node_tree, location=(0, length / 4))
-    transform_geo = TransformGeometry(node_tree, location=(1, length / 4), translation=[0.5] * 3,scale=cube_scale.std_out)
+    transform_geo = TransformGeometry(node_tree, location=(1, length / 4), translation=[0.5] * 3,
+                                      scale=cube_scale.std_out)
     drawing = SetMaterial(node_tree, location=(2, length / 4), material='plastic_drawing',
                           roughness=0.25, name="CubeMaterial")
     create_geometry_line(node, [cube, transform_geo, drawing, join])
@@ -3210,76 +3404,85 @@ def penrose_3D_analog(size=5, name="Penrose3DAnalog", radius=0.1, colors=None,pl
     node_tree.links.new(planeNormal.outputs[0], min_max.inputs['normal'])
 
     # xy create faces
-    scale = InputValue(node_tree,location=(length,-length/4),name="ScaleElements",value=1)
-    extrude = InputValue(node_tree,location=(length,-length/4-0.25),name="ExtrudeElements",value=0)
-    create_faces(node_tree, realize_instances, join, unitX, unitY, min_max, planeNormal, planeOrigin, projection,scale,extrude, nlength, level,colors)
-    create_faces(node_tree, realize_instances, join, unitX, unitZ, min_max, planeNormal, planeOrigin, projection,scale,extrude, nlength, level - 1,colors)
-    create_faces(node_tree, realize_instances, join, unitY, unitZ, min_max, planeNormal, planeOrigin, projection,scale,extrude, nlength, level - 2,colors)
+    scale = InputValue(node_tree, location=(length, -length / 4), name="ScaleElements", value=1)
+    extrude = InputValue(node_tree, location=(length, -length / 4 - 0.25), name="ExtrudeElements", value=0)
+    create_faces(node_tree, realize_instances, join, unitX, unitY, min_max, planeNormal, planeOrigin, projection, scale,
+                 extrude, nlength, level, colors)
+    create_faces(node_tree, realize_instances, join, unitX, unitZ, min_max, planeNormal, planeOrigin, projection, scale,
+                 extrude, nlength, level - 1, colors)
+    create_faces(node_tree, realize_instances, join, unitY, unitZ, min_max, planeNormal, planeOrigin, projection, scale,
+                 extrude, nlength, level - 2, colors)
 
-    create_geometry_line(node, [point, instance3, set_pos_plane,join])
+    create_geometry_line(node, [point, instance3, set_pos_plane, join])
 
-    node_tree.nodes.get("Group Output").location = ((length+2) * 200, 0)
+    node_tree.nodes.get("Group Output").location = ((length + 2) * 200, 0)
 
     size = 7
-    max_zone = Grid(node_tree,location=(-1, length/4-1),size_x=2 * size, size_y=2 * size, vertices_x=2 * size + 1, vertices_y=2 * size + 1,name="ZoneMax")
-    min_zone = Grid(node_tree,location=(-1, length/4-2),size_x=2 * size, size_y=2 * size, vertices_x=2 * size + 1, vertices_y=2 * size + 1,name="ZoneMin")
+    max_zone = Grid(node_tree, location=(-1, length / 4 - 1), size_x=2 * size, size_y=2 * size, vertices_x=2 * size + 1,
+                    vertices_y=2 * size + 1, name="ZoneMax")
+    min_zone = Grid(node_tree, location=(-1, length / 4 - 2), size_x=2 * size, size_y=2 * size, vertices_x=2 * size + 1,
+                    vertices_y=2 * size + 1, name="ZoneMin")
 
-    min_shift = make_function(node_tree,functions={
-        "shift":"normal,d_min,scale"
-    },inputs=["normal","d_min"],outputs=["shift"],scalars = ["d_min"],vectors=["normal","shift"],
-                              name="MinShiftFunction",hide = True)
-    node_tree.links.new(planeNormal.outputs[0],min_shift.inputs["normal"])
-    node_tree.links.new(min_max.outputs["d_min"],min_shift.inputs["d_min"])
-    min_shift.location = (-400,200*(length/4-2))
+    min_shift = make_function(node_tree, functions={
+        "shift": "normal,d_min,scale"
+    }, inputs=["normal", "d_min"], outputs=["shift"], scalars=["d_min"], vectors=["normal", "shift"],
+                              name="MinShiftFunction", hide=True)
+    node_tree.links.new(planeNormal.outputs[0], min_shift.inputs["normal"])
+    node_tree.links.new(min_max.outputs["d_min"], min_shift.inputs["d_min"])
+    min_shift.location = (-400, 200 * (length / 4 - 2))
 
     max_shift = make_function(node_tree, functions={
         "shift": "normal,d_max,scale"
-    }, inputs=["normal","d_max"], outputs=["shift"], scalars=["d_max"], vectors=["normal", "shift"],
-                              name="MaxShiftFunction",hide=True)
-    max_shift.location = (-400, 200*(length / 4-1))
+    }, inputs=["normal", "d_max"], outputs=["shift"], scalars=["d_max"], vectors=["normal", "shift"],
+                              name="MaxShiftFunction", hide=True)
+    max_shift.location = (-400, 200 * (length / 4 - 1))
     node_tree.links.new(planeNormal.outputs[0], max_shift.inputs["normal"])
     node_tree.links.new(min_max.outputs["d_max"], max_shift.inputs["d_max"])
 
-    shift_min = TransformGeometry(node_tree, location=(1, length / 4 - 2), translation=min_shift.outputs[0],rotation=rotatePlane.std_out,
+    shift_min = TransformGeometry(node_tree, location=(1, length / 4 - 2), translation=min_shift.outputs[0],
+                                  rotation=rotatePlane.std_out,
                                   name="MinTransform")
-    shift_max = TransformGeometry(node_tree, location=(1, length / 4 - 1), translation=max_shift.outputs[0],rotation=rotatePlane.std_out,
+    shift_max = TransformGeometry(node_tree, location=(1, length / 4 - 1), translation=max_shift.outputs[0],
+                                  rotation=rotatePlane.std_out,
                                   name="MaxTransform")
 
+    min_mat = SetMaterial(node_tree, material="plastic_drawing", location=(2, length / 4 - 2), name="MinMaterial")
+    max_mat = SetMaterial(node_tree, material="plastic_drawing", location=(2, length / 4 - 1), name="MaxMaterial")
+    min_wire = WireFrame(node_tree, location=(0, length / 4 - 2), radius=0.01, name="MinWireFrame")
+    max_wire = WireFrame(node_tree, location=(0, length / 4 - 2), radius=0.01, name="MaxWireFrame")
 
-    min_mat = SetMaterial(node_tree,material="plastic_drawing",location=(2,length/4-2),name="MinMaterial")
-    max_mat = SetMaterial(node_tree,material="plastic_drawing",location=(2,length/4-1),name="MaxMaterial")
-    min_wire = WireFrame(node_tree,location = (0,length/4-2),radius = 0.01,name= "MinWireFrame")
-    max_wire = WireFrame(node_tree,location = (0,length/4-2),radius=0.01,name= "MaxWireFrame")
-
-    create_geometry_line(node_tree,[max_zone,max_wire,shift_max,max_mat,join])
-    create_geometry_line(node_tree,[min_zone,min_wire,shift_min,min_mat,join])
+    create_geometry_line(node_tree, [max_zone, max_wire, shift_max, max_mat, join])
+    create_geometry_line(node_tree, [min_zone, min_wire, shift_min, min_mat, join])
 
     # selector
-    selector2 = make_function(node_tree.nodes,functions={
-        'select':'pos,normal,dot,d_min,>,pos,normal,dot,d_max,>,not,*,limits,*'
-    },inputs=["normal","pos","d_min","d_max","limits"],outputs=["select"],scalars=["limits","d_max","d_min","select"],vectors=["normal","pos"],
-                             name="Selector",hide = True)
-    node_tree.links.new(min_max.outputs["d_min"],selector2.inputs["d_min"])
-    node_tree.links.new(min_max.outputs["d_max"],selector2.inputs["d_max"])
-    node_tree.links.new(planeNormal.outputs[0],selector2.inputs["normal"])
-    node_tree.links.new(position.std_out,selector2.inputs["pos"])
-    node_tree.links.new(selector.outputs["selector"],selector2.inputs["limits"])
-    selector.location = (-200,length/5*200)
+    selector2 = make_function(node_tree.nodes, functions={
+        'select': 'pos,normal,dot,d_min,>,pos,normal,dot,d_max,>,not,*,limits,*'
+    }, inputs=["normal", "pos", "d_min", "d_max", "limits"], outputs=["select"],
+                              scalars=["limits", "d_max", "d_min", "select"], vectors=["normal", "pos"],
+                              name="Selector", hide=True)
+    node_tree.links.new(min_max.outputs["d_min"], selector2.inputs["d_min"])
+    node_tree.links.new(min_max.outputs["d_max"], selector2.inputs["d_max"])
+    node_tree.links.new(planeNormal.outputs[0], selector2.inputs["normal"])
+    node_tree.links.new(position.std_out, selector2.inputs["pos"])
+    node_tree.links.new(selector.outputs["selector"], selector2.inputs["limits"])
+    selector.location = (-200, length / 5 * 200)
 
-    ico_sphere =IcoSphere(node_tree,location = (0,length/6),radius=0.075,subdivisions=2,name="SelSphere")
-    ico_material = SetMaterial(node_tree,location=(3,length/6),name="IcoSphereMaterial",material="plastic_example")
-    set_pos2 = SetPosition(node_tree,location=(4,length/6),position=projector.outputs[0])
-    instance4 = InstanceOnPoints(node_tree,instance=ico_sphere.geometry_out,
-                                 location=(2,length/5),selection=selector2.outputs['select'])
+    ico_sphere = IcoSphere(node_tree, location=(0, length / 6), radius=0.075, subdivisions=2, name="SelSphere")
+    ico_material = SetMaterial(node_tree, location=(3, length / 6), name="IcoSphereMaterial",
+                               material="plastic_example")
+    set_pos2 = SetPosition(node_tree, location=(4, length / 6), position=projector.outputs[0])
+    instance4 = InstanceOnPoints(node_tree, instance=ico_sphere.geometry_out,
+                                 location=(2, length / 5), selection=selector2.outputs['select'])
 
-    create_geometry_line(node_tree,[realize_instances,instance4,ico_material,set_pos2,join2])
+    create_geometry_line(node_tree, [realize_instances, instance4, ico_material, set_pos2, join2])
 
     return node_tree
 
 
-def create_faces(node_tree, realize_instances, join, u, v, minmax_values, planeNormal, planeOrigin, projection, scale, extrude, nlength, level,colors):
-    uv_string = u.node.label[-1]+v.node.label[-1]
-    range_name=uv_string.lower()+'Range'
+def create_faces(node_tree, realize_instances, join, u, v, minmax_values, planeNormal, planeOrigin, projection, scale,
+                 extrude, nlength, level, colors):
+    uv_string = u.node.label[-1] + v.node.label[-1]
+    range_name = uv_string.lower() + 'Range'
     if colors:
         dict = {
             'XY': colors[0],
@@ -3288,17 +3491,19 @@ def create_faces(node_tree, realize_instances, join, u, v, minmax_values, planeN
         }
     else:
         dict = {
-            'XY':'joker',
-            'XZ':'important',
-            'YZ':'x23_color',
-                }
+            'XY': 'joker',
+            'XZ': 'important',
+            'YZ': 'x23_color',
+        }
     uv_range = InputValue(node_tree, name=range_name, label=range_name, value=10, location=(nlength, (level + 1)))
     face_uv = make_face_generator(node_tree.nodes,
-                                  inputs=['Geometry', 'u', 'v', 'd_min','d_max', 'planeNormal','planeOrigin', 'rLimit',
+                                  inputs=['Geometry', 'u', 'v', 'd_min', 'd_max', 'planeNormal', 'planeOrigin',
+                                          'rLimit',
                                           'projection'],
                                   outputs=['Geometry'],
-                                  input_types=['Geometry', 'Vector', 'Vector', 'Float','Float', 'Vector', 'Vector','Float', 'Float'],
-                                  output_types=['Geometry'], name='Faces'+uv_string)
+                                  input_types=['Geometry', 'Vector', 'Vector', 'Float', 'Float', 'Vector', 'Vector',
+                                               'Float', 'Float'],
+                                  output_types=['Geometry'], name='Faces' + uv_string)
     face_uv.hide = True
     face_uv.location = ((nlength + 1) * 200, (level + 1) * 200)
     node_tree.links.new(uv_range.std_out, face_uv.inputs['rLimit'])
@@ -3312,28 +3517,20 @@ def create_faces(node_tree, realize_instances, join, u, v, minmax_values, planeN
     node_tree.links.new(projection.std_out, face_uv.inputs['projection'])
 
     uv_material = SetMaterial(node_tree, location=((nlength + 2), level + 2), material=dict[uv_string],
-                              emission=0.015,rougness=0.4)
+                              emission=0.015, rougness=0.4)
     node_tree.links.new(face_uv.outputs['Geometry'], uv_material.inputs['Geometry'])
-    scale_element = ScaleElements(node_tree,location=((nlength+3),level+2),scale = scale.std_out)
+    scale_element = ScaleElements(node_tree, location=((nlength + 3), level + 2), scale=scale.std_out)
     node_tree.links.new(uv_material.outputs['Geometry'], scale_element.inputs['Geometry'])
-    extrude_element = ExtrudeMesh(node_tree,mode='FACES',location=((nlength+4),level+2),offset=extrude.std_out)
+    extrude_element = ExtrudeMesh(node_tree, mode='FACES', location=((nlength + 4), level + 2), offset=extrude.std_out)
     node_tree.links.new(scale_element.geometry_out, extrude_element.geometry_in)
     node_tree.links.new(extrude_element.geometry_out, join.geometry_in)
 
     level -= 1
 
-def setup_geometry_nodes(name):
-    node_tree = bpy.data.node_groups.new(name, type='GeometryNodeTree')
-    nodes = node_tree.nodes
-
-    nodes.new('NodeGroupOutput')
-    make_new_socket(node_tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
-    return node_tree
-
 
 def make_face_generator(nodes, inputs=['Geometry'], outputs=['Geometry'],
                         input_types=['Geometry'], output_types=['Geometry'],
-                        name='FaceGenerator',flip_orientation=False):
+                        name='FaceGenerator', flip_orientation=False):
     tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
     group = nodes.new(type='GeometryNodeGroup')
 
@@ -3368,9 +3565,9 @@ def make_face_generator(nodes, inputs=['Geometry'], outputs=['Geometry'],
         'U': 'u,planeNormal,u,planeNormal,dot,projection,*,scale,sub',
         'V': 'v,planeNormal,v,planeNormal,dot,projection,*,scale,sub'
     },
-                               inputs=['position', 'u', 'v', 'planeNormal','planeOrigin', 'projection'],
+                               inputs=['position', 'u', 'v', 'planeNormal', 'planeOrigin', 'projection'],
                                outputs=['P', 'U', 'V'],
-                               vectors=['position', 'u', 'v', 'planeNormal','planeOrigin', 'P', 'U', 'V'],
+                               vectors=['position', 'u', 'v', 'planeNormal', 'planeOrigin', 'P', 'U', 'V'],
                                scalars=['projection'],
                                name='ProjectorOf' + name
                                )
@@ -3391,16 +3588,16 @@ def make_face_generator(nodes, inputs=['Geometry'], outputs=['Geometry'],
                     'position,v,add,planeOrigin,sub,planeNormal,dot,d_min,>,position,v,add,planeOrigin,sub,planeNormal,dot,d_max,>,not,*,*,' +
                     'position,u,add,v,add,planeOrigin,sub,planeNormal,dot,d_min,>,position,u,add,v,add,planeOrigin,sub,planeNormal,dot,d_max,>,not,*,*'
     },
-                             inputs=['position', 'u', 'v', 'd_min','d_max', 'planeNormal','planeOrigin', 'rLimit'],
+                             inputs=['position', 'u', 'v', 'd_min', 'd_max', 'planeNormal', 'planeOrigin', 'rLimit'],
                              outputs=['selector'],
-                             vectors=['position', 'u', 'v', 'planeNormal','planeOrigin'],
-                             scalars=['rLimit', 'd_min','d_max', 'selector'],
-                             name='SelectorOf'+name
+                             vectors=['position', 'u', 'v', 'planeNormal', 'planeOrigin'],
+                             scalars=['rLimit', 'd_min', 'd_max', 'selector'],
+                             name='SelectorOf' + name
                              )
     selector.location = (200, -100)
 
     tree_links.new(position.std_out, selector.inputs['position'])
-    for label in ['u', 'v', 'd_min','d_max', 'planeNormal','planeOrigin', 'rLimit']:
+    for label in ['u', 'v', 'd_min', 'd_max', 'planeNormal', 'planeOrigin', 'rLimit']:
         tree_links.new(group_inputs.outputs[label], selector.inputs[label])
 
     instance = InstanceOnPoints(tree, location=(2, 0),
@@ -3420,4 +3617,3 @@ def make_face_generator(nodes, inputs=['Geometry'], outputs=['Geometry'],
                          ins=group_inputs.outputs['Geometry'],
                          out=group_outputs.inputs['Geometry'])
     return group
-

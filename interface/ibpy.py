@@ -11,7 +11,7 @@ from mathutils import Vector, Quaternion, Matrix
 
 from compositions.compositions import create_composition
 from interface.interface_constants import EMISSION, TRANSMISSION, BLENDER_EEVEE, blender_version
-from shader_nodes.shader_nodes import MixRGB
+
 from utils.constants import BLEND_DIR, FRAME_RATE, OBJECT_APPEARANCE_TIME, OSL_DIR, COLOR_NAMES, COLORS_SCALED, IMG_DIR, \
     DEFAULT_ANIMATION_TIME, RES_HDRI_DIR, FINAL_DIR, VID_DIR, COLOR_PREFIXES, SPECIALS, COLORS, APPEND_DIR
 from utils.geometry import BoundingBox
