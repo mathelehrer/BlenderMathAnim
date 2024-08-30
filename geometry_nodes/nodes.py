@@ -1049,7 +1049,7 @@ class VectorMath(RedNode):
         super().__init__(tree, location=location, **kwargs)
 
         if operation in ("DOT", "LENGTH"):
-            self.std_out = self.node.outputs['Value']
+            self.std_out = self.node.outputs[1]
         else:
             self.std_out = self.node.outputs['Vector']
 
@@ -1224,6 +1224,45 @@ class RepeatZone(GreenNode):
             self.tree.links.new(current.geometry_out, last.geometry_in)
             last = current
         self.tree.links.new(self.repeat_input.outputs['Geometry'], last.geometry_in)
+
+
+class Simulation(GreenNode):
+    def __init__(self, tree, location=(0, 0), width=5, geometry=None, **kwargs):
+        self.simulation_output = tree.nodes.new("GeometryNodeSimulationOutput")
+        self.simulation_input = tree.nodes.new("GeometryNodeSimulationInput")
+        self.simulation_input.location = (location[0] * 200, location[1] * 200)
+        self.simulation_output.location = (location[0] * 200 + width * 200, location[1] * 200)
+        self.simulation_input.pair_with_output(self.simulation_output)
+        self.node = self.simulation_input
+        self.geometry_in = self.simulation_input.inputs['Geometry']
+        self.geometry_out = self.simulation_output.outputs['Geometry']
+        tree.links.new(self.simulation_input.outputs['Geometry'], self.simulation_output.inputs['Geometry'])
+        super().__init__(tree, location=location, **kwargs)
+
+        if geometry is not None:
+            tree.links.new(geometry, self.simulation_input.inputs['Geometry'])
+
+    def add_socket(self, socket_type='GEOMETRY', name="socket"):
+        """
+        :param socket_type: 'FLOAT', 'INT', 'BOOLEAN', 'VECTOR', 'ROTATION', 'STRING', 'RGBA', 'OBJECT', 'IMAGE', 'GEOMETRY', 'COLLECTION', 'TEXTURE', 'MATERIAL'
+        :param name:
+        :return:
+        """
+        self.simulation_output.state_items.new(socket_type, name)
+
+    def join_in_geometries(self, out_socket_name=None):
+        join = JoinGeometry(self.tree, geometry=self.simulation_input.outputs[0:-1])
+        if out_socket_name:
+            self.tree.links.new(join.geometry_out, self.simulation_output.inputs[out_socket_name])
+
+    def create_geometry_line(self, nodes):
+        last = nodes.pop()
+        self.tree.links.new(last.geometry_out, self.simulation_output.inputs['Geometry'])
+        while len(nodes) > 0:
+            current = nodes.pop()
+            self.tree.links.new(current.geometry_out, last.geometry_in)
+            last = current
+        self.tree.links.new(self.simulation_input.outputs['Geometry'], last.geometry_in)
 
 
 # custom composite nodes
