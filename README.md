@@ -20,4 +20,4 @@ pip install mathutils<br>
 On Windows: You need to install the Visual C++ Build Tools and then install the python development package using pip<br>
 pip install --upgrade setuptools<br>
 pip install --upgrade wheel<br>
-pip install --upgrade python-dev<br>
+pip install --upgrade python-dev-tools<br>
