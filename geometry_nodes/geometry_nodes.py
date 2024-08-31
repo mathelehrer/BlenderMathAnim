@@ -228,7 +228,7 @@ def create_pendulum_node():
     links.new(ins.outputs["omega"],simulation.simulation_input.inputs["omega"])
     links.new(ins.outputs["theta"],simulation.simulation_input.inputs["theta"])
 
-    length = InputValue(tree, location=(left - 1, -4), value=2.5)
+    length = InputValue(tree, location=(left - 1, -4), value=2.5,name="Length")
 
     left+=2
     update_omega=make_function(tree,functions={
@@ -279,7 +279,7 @@ def create_pendulum_node():
     left+=1
     mat = SetMaterial(tree,location=(left,0),material='joker')
     left+=1
-    join2 = JoinGeometry(tree,location=(left,0))
+    join2 = JoinGeometry(tree,location=(left,-0.5))
     left+=1
     trafo = TransformGeometry(tree,location=(left,0),translation=[5,0,1])
     left+=1
@@ -290,14 +290,49 @@ def create_pendulum_node():
     left-=6
     pos = Position(tree,location =(left,-1) )
     left+=1
-    length = VectorMath(tree,location=(left,-1),operation='LENGTH',inputs0=pos.std_out)# one vertex is at the origin
+    lengthBool = VectorMath(tree,location=(left,-1),operation='LENGTH',inputs0=pos.std_out)# one vertex is at the origin
     # only the vertex away from the origin has a non-zero length, this value is used to select the correct vertex for the instance on points
     uv = IcoSphere(tree,location=(left,-2),radius=0.3,subdivisions=3)
     left+=1
-    iop = InstanceOnPoints(tree,location=(left,-1),selection=length.std_out,instance=uv.geometry_out)
+    iop = InstanceOnPoints(tree,location=(left,-1),selection=lengthBool.std_out,instance=uv.geometry_out)
     left+=1
     mat2 = SetMaterial(tree,location=(left,-2),material='plastic_example')
     create_geometry_line(tree,[point2mesh,iop,mat2,join2])
+
+    # create angle visualization
+
+    left = -10
+    arc_length_factor=InputValue(tree,location=(left,-5.5),value=0.5,name="ArcFactor")
+    res = InputValue(tree, location=(left , -6), value=100, name="Resolution")
+    idx = Index(tree,location=(left,-5))
+    left +=1
+    arc = Points(tree,location=(left,-6),count=res.std_out)
+    left+=1
+
+    compute_positions=make_function(tree,functions={
+        "position":["l,fac,*,theta,res,/,idx,*,sin,*","0","l,fac,*,-1,*,theta,res,/,idx,*,cos,*"]
+    },name="arcPosition",inputs=["l","fac","idx","res","theta"],outputs=["position"],
+                                    scalars=["l","fac","idx","res","theta"],
+                                    vectors=["position"],location=(left,-3))
+
+    links.new(res.std_out,compute_positions.inputs["res"])
+    links.new(idx.std_out,compute_positions.inputs["idx"])
+    links.new(length.std_out,compute_positions.inputs["l"])
+    links.new(arc_length_factor.std_out,compute_positions.inputs["fac"])
+    links.new(simulation.simulation_output.outputs["theta"],compute_positions.inputs["theta"])
+    left+=1
+    set_arc_pos = SetPosition(tree,location=(left,-6),position=compute_positions.outputs["position"])
+    left+=1
+    join3 = JoinGeometry(tree,location=(left,-6))
+    left+=1
+    arc_fill = ConvexHull(tree,location=(left,-6))
+    left+=1
+    theta_attr = StoredNamedAttribute(tree,location=(left,-6),name="thetaStorage",value=simulation.simulation_output.outputs["theta"])
+    left+=1
+    arc_mat = SetMaterial(tree,location=(left,-6),material=z_gradient)
+
+    create_geometry_line(tree,[arc,set_arc_pos,join3,arc_fill,theta_attr,arc_mat,join2])
+    create_geometry_line(tree,[origin,join3])
     return tree
 
 #########################
