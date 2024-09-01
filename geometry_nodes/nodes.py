@@ -997,6 +997,13 @@ class InputValue(RedNode):
         self.outputs['Value'].default_value = value
 
 
+class SceneTime(RedNode):
+    def __init__(self, tree, location=(0, 0), std_out="Seconds", **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeInputSceneTime")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs[std_out]
+
 # Function Nodes #
 class InputBoolean(RedNode):
     def __init__(self, tree, location=(0, 0), value=True, **kwargs):
@@ -1005,70 +1012,6 @@ class InputBoolean(RedNode):
 
         self.std_out = self.node.outputs['Boolean']
         self.node.boolean = value
-
-
-class BooleanMath(RedNode):
-    def __init__(self, tree, location=(0, 0), operation='AND', inputs0=True, inputs1=True, **kwargs):
-        """
-        :param tree:
-        :param location:
-        :param operation: 'AND','OR',...
-        :param inputs0:
-        :param inputs1:
-        :param kwargs:
-        """
-        self.node = tree.nodes.new(type="FunctionNodeBooleanMath")
-        super().__init__(tree, location=location, **kwargs)
-
-        self.std_out = self.node.outputs['Boolean']
-
-        if operation:
-            self.node.operation = operation
-        if isinstance(inputs0, (bool, int, float)):
-            self.node.inputs[0].default_value = inputs0
-        else:
-            tree.links.new(inputs0, self.node.inputs[0])
-        if isinstance(inputs1, (bool, int, float)):
-            self.node.inputs[1].default_value = inputs1
-        else:
-            tree.links.new(inputs1, self.node.inputs[1])
-
-
-class VectorMath(RedNode):
-    def __init__(self, tree, location=(0, 0), operation='ADD', inputs0=Vector(), inputs1=Vector(), float_input=None,
-                 **kwargs):
-        """
-        :param tree:
-        :param location:
-        :param operation: 'AND','OR',...
-        :param inputs0:
-        :param inputs1:
-        :param kwargs:
-        """
-        self.node = tree.nodes.new(type="ShaderNodeVectorMath")
-        super().__init__(tree, location=location, **kwargs)
-
-        if operation in ("DOT", "LENGTH"):
-            self.std_out = self.node.outputs[1]
-        else:
-            self.std_out = self.node.outputs['Vector']
-
-        if operation:
-            self.node.operation = operation
-        if isinstance(inputs0, (Vector, list)):
-            self.node.inputs[0].default_value = inputs0
-        else:
-            tree.links.new(inputs0, self.node.inputs[0])
-        if isinstance(inputs1, (Vector, list)):
-            self.node.inputs[1].default_value = inputs1
-        else:
-            tree.links.new(inputs1, self.node.inputs[1])
-        if float_input:
-            if isinstance(float_input, (float, int)):
-                self.node.inputs[3].default_value = float_input
-            else:
-                tree.links.new(float_input, self.node.inputs[3])
-
 
 class InputVector(RedNode):
     def __init__(self, tree, location=(0, 0), value=Vector()
@@ -1180,6 +1123,127 @@ class CombineXYZ(BlueNode):
             tree.links.new(z, self.node.inputs['Z'])
 
 
+class MathNode(BlueNode):
+    def __init__(self, tree, location=(0, 0), operation='ADD', inputs0=None,
+                 inputs1=None, inputs2=None, **kwargs):
+        """
+        :param tree:
+        :param location:
+        :param operation: 'ADD','SUBTRACT',...
+        :param inputs0:
+        :param inputs1:
+        :param inputs2:
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="ShaderNodeMath")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs[0]
+
+        if operation:
+            self.node.operation = operation
+        if inputs0:
+            if isinstance(inputs0, (bool, int, float)):
+                self.node.inputs[0].default_value = inputs0
+            else:
+                tree.links.new(inputs0, self.node.inputs[0])
+        if inputs1:
+            if isinstance(inputs1, (bool, int, float)):
+                self.node.inputs[1].default_value = inputs1
+            else:
+                tree.links.new(inputs1, self.node.inputs[1])
+        if inputs2:
+            if isinstance(inputs2, (bool, int, float)):
+                self.node.inputs[2].default_value = inputs2
+            else:
+                tree.links.new(inputs2, self.node.inputs[2])
+
+
+class BooleanMath(BlueNode):
+    def __init__(self, tree, location=(0, 0), operation='AND', inputs0=True, inputs1=True, **kwargs):
+        """
+        :param tree:
+        :param location:
+        :param operation: 'AND','OR',...
+        :param inputs0:
+        :param inputs1:
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="FunctionNodeBooleanMath")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs['Boolean']
+
+        if operation:
+            self.node.operation = operation
+        if isinstance(inputs0, (bool, int, float)):
+            self.node.inputs[0].default_value = inputs0
+        else:
+            tree.links.new(inputs0, self.node.inputs[0])
+        if isinstance(inputs1, (bool, int, float)):
+            self.node.inputs[1].default_value = inputs1
+        else:
+            tree.links.new(inputs1, self.node.inputs[1])
+
+
+class VectorMath(BlueNode):
+    def __init__(self, tree, location=(0, 0), operation='ADD', inputs0=Vector(), inputs1=Vector(), float_input=None,
+                 **kwargs):
+        """
+        :param tree:
+        :param location:
+        :param operation: 'AND','OR',...
+        :param inputs0:
+        :param inputs1:
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="ShaderNodeVectorMath")
+        super().__init__(tree, location=location, **kwargs)
+
+        if operation in ("DOT", "LENGTH"):
+            self.std_out = self.node.outputs[1]
+        else:
+            self.std_out = self.node.outputs['Vector']
+
+        if operation:
+            self.node.operation = operation
+        if isinstance(inputs0, (Vector, list)):
+            self.node.inputs[0].default_value = inputs0
+        else:
+            tree.links.new(inputs0, self.node.inputs[0])
+        if isinstance(inputs1, (Vector, list)):
+            self.node.inputs[1].default_value = inputs1
+        else:
+            tree.links.new(inputs1, self.node.inputs[1])
+        if float_input:
+            if isinstance(float_input, (float, int)):
+                self.node.inputs[3].default_value = float_input
+            else:
+                tree.links.new(float_input, self.node.inputs[3])
+
+
+class Switch(BlueNode):
+    def __init__(self, tree, location=(0, 0),input_type="Geometry",
+                 switch=None,false=None,true=None,**kwargs):
+
+        self.node = tree.nodes.new(type="GeometryNodeSwitch")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs['Output']
+        self.switch = self.node.inputs['Switch']
+        self.true = self.node.inputs['True']
+        self.false = self.node.inputs['False']
+
+        if switch:
+            tree.links.new(switch,self.switch)
+
+        if true:
+            tree.links.new(true,self.true)
+
+        if false:
+            tree.links.new(false,self.false)
+
+
 # zones
 
 class RepeatZone(GreenNode):
@@ -1242,13 +1306,14 @@ class Simulation(GreenNode):
         if geometry is not None:
             tree.links.new(geometry, self.simulation_input.inputs['Geometry'])
 
-    def add_socket(self, socket_type='GEOMETRY', name="socket"):
+    def add_socket(self, socket_type='GEOMETRY', name="socket",value=0):
         """
         :param socket_type: 'FLOAT', 'INT', 'BOOLEAN', 'VECTOR', 'ROTATION', 'STRING', 'RGBA', 'OBJECT', 'IMAGE', 'GEOMETRY', 'COLLECTION', 'TEXTURE', 'MATERIAL'
         :param name:
         :return:
         """
         self.simulation_output.state_items.new(socket_type, name)
+        self.simulation_input.outputs[name].default_value=value
 
     def join_in_geometries(self, out_socket_name=None):
         join = JoinGeometry(self.tree, geometry=self.simulation_input.outputs[0:-1])

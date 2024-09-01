@@ -80,7 +80,7 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
 
     if recursive:
         for child in obj.children:
-            apply_material(child, material, recursive=recursive, type_req=type_req,**kwargs)
+            apply_material(child, material, recursive=recursive, type_req=type_req, **kwargs)
 
     if intensity is not None and 'trans' in material:
         nodes = obj.active_material.node_tree.nodes
@@ -117,6 +117,7 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
 
     if 'volume_scatter' in kwargs:
         ibpy.set_volume_scatter_of_material(material, value=kwargs.pop('volume_scatter'))
+
 
 def vertex_color_material():
     vertex_color = bpy.data.materials.new(name="Vertex_Color")
@@ -389,7 +390,52 @@ def pie_checker_material(colors=['drawing', 'joker'], name='PieChecker', **kwarg
     links.new(mixer.outputs[0], bsdf.inputs['Base Color'])
     return mat
 
-def z_gradient(name="zGradient",**kwargs):
+
+def gradient_from_attribute(name="AngleDisplacement", **kwargs):
+    """
+    create an angle size dependent color
+    just a quick simple implementation, lots of customization is possible
+    :param name:
+    :param kwargs:
+    :return:
+    """
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+
+    mat.name = name
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+
+    customize_material(mat, **kwargs)
+    bsdf = nodes.get("Principled BSDF")
+
+    attr_name = get_from_kwargs(kwargs,"attr_name","attributeName")
+    attr_type = get_from_kwargs(kwargs,"attr_type","GEOMETRY")
+    gradient = get_from_kwargs(kwargs,"gradient",{0:[1,0,0,1],0.5:[0,1,0,1],1:[0,0,1,1]})
+    attr = AttributeNode(tree, location=(-4, 0),
+                         attribute_name=attr_name,type=attr_type)
+    trafo = make_function(tree, functions={
+        "factor": "theta,2,pi,*,/,0.5,+"
+    }, location=(-2, 0), name="angle2factor",
+                     node_group_type='Shader',
+                          inputs=["theta"], outputs=["factor"], scalars=["theta", "factor"])
+    ramp = ColorRamp(tree, location=(-1, 0),factor=trafo.outputs["factor"])
+    links.new(attr.fac_out,trafo.inputs["theta"])
+    ramp.node.color_ramp.elements.new(len(gradient)-2)
+
+    i=0
+    for key,val in gradient.items():
+        ramp.node.color_ramp.elements[i].position = key
+        ramp.node.color_ramp.elements[i].color = val
+        i=i+1
+
+    links.new(ramp.std_out, bsdf.inputs["Base Color"])
+    links.new(ramp.std_out, bsdf.inputs[EMISSION])
+    return mat
+
+
+def z_gradient(name="zGradient", **kwargs):
     """
     create a color gradient
     just a quick simple implementation, lots of customization is possible
@@ -423,7 +469,7 @@ def z_gradient(name="zGradient",**kwargs):
     return mat
 
 
-def camera_gradient_rainbow(name="Rainbow",**kwargs):
+def camera_gradient_rainbow(name="Rainbow", **kwargs):
     """
     create rainbow gradient across text
     This is used in video_cmb
@@ -443,13 +489,13 @@ def camera_gradient_rainbow(name="Rainbow",**kwargs):
     customize_material(mat, **kwargs)
     bsdf = nodes.get("Principled BSDF")
 
-    coords = TextureCoordinate(tree,location=(-4,0),std_out='Camera')
-    mapping = Mapping(tree,location=(-3,0),vector=coords.std_out,loc=Vector([0.5,0,0]),scale=Vector([0.3,1,1]))
-    gradient = GradientTexture(tree,location=(-2,0),gradient_type='EASING',vector=mapping.std_out,std_out=1)
-    ramp = ColorRamp(tree,location=(-1,0),factor=gradient.std_out)
+    coords = TextureCoordinate(tree, location=(-4, 0), std_out='Camera')
+    mapping = Mapping(tree, location=(-3, 0), vector=coords.std_out, loc=Vector([0.5, 0, 0]), scale=Vector([0.3, 1, 1]))
+    gradient = GradientTexture(tree, location=(-2, 0), gradient_type='EASING', vector=mapping.std_out, std_out=1)
+    ramp = ColorRamp(tree, location=(-1, 0), factor=gradient.std_out)
     ramp.node.color_ramp.elements.new(1)
     ramp.node.color_ramp.elements[0].position = 0.05
-    ramp.node.color_ramp.elements[0].color = [1,0,0,1]
+    ramp.node.color_ramp.elements[0].color = [1, 0, 0, 1]
     ramp.node.color_ramp.elements[1].position = 0.5
     ramp.node.color_ramp.elements[1].color = [0, 1, 0, 1]
     ramp.node.color_ramp.elements[2].position = 0.95
@@ -458,7 +504,8 @@ def camera_gradient_rainbow(name="Rainbow",**kwargs):
     links.new(ramp.std_out, bsdf.inputs[EMISSION])
     return mat
 
-def image_over_text(name="ImageOverText",**kwargs):
+
+def image_over_text(name="ImageOverText", **kwargs):
     """
     create an image texture across text
     This is used in video_cmb
@@ -476,12 +523,12 @@ def image_over_text(name="ImageOverText",**kwargs):
     customize_material(mat, **kwargs)
     bsdf = nodes.get("Principled BSDF")
 
-    coords = TextureCoordinate(tree,location=(-4,0),std_out='Camera')
-    mapping = Mapping(tree,location=(-3,0),vector=coords.std_out,loc=Vector([0.5,0,0]),scale=Vector([0.3,1,1]))
-    src = get_from_kwargs(kwargs,'src',None)
+    coords = TextureCoordinate(tree, location=(-4, 0), std_out='Camera')
+    mapping = Mapping(tree, location=(-3, 0), vector=coords.std_out, loc=Vector([0.5, 0, 0]), scale=Vector([0.3, 1, 1]))
+    src = get_from_kwargs(kwargs, 'src', None)
     if src is not None:
-        image =ibpy.get_image(src)
-        image_texture = ImageTexture(tree,location=(-2,0),image=image,vector=mapping.std_out,std_out='Color')
+        image = ibpy.get_image(src)
+        image_texture = ImageTexture(tree, location=(-2, 0), image=image, vector=mapping.std_out, std_out='Color')
 
         links.new(image_texture.std_out, bsdf.inputs["Base Color"])
         links.new(image_texture.std_out, bsdf.inputs[EMISSION])
@@ -543,13 +590,11 @@ def multipole_texture(l_max=5, **kwargs):
         "st": "uv_y,pi,*,sin",
     }
     outs = ["ct", "st"]
-    for l in range(1,l_max+1):
-        functions["s"+str(l)+"f"]="uv_x,pi,*,2,*,"+str(l)+",*,sin"
-        functions["c"+str(l)+"f"]="uv_x,pi,*,2,*,"+str(l)+",*,cos"
-        outs.append("c"+str(l)+"f")
-        outs.append("s"+str(l)+"f")
-
-
+    for l in range(1, l_max + 1):
+        functions["s" + str(l) + "f"] = "uv_x,pi,*,2,*," + str(l) + ",*,sin"
+        functions["c" + str(l) + "f"] = "uv_x,pi,*,2,*," + str(l) + ",*,cos"
+        outs.append("c" + str(l) + "f")
+        outs.append("s" + str(l) + "f")
 
     coords = TextureCoordinate(tree, location=(left, 0))
     left += 1
@@ -561,56 +606,59 @@ def multipole_texture(l_max=5, **kwargs):
                           location=(left, -1))
     links.new(coords.std_out, polar.inputs["uv"])
 
-    left+=1
+    left += 1
     # setup functions with random coefficients so far
 
     parts = []
-    last_order=None
-    last_add=None
-    for l in range(1,l_max+1):
-        for m in range(0,l+1):
-            coefficients = [np.round(10*(random()*2-1))/10 for i in range(2*(l+1))]
+    last_order = None
+    last_add = None
+    for l in range(1, l_max + 1):
+        for m in range(0, l + 1):
+            coefficients = [np.round(10 * (random() * 2 - 1)) / 10 for i in range(2 * (l + 1))]
 
-            y_lm = SphericalHarmonics(l,m,"theta","phi")
+            y_lm = SphericalHarmonics(l, m, "theta", "phi")
             parts.append(re(y_lm.poly))
-            if m!=0: # for m=0 there is no imaginary part
+            if m != 0:  # for m=0 there is no imaginary part
                 parts.append(im(y_lm.poly))
 
         # create function string
-        summands = [ str(coeff)+","+ExpressionConverter(expr).postfix()+",*" for coeff, expr in zip(coefficients,parts)]
+        summands = [str(coeff) + "," + ExpressionConverter(expr).postfix() + ",*" for coeff, expr in
+                    zip(coefficients, parts)]
 
-        if len(summands)>1:
-            term = summands[0]+","+summands[1]+",+"
-        for i in range(2,len(summands)):
-            term+= ","+summands[i]+",+"
-        term=term.replace("theta,cos","ct")
-        term=term.replace("theta,sin","st")
+        if len(summands) > 1:
+            term = summands[0] + "," + summands[1] + ",+"
+        for i in range(2, len(summands)):
+            term += "," + summands[i] + ",+"
+        term = term.replace("theta,cos", "ct")
+        term = term.replace("theta,sin", "st")
         term = term.replace("phi,cos", "c1f")
         term = term.replace("phi,sin", "s1f")
-        for t in range(2,l+1):
-            term=term.replace(str(t)+",phi,*,cos","c"+str(l)+"f")
-            term=term.replace(str(t)+",phi,*,sin","s"+str(l)+"f")
+        for t in range(2, l + 1):
+            term = term.replace(str(t) + ",phi,*,cos", "c" + str(l) + "f")
+            term = term.replace(str(t) + ",phi,*,sin", "s" + str(l) + "f")
         print(term)
-        order_l = make_function(nodes,functions={
-            "temperature":term,
+        order_l = make_function(nodes, functions={
+            "temperature": term,
         },
-                                inputs=outs[0:2*l+2],
+                                inputs=outs[0:2 * l + 2],
                                 outputs=["temperature"],
-                                scalars = outs[0:2*l+2]+["temperature"],
-                                name="order_"+str(l),
-                                node_group_type="Shader",location=(left,-l))
-        for label in outs[0:2*l+2]:
-            links.new(polar.outputs[label],order_l.inputs[label])
+                                scalars=outs[0:2 * l + 2] + ["temperature"],
+                                name="order_" + str(l),
+                                node_group_type="Shader", location=(left, -l))
+        for label in outs[0:2 * l + 2]:
+            links.new(polar.outputs[label], order_l.inputs[label])
 
         if last_order:
             if last_add:
-                add = MathNode(tree,location=(left+1,-l+0.5),input0=order_l.outputs["temperature"],input1=last_add.std_out)
+                add = MathNode(tree, location=(left + 1, -l + 0.5), input0=order_l.outputs["temperature"],
+                               input1=last_add.std_out)
             else:
-                add = MathNode(tree,location=(left+1,-l+0.5),input0=order_l.outputs["temperature"],input1=last_order.outputs["temperature"])
-            last_add=add
+                add = MathNode(tree, location=(left + 1, -l + 0.5), input0=order_l.outputs["temperature"],
+                               input1=last_order.outputs["temperature"])
+            last_add = add
         last_order = order_l
 
-    left+=2
+    left += 2
 
     abs_temp = make_function(nodes, functions={
         "abs": "temp,abs",
@@ -745,6 +793,7 @@ def rgb_color(rgb=[1, 1, 1, 1], **kwargs):
     bsdf.inputs[EMISSION].default_value = color
     return mat
 
+
 def decay_mode_material(**kwargs):
     mat = bpy.data.materials.new(name="DecayModeColor" + str(type))
     mat.use_nodes = True
@@ -755,18 +804,17 @@ def decay_mode_material(**kwargs):
     links = mat.node_tree.links
     decay_mode_attribute = AttributeNode(tree, attribute_name="DecayMode", location=(-5, 0))
 
-
     colors = [
-        [0.4, 0.4, 0.4, 1],# stable
-        [1, 1, 0, 1], # alpha
-        [1, 0, 1, 1],# beta-
-        [0, 1, 1, 1],# beta+
-        [0, 0.7, 0.7, 1],# electron capture only
-        [0,0,1,1],# proton emission
-        [1,0,0,1], # neutron emission
-        [0, 1, 0, 1],# spontaneous fission
-        [1, 1, 1, 1],# unknown
-         ]
+        [0.4, 0.4, 0.4, 1],  # stable
+        [1, 1, 0, 1],  # alpha
+        [1, 0, 1, 1],  # beta-
+        [0, 1, 1, 1],  # beta+
+        [0, 0.7, 0.7, 1],  # electron capture only
+        [0, 0, 1, 1],  # proton emission
+        [1, 0, 0, 1],  # neutron emission
+        [0, 1, 0, 1],  # spontaneous fission
+        [1, 1, 1, 1],  # unknown
+    ]
     old_mix = None
     for i in range(1, 9):
         compare = MathNode(tree, location=(-4, -10 + i), operation='COMPARE', input0=decay_mode_attribute.fac_out,
@@ -2746,28 +2794,28 @@ def set_sky_background(**kwargs):
     links = world.node_tree.links
 
     out = nodes['World Output']
-    out.location=(200,0)
+    out.location = (200, 0)
 
     sky = nodes.new(type="ShaderNodeTexSky")
-    sky.sky_type="NISHITA"
-    altitude=get_from_kwargs(kwargs,'altitude',0)
-    intensity=get_from_kwargs(kwargs,'sun_intensity',1)
-    sky.location=(-200,0)
-    sky.altitude=altitude
-    sky.sun_intensity=intensity
+    sky.sky_type = "NISHITA"
+    altitude = get_from_kwargs(kwargs, 'altitude', 0)
+    intensity = get_from_kwargs(kwargs, 'sun_intensity', 1)
+    sky.location = (-200, 0)
+    sky.altitude = altitude
+    sky.sun_intensity = intensity
 
     air = get_from_kwargs(kwargs, 'air_density', 1)
     dust = get_from_kwargs(kwargs, 'dust_density', 1)
     ozone = get_from_kwargs(kwargs, 'ozone_density', 1)
 
-    sky.air_density=air
-    sky.dust_density=dust
-    sky.ozone_density=ozone
+    sky.air_density = air
+    sky.dust_density = dust
+    sky.ozone_density = ozone
 
     background = nodes.get("Background")
-    background.location=(0,0)
+    background.location = (0, 0)
 
-    links.new(sky.outputs['Color'],background.inputs['Color'])
-    links.new(background.outputs['Background'],out.inputs["Surface"])
+    links.new(sky.outputs['Color'], background.inputs['Color'])
+    links.new(background.outputs['Background'], out.inputs["Surface"])
 
-    animate_sky_background(sky,**kwargs)
+    animate_sky_background(sky, **kwargs)
