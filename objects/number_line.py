@@ -147,7 +147,7 @@ class NumberLine(BObject):
             # tics
             self.tics = []
             for i in range(0,int( n_tics) + 1):
-                if include_zero or self.tic_values[i] != 0:
+                if include_zero or (self.tic_values[i] != 0 and self.tic_values[i] != '0'):
                     tic = Cylinder(length=radius / 2,
                                    location=self.get_location(self.tic_values[i]), radius=radius * 3,
                                    name=label + "_tic_" + str(self.tic_values[i]),
@@ -183,7 +183,7 @@ class NumberLine(BObject):
         if isinstance(tic_labels, str):
             if tic_labels == 'AUTO':
                 for i in range(0, n_tics + 1):
-                    if include_zero or self.tic_values[i] != 0:
+                    if include_zero or (self.tic_values[i] != 0 and self.tic_values[i] !='0'):
                         if not self.dynamic:
                             lbl = SimpleTexBObject(self.make_tic_label(self.tic_values[i], label_unit),
                                              centered=True,
@@ -205,7 +205,7 @@ class NumberLine(BObject):
             self.labels = []
         else:
             for i, lbl in enumerate(tic_labels):
-                if include_zero or lbl != 0:
+                if include_zero or (lbl != 0 and lbl !='0'):
                     if not self.dynamic:
                         ll = SimpleTexBObject(self.make_tic_label(lbl, label_unit),
                                                centered=True,

@@ -186,7 +186,7 @@ class CoordinateSystem(BObject):
         if self.dimensions == 3:
             if len(X) < 3:
                 X.append(0)
-            X = mathutils.Vector(X)
+            X = Vector(X)
         else:
             if len(X) < 3:
                 X.append(0)
@@ -195,7 +195,7 @@ class CoordinateSystem(BObject):
             # X[1] /= scales[1]
 
             X[1], X[2] = X[2], X[1]
-            X = mathutils.Vector(X)  # + Vector(self.location_of_origin)
+            X = Vector(X)  # + Vector(self.location_of_origin)
         return X
 
     def coords2location_relative2coordinate_system(self, coordinates,apply_origin_shift=False):

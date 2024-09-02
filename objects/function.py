@@ -56,6 +56,7 @@ class Function(BObject):
                  hue_functions=["x", "y"],
                  color_mode='simple_color',
                  mode='2D',
+                 thickness=1,
                  **kwargs):
         """
 
@@ -186,7 +187,6 @@ class Function(BObject):
             self.dialer = make_voronoi_bezier_curve(self, colors, scale=coordinate_system.get_scales(),
                                                     emission_strength=0.3)
 
-        thickness = super().get_from_kwargs("thickness", 1)
         self.bevel_depth = 0.05 * thickness
         extrude = self.get_from_kwargs('extrude', 0.005)
         self.extrude = extrude

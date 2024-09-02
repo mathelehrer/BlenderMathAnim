@@ -1,22 +1,28 @@
 import numpy as np
 
-from appearance.textures import phase2hue_material
+from appearance.textures import phase2hue_material, gradient_from_attribute
 from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, InstanceOnPoints, JoinGeometry, \
     create_geometry_line, RealizeInstances, Position, make_function, ObjectInfo, SetPosition, Index, SetMaterial, \
     RandomValue, RepeatZone, StoredNamedAttribute, NamedAttribute, VectorMath, CurveToMesh, PointsToCurve, Grid, \
     TransformGeometry, InputVector, DeleteGeometry, IcoSphere, MeshLine, MeshToCurve, InstanceOnEdges, CubeMesh, \
     EdgeVertices, BooleanMath, SetShadeSmooth, RayCast, WireFrame, ConvexHull, InsideConvexHull, ExtrudeMesh, \
-    ScaleElements, UVSphere
+    ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch
 from interface import ibpy
-from interface.ibpy import make_new_socket, Vector, get_node_tree
+from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
 from objects.derived_objects.p_arrow import PArrow
+from utils.constants import FRAME_RATE
 
 pi = np.pi
 r2 = np.sqrt(2)
 r3 = np.sqrt(3)
 
+
+############################
+## GeometryNodesModifier ###
+## provide more versality ##
+############################
 
 class GeometryNodesModifier:
     """
@@ -50,6 +56,427 @@ class GeometryNodesModifier:
     def get_node_tree(self):
         return self.tree
 
+##################
+## Applications ##
+##################
+
+class PendulumModifier(GeometryNodesModifier):
+    def __init__(self,name="Pendulum",automatic_layout=False):
+        super().__init__(name=name,automatic_layout=automatic_layout)
+
+    def create_node(self,tree):
+
+        out = tree.nodes.get("Group Output")
+        links = tree.links
+
+        ##### first pendulum ####
+        first_left = -18
+        left = first_left
+        theta = InputValue(tree, location=(left,0.25), name="theta", value=np.pi * 0.95)
+        b = InputValue(tree, location=(left,0.5), name="friction", value=0.0225) # damping to compensate accumulating errors
+        omega = InputValue(tree, location=(left,0.75), name="omega", value=0)
+        origin = Points(tree, location=(left, 4), name="Origin")
+        point = Points(tree, location=(left, 0), name="PendulumMass")
+
+        frame = SceneTime(tree, location=(left, -0.75), std_out="Frame")
+        min_frame = InputValue(tree, location=(left,- 1), name="maxFrame", value=119)
+        max_frame = InputValue(tree, location=(left,- 1.25), name="maxFrame", value=600)
+        t0 = InputValue(tree,location=(left,-0.5),value=-120/FRAME_RATE)
+
+        left += 1
+
+        simulation = Simulation(tree, location=(left, 0))
+        simulation.add_socket(socket_type='FLOAT', name="t")  # elongation
+        simulation.add_socket(socket_type='FLOAT', name="theta")  # elongation
+        simulation.add_socket(socket_type='FLOAT', name="omega")  # angular velocity
+        links.new(omega.std_out, simulation.simulation_input.inputs["omega"])
+        links.new(t0.std_out, simulation.simulation_input.inputs["t"])
+
+        length = InputValue(tree, location=(left - 1, -4), value=2.5, name="Length")
+
+        left += 2
+        time = MathNode(tree, location=(left, +1), inputs0=simulation.simulation_input.outputs["t"],
+                        inputs1=simulation.simulation_input.outputs["Delta Time"])
+
+        start_sim = make_function(tree,functions={
+            "theta":"frame,start,=,theta0,*,th,+" # initialize theta at a particular frame
+        },name="thetaInitializer",inputs=["frame","start","theta0","th"],outputs=["theta"],
+                                  scalars=["frame","start","theta0","th","theta"],
+                                  location=(left-1,-0.5),hide=True)
+        links.new(theta.std_out,start_sim.inputs["theta0"])
+        links.new(frame.std_out,start_sim.inputs["frame"])
+        links.new(min_frame.std_out,start_sim.inputs["start"])
+        links.new(simulation.simulation_input.outputs["theta"],start_sim.inputs["th"])
+
+        update_omega = make_function(tree, functions={
+            "omega": "o,9.81,l,/,theta,sin,*,b,o,*,+,dt,*,-"
+        }, name="updateOmega", location=(left, -0.5), hide=True,
+                                     outputs=["omega"], inputs=["dt", "theta", "o", "l", "b"],
+                                     scalars=["omega", "o", "l", "theta", "dt", "b"])
+
+        links.new(length.std_out, update_omega.inputs["l"])
+        links.new(b.std_out, update_omega.inputs["b"])
+        links.new(start_sim.outputs["theta"], update_omega.inputs["theta"])
+        links.new(simulation.simulation_input.outputs["Delta Time"], update_omega.inputs["dt"])
+        links.new(update_omega.outputs["omega"], simulation.simulation_output.inputs["omega"])
+        links.new(time.std_out, simulation.simulation_output.inputs["t"])
+        links.new(simulation.simulation_input.outputs["omega"], update_omega.inputs["o"])
+
+        update_theta = make_function(tree, functions={
+            "theta": "th,omega,dt,*,+"
+        }, name="updateTheta", location=(left, -1.5), hide=True,
+                                     outputs=["theta"], inputs=["dt", "th", "omega"],
+                                     scalars=["theta", "th", "dt", "omega"])
+
+        links.new(start_sim.outputs["theta"], update_theta.inputs["th"])
+        links.new(simulation.simulation_input.outputs["Delta Time"], update_theta.inputs["dt"])
+        links.new(update_theta.outputs["theta"], simulation.simulation_output.inputs["theta"])
+        links.new(simulation.simulation_input.outputs["omega"], update_theta.inputs["omega"])
+        left += 4
+
+        # convert angle into position
+        converter = make_function(tree, functions={
+            "position": ["theta,sin,l,*", "0", "theta,cos,l,-1,*,*"]
+        }, name="Angle2Position", inputs=["theta", "l"], outputs=["position"], scalars=["l", "theta"], vectors=["position"],
+                                  location=(left, -1))
+        links.new(simulation.simulation_output.outputs["theta"], converter.inputs["theta"])
+        links.new(length.std_out, converter.inputs["l"])
+        left += 1
+
+        set_pos = SetPosition(tree, position=converter.outputs["position"], location=(left, -0.5))
+        left += 1
+        join = JoinGeometry(tree, location=(left, 0))
+        create_geometry_line(tree, [origin, join])
+
+        left += 1
+        point2mesh = PointsToVertices(tree, location=(left, 0))
+        left += 1
+        convex_hull = ConvexHull(tree, location=(left, 0))
+        left += 1
+        wireframe = WireFrame(tree, location=(left, 0))
+        left += 1
+        material = get_material('joker')
+        self.materials.append(material)
+        mat = SetMaterial(tree, location=(left, 0), material=material)
+        left += 1
+        join2 = JoinGeometry(tree, location=(left, -0.5))
+        left += 1
+        trafo = TransformGeometry(tree, location=(left, 0), translation=[5, 0, 1])
+        left += 1
+        join_full = JoinGeometry(tree, location=(left, 0))
+        create_geometry_line(tree, [point, simulation, set_pos, join, point2mesh,
+                                    convex_hull, wireframe, mat, join2, trafo, join_full], out=out.inputs["Geometry"])
+
+        # create branch for the mass
+        left -= 6
+        pos = Position(tree, location=(left, -1))
+        left += 1
+        lengthBool = VectorMath(tree, location=(left, -1), operation='LENGTH',
+                                inputs0=pos.std_out)  # one vertex is at the origin
+        # only the vertex away from the origin has a non-zero length, this value is used to select the correct vertex for the instance on points
+        ico = IcoSphere(tree, location=(left, -2), radius=0.3, subdivisions=1)
+        left += 1
+        iop = InstanceOnPoints(tree, location=(left, -1), selection=lengthBool.std_out,
+                               instance=ico.geometry_out)
+        left += 1
+        material = get_material('plastic_example')
+        self.materials.append(material)
+        mat2 = SetMaterial(tree, location=(left, -2), material=material)
+
+        create_geometry_line(tree, [point2mesh, iop, mat2, join2])
+
+        # create angle visualization
+
+        left = first_left + 6
+        arc_length_factor = InputValue(tree, location=(left, -5.5), value=0.5, name="ArcFactor")
+        res = InputValue(tree, location=(left, -6), value=100, name="Resolution")
+        idx = Index(tree, location=(left, -5))
+        left += 1
+        arc = Points(tree, location=(left, -6), count=res.std_out)
+        left += 1
+
+        compute_positions = make_function(tree, functions={
+            "position": ["l,fac,*,theta,res,/,idx,*,sin,*", "0", "l,fac,*,-1,*,theta,res,/,idx,*,cos,*"]
+        }, name="arcPosition", inputs=["l", "fac", "idx", "res", "theta"], outputs=["position"],
+                                          scalars=["l", "fac", "idx", "res", "theta"],
+                                          vectors=["position"], location=(left, -3))
+
+        links.new(res.std_out, compute_positions.inputs["res"])
+        links.new(idx.std_out, compute_positions.inputs["idx"])
+        links.new(length.std_out, compute_positions.inputs["l"])
+        links.new(arc_length_factor.std_out, compute_positions.inputs["fac"])
+        links.new(simulation.simulation_output.outputs["theta"], compute_positions.inputs["theta"])
+        left += 1
+        set_arc_pos = SetPosition(tree, location=(left, -6), position=compute_positions.outputs["position"])
+        left += 1
+        join3 = JoinGeometry(tree, location=(left, -6))
+        left += 1
+        arc_fill = ConvexHull(tree, location=(left, -6))
+        left += 1
+        theta_attr = StoredNamedAttribute(tree, location=(left, -6), name="thetaStorage",
+                                          value=simulation.simulation_output.outputs["theta"])
+        left += 1
+        material = gradient_from_attribute( attr_name="thetaStorage",
+                              roughness=0.1, metallic=0.5,emission=0.75)
+        self.materials.append(material)
+        arc_mat = SetMaterial(tree, location=(left, -6),material=material)
+        create_geometry_line(tree, [arc, set_arc_pos, join3, arc_fill, theta_attr, arc_mat, join2])
+        create_geometry_line(tree, [origin, join3])
+
+        # trace motion
+        left = first_left + 4
+        y = -10
+        graph = MeshLine(tree, location=(left, y + 1), count=1)
+
+        skip_frame = InputValue(tree, location=(left, y - 0.5), name="skipFrame", value=7)
+        left += 1
+        freeze_frames = make_function(tree, location=(left, y / 2),
+                                      functions={
+                                          "switch": "frame,skip,%,0,=,frame,end,<,and,frame,start,>,and"
+                                      }, inputs=["frame", "skip", "start","end"], outputs=["switch"],
+                                      scalars=["frame", "skip","start", "end", "switch"], name="freezer")
+        links.new(frame.std_out, freeze_frames.inputs["frame"])
+        links.new(skip_frame.std_out, freeze_frames.inputs["skip"])
+        links.new(max_frame.std_out, freeze_frames.inputs["end"])
+        links.new(min_frame.std_out, freeze_frames.inputs["start"])
+
+        comb_xyz = CombineXYZ(tree, location=(left, y + 1),
+                              x=simulation.simulation_output.outputs["t"],
+                              z=simulation.simulation_output.outputs["theta"])
+
+        left += 1
+
+        set_graph = SetPosition(tree, location=(left, y + 1), position=comb_xyz.std_out)
+        switch = Switch(tree, location=(left, y), switch=freeze_frames.outputs["switch"])
+        left += 1
+        attr2 = StoredNamedAttribute(tree, location=(left, y), name='thetaStorage2',
+                                     value=simulation.simulation_output.outputs["theta"])
+        left += 1
+        simulation2 = Simulation(tree, location=(left, y + 2))
+        left += 1
+        join_freezes = JoinGeometry(tree, location=(left, y + 1))
+        links.new(simulation2.simulation_input.outputs["Geometry"], join_freezes.geometry_in)
+        links.new(join_freezes.geometry_out, simulation2.simulation_output.inputs["Geometry"])
+        links.new(switch.std_out, attr2.geometry_in)
+        links.new(attr2.geometry_out, join_freezes.geometry_in)
+        left += 3
+        graph_sphere = IcoSphere(tree, location=(left, y + 1), radius=0.1)
+        left += 1
+        graph_iop = InstanceOnPoints(tree, location=(left, y), instance=graph_sphere.geometry_out)
+        left += 1
+        graph_trafo = TransformGeometry(tree, location=(left, y),
+                                        translation=Vector([-4.5, 0, 0.5]))
+        left += 1
+
+        graph_mat = SetMaterial(tree, location=(left, y),material_list=self.materials,
+                                material=gradient_from_attribute, attr_name="thetaStorage2", attr_type="INSTANCER",emission=0.75)
+
+        create_geometry_line(tree, [graph, set_graph], out=switch.true)
+        create_geometry_line(tree, [simulation2, graph_iop, graph_trafo, graph_mat, join_full])
+
+        ##### second pendulum ####
+
+        first_left = -38
+        left = first_left
+        theta = InputValue(tree, location=(left, 0.25), name="theta", value=0.2)
+        b = InputValue(tree, location=(left, 0.5), name="friction",
+                       value=0.0225)  # damping to compensate accumulating errors
+        omega = InputValue(tree, location=(left, 0.75), name="omega", value=0)
+        origin = Points(tree, location=(left, 4), name="Origin")
+        point = Points(tree, location=(left, 0), name="PendulumMass")
+
+        left += 1
+
+        simulation = Simulation(tree, location=(left, 0))
+        simulation.add_socket(socket_type='FLOAT', name="t")  # elongation
+        simulation.add_socket(socket_type='FLOAT', name="theta")  # elongation
+        simulation.add_socket(socket_type='FLOAT', name="omega")  # angular velocity
+        links.new(omega.std_out, simulation.simulation_input.inputs["omega"])
+        links.new(t0.std_out, simulation.simulation_input.inputs["t"])
+
+        length = InputValue(tree, location=(left - 1, -4), value=15.75/2, name="Length")
+
+        left += 2
+        time = MathNode(tree, location=(left, +1), inputs0=simulation.simulation_input.outputs["t"],
+                        inputs1=simulation.simulation_input.outputs["Delta Time"])
+
+        start_sim = make_function(tree, functions={
+            "theta": "frame,start,=,theta0,*,th,+"  # initialize theta at a particular frame
+        }, name="thetaInitializer", inputs=["frame", "start", "theta0", "th"], outputs=["theta"],
+                                  scalars=["frame", "start", "theta0", "th", "theta"],
+                                  location=(left - 1, -0.5), hide=True)
+        links.new(theta.std_out, start_sim.inputs["theta0"])
+        links.new(frame.std_out, start_sim.inputs["frame"])
+        links.new(min_frame.std_out, start_sim.inputs["start"])
+        links.new(simulation.simulation_input.outputs["theta"], start_sim.inputs["th"])
+
+        update_omega = make_function(tree, functions={
+            "omega": "o,4.905,l,/,theta,sin,*,b,o,*,+,dt,*,-" # reduce gravity for matching period without over-length pendulum
+        }, name="updateOmega", location=(left, -0.5), hide=True,
+                                     outputs=["omega"], inputs=["dt", "theta", "o", "l", "b"],
+                                     scalars=["omega", "o", "l", "theta", "dt", "b"])
+
+        links.new(length.std_out, update_omega.inputs["l"])
+        links.new(b.std_out, update_omega.inputs["b"])
+        links.new(start_sim.outputs["theta"], update_omega.inputs["theta"])
+        links.new(simulation.simulation_input.outputs["Delta Time"], update_omega.inputs["dt"])
+        links.new(update_omega.outputs["omega"], simulation.simulation_output.inputs["omega"])
+        links.new(time.std_out, simulation.simulation_output.inputs["t"])
+        links.new(simulation.simulation_input.outputs["omega"], update_omega.inputs["o"])
+
+        update_theta = make_function(tree, functions={
+            "theta": "th,omega,dt,*,+"
+        }, name="updateTheta", location=(left, -1.5), hide=True,
+                                     outputs=["theta"], inputs=["dt", "th", "omega"],
+                                     scalars=["theta", "th", "dt", "omega"])
+
+        links.new(start_sim.outputs["theta"], update_theta.inputs["th"])
+        links.new(simulation.simulation_input.outputs["Delta Time"], update_theta.inputs["dt"])
+        links.new(update_theta.outputs["theta"], simulation.simulation_output.inputs["theta"])
+        links.new(simulation.simulation_input.outputs["omega"], update_theta.inputs["omega"])
+        left += 4
+
+        # convert angle into position
+        converter = make_function(tree, functions={
+            "position": ["theta,sin,l,*", "0", "theta,cos,l,-1,*,*"]
+        }, name="Angle2Position", inputs=["theta", "l"], outputs=["position"], scalars=["l", "theta"],
+                                  vectors=["position"],
+                                  location=(left, -1))
+        links.new(simulation.simulation_output.outputs["theta"], converter.inputs["theta"])
+        links.new(length.std_out, converter.inputs["l"])
+        left += 1
+
+        set_pos = SetPosition(tree, position=converter.outputs["position"], location=(left, -0.5))
+        left += 1
+        join = JoinGeometry(tree, location=(left, 0))
+        create_geometry_line(tree, [origin, join])
+
+        left += 1
+        point2mesh = PointsToVertices(tree, location=(left, 0))
+        left += 1
+        convex_hull = ConvexHull(tree, location=(left, 0))
+        left += 1
+        wireframe = WireFrame(tree, location=(left, 0))
+        left += 1
+        material = get_material('joker')
+        self.materials.append(material)
+        mat = SetMaterial(tree, location=(left, 0), material=material)
+        left += 1
+        join2 = JoinGeometry(tree, location=(left, -0.5))
+        left += 1
+        trafo = TransformGeometry(tree, location=(left, 0), translation=[-6, 0, 4])
+        left += 1
+
+        create_geometry_line(tree, [point, simulation, set_pos, join, point2mesh,
+                                    convex_hull, wireframe, mat, join2, trafo, join_full], out=out.inputs["Geometry"])
+
+        # create branch for the mass
+        left -= 6
+        pos = Position(tree, location=(left, -1))
+        left += 1
+        lengthBool = VectorMath(tree, location=(left, -1), operation='LENGTH',
+                                inputs0=pos.std_out)  # one vertex is at the origin
+        # only the vertex away from the origin has a non-zero length, this value is used to select the correct vertex for the instance on points
+        cube = CubeMesh(tree, location=(left, -2), size=0.4)
+        left += 1
+        iop = InstanceOnPoints(tree, location=(left, -1), selection=lengthBool.std_out,
+                               instance=cube.geometry_out)
+        left += 1
+        material = get_material('plastic_example')
+        self.materials.append(material)
+        mat2 = SetMaterial(tree, location=(left, -2), material=material)
+
+        create_geometry_line(tree, [point2mesh, iop, mat2, join2])
+
+        # create angle visualization
+
+        left = first_left + 6
+        arc_length_factor = InputValue(tree, location=(left, -5.5), value=0.5, name="ArcFactor")
+        res = InputValue(tree, location=(left, -6), value=100, name="Resolution")
+        idx = Index(tree, location=(left, -5))
+        left += 1
+        arc = Points(tree, location=(left, -6), count=res.std_out)
+        left += 1
+
+        compute_positions = make_function(tree, functions={
+            "position": ["l,fac,*,theta,res,/,idx,*,sin,*", "0", "l,fac,*,-1,*,theta,res,/,idx,*,cos,*"]
+        }, name="arcPosition", inputs=["l", "fac", "idx", "res", "theta"], outputs=["position"],
+                                          scalars=["l", "fac", "idx", "res", "theta"],
+                                          vectors=["position"], location=(left, -3))
+
+        links.new(res.std_out, compute_positions.inputs["res"])
+        links.new(idx.std_out, compute_positions.inputs["idx"])
+        links.new(length.std_out, compute_positions.inputs["l"])
+        links.new(arc_length_factor.std_out, compute_positions.inputs["fac"])
+        links.new(simulation.simulation_output.outputs["theta"], compute_positions.inputs["theta"])
+        left += 1
+        set_arc_pos = SetPosition(tree, location=(left, -6), position=compute_positions.outputs["position"])
+        left += 1
+        join3 = JoinGeometry(tree, location=(left, -6))
+        left += 1
+        arc_fill = ConvexHull(tree, location=(left, -6))
+        left += 1
+        theta_attr = StoredNamedAttribute(tree, location=(left, -6), name="thetaStorage",
+                                          value=simulation.simulation_output.outputs["theta"])
+        left += 1
+        material = gradient_from_attribute(attr_name="thetaStorage",
+                                           roughness=0.1, metallic=0.5, emission=0.5)
+        self.materials.append(material)
+        arc_mat = SetMaterial(tree, location=(left, -6), material=material)
+        create_geometry_line(tree, [arc, set_arc_pos, join3, arc_fill, theta_attr, arc_mat, join2])
+        create_geometry_line(tree, [origin, join3])
+
+        # trace motion
+        left = first_left + 4
+        y = -10
+        graph = MeshLine(tree, location=(left, y + 1), count=1)
+
+        skip_frame = InputValue(tree, location=(left, y - 0.5), name="skipFrame", value=10)
+        left += 1
+        freeze_frames = make_function(tree, location=(left, y / 2),
+                                      functions={
+                                          "switch": "frame,skip,%,0,=,frame,end,<,and,frame,start,>,and"
+                                      }, inputs=["frame", "skip", "start", "end"], outputs=["switch"],
+                                      scalars=["frame", "skip", "start", "end", "switch"], name="freezer")
+        links.new(frame.std_out, freeze_frames.inputs["frame"])
+        links.new(skip_frame.std_out, freeze_frames.inputs["skip"])
+        links.new(max_frame.std_out, freeze_frames.inputs["end"])
+        links.new(min_frame.std_out, freeze_frames.inputs["start"])
+
+        comb_xyz = CombineXYZ(tree, location=(left, y + 1),
+                              x=simulation.simulation_output.outputs["t"],
+                              z=simulation.simulation_output.outputs["theta"])
+
+        left += 1
+
+        set_graph = SetPosition(tree, location=(left, y + 1), position=comb_xyz.std_out)
+        switch = Switch(tree, location=(left, y), switch=freeze_frames.outputs["switch"])
+        left += 1
+        attr2 = StoredNamedAttribute(tree, location=(left, y), name='thetaStorage2',
+                                     value=simulation.simulation_output.outputs["theta"])
+        left += 1
+        simulation2 = Simulation(tree, location=(left, y + 2))
+        left += 1
+        join_freezes = JoinGeometry(tree, location=(left, y + 1))
+        links.new(simulation2.simulation_input.outputs["Geometry"], join_freezes.geometry_in)
+        links.new(join_freezes.geometry_out, simulation2.simulation_output.inputs["Geometry"])
+        links.new(switch.std_out, attr2.geometry_in)
+        links.new(attr2.geometry_out, join_freezes.geometry_in)
+        left += 3
+        graph_cube = CubeMesh(tree, location=(left, y + 1), size=0.1)
+        left += 1
+        graph_iop = InstanceOnPoints(tree, location=(left, y), instance=graph_cube.geometry_out)
+        left += 1
+        graph_trafo = TransformGeometry(tree, location=(left, y),
+                                        translation=Vector([-4.5, 0, 0.5]))
+        left += 1
+
+        graph_mat = SetMaterial(tree, location=(left, y), material_list=self.materials,
+                                material=gradient_from_attribute, attr_name="thetaStorage2", attr_type="INSTANCER",
+                                emission=0.5)
+
+        create_geometry_line(tree, [graph, set_graph], out=switch.true)
+        create_geometry_line(tree, [simulation2, graph_iop, graph_trafo, graph_mat, join_full])
 
 class VectorLogo(GeometryNodesModifier):
     def __init__(self, name='VectorLogo', n=10, colors=['important', 'example', 'drawing']):
@@ -167,7 +594,6 @@ class VectorLogo(GeometryNodesModifier):
     def get_arrow_object(self):
         return self.arrow
 
-
 class LorentzAttractorNode(GeometryNodesModifier):
     def __init__(self, name='LorentzAttractor', iterations=15000, a=0.4):
         self.iterations = iterations
@@ -216,7 +642,6 @@ class LorentzAttractorNode(GeometryNodesModifier):
 
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
-
 
 class Penrose2DIntro(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
@@ -295,7 +720,6 @@ class Penrose2DIntro(GeometryNodesModifier):
 
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
-
 
 class Penrose2DVoronoi(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
@@ -524,7 +948,6 @@ class Penrose2DVoronoi(GeometryNodesModifier):
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
 
-
 class Penrose2D(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
         super().__init__(name)
@@ -691,7 +1114,6 @@ class Penrose2D(GeometryNodesModifier):
 
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
-
 
 class ConvexHull2D(GeometryNodesModifier):
     def __init__(self, name='ConvexHull2D', size=10):
@@ -873,7 +1295,6 @@ class ConvexHull2D(GeometryNodesModifier):
         create_geometry_line(tree, [realize_instances,instance_on_grid_points,selected_material,join2])
         # voronoi zone
         create_geometry_line(tree,[projection_line,product_geometry,realize,hull_hull,zone_mat,join2])
-
 class SphericalHarmonicsNode(GeometryNodesModifier):
     def __init__(self,l=0,m=0,name='SphericalHarmonics',resolution =5,**kwargs):
         """
@@ -957,3 +1378,4 @@ class SphericalHarmonicsNode(GeometryNodesModifier):
         smooth = SetShadeSmooth(tree,location=(1,-1))
 
         create_geometry_line(tree,[sphere,set_pos,attr,color,smooth],out=self.group_outputs.inputs[0])
+

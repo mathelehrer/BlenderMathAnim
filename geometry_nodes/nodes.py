@@ -1295,7 +1295,7 @@ class Simulation(GreenNode):
         self.simulation_output = tree.nodes.new("GeometryNodeSimulationOutput")
         self.simulation_input = tree.nodes.new("GeometryNodeSimulationInput")
         self.simulation_input.location = (location[0] * 200, location[1] * 200)
-        self.simulation_output.location = (location[0] * 200 + width * 200, location[1] * 200)
+        self.simulation_output.location = (location[0] * 200 + width * 200, location[1] * 100)
         self.simulation_input.pair_with_output(self.simulation_output)
         self.node = self.simulation_input
         self.geometry_in = self.simulation_input.inputs['Geometry']
