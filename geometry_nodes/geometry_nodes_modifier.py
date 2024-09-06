@@ -69,11 +69,13 @@ class MathematicalSurface(GeometryNodesModifier):
 
     """
 
-    def __init__(self, function="x,y,+,2,**", name="(x+y)**2", resolution=100, automatic_layout=False):
+    def __init__(self, function="x,y,+,2,**", name="(x+y)**2", resolution=100, automatic_layout=False,**kwargs):
         self.function = function
         self.resolution = resolution
         self.name = name
+        self.kwargs = kwargs
         super().__init__(name=name, automatic_layout=automatic_layout)
+
 
     def create_node(self, tree):
         out = tree.nodes.get("Group Output")
@@ -124,7 +126,10 @@ class MathematicalSurface(GeometryNodesModifier):
         left += 1
 
         # custom material that is a gradient in z-direction
-        mat = SetMaterial(tree, location=(left, 0), material=z_gradient, roughness=0.005, metallic=0.45, emission=0.1)
+        gradient_material=z_gradient(**self.kwargs)
+        self.materials.append(gradient_material)
+        mat = SetMaterial(tree, location=(left, 0), material=gradient_material)
+
         # connect all geometry nodes
         create_geometry_line(tree, [grid, del_geo, set_pos, smooth, mat], out=out.inputs["Geometry"])
 
