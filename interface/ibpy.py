@@ -998,7 +998,11 @@ def delete(obj):
 ##################
 
 def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, denoising=False,
-                      resolution_percentage=100, taa_render_samples=1024, feature_set='SUPPORTED'):
+                      resolution_percentage=100, frame_start=0, taa_render_samples=1024, feature_set='SUPPORTED'):
+    """
+    @type frame_start: int
+    
+    """
     scene = get_scene()
     if engine==BLENDER_EEVEE:
         engine = BLENDER_EEVEE
@@ -1016,6 +1020,7 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
         scene.eevee.use_ssr_refraction = True  # (space reflections)
         scene.eevee.ssr_quality = 1  # (space reflections)
         scene.eevee.ssr_max_roughness = 0  # (space reflections)
+        scene.frame_start=frame_start
         set_taa_render_samples(taa_render_samples,begin_frame=0)
 
         # set view to Material view

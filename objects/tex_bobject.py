@@ -673,6 +673,8 @@ class SimpleTexBObject(SVGBObject):
     def change_alpha(self,alpha=1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
         [letter.change_alpha(alpha=alpha,begin_time=begin_time,transition_time=transition_time) for letter in self.letters]
         return begin_time+transition_time
+
+
     def align(self, other, char_index=0, other_char_index=0):
         # align with other
         diff = other.ref_obj.location[0] - self.ref_obj.location[0]
@@ -681,6 +683,7 @@ class SimpleTexBObject(SVGBObject):
         diff = other.letters[other_char_index].ref_obj.location[0] - self.letters[char_index].ref_obj.location[0]
         for letter in self.letters:
             letter.ref_obj.location[0] += diff
+
 
     def batch_replace(self, b_tex_obj, src_ranges=None, img_ranges=None, shifts=[[0, 0]], begin_time=0,
                       transition_time=DEFAULT_ANIMATION_TIME):
@@ -695,6 +698,7 @@ class SimpleTexBObject(SVGBObject):
             self.replace(b_tex_obj, src_letter_range=src, img_letter_range=img, shift=shift, begin_time=begin_time,
                          transition_time=transition_time, morphing=False)
         self.perform_morphing()
+
 
     def replace(self, b_tex_obj, src_letter_range=None, img_letter_range=None, rescale=[1, 1, 1], shift=[0, 0],
                 begin_time=0,
@@ -737,6 +741,7 @@ class SimpleTexBObject(SVGBObject):
             self.perform_morphing()
         if begin_time is not None:
             return begin_time + transition_time
+
 
     def replace2(self, b_tex_obj, src_letter_range=None, img_letter_range=None, rescale=[1, 1, 1], shift=[0, 0],
                  begin_time=0,
@@ -787,11 +792,13 @@ class SimpleTexBObject(SVGBObject):
             for i in range(src_letter_range[0], src_letter_range[1]):
                 self.letters[i].disappear(begin_time=begin_time + transition_time, transition_time=0)
 
+
     def grow_letter(self, index, final_scale=1, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
         letter = self.letters[index]
         letter.appear(begin_time=begin_time, transition_time=transition_time)
         letter.grow(final_scale, begin_time=begin_time, transition_time=transition_time)
         self.write(letter_set={index}, begin_time=begin_time * 1.02, transition_time=0)
+
 
     def move_to_match_letter(self, target=None, src_letter_index=0, target_letter_index=0, begin_time=0,
                              transition_time=DEFAULT_ANIMATION_TIME):
@@ -808,6 +815,7 @@ class SimpleTexBObject(SVGBObject):
         target_location += shift
 
         ibpy.set_location(self, location=target_location)
+
 
     def move_copy_of_letter_to(self,index,target_location,begin_time=0,rescale=1,transition_time=DEFAULT_ANIMATION_TIME):
         if self.copies_of_letters is None:
@@ -844,6 +852,7 @@ class SimpleTexBObject(SVGBObject):
                            begin_time=begin_time, transition_time=transition_time)
             count += 1
 
+
     def move_null_curves_to(self, target=None, null_indices=[], target_letter_indices=[], begin_time=0,
                             offsets=[[0, 0, 0]],
                             transition_time=DEFAULT_ANIMATION_TIME):
@@ -866,6 +875,7 @@ class SimpleTexBObject(SVGBObject):
             letter.move_to(target_location=shift + ibpy.get_location(target.letters[target_index]) + offset,
                            begin_time=begin_time, transition_time=transition_time)
             count += 1
+
 
     def move_copy_to_and_remove(self, target=None, src_letter_indices=[], target_letter_indices=[], begin_time=0,
                                 rescale=None,
@@ -911,6 +921,7 @@ class SimpleTexBObject(SVGBObject):
             copy.disappear(begin_time=remove_time, transition_time=transition_time / 2)
         target.write(letter_set=target_letter_indices, begin_time=remove_time, transition_time=0)
         return begin_time+transition_time
+
 
     def move_copy_of_null_to_and_remove(self, target=None, null_indices=[], target_letter_indices=[], begin_time=0,
                                         rescale=None,
@@ -1015,6 +1026,7 @@ class SimpleTexBObject(SVGBObject):
                 letter_copy.change_color(new_color=new_color, begin_time=begin_time - transition_time / 2,
                                          transition_time=transition_time)
 
+
     def disappear_copies(self, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME, display=None):
         for letter_copy in self.copies_of_letters:
             letter_copy.disappear(begin_time=begin_time, transition_time=transition_time)
@@ -1023,17 +1035,21 @@ class SimpleTexBObject(SVGBObject):
             letter_copy.toggle_hide(begin_time=(begin_time + transition_time))
         return begin_time+transition_time
 
+
     def hide(self, begin_time=0):
         for letter in self.letters:
             letter.toggle_hide(begin_time=begin_time)
 
+
     def disappear(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         super().disappear(begin_time=begin_time, transition_time=transition_time, **kwargs)
-        for l in self.letters:
-            l.disappear(begin_time=begin_time, transition_time=transition_time, **kwargs)
-        for l in self.created_null_curves:
+        half = transition_time/2
+        delta = half/np.maximum(1,len(self.letters))
+        for i,l in enumerate(self.letters):
+            l.disappear(begin_time=begin_time+i*delta, transition_time=half, **kwargs)
+        for i,l in enumerate(self.created_null_curves):
             l.appeared=True # make sure it is said to true otherwise the null curves won't disappear
-            l.disappear(begin_time=begin_time,transition_time=transition_time,**kwargs)
+            l.disappear(begin_time=begin_time+i*delta,transition_time=half,**kwargs)
         return begin_time + transition_time
 
     def change_color(self, new_color, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
