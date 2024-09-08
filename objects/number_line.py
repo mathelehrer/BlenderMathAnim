@@ -281,7 +281,7 @@ class NumberLine(BObject):
 
     def appear(self, alpha=1,
                begin_time=0,
-               transition_time=OBJECT_APPEARANCE_TIME,silent = True,
+               transition_time=OBJECT_APPEARANCE_TIME,silent = True,**kwargs
                ):
         # distribute appearance time among the components of the number line
         cyl_time = 0.2 * transition_time
@@ -292,7 +292,7 @@ class NumberLine(BObject):
             label_time = 0
 
         t0 = begin_time
-        super().appear(alpha=alpha, begin_time=t0,silent=silent)
+        super().appear(alpha=alpha, begin_time=t0,silent=silent,**kwargs)
         self.cyl.grow(self.cyl.intrinsic_scale, begin_time=t0, transition_time=cyl_time, modus=self.grow_mode)
         t0 += cyl_time
         self.tip.grow(self.tip.intrinsic_scale, begin_time=t0, transition_time=tip_time)

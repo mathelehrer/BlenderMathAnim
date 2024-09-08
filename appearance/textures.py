@@ -413,15 +413,17 @@ def gradient_from_attribute(name="AngleDisplacement", **kwargs):
     attr_name = get_from_kwargs(kwargs,"attr_name","attributeName")
     attr_type = get_from_kwargs(kwargs,"attr_type","GEOMETRY")
     gradient = get_from_kwargs(kwargs,"gradient",{0:[1,0,0,1],0.5:[0,1,0,1],1:[0,0,1,1]})
+    function = get_from_kwargs(kwargs,"function","fac,2,pi,*,/,0.5,+")
+
     attr = AttributeNode(tree, location=(-4, 0),
                          attribute_name=attr_name,type=attr_type)
     trafo = make_function(tree, functions={
-        "factor": "theta,2,pi,*,/,0.5,+"
-    }, location=(-2, 0), name="angle2factor",
+        "factor": function
+    }, location=(-3, 0), name=attr_name+"_transform",
                      node_group_type='Shader',
-                          inputs=["theta"], outputs=["factor"], scalars=["theta", "factor"])
-    ramp = ColorRamp(tree, location=(-1, 0),factor=trafo.outputs["factor"])
-    links.new(attr.fac_out,trafo.inputs["theta"])
+                          inputs=["fac"], outputs=["factor"], scalars=["fac", "factor"])
+    ramp = ColorRamp(tree, location=(-2, 0),factor=trafo.outputs["factor"],hide=False)
+    links.new(attr.fac_out,trafo.inputs["fac"])
     ramp.node.color_ramp.elements.new(len(gradient)-2)
 
     i=0

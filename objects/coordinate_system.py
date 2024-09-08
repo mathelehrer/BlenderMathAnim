@@ -1,3 +1,4 @@
+import mathutils
 from mathutils import Vector
 import numpy as np
 
@@ -253,14 +254,14 @@ class CoordinateSystem(BObject):
 
     def appear(self,alpha=1,
                begin_time=0,
-               transition_time=OBJECT_APPEARANCE_TIME, empty=False
+               transition_time=OBJECT_APPEARANCE_TIME, empty=False,**kwargs
                ):
 
         t0 = begin_time
-        super().appear(alpha=alpha,begin_time=t0, transition_time=transition_time)
+        super().appear(alpha=alpha,begin_time=t0, transition_time=transition_time,**kwargs)
         if not empty:
             for axis in self.axes:
-                axis.appear(alpha=alpha, begin_time=t0, transition_time=transition_time)
+                axis.appear(alpha=alpha, begin_time=t0, transition_time=transition_time,**kwargs)
 
         return t0+transition_time
 

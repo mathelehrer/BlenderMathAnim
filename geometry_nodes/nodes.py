@@ -159,26 +159,6 @@ class ExtrudeMesh(GreenNode):
         if mesh:
             self.tree.links.new(mesh, self.node.inputs['Mesh'])
 
-
-class PointsToCurve(GreenNode):
-    def __init__(self, tree, location=(0, 0),
-                 mesh=None,
-                 selection=None,
-                 **kwargs):
-        """
-        :param tree:
-        :param location:
-        :param mesh:
-        :param selection:
-        :param kwargs:
-        """
-        self.node = tree.nodes.new(type="GeometryNodePointsToCurves")
-        super().__init__(tree, location=location, **kwargs)
-
-        self.geometry_out = self.node.outputs['Curves']
-        self.geometry_in = self.node.inputs['Points']
-
-
 class MeshToCurve(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  mesh=None,
@@ -201,7 +181,6 @@ class MeshToCurve(GreenNode):
             self.tree.links.new(selection, self.node.inputs['Selection'])
         if mesh:
             self.tree.links.new(mesh, self.node.inputs['Mesh'])
-
 
 class MeshToPoints(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -232,6 +211,90 @@ class MeshToPoints(GreenNode):
                 self.node.inputs['Position'].default_value=position
             else:
                 self.tree.links.new(position,self.node.inputs['Position'])
+
+class SubdivideMesh(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 mesh=None,
+                 level=1,
+                 **kwargs):
+        """
+        :param tree:
+        :param location:
+        :param mesh:
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="GeometryNodeSubdivideMesh")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs['Mesh']
+        self.geometry_in = self.node.inputs['Mesh']
+
+        if mesh:
+            self.tree.links.new(mesh, self.node.inputs['Mesh'])
+        if level:
+            if isinstance(level,int):
+                self.node.inputs['Level'].default_value=level
+            else:
+                self.tree.links.new(level,self.node.inputs['Level'])
+
+
+# point operations
+class Points(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 count=1,
+                 position=Vector([0, 0, 0]),
+                 radius=0.1, **kwargs):
+
+        self.node = tree.nodes.new(type="GeometryNodePoints")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs['Geometry']
+
+        if isinstance(count, int):
+            self.node.inputs['Count'].default_value = count
+        else:
+            self.tree.links.new(count, self.node.inputs['Count'])
+        if isinstance(position, Vector):
+            self.node.inputs['Position'].default_value = position
+        else:
+            self.tree.links.new(position, self.node.inputs['Position'])
+        if isinstance(radius, (int, float)):
+            self.node.inputs['Radius'].default_value = radius
+        else:
+            self.tree.links.new(radius, self.node.inputs['Radius'])
+
+class PointsToVertices(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 points=None,
+                 selection=None, **kwargs):
+
+        self.node = tree.nodes.new(type="GeometryNodePointsToVertices")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs['Mesh']
+        self.geometry_in = self.node.inputs['Points']
+        if points:
+            self.tree.links.new(points, self.node.inputs['Points'])
+        if selection:
+            self.tree.links.new(selection, self.node.inputs['Selection'])
+
+class PointsToCurve(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 mesh=None,
+                 selection=None,
+                 **kwargs):
+        """
+        :param tree:
+        :param location:
+        :param mesh:
+        :param selection:
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="GeometryNodePointsToCurves")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs['Curves']
+        self.geometry_in = self.node.inputs['Points']
 
 # curve primitives
 
@@ -265,7 +328,6 @@ class CurveCircle(GreenNode):
         else:
             self.tree.links.new(resolution, self.node.inputs['Resolution'])
 
-
 # curve operations
 class CurveToMesh(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -290,47 +352,6 @@ class CurveToMesh(GreenNode):
             self.tree.links.new(curve, self.node.inputs['Curve'])
         if profile_curve:
             self.tree.links.new(profile_curve, self.node.inputs['Profile Curve'])
-
-
-class Points(GreenNode):
-    def __init__(self, tree, location=(0, 0),
-                 count=1,
-                 position=Vector([0, 0, 0]),
-                 radius=0.1, **kwargs):
-
-        self.node = tree.nodes.new(type="GeometryNodePoints")
-        super().__init__(tree, location=location, **kwargs)
-
-        self.geometry_out = self.node.outputs['Geometry']
-
-        if isinstance(count, int):
-            self.node.inputs['Count'].default_value = count
-        else:
-            self.tree.links.new(count, self.node.inputs['Count'])
-        if isinstance(position, Vector):
-            self.node.inputs['Position'].default_value = position
-        else:
-            self.tree.links.new(position, self.node.inputs['Position'])
-        if isinstance(radius, (int, float)):
-            self.node.inputs['Radius'].default_value = radius
-        else:
-            self.tree.links.new(radius, self.node.inputs['Radius'])
-
-
-class PointsToVertices(GreenNode):
-    def __init__(self, tree, location=(0, 0),
-                 points=None,
-                 selection=None, **kwargs):
-
-        self.node = tree.nodes.new(type="GeometryNodePointsToVertices")
-        super().__init__(tree, location=location, **kwargs)
-
-        self.geometry_out = self.node.outputs['Mesh']
-        self.geometry_in = self.node.inputs['Points']
-        if points:
-            self.tree.links.new(points, self.node.inputs['Points'])
-        if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
 
 
 class Grid(GreenNode):

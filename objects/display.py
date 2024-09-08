@@ -395,7 +395,7 @@ class Display(Plane):
                begin_time=0,
                transition_time=DEFAULT_ANIMATION_TIME,
                **kwargs):
-        super().appear(begin_time=begin_time, transition_time=transition_time)
+        super().appear(begin_time=begin_time, transition_time=transition_time,**kwargs)
         if self.show_lines:
             for line in self.lines:
                 line.grow(begin_time=begin_time, transition_time=transition_time)

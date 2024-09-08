@@ -1000,30 +1000,29 @@ def delete(obj):
 def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, denoising=False,
                       resolution_percentage=100, taa_render_samples=1024, feature_set='SUPPORTED'):
     scene = get_scene()
-    if engine=='BLENDER_EEVEE':
+    if engine==BLENDER_EEVEE:
         engine = BLENDER_EEVEE
     scene.render.engine = engine
     scene.render.use_compositing = True
     scene.render.resolution_percentage = resolution_percentage
     scene.render.film_transparent = transparent
 
-    if engine == 'BLENDER_EEVEE':
+    if engine == BLENDER_EEVEE:
         scene.eevee.use_gtao = True
         scene.eevee.use_bloom = True
-        scene.eevee.use_motion_blur = motion_blur
+        scene.render.use_motion_blur = motion_blur
         scene.eevee.use_ssr = True  # (space reflections)
         scene.eevee.use_ssr_halfres = False  # (space reflections)
         scene.eevee.use_ssr_refraction = True  # (space reflections)
         scene.eevee.ssr_quality = 1  # (space reflections)
         scene.eevee.ssr_max_roughness = 0  # (space reflections)
-        scene.eevee.taa_render_samples = taa_render_samples
+        set_taa_render_samples(taa_render_samples,begin_frame=0)
 
         # set view to Material view
 
         area = next(area for area in bpy.context.screen.areas if area.type == 'VIEW_3D')
         space = next(space for space in area.spaces if space.type == 'VIEW_3D')
         space.shading.type = 'MATERIAL'
-
     else:
         scene.cycles.feature_set = feature_set
 
@@ -2731,8 +2730,8 @@ def change_default_value(slot, from_value, to_value, begin_time=None, transition
         begin_frame = begin_time * FRAME_RATE
     else:
         begin_time = begin_frame / FRAME_RATE
-    if transition_time:
-        transition_frames = transition_time * FRAME_RATE
+    if transition_time is not None:
+        transition_frames = np.maximum(1,transition_time * FRAME_RATE)
     else:
         transition_time = transition_frames / FRAME_RATE
     if from_value is not None:
@@ -5797,6 +5796,16 @@ def apply_modifier(bob, type=None):
 ####################
 # Transformations  #
 ####################
+
+def set_taa_render_samples(taa_render_samples=64,begin_frame=0):
+    scene = get_scene()
+    if scene.render.engine==BLENDER_EEVEE:
+        set_frame(begin_frame-1)
+        old_taa_render_samples = scene.eevee.taa_render_samples
+        scene.eevee.taa_render_samples=old_taa_render_samples
+        scene.keyframe_insert(data_path="eevee.taa_render_samples",frame=begin_frame-1)
+        scene.eevee.taa_render_samples = taa_render_samples
+        scene.keyframe_insert(data_path="eevee.taa_render_samples", frame=begin_frame)
 
 def disappear_all_copies_of_letters(begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
     objects = bpy.data.objects

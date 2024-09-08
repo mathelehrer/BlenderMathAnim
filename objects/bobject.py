@@ -528,11 +528,16 @@ class BObject(object):
         ibpy.shader_value(self, old_value, new_value, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
         return begin_time + transition_time
 
-    def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, clear_data=False, silent=False,linked=False,**kwargs):
+    def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+               clear_data=False, silent=False,linked=False, nice_alpha=False,**kwargs):
         """
         makes the object simply fade in with in the transition time
         from alpha = 0 to alpha defined in kwargs (default 1)
 
+        :param nice_alpha: the taa_render_samples are increased for a nice alpha appearance in eevee renders
+        :param linked:
+        :param silent:
+        :param clear_data:
         :param begin_time:
         :param transition_time:
         :param kwargs:
@@ -542,6 +547,9 @@ class BObject(object):
         if not self.appeared:
             if not silent:
                 print("Appear " + self.ref_obj.name)
+            if nice_alpha:
+                ibpy.set_taa_render_samples(1024,begin_time*FRAME_RATE)
+                ibpy.set_taa_render_samples(64,(begin_time+transition_time)*FRAME_RATE)
             obj = self.ref_obj
             if not linked:
                 if obj.name not in bpy.context.scene.objects:

@@ -7,6 +7,7 @@ from geometry_nodes.geometry_nodes import de_bruijn, penrose_3D_analog, create_n
 from interface import ibpy
 from interface.ibpy import Vector, get_geometry_node_from_modifier, change_default_value, \
     set_material, make_rigid_body
+from interface.interface_constants import BLENDER_EEVEE
 from mathematics.geometry.convex_hull import ConvexHull
 from mathematics.mathematica.mathematica import tuples
 from objects.circle import BezierCircle
@@ -45,7 +46,7 @@ class Optimization(Scene):
                                  rotation_euler=[0, 0, 260 * pi / 180])
         ibpy.set_render_engine(motion_blur=False, denoising=False, transparent=True,
                                resolution_percentage=100,
-                               engine="BLENDER_EEVEE",
+                               engine=BLENDER_EEVEE,
                                taa_render_samples=64  # 1024 for good alpha channel in EEVEE
                                )
 

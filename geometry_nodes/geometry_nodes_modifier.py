@@ -6,7 +6,8 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     RandomValue, RepeatZone, StoredNamedAttribute, NamedAttribute, VectorMath, CurveToMesh, PointsToCurve, Grid, \
     TransformGeometry, InputVector, DeleteGeometry, IcoSphere, MeshLine, MeshToCurve, InstanceOnEdges, CubeMesh, \
     EdgeVertices, BooleanMath, SetShadeSmooth, RayCast, WireFrame, ConvexHull, InsideConvexHull, ExtrudeMesh, \
-    ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch
+    ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch, MeshToPoints, \
+    SubdivideMesh
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -15,6 +16,7 @@ from objects.derived_objects.p_arrow import PArrow
 from utils.constants import FRAME_RATE
 
 pi = np.pi
+tau = 2*pi
 r2 = np.sqrt(2)
 r3 = np.sqrt(3)
 
@@ -62,11 +64,154 @@ class GeometryNodesModifier:
 ## Applications ##
 ##################
 
+class SpherePreImage(GeometryNodesModifier):
+    """
+    theta-phi-domain that gets mapped into a sphere
+
+    """
+    def __init__(self):
+        super().__init__(name="SpherePreImage",automatic_layout=False)
+
+    def create_node(self, tree):
+        out = tree.nodes.get("Group Output")
+        links = tree.links
+
+        left = -15
+        reset_left = left
+        # vertical grid lines
+        line = MeshLine(tree,location=(left,2),count=20,start_location=Vector(),end_location=Vector([tau,0,0]))
+        left+=1
+        mesh2points = MeshToPoints(tree,location=(left,2))
+        left+=1
+        points2verts = PointsToVertices(tree,location=(left,2))
+        index = Index(tree,location=(left,1))
+        left+=1
+        attr = StoredNamedAttribute(tree,location=(left,2),name="Index",data_type="INT",value=index.std_out)
+        pi_offset = InputVector(tree,location=(left,1),value=[0,0,pi])
+        left+=1
+        extrude_mesh = ExtrudeMesh(tree,location=(left,2),offset=pi_offset.std_out)
+        left+=1
+        sub_div = SubdivideMesh(tree,location=(left,1),level=5)
+        left+=1
+        lmda = InputValue(tree,location=(left-1,4),value=0,name="lambda")
+        position = Position(tree,location=(left-1,3.5))
+        shift = InputVector(tree, location=(left - 1, 3), value=[-4.5, 0, -1.5], name="shift")
+        radius = InputValue(tree, location=(left - 1, 2.5), value=2.5,name="r")
+        selected_index = InputValue(tree,location=(left-1,2),value=0,name="idx0")
+        named_attr = NamedAttribute(tree,location=(left-1,1.5),data_type="INT",name="Index")
+
+        # mega trafo
+        # (r cos\phi sin(\theta-pi) + shift_x)*(idx<idx_0)+[(r cos\phi sin(\theta-pi) + shift_x)*lambda+pos_x*(1-lambda)]*(idx=idx_0)+pos_x*(idx>idx_0)
+        # similar for the other components
+        x = "r,pos_x,cos,*,pos_z,pi,-,sin,*,shift_x,+"
+        y = "r,pos_x,sin,*,pos_z,pi,-,sin,*,shift_y,+"
+        z = "r,pos_z,pi,-,cos,*,shift_z,+"
+        less = "index,idx0,>"
+        equal = "index,idx0,="
+        more = "index,idx0,<"
+
+        trafo = make_function(tree,functions={
+            "position":[
+                x+","+more+",*,"+x+",lambda,*,pos_x,1,lambda,-,*,+,"+equal+",*,+,pos_x,"+less+",*,+",
+                y+","+more+",*,"+y+",lambda,*,pos_y,1,lambda,-,*,+,"+equal+",*,+,pos_y,"+less+",*,+",
+                z+","+more+",*,"+z+",lambda,*,pos_z,1,lambda,-,*,+,"+equal+",*,+,pos_z,"+less+",*,+",
+             ]
+        },inputs=["lambda","pos","shift","r","idx0","index"],outputs=["position"],
+        scalars=["lambda","r","idx0","index"],vectors=["pos","position","shift"],name="Map2Sphere",location=(left,1.5),hide=True)
+        links.new(lmda.std_out,trafo.inputs["lambda"])
+        links.new(position.std_out,trafo.inputs["pos"])
+        links.new(radius.std_out,trafo.inputs["r"])
+        links.new(shift.std_out,trafo.inputs["shift"])
+        links.new(named_attr.std_out,trafo.inputs["index"])
+        links.new(selected_index.std_out,trafo.inputs["idx0"])
+        left+=1
+        set_pos = SetPosition(tree,location=(left,1),position=trafo.outputs["position"])
+        left+=1
+        wireframe = WireFrame(tree,location=(left,1))
+        left+=1
+        material = gradient_from_attribute(name="Index",
+                                           function="fac,20,/",
+                                           attr_name="Index",
+                                           gradient={0:[1,0,0,1],1:[0.8,0,1,1]})
+        mat = SetMaterial(tree,location=(left,1),material=material)
+        self.materials.append(material)
+        left+=1
+        join = JoinGeometry(tree,location=(left,0))
+        create_geometry_line(tree,[line,mesh2points,points2verts,attr,extrude_mesh,sub_div,set_pos,wireframe,mat,join])
+
+        # horizontal grid lines
+        left = reset_left
+
+        line = MeshLine(tree,location=(left,-2),count=10,start_location=Vector([0,0,pi]),end_location=Vector([0,0,0]))
+        left+=1
+        mesh2points = MeshToPoints(tree,location=(left,-2))
+        left+=1
+        points2verts = PointsToVertices(tree,location=(left,-2))
+        index = Index(tree,location=(left,1))
+        left+=1
+        attr = StoredNamedAttribute(tree,location=(left,-2),name="Index2",data_type="INT",value=index.std_out)
+        tau_offset = InputVector(tree,location=(left,-1),value=[tau,0,0])
+        left+=1
+        extrude_mesh = ExtrudeMesh(tree,location=(left,-2),offset=tau_offset.std_out)
+        left+=1
+        sub_div = SubdivideMesh(tree,location=(left,-1),level=5)
+        left+=1
+        lmda = InputValue(tree,location=(left-1,-1.5),value=0,name="lambda2")
+        position = Position(tree,location=(left-1,-2))
+        shift = InputVector(tree, location=(left - 1, -2.5), value=[-4.5, 0, -1.5], name="shift")
+        radius = InputValue(tree, location=(left - 1, -3), value=2.5,name="r")
+        selected_index = InputValue(tree,location=(left-1,-3.5),value=0,name="idx02")
+        named_attr = NamedAttribute(tree,location=(left-1,-4),data_type="INT",name="Index2")
+
+        # mega trafo
+        # (r cos\phi sin(\theta-pi) + shift_x)*(idx<idx_0)+[(r cos\phi sin(\theta-pi) + shift_x)*lambda+pos_x*(1-lambda)]*(idx=idx_0)+pos_x*(idx>idx_0)
+        # similar for the other components
+        x = "r,pos_x,cos,*,pos_z,pi,-,sin,*,shift_x,+"
+        y = "r,pos_x,sin,*,pos_z,pi,-,sin,*,shift_y,+"
+        z = "r,pos_z,pi,-,cos,*,shift_z,+"
+        less = "index,idx0,>"
+        equal = "index,idx0,="
+        more = "index,idx0,<"
+
+        trafo = make_function(tree,functions={
+            "position":[
+                x+","+more+",*,"+x+",lambda,*,pos_x,1,lambda,-,*,+,"+equal+",*,+,pos_x,"+less+",*,+",
+                y+","+more+",*,"+y+",lambda,*,pos_y,1,lambda,-,*,+,"+equal+",*,+,pos_y,"+less+",*,+",
+                z+","+more+",*,"+z+",lambda,*,pos_z,1,lambda,-,*,+,"+equal+",*,+,pos_z,"+less+",*,+",
+             ]
+        },inputs=["lambda","pos","shift","r","idx0","index"],outputs=["position"],
+        scalars=["lambda","r","idx0","index"],vectors=["pos","position","shift"],name="Map2Sphere",location=(left,-1.5),hide=True)
+        links.new(lmda.std_out,trafo.inputs["lambda"])
+        links.new(position.std_out,trafo.inputs["pos"])
+        links.new(radius.std_out,trafo.inputs["r"])
+        links.new(shift.std_out,trafo.inputs["shift"])
+        links.new(named_attr.std_out,trafo.inputs["index"])
+        links.new(selected_index.std_out,trafo.inputs["idx0"])
+        left+=1
+        set_pos = SetPosition(tree,location=(left,-1),position=trafo.outputs["position"])
+        left+=1
+        wireframe = WireFrame(tree,location=(left,-1))
+        left+=1
+        material = gradient_from_attribute(name="Index2",
+                                           function="fac,10,/",
+                                           attr_name="Index2",
+                                           gradient={0: [0, 1, 0.95, 1], 1: [1, 1,0, 1]})
+        mat = SetMaterial(tree, location=(left, 1), material=material)
+        self.materials.append(material)
+        left+=1
+        rot = InputVector(tree,location=(left,-1),name='rotation')
+        trafo1 = TransformGeometry(tree,location=(left,0),translation=Vector([4.5,0,1.5]))
+        left+=1
+        trafo2 = TransformGeometry(tree, location=(left, 0),rotation=rot.std_out)
+        left += 1
+        trafo3 = TransformGeometry(tree, location=(left, 0), translation=Vector([-4.5, 0, -1.5]))
+        left += 1
+
+        create_geometry_line(tree,[line,mesh2points,points2verts,attr,extrude_mesh,sub_div,set_pos,wireframe,mat,join,trafo1,trafo2,trafo3],out=out.inputs["Geometry"])
 
 class MathematicalSurface(GeometryNodesModifier):
     """
     geometry node setup to display a mathematical surface in explicit form
-
     """
 
     def __init__(self, function="x,y,+,2,**", name="(x+y)**2", resolution=100, automatic_layout=False,**kwargs):
@@ -75,7 +220,6 @@ class MathematicalSurface(GeometryNodesModifier):
         self.name = name
         self.kwargs = kwargs
         super().__init__(name=name, automatic_layout=automatic_layout)
-
 
     def create_node(self, tree):
         out = tree.nodes.get("Group Output")
