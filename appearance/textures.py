@@ -434,6 +434,18 @@ def gradient_from_attribute(name="AngleDisplacement", **kwargs):
 
     links.new(ramp.std_out, bsdf.inputs["Base Color"])
     links.new(ramp.std_out, bsdf.inputs[EMISSION])
+
+    if "alpha_function" in kwargs:
+        dict = kwargs.pop("alpha_function")
+
+        key = str(next(iter(dict)))
+        attr2 = AttributeNode(tree, location=(-2,2), attribute_name=key,std_out='Fac')
+        trafo = make_function(tree,functions={
+            "alpha":dict[key]
+        },node_group_type="Shader",inputs=["alpha"],outputs=["alpha"],scalars=["alpha"],location=(-2,1))
+
+        links.new(attr2.fac_out,trafo.inputs["alpha"])
+        links.new(trafo.outputs["alpha"],bsdf.inputs["Alpha"])
     return mat
 
 
@@ -922,6 +934,18 @@ def phase2hue_material(attribute_names=None, **kwargs):
     hue = HueSaturationValueNode(tree, location=(-3, 0), hue=trafo.outputs["out"])
     links.new(hue.std_out, bsdf.inputs['Base Color'])
     links.new(hue.std_out, bsdf.inputs[EMISSION])
+
+    if "alpha_function" in kwargs:
+        dict = kwargs.pop("alpha_function")
+
+        key = str(next(iter(dict)))
+        attr2 = AttributeNode(tree, location=(-2,2), attribute_name=key,std_out='Fac')
+        trafo = make_function(tree,functions={
+            "alpha":dict[key]
+        },node_group_type="Shader",inputs=["alpha"],outputs=["alpha"],scalars=["alpha"],location=(-2,1))
+
+        links.new(attr2.fac_out,trafo.inputs["alpha"])
+        links.new(trafo.outputs["alpha"],bsdf.inputs["Alpha"])
     return mat
 
 

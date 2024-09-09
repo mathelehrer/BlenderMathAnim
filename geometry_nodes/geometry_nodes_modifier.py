@@ -1685,12 +1685,13 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         left += 1
         set_pos = SetPosition(tree, location=(left, 1), position=trafo.outputs["position"])
         left += 1
-        wireframe = WireFrame(tree, location=(left, 1))
+        wireframe = WireFrame(tree, radius=0.01,location=(left, 1))
         left += 1
         material = gradient_from_attribute(name="Index",
                                            function="fac,"+str(self.resolution*4)+",/",
                                            attr_name="Index",
-                                           gradient={0: [1, 0, 0, 1], 1: [0.8, 0, 1, 1]})
+                                           gradient={0: [1, 0, 0, 1], 1: [0.8, 0, 1, 1]},
+                                           alpha_function={"Alpha":"1,alpha,alpha,*,-"}) # fading in from -1 to 0 fading out from 0 to 1
         mat = SetMaterial(tree, location=(left, 1), material=material)
         self.materials.append(material)
         left += 1
@@ -1734,12 +1735,13 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         left += 1
         set_pos = SetPosition(tree, location=(left, -1), position=trafo.outputs["position"])
         left += 1
-        wireframe = WireFrame(tree, location=(left, -1))
+        wireframe = WireFrame(tree, radius=0.01, location=(left, -1))
         left += 1
         material = gradient_from_attribute(name="Index2",
                                            function="fac,"+str(self.resolution*2)+",/",
                                            attr_name="Index2",
-                                           gradient={0: [0, 1, 0.95, 1], 1: [1, 1, 0, 1]})
+                                           gradient={0: [0, 1, 0.95, 1], 1: [1, 1, 0, 1]},
+                                           alpha_function={"Alpha":"1,alpha,alpha,*,-"}) # fading in from -1 to 0 fading out from 0 to 1
         mat = SetMaterial(tree, location=(left, 1), material=material)
         self.materials.append(material)
         left += 1
@@ -1750,7 +1752,7 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
 
         # recalculate position of vertices
         sphere_position = Position(tree, location=(left, 2))
-        lambda_node = InputValue(tree,name='lambda',location=(left,1.5),value=0)
+        lambda_node = InputValue(tree,name='lambda',location=(left,1.5),value=-1)
 
         # create default spherical geometry
 
@@ -1805,10 +1807,15 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         tree.links.new(compute_y_lm.outputs["im"], complex_analyser.inputs["im"])
         left+=1
 
+        if self.m>=0:
+            selection = "re"
+        else:
+            selection = "im"
+
         # transform position
         vals = ["re", "im", "absolute", "phase"]
         trafo = make_function(tree, name="Transformation", hide=True, functions={
-            "position": "position,re,abs,lambda,*,1,lambda,-,+,scale"
+            "position": "position,"+selection+",abs,lambda,lambda,0,>,*,*,1,lambda,lambda,0,>,*,-,+,scale" # function is only active for lambda>0
         }, inputs=["lambda","position"]+vals, outputs=["position"],
                               vectors=["position"],
                               scalars=["lambda"]+vals, location=(left, -2))
@@ -1820,16 +1827,18 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         left+=1
         join_full = JoinGeometry(tree,location=(left,0))
         left+=1
+        alpha_attr = StoredNamedAttribute(tree,location=(left,0),name="Alpha",value=lambda_node.std_out)
+        left+=1
         set_pos = SetPosition(tree, location=(left,0), position=trafo.outputs["position"])
         left+=1
         # store the phase for coloring
         attr = StoredNamedAttribute(tree, location=(sphere_node_pos+1,1), name="Phase", value=complex_analyser.outputs["phase"])
-        material = phase2hue_material(attribute_names=["Phase"], **self.kwargs)
+        material = phase2hue_material(attribute_names=["Phase"], alpha_function = {"Alpha":"alpha"},**self.kwargs)
         self.materials.append(material)
 
         color = SetMaterial(tree, location=(sphere_node_pos+2, 1), material=material)
 
         smooth = SetShadeSmooth(tree, location=(left,0))
 
-        create_geometry_line(tree, [sphere, attr, color,join_full,set_pos,smooth], out=self.group_outputs.inputs[0])
+        create_geometry_line(tree, [sphere, attr, color,join_full,alpha_attr,set_pos,smooth], out=self.group_outputs.inputs[0])
         create_geometry_line(tree,[join,join_full])
