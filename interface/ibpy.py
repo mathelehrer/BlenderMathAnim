@@ -5621,6 +5621,7 @@ def add_bevel_modifier(b_obj, width=0.1):
 
 def add_constraint(b_object, type, name=None, **kwargs):
     obj = get_obj(b_object)
+    use_legacy_behavior = get_from_kwargs(kwargs,"use_legacy_behavior",False) # introduced for 4.2 (book)
     if not name:
         name = str(type)
     constraint = obj.constraints.new(type=type)
@@ -5660,6 +5661,7 @@ def add_constraint(b_object, type, name=None, **kwargs):
         constraint.max_x = max_x
         constraint.max_y = max_y
         constraint.max_z = max_z
+        constraint.use_legacy_behavior=use_legacy_behavior
     elif type == 'COPY_LOCATION':
         target = get_from_kwargs(kwargs, 'target', None)
         constraint.target = get_obj(target)

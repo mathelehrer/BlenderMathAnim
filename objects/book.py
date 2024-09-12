@@ -41,8 +41,8 @@ class Book(BObject):
         ibpy.add_constraint(self.spine, type='PIVOT', target=self.arrow_empties[1], rotation_range='Y')
         ibpy.add_constraint(self.cover, type='COPY_ROTATION', target=self.spine, mix_mode='ADD')
         ibpy.add_constraint(self.back, type='COPY_ROTATION', target=self.spine, mix_mode='ADD')
-        ibpy.add_constraint(self.cover, type='LIMIT_ROTATION', limit_y=True, min_y=0, max_y=np.pi)
-        ibpy.add_constraint(self.back, type='LIMIT_ROTATION', limit_y=True, min_y=-np.pi, max_y=0)
+        ibpy.add_constraint(self.cover, type='LIMIT_ROTATION', limit_y=True, min_y=0, max_y=np.pi,use_legacy_behavior=True)
+        ibpy.add_constraint(self.back, type='LIMIT_ROTATION', limit_y=True, min_y=-np.pi, max_y=0,use_legacy_behavior=True)
 
         self.spine.ref_obj.rotation_euler = [0, np.pi / 2, 0]
         self.add_pages(pages, page_thickness)
