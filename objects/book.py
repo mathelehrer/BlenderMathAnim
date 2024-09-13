@@ -2,11 +2,8 @@ import numpy as np
 from mathutils import Vector
 
 from interface import ibpy
-from interface.ibpy import add_cone, add_cylinder
-from objects.cone import Cone
 from objects.bobject import BObject
 from objects.cube import Cube
-from objects.cylinder import Cylinder
 from objects.empties import EmptyArrow, EmptyAxes
 from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
 
@@ -22,21 +19,24 @@ class Book(BObject):
         self.cover_thickness = 0.01
         self.pages = pages
         self.page_list = []
+        ibpy.make_new_collection(name="BookCollection")
+
         name = self.get_from_kwargs('name', 'Book')
         self.cover = Cube(scale=[scale[0], scale[1], cover_thickness],
                           location=[-scale[0] - scale[2] + cover_thickness, 0, 0],
                           origin=[-scale[2] + cover_thickness, 0, 0],
-                          name='cover')  # add cover_thickness to avoid gaps while opening the book
+                          name='cover',collection="BookCollection")  # add cover_thickness to avoid gaps while opening the book
         self.back = Cube(scale=[scale[0], scale[1], cover_thickness],
                          location=[scale[0] + scale[2] - cover_thickness, 0, 0],
                          origin=[scale[2] - cover_thickness, 0, 0],
-                         name='back')
-        self.spine = Cube(scale=[scale[2], scale[1], cover_thickness], name='spine', apply_scale=True)
+                         name='back',collection="BookCollection")
+        self.spine = Cube(scale=[scale[2], scale[1], cover_thickness], name='spine',
+                          apply_scale=True,collection="BookCollection")
         ibpy.set_parent(self.cover, self.spine)
         ibpy.set_parent(self.back, self.spine)
         empty_scale = [0.3 * scale[0]] * 3
-        self.arrow_empties = [EmptyArrow(location=[-scale[2], 0, 0], scale=empty_scale, apply_scale=True),
-                              EmptyArrow(location=[scale[2], 0, 0], scale=empty_scale, apply_scale=True)]
+        self.arrow_empties = [EmptyArrow(location=[-scale[2], 0, 0], scale=empty_scale, apply_scale=True,collection="BookCollection"),
+                              EmptyArrow(location=[scale[2], 0, 0], scale=empty_scale, apply_scale=True,collection="BookCollection")]
         ibpy.add_constraint(self.spine, type='PIVOT', target=self.arrow_empties[0], rotation_range='NY')
         ibpy.add_constraint(self.spine, type='PIVOT', target=self.arrow_empties[1], rotation_range='Y')
         ibpy.add_constraint(self.cover, type='COPY_ROTATION', target=self.spine, mix_mode='ADD')
@@ -47,7 +47,8 @@ class Book(BObject):
         self.spine.ref_obj.rotation_euler = [0, np.pi / 2, 0]
         self.add_pages(pages, page_thickness)
 
-        super().__init__(children=[self.spine] + self.arrow_empties + self.page_list, name=name, **kwargs)
+        super().__init__(children=[self.spine] + self.arrow_empties + self.page_list, name=name,
+                         collection="BookCollection", **kwargs)
 
     def add_pages(self, pages, page_thickness):
         # add pages into the open book
@@ -58,10 +59,10 @@ class Book(BObject):
                 0, 0]
             page = Cube(scale=scale, rotation_euler=[np.pi / 2, 0, 0],
                         location=[0.99 * scale[0], 0, 0], origin=Vector(), x_loop_cuts=39, apply_rotation=True,
-                        name='page')
+                        name='page',collection="BookCollection")
             page.ref_obj.location = location
             page.add_mesh_modifier(type='SIMPLE_DEFORM', deform_method='BEND', deform_axis='Z', angle=0, name='deform')
-            hook = EmptyAxes(scale=0.15, apply_scale=True, name='hook_for_pg',location=location)
+            hook = EmptyAxes(scale=0.15, apply_scale=True, name='hook_for_pg',location=location,collection="BookCollection")
             hook.ref_obj.rotation_euler=[-np.pi/2,-np.pi/2,0]
             vertex_group = ibpy.add_vertex_group(page, name="hook_group",
                                                  weight_function=lambda v: ((2 - 0.95 * v.x * scale[0]) / 2) ** 4)

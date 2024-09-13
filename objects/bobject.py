@@ -52,6 +52,7 @@ class BObject(object):
             else:
                 ref_obj = bpy.data.objects.new(name=self.name, object_data=None)
 
+        self.collection = self.get_from_kwargs('collection',None)
         self.intrinsic_scale = self.get_from_kwargs('scale', 1)
         if isinstance(self.intrinsic_scale, int) or isinstance(self.intrinsic_scale, float):
             self.intrinsic_scale = [self.intrinsic_scale] * 3
@@ -553,7 +554,12 @@ class BObject(object):
             obj = self.ref_obj
             if not linked:
                 if obj.name not in bpy.context.scene.objects:
-                    ibpy.link(obj)
+                    if self.collection is not None:
+                        # this is new, whenever an object is added to a separate collection,
+                        # all children have to be linked recursively into this collection
+                        ibpy.link(obj,collection=self.collection)
+                    else:
+                        ibpy.link(obj,collection=self.collection)
             if clear_data:  # this is useful for copies of objects to remove animation data from inherited from the parent
                 ibpy.clear_animation_data(self)
             ibpy.fade_in(self, begin_time * FRAME_RATE, np.maximum(1, transition_time * FRAME_RATE), alpha=alpha,**kwargs)
