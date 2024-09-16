@@ -36,16 +36,19 @@ CAMERA_FOLLOW_PATH_TARGET_DICTIONARY = {}
 FOLLOW_PATH_DICTIONARY = {}
 TRACK_TO_DICTIONARY = {}
 
-SOCKET_TYPES=('FLOAT', 'INT', 'BOOLEAN', 'VECTOR', 'ROTATION', 'STRING', 'RGBA', 'OBJECT', 'IMAGE', 'GEOMETRY', 'COLLECTION', 'TEXTURE', 'MATERIAL')
-DATA_TYPES=('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'QUATERNION')
+SOCKET_TYPES = (
+'FLOAT', 'INT', 'BOOLEAN', 'VECTOR', 'ROTATION', 'STRING', 'RGBA', 'OBJECT', 'IMAGE', 'GEOMETRY', 'COLLECTION',
+'TEXTURE', 'MATERIAL')
+DATA_TYPES = ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'QUATERNION')
 
 # where as '*' is the ordinary multiplication for scalars, 'mul' is the corresponding vector operator
 OPERATORS = ['*', 'mul', '%', 'mod', '/', 'div', '+', 'add', '-', 'sub', '**', 'sin', 'cos', 'tan', '^', 'lg',
-                    'sqrt', 'exp', 'abs', 'min', 'max', '<', '>', 'sgn', 'round', 'floor', 'vfloor', 'ceil',
-                    'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'length', 'scale', 'sqrt', '=','dot',
-                    'cross','rot','axis_rot','rot2euler','axis_angle_euler','not','normalize','and','or']
+             'sqrt', 'exp', 'abs', 'min', 'max', '<', '>', 'sgn', 'round', 'floor', 'vfloor', 'ceil',
+             'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'length', 'scale', 'sqrt', '=', 'dot',
+             'cross', 'rot', 'axis_rot', 'rot2euler', 'axis_angle_euler', 'not', 'normalize', 'and', 'or']
 # operators that return data of type VECTOR
-VECTOR_OPERATORS = ['mul', 'mod', 'div', 'add', 'sub', 'scale', 'vfloor', 'cross', 'rot', 'axis_rot', 'rot2euler','axis_angle_euler','normalize']
+VECTOR_OPERATORS = ['mul', 'mod', 'div', 'add', 'sub', 'scale', 'vfloor', 'cross', 'rot', 'axis_rot', 'rot2euler',
+                    'axis_angle_euler', 'normalize']
 
 
 def get_context():
@@ -79,7 +82,6 @@ def get_obj_from_name(name=None):
 def rename(bob, name):
     obj = get_obj(bob)
     obj.name = name
-
 
 
 ###########
@@ -119,11 +121,11 @@ def set_sun_light(location=[0, 0, 10], energy=2):
 
     light.data.energy = energy
 
+
 def remove_sun_light():
     if 'Sun' in bpy.data.objects:
-        sun=bpy.data.objects['Sun']
+        sun = bpy.data.objects['Sun']
         bpy.data.objects.remove(sun)
-
 
 
 def add_light_probe(**kwargs):
@@ -278,10 +280,10 @@ def set_camera_rotation(rotation=[0, 0, 0]):
     cam.rotation_euler = rotation
 
 
-def set_camera_lens(lens=50,clip_end=1000):
+def set_camera_lens(lens=50, clip_end=1000):
     cam = get_camera()
     cam.data.lens = lens
-    cam.data.clip_end=clip_end
+    cam.data.clip_end = clip_end
 
 
 def camera_zoom(lens=50, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
@@ -295,7 +297,7 @@ def camera_zoom(lens=50, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
     return begin_time + transition_time
 
 
-def camera_move(shift, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME,verbose=False):
+def camera_move(shift, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME, verbose=False):
     cam = get_camera()
     start_frame = begin_time * FRAME_RATE
     location = get_location_at_frame(cam, start_frame)
@@ -305,7 +307,7 @@ def camera_move(shift, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME,verb
         cam.location[i] += s
     cam.keyframe_insert(data_path='location', frame=(begin_time + transition_time) * FRAME_RATE)
     if verbose:
-        print("Camera move by: "+str(shift)+" at "+str(begin_time))
+        print("Camera move by: " + str(shift) + " at " + str(begin_time))
     return begin_time + transition_time
 
 
@@ -389,7 +391,7 @@ def camera_change_track_influence(target, start, end, begin_time=0, transition_t
     insert_keyframe(c, 'influence', begin_time * FRAME_RATE)
     c.influence = end
     insert_keyframe(c, 'influence', (begin_time + transition_time) * FRAME_RATE)
-    return begin_time+transition_time
+    return begin_time + transition_time
 
 
 def camera_change_follow_influence(target, start, end, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
@@ -576,7 +578,7 @@ def shade_smooth(auto=True):
     bpy.ops.object.shade_smooth()
 
 
-def add_sphere(radius=1, location=(0, 0, 0), scale=(1, 1, 1), resolution=5,smooth=True, **kwargs):
+def add_sphere(radius=1, location=(0, 0, 0), scale=(1, 1, 1), resolution=5, smooth=True, **kwargs):
     deselect_all()
 
     if 'mesh_type' in kwargs:
@@ -614,13 +616,15 @@ def add_torus(smooth=True, **kwargs):
     tor = bpy.context.object
     return tor
 
-def add_reference_image(name,**kwargs):
-    path = os.path.join(IMG_DIR,name)
-    if blender_version()<(4,2):
+
+def add_reference_image(name, **kwargs):
+    path = os.path.join(IMG_DIR, name)
+    if blender_version() < (4, 2):
         bpy.ops.object.load_reference_image(filepath=path)
     else:
         bpy.ops.object.empty_image_add(filepath=path)
     return bpy.context.active_object
+
 
 def add_cube(smooth=True, **kwargs):
     deselect_all()
@@ -930,29 +934,59 @@ def hide_frm_rec(obj, frame):
 context.scene.
 '''
 
+
 def set_layout_clip_end(end=100000):
     for area in bpy.data.screens["Layout"].areas:
-        if area.ui_type=='VIEW_3D':
+        if area.ui_type == 'VIEW_3D':
             for space in area.spaces:
-                space.clip_end=end
+                space.clip_end = end
 
 
 def set_frame(frame):
     bpy.context.scene.frame_set(int(frame))
+
+
 def get_frame():
     return bpy.context.scene.frame_current
 
+
+def make_new_collection(name="MyCollection"):
+    col = bpy.data.collections.new(name)
+    bpy.context.scene.collection.children.link(col)
+
+
 # linking and unlinking
+
+
+def get_collection(name="Collection"):
+    return bpy.data.collections.get(name)
+
+
 def link(obj, collection=None):
     obj = get_obj(obj)
-    if collection is None:
-        if obj.name not in bpy.context.scene.collection.objects:
-            bpy.context.scene.collection.objects.link(obj)
+
+    # check, whether already linked object is added to the correct collection
+    # (when a composed objected is added to a custom collection the children are automatically added to the default collection
+    # A necessary relinking is initiated
+    if len(obj.users_collection) > 0:
+        old_collection = obj.users_collection[0].name
+        if old_collection != collection:
+            un_link(obj, old_collection)
+            link(obj, collection)
     else:
-        if collection not in bpy.context.scene.collection.children:
-            col = bpy.data.collections.new(collection)
-            bpy.context.scene.collection.children.link(col)
-        bpy.context.scene.collection.children[collection].objects.link(obj)
+        # unlinked object
+        if collection is None:
+            if obj.name not in bpy.context.scene.collection.objects:
+                bpy.context.scene.collection.objects.link(obj)
+        else:
+            if collection not in bpy.context.scene.collection.children:
+                make_new_collection(collection)
+            bpy.context.scene.collection.children[collection].objects.link(obj)
+            ### if there are children they need to be relinked if there is a custom collection
+            for child in obj.children:
+                link(child, collection=collection)
+
+
 def recursive_link(obj, collection=None):
     """
         link a blender object to the collection with the name collection
@@ -1004,7 +1038,7 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
     
     """
     scene = get_scene()
-    if engine==BLENDER_EEVEE:
+    if engine == BLENDER_EEVEE:
         engine = BLENDER_EEVEE
     scene.render.engine = engine
     scene.render.use_compositing = True
@@ -1020,8 +1054,8 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
         scene.eevee.use_ssr_refraction = True  # (space reflections)
         scene.eevee.ssr_quality = 1  # (space reflections)
         scene.eevee.ssr_max_roughness = 0  # (space reflections)
-        scene.frame_start=frame_start
-        set_taa_render_samples(taa_render_samples,begin_frame=0)
+        scene.frame_start = frame_start
+        set_taa_render_samples(taa_render_samples, begin_frame=0)
 
         # set view to Material view
 
@@ -1151,7 +1185,6 @@ def change_emission(bob, from_value=0, to_value=1, begin_frame=0, frame_duration
             insert_keyframe(bsdf.inputs['Emission Strength'], 'default_value', frame=begin_frame + frame_duration)
 
 
-
 def change_emission_by_name(name_part, from_value, to_value, begin_frame, frame_duration):
     for mat in bpy.data.materials:
         if name_part in mat.name:
@@ -1179,39 +1212,39 @@ def change_alpha_by_name(name_part, from_value, to_value, begin_frame, frame_dur
 
 
 def animate_glare(glare, **kwargs):
-    begin_frame=get_from_kwargs(kwargs,'begin_frame',0)
-    end_frame=get_from_kwargs(kwargs,'end_frame',DEFAULT_ANIMATION_TIME*FRAME_RATE)
+    begin_frame = get_from_kwargs(kwargs, 'begin_frame', 0)
+    end_frame = get_from_kwargs(kwargs, 'end_frame', DEFAULT_ANIMATION_TIME * FRAME_RATE)
 
-    threshold_start = get_from_kwargs(kwargs,'threshold_start',10)
-    threshold_end = get_from_kwargs(kwargs,'threshold_end',0)
+    threshold_start = get_from_kwargs(kwargs, 'threshold_start', 10)
+    threshold_end = get_from_kwargs(kwargs, 'threshold_end', 0)
 
-    glare.threshold=threshold_start
-    insert_keyframe(glare,'threshold',begin_frame)
+    glare.threshold = threshold_start
+    insert_keyframe(glare, 'threshold', begin_frame)
     glare.threshold = threshold_end
     insert_keyframe(glare, 'threshold', end_frame)
 
 
 def animate_sky_background(sky, **kwargs):
-    begin_frame=get_from_kwargs(kwargs,'begin_frame',0)
-    end_frame=get_from_kwargs(kwargs,'end_frame',DEFAULT_ANIMATION_TIME*FRAME_RATE)
+    begin_frame = get_from_kwargs(kwargs, 'begin_frame', 0)
+    end_frame = get_from_kwargs(kwargs, 'end_frame', DEFAULT_ANIMATION_TIME * FRAME_RATE)
 
-    elevation_start = get_from_kwargs(kwargs,'elevation_start',10)
-    elevation_end = get_from_kwargs(kwargs,'elevation_end',0)
+    elevation_start = get_from_kwargs(kwargs, 'elevation_start', 10)
+    elevation_end = get_from_kwargs(kwargs, 'elevation_end', 0)
 
-    rotation_start= get_from_kwargs(kwargs,'rotation_start',0)
-    rotation_end = get_from_kwargs(kwargs,'rotation_end',45)
+    rotation_start = get_from_kwargs(kwargs, 'rotation_start', 0)
+    rotation_end = get_from_kwargs(kwargs, 'rotation_end', 45)
 
-    sky.sun_elevation=elevation_start
-    sky.sun_rotation=rotation_start
-    insert_keyframe(sky,'sun_elevation',begin_frame)
-    insert_keyframe(sky,'sun_rotation',begin_frame)
+    sky.sun_elevation = elevation_start
+    sky.sun_rotation = rotation_start
+    insert_keyframe(sky, 'sun_elevation', begin_frame)
+    insert_keyframe(sky, 'sun_rotation', begin_frame)
     sky.sun_elevation = elevation_end
     sky.sun_rotation = rotation_end
     insert_keyframe(sky, 'sun_elevation', end_frame)
     insert_keyframe(sky, 'sun_rotation', end_frame)
 
 
-def set_hdri_background(filename='', ext='exr', simple=False, transparent=False, background="background",strength =0.2,
+def set_hdri_background(filename='', ext='exr', simple=False, transparent=False, background="background", strength=0.2,
                         no_transmission_ray=False, rotation_euler=None):
     # remove lights
     for obj in bpy.data.objects:
@@ -1239,7 +1272,7 @@ def set_hdri_background(filename='', ext='exr', simple=False, transparent=False,
         tex.location = (-1200, 0)
         mapping = nodes.new(type='ShaderNodeMapping')
         mapping.location = (-1000, 0)
-        mapping.vector_type='NORMAL'
+        mapping.vector_type = 'NORMAL'
         mapping.inputs['Rotation'].default_value = rotation_euler
         links.new(tex.outputs['Generated'], mapping.inputs['Vector'])
         links.new(mapping.outputs['Vector'], environment.inputs['Vector'])
@@ -1290,7 +1323,7 @@ def set_hdri_background(filename='', ext='exr', simple=False, transparent=False,
             coords = nodes.new(type='ShaderNodeTexCoord')
             coords.location = (-1500, -400)
             links.new(coords.outputs['Window'], mapping2.inputs['Vector'])
-        elif isinstance(background,str):
+        elif isinstance(background, str):
             mix_shader = nodes.new(type='ShaderNodeMixShader')
             mix_shader.location = (-200, 0)
             links.new(mix_shader.outputs['Shader'], out.inputs['Surface'])
@@ -1312,7 +1345,7 @@ def set_hdri_background(filename='', ext='exr', simple=False, transparent=False,
             bg2.location = (-400, -400)
             links.new(bg2.outputs['Background'], mix_shader.inputs[2])
             bg2.inputs['Color'].default_value = get_color(background)
-            bg2.inputs['Strength'].default_value=strength
+            bg2.inputs['Strength'].default_value = strength
         else:
             # delete default nodes
             nodes.remove(light_path)
@@ -1383,7 +1416,14 @@ def dim_background(value=[0, 0, 0, 1], begin_time=0, transition_time=DEFAULT_ANI
 
 def get_color(color):
     if isinstance(color, list):
-        return color
+        if len(list)==4:
+            return color
+        elif len(list)==3:
+            return list+[1]
+        elif len(list)==1:
+            return list*3+[1]
+        else:
+            return [1,1,1,1]
     else:
         return get_color_from_string(color)
 
@@ -1483,13 +1523,16 @@ def set_transmission_for_material(material, transmission):
     bsdf.inputs[TRANSMISSION].default_value = transmission
 
 
-def get_alpha_at_current_keyframe(obj, frame,slot=0):
+def get_alpha_at_current_keyframe(obj, frame, slot=0):
     if len(obj.material_slots) > 0:
         current_frame = get_frame()
         set_frame(frame)
         material_slot = obj.material_slots[slot]
         material = material_slot.material
-        if 'Principled BSDF' in material.node_tree.nodes:
+        if _alpha := material.node_tree.nodes.get("AlphaFactor"):
+            alpha = _alpha.inputs[0].default_value
+        # Detect AlphaFactor node (book and pages for instance)
+        elif 'Principled BSDF' in material.node_tree.nodes:
             alpha = material.node_tree.nodes["Principled BSDF"].inputs['Alpha'].default_value
         else:
             alpha = material.node_tree.nodes['Mix Shader'].inputs[0].default_value
@@ -1520,10 +1563,12 @@ def set_alpha_and_keyframe(obj, value, frame, offset_for_slots=None):
             for dialer in dialers:
                 insert_keyframe(dialer, 'default_value', frame + offset)
 
+
 # Geometry nodes
 
-def get_node_tree(name,type='GeometryNodeTree'):
+def get_node_tree(name, type='GeometryNodeTree'):
     return bpy.data.node_groups.new(name, type='GeometryNodeTree')
+
 
 # Materials/Shaders
 
@@ -2165,12 +2210,14 @@ def get_geometry_node_from_modifier(modifier, label):
             return n
     return None
 
+
 def get_material_from_modifier(modifier, label):
     for n in modifier.nodes:
         if label in n.label or label in n.name:
             if 'Material' in n.inputs:
                 return n.inputs['Material'].default_value
     return None
+
 
 def get_spacing_value(bob):
     mat = get_material_of(bob)
@@ -2736,7 +2783,7 @@ def change_default_value(slot, from_value, to_value, begin_time=None, transition
     else:
         begin_time = begin_frame / FRAME_RATE
     if transition_time is not None:
-        transition_frames = np.maximum(1,transition_time * FRAME_RATE)
+        transition_frames = np.maximum(1, transition_time * FRAME_RATE)
     else:
         transition_time = transition_frames / FRAME_RATE
     if from_value is not None:
@@ -2747,7 +2794,8 @@ def change_default_value(slot, from_value, to_value, begin_time=None, transition
 
     return begin_time + transition_time
 
-def change_default_boolean(slot,from_value,to_value,begin_time=None, transition_time=None,data_path="boolean",
+
+def change_default_boolean(slot, from_value, to_value, begin_time=None, transition_time=None, data_path="boolean",
                            begin_frame=0):
     if begin_time:
         begin_frame = begin_time * FRAME_RATE
@@ -2757,12 +2805,13 @@ def change_default_boolean(slot,from_value,to_value,begin_time=None, transition_
         slot.boolean = from_value
         insert_keyframe(slot, data_path, begin_frame)
     slot.boolean = to_value
-    insert_keyframe(slot, data_path, begin_frame +1)
+    insert_keyframe(slot, data_path, begin_frame + 1)
 
-    return (begin_frame+1)/FRAME_RATE
+    return (begin_frame + 1) / FRAME_RATE
 
-def change_default_vector(slot,from_value,to_value,begin_time=None, transition_time=None,data_path="vector",
-                           begin_frame=0,transition_frames=DEFAULT_ANIMATION_TIME*FRAME_RATE):
+
+def change_default_vector(slot, from_value, to_value, begin_time=None, transition_time=None, data_path="vector",
+                          begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME * FRAME_RATE):
     if begin_time:
         begin_frame = begin_time * FRAME_RATE
     else:
@@ -2778,6 +2827,8 @@ def change_default_vector(slot,from_value,to_value,begin_time=None, transition_t
     insert_keyframe(slot, data_path, begin_frame + transition_frames)
 
     return begin_time + transition_time
+
+
 def change_value(value, from_value, to_value, begin_time=None, transition_time=None, data_path="default_value",
                  begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME * FRAME_RATE):
     if begin_time:
@@ -2906,7 +2957,7 @@ def make_image_material(src=None, **kwargs):
     if 'name' in kwargs:
         name = kwargs.pop('name')
     else:
-        name='image_'+src
+        name = 'image_' + src
     color = bpy.data.materials.new(name=name)
     color.use_nodes = True
     nodes = color.node_tree.nodes
@@ -2938,7 +2989,7 @@ def make_image_material(src=None, **kwargs):
     alpha_factor.label = 'AlphaFactor'
     alpha_factor.operation = 'MULTIPLY'
     alpha_factor.location = (-200, 0)
-    alpha_factor.inputs[0].default_value = 0
+    alpha_factor.inputs[0].default_value = 1
 
     links.new(img.outputs['Alpha'], alpha_factor.inputs[1])
     links.new(alpha_factor.outputs[0], bsdf.inputs['Alpha'])
@@ -2996,7 +3047,7 @@ def set_movie_start(bob, begin_frame=0):
 
 def set_material(bob, material, slot=0):
     obj = bob.ref_obj
-    if isinstance(material,str):
+    if isinstance(material, str):
         material = bpy.data.materials.get(material)
 
     if material:
@@ -3008,7 +3059,7 @@ def set_material(bob, material, slot=0):
             else:
                 obj.material_slots[slot].material = material
     else:
-        print("No material found with name ",material)
+        print("No material found with name ", material)
 
 
 def asign_material_to_faces(bob, material_index, normal=Vector([0, 0, 1])):
@@ -3223,6 +3274,7 @@ def change_color(bob, new_color, begin_frame, final_frame):
         for child in obj.children:
             change_color(child, new_color, begin_frame, final_frame)
 
+
 def create_color_mixing_find_previous_color(material, color):
     return create_color_mixing(material, None, color)
 
@@ -3259,8 +3311,8 @@ def create_color_mixing(material, color1, color2):
 
     bsdf = nodes['Principled BSDF']
     mixer = nodes.new(type='ShaderNodeMixRGB')
-    mixer.name='Mix' # since 4.0 the name has changed to "Mix (Legacy)", therefore enforce old name scheme
-    mixer.label='Mix'
+    mixer.name = 'Mix'  # since 4.0 the name has changed to "Mix (Legacy)", therefore enforce old name scheme
+    mixer.label = 'Mix'
     mixer.inputs['Fac'].default_value = 0
 
     # get previous color
@@ -3460,6 +3512,7 @@ def create_color_map_for_mesh(bob, colors, name, **kwargs):
     else:
         obj.material_slots[0].material = phase_color
 
+
 def set_vertex_colors(bob, colors):
     obj = get_obj(bob)
     vert_list = obj.data.vertices
@@ -3530,6 +3583,7 @@ def create_iterator_group(nodes, functions, parameters, iterations, name='Iterat
     group_outputs.location = (2 * delta, 0)
 
     return group
+
 
 def if_node(nodes, bool_function, parameters=['True', 'False'], scalar_parameters=[], name='IfNode',
             node_type='Shader'):
@@ -3780,7 +3834,7 @@ def create_group_from_vector_function(nodes, functions, parameters=[], scalar_pa
     return group
 
 
-def create_group_from_scalar_function(nodes, functions, parameters=[],vector_parameters=[], name='ScalarFunction',
+def create_group_from_scalar_function(nodes, functions, parameters=[], vector_parameters=[], name='ScalarFunction',
                                       node_group_type='Shader', output_names=[]):
     """
        :param node_group_type:
@@ -4158,7 +4212,7 @@ def build_group_component(tree, stack, parameters=[], scalar_parameters=[], seps
             new_node_math = None
 
 
-def build_scalar_group_component(tree, stack, parameters=[],vector_parameters=[], inputs=None,
+def build_scalar_group_component(tree, stack, parameters=[], vector_parameters=[], inputs=None,
                                  out=None, length=1, unary=None, last_operator=None, height=0, level=[0]):
     """
     :param level: captures the structure of the tree to place the node at the right location
@@ -4411,7 +4465,7 @@ def build_scalar_group_component(tree, stack, parameters=[],vector_parameters=[]
 
         # if a new operator is processed the function has to be called again
         if new_node_math:
-            build_scalar_group_component(tree, stack, parameters=parameters,vector_parameters=vector_parameters,
+            build_scalar_group_component(tree, stack, parameters=parameters, vector_parameters=vector_parameters,
                                          inputs=inputs, out=out,
                                          length=length - 1, unary=unary, last_operator=new_node_math, height=height,
                                          level=new_level)
@@ -4925,6 +4979,7 @@ def change_volume_scatter(bob, final_value, begin_time=0, transition_time=DEFAUL
     density_socket.default_value = final_value
     insert_keyframe(density_socket, 'default_value', frame + int(transition_time * FRAME_RATE))
 
+
 def set_volume_absorption_of_material(material, value):
     if material:
         nodes = material.node_tree.nodes
@@ -4933,9 +4988,10 @@ def set_volume_absorption_of_material(material, value):
             density_socket = scatter_node.inputs['Density']
             density_socket.default_value = value
         else:
-            scatter_node=nodes.new(type="ShaderNodeVolumeAbsorption")
-            scatter_node.inputs['Density'].default_value=value
-            material.node_tree.links.new(scatter_node.outputs[0],nodes.get('Material Output').inputs['Volume'])
+            scatter_node = nodes.new(type="ShaderNodeVolumeAbsorption")
+            scatter_node.inputs['Density'].default_value = value
+            material.node_tree.links.new(scatter_node.outputs[0], nodes.get('Material Output').inputs['Volume'])
+
 
 def set_volume_scatter_of_material(material, value):
     if material:
@@ -4945,9 +5001,9 @@ def set_volume_scatter_of_material(material, value):
             density_socket = scatter_node.inputs['Density']
             density_socket.default_value = value
         else:
-            scatter_node=nodes.new(type="ShaderNodeVolumeScatter")
-            scatter_node.inputs['Density'].default_value=value
-            material.node_tree.links.new(scatter_node.outputs[0],nodes.get('Material Output').inputs['Volume'])
+            scatter_node = nodes.new(type="ShaderNodeVolumeScatter")
+            scatter_node.inputs['Density'].default_value = value
+            material.node_tree.links.new(scatter_node.outputs[0], nodes.get('Material Output').inputs['Volume'])
 
 
 def set_volume_absorption(bob, value, begin_time=0):
@@ -5621,7 +5677,7 @@ def add_bevel_modifier(b_obj, width=0.1):
 
 def add_constraint(b_object, type, name=None, **kwargs):
     obj = get_obj(b_object)
-    use_legacy_behavior = get_from_kwargs(kwargs,"use_legacy_behavior",False) # introduced for 4.2 (book)
+    use_legacy_behavior = get_from_kwargs(kwargs, "use_legacy_behavior", False)  # introduced for 4.2 (book)
     if not name:
         name = str(type)
     constraint = obj.constraints.new(type=type)
@@ -5661,7 +5717,7 @@ def add_constraint(b_object, type, name=None, **kwargs):
         constraint.max_x = max_x
         constraint.max_y = max_y
         constraint.max_z = max_z
-        constraint.use_legacy_behavior=use_legacy_behavior
+        constraint.use_legacy_behavior = use_legacy_behavior
     elif type == 'COPY_LOCATION':
         target = get_from_kwargs(kwargs, 'target', None)
         constraint.target = get_obj(target)
@@ -5718,25 +5774,25 @@ def add_mesh_modifier(bob, **kwargs):
     else:
         name = 'modifier_' + str(type)
     modifiers = obj.modifiers.new(type=type, name=name)
-    if type=='SOLIDIFY':
+    if type == 'SOLIDIFY':
         if 'thickness' in kwargs:
             thickness = kwargs.pop('thickness')
-            modifiers.thickness= thickness
+            modifiers.thickness = thickness
         if 'offset' in kwargs:
             offset = kwargs.pop('offset')
             modifiers.offset = offset
-    if type=='BEVEL':
+    if type == 'BEVEL':
         if 'amount' in kwargs:
             amount = kwargs.pop('amount')
-            modifiers.width= amount
+            modifiers.width = amount
         if 'segments' in kwargs:
             segments = kwargs.pop('segments')
-            modifiers.segments= segments
+            modifiers.segments = segments
     if type == 'SUBSURF':
-        levels = get_from_kwargs(kwargs,"levels",1)
-        render_levels=get_from_kwargs(kwargs,"render_levels",2)
-        modifiers.levels=levels
-        modifiers.render_levels=render_levels
+        levels = get_from_kwargs(kwargs, "levels", 1)
+        render_levels = get_from_kwargs(kwargs, "render_levels", 2)
+        modifiers.levels = levels
+        modifiers.render_levels = render_levels
     if type == 'WIREFRAME':
         if 'thickness' in kwargs:
             thickness = kwargs.pop('thickness')
@@ -5783,6 +5839,7 @@ def add_mesh_modifier(bob, **kwargs):
                 for i, name in enumerate(attribute_names):
                     modifiers["Output_" + str(i + 1) + "_attribute_name"] = name
 
+
 def apply_modifiers(bob):
     obj = get_obj(bob)
     select(obj)
@@ -5804,15 +5861,16 @@ def apply_modifier(bob, type=None):
 # Transformations  #
 ####################
 
-def set_taa_render_samples(taa_render_samples=64,begin_frame=0):
+def set_taa_render_samples(taa_render_samples=64, begin_frame=0):
     scene = get_scene()
-    if scene.render.engine==BLENDER_EEVEE:
-        set_frame(begin_frame-1)
+    if scene.render.engine == BLENDER_EEVEE:
+        set_frame(begin_frame - 1)
         old_taa_render_samples = scene.eevee.taa_render_samples
-        scene.eevee.taa_render_samples=old_taa_render_samples
-        scene.keyframe_insert(data_path="eevee.taa_render_samples",frame=begin_frame-1)
+        scene.eevee.taa_render_samples = old_taa_render_samples
+        scene.keyframe_insert(data_path="eevee.taa_render_samples", frame=begin_frame - 1)
         scene.eevee.taa_render_samples = taa_render_samples
         scene.keyframe_insert(data_path="eevee.taa_render_samples", frame=begin_frame)
+
 
 def disappear_all_copies_of_letters(begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
     objects = bpy.data.objects
@@ -5845,13 +5903,15 @@ def recursively_fade_in(obj, alpha, frame, frame_duration):
         print("DEPRECATED: fade in recursively " + child.name)
         recursively_fade_in(child, alpha, frame, frame_duration)
 
-def change_alpha_of_material(mat,from_value=0,to_value=1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+
+def change_alpha_of_material(mat, from_value=0, to_value=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
     nodes = mat.node_tree.nodes
     if "Principled BSDF" in nodes:
-        return change_default_value(nodes["Principled BSDF"].inputs['Alpha'],from_value=from_value,to_value=to_value,
-                                    begin_time=begin_time,transition_time=transition_time)
+        return change_default_value(nodes["Principled BSDF"].inputs['Alpha'], from_value=from_value, to_value=to_value,
+                                    begin_time=begin_time, transition_time=transition_time)
     else:
         raise "Cannot change Alpha for non BSDF nodes"
+
 
 def change_alpha(b_obj, frame, frame_duration, alpha=0):
     """
@@ -5897,7 +5957,7 @@ def fade_out(b_obj, frame, frame_duration, alpha=0, handwriting=False, **kwargs)
     """
     obj = get_obj(b_obj)
 
-    recursive_fade_out(obj, frame, frame_duration, handwriting=handwriting, alpha=alpha,**kwargs)
+    recursive_fade_out(obj, frame, frame_duration, handwriting=handwriting, alpha=alpha, **kwargs)
 
     if alpha == 0:
         hide_frm(b_obj, frame + frame_duration)
@@ -5915,17 +5975,17 @@ def fade_out_quickly(obj, frame, frame_duration):
     set_alpha_and_keyframe(obj, 0, frame + frame_duration)
 
 
-def recursive_fade_out(obj, frame, frame_duration, handwriting=False, alpha=0,slot=0):
+def recursive_fade_out(obj, frame, frame_duration, handwriting=False, alpha=0, slot=0):
     # retrieve current alpha state  to fade out from the current state
     if not "hand_written" in obj.name or handwriting:
-        alpha0 = get_alpha_at_current_keyframe(obj, frame,slot)
+        alpha0 = get_alpha_at_current_keyframe(obj, frame, slot)
         set_alpha_and_keyframe(obj, alpha0, frame)
         set_alpha_and_keyframe(obj, alpha, frame + frame_duration)
 
     for child in obj.children:
         recursive_fade_out(child, frame, frame_duration, alpha=alpha)
 
-    if alpha==0:
+    if alpha == 0:
         obj.hide_render = True
         obj.keyframe_insert(data_path="hide_render", frame=frame + frame_duration)
 
@@ -6450,6 +6510,7 @@ def get_location(b_obj):
     #     location = obj.matrix_world.translation
     return location
 
+
 def get_scale(b_obj):
     obj = get_obj(b_obj)
     return obj.scale.copy()
@@ -6502,6 +6563,7 @@ def get_rotation_quaternion_at_frame(b_obj, frame):
     set_frame(frame_old)
     return rotation
 
+
 def get_input_value_at_frame(b_obj, frame):
     """
     get value of a simple input node
@@ -6542,7 +6604,8 @@ def add_rigid_body(bob, **kwargs):
     select(obj)
     bpy.ops.rigidbody.objects_add(**kwargs)
 
-def key_frame_rigid_body_properties(bob,type='dynamic',value=True,begin_time=0):
+
+def key_frame_rigid_body_properties(bob, type='dynamic', value=True, begin_time=0):
     """
     set keyframes for rigid_body properties
     :param bob:
@@ -6552,18 +6615,19 @@ def key_frame_rigid_body_properties(bob,type='dynamic',value=True,begin_time=0):
     :return:
     """
     obj = get_obj(bob)
-    if type=='dynamic':
-        obj.rigid_body.enabled=value
-        insert_keyframe(obj.rigid_body,data_path='enabled',frame=begin_time*FRAME_RATE)
-    elif type=='kinematic':
+    if type == 'dynamic':
+        obj.rigid_body.enabled = value
+        insert_keyframe(obj.rigid_body, data_path='enabled', frame=begin_time * FRAME_RATE)
+    elif type == 'kinematic':
         obj.rigid_body.kinematic = value
         insert_keyframe(obj.rigid_body, data_path='kinematic', frame=begin_time * FRAME_RATE)
+
 
 def make_rigid_body(bob, dynamic=True, kinematic=False, friction=0.1, bounciness=0.5,
                     all_similar_objects=False, use_margin=False, collision_margin=0.04, **kwargs):
     obj = get_obj(bob)
     set_active(obj)
-    set_select(obj,value=True)
+    set_select(obj, value=True)
     # bpy.ops.rigidbody.world_add()
     similar_objects = []
     if all_similar_objects:
@@ -6595,7 +6659,7 @@ def set_simulation(begin_time=0, transition_time=250 / FRAME_RATE):
     scene.rigidbody_world.point_cache.frame_start = start
     scene.rigidbody_world.point_cache.frame_end = end
 
-    return begin_time+transition_time
+    return begin_time + transition_time
 
 
 ##################
@@ -6723,11 +6787,12 @@ def print_fcurves_of_action(action):
 # attributes#
 #############
 
-def add_attribute(bob, name = "attribute",attribute=None,type='FLOAT',domain='POINT'):
+def add_attribute(bob, name="attribute", attribute=None, type='FLOAT', domain='POINT'):
     obj = get_obj(bob)
     if attribute:
-        attr = obj.data.attributes.new(name=name,type=type,domain=domain)
-        attr.data.foreach_set('value',attribute)
+        attr = obj.data.attributes.new(name=name, type=type, domain=domain)
+        attr.data.foreach_set('value', attribute)
+
 
 #############
 # utilities #
@@ -6741,18 +6806,22 @@ def vectorize(list):
 def diff(a, b):
     return a - b
 
+
 ####################
 # append resources #
 ####################
 
 def append(filename):
-    path = os.path.join(APPEND_DIR,filename)
+    path = os.path.join(APPEND_DIR, filename)
 
     import_objects = ['Mountains', 'Lake', 'BackgroundMountains']
-    import_objects +=[ 'ast_spruce01b', 'ast_spruce01', 'ast_rocklp11', 'ast_rocklp10', 'ast_rocklp09', 'ast_rocklp08', 'ast_rocklp07', 'ast_rocklp06', 'ast_rocklp05', 'ast_rocklp04', 'ast_rocklp03', 'ast_rocklp01', 'ast_pine02b', 'ast_pine02', 'ast_pine01b', 'ast_pine01', 'ast_ocklp02', 'ast_deciduous03', 'ast_deciduous02', 'ast_deciduous01']
+    import_objects += ['ast_spruce01b', 'ast_spruce01', 'ast_rocklp11', 'ast_rocklp10', 'ast_rocklp09', 'ast_rocklp08',
+                       'ast_rocklp07', 'ast_rocklp06', 'ast_rocklp05', 'ast_rocklp04', 'ast_rocklp03', 'ast_rocklp01',
+                       'ast_pine02b', 'ast_pine02', 'ast_pine01b', 'ast_pine01', 'ast_ocklp02', 'ast_deciduous03',
+                       'ast_deciduous02', 'ast_deciduous01']
     # link all objects in the list
     with bpy.data.libraries.load(path, link=True) as (data_from, data_to):
-        data_to.objects = [name for name in data_from.objects if name in import_objects ]
+        data_to.objects = [name for name in data_from.objects if name in import_objects]
 
     # link object to scene collection
     for obj in data_to.objects:
@@ -6775,4 +6844,4 @@ def append(filename):
 
 
 def get_image(src):
-    return  bpy.data.images.load(os.path.join(IMG_DIR, src))
+    return bpy.data.images.load(os.path.join(IMG_DIR, src))

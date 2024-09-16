@@ -4,7 +4,8 @@ from mathutils import Vector
 
 from grandalf.graphs import Vertex, Edge, Graph
 from grandalf.layouts import SugiyamaLayout, DigcoLayout
-from interface.ibpy import get_material, make_new_socket, OPERATORS
+from interface import ibpy
+from interface.ibpy import get_material, make_new_socket, OPERATORS, get_collection
 from mathematics.groups.e8 import E8Lattice
 
 pi = np.pi
@@ -794,6 +795,34 @@ class NamedAttribute(RedNode):
         else:
             self.tree.links.new(name, self.node.inputs['Name'])
 
+class CollectionInfo(RedNode):
+    def __init__(self, tree, location=(0, 0),
+                    transform_space='ORIGINAL',
+                 collection_name="Collection",
+                 separate_children=False,
+                 reset_children=False, **kwargs
+                 ):
+        """
+           :param tree:
+           :param location:
+           :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'QUATERNION'
+           :param name: name of the attribute
+           :param kwargs:
+        """
+        self.node = tree.nodes.new(type="GeometryNodeCollectionInfo")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out=self.node.outputs['Instances']
+        self.node.transform_space=transform_space
+        self.node.inputs[0].default_value=ibpy.get_collection(collection_name)
+        if isinstance(separate_children, bool):
+            self.node.inputs[1].default_value = separate_children
+        else:
+            self.tree.links.new(separate_children, self.node.inputs[1])
+        if isinstance(reset_children, bool):
+            self.node.inputs[2].default_value = reset_children
+        else:
+            self.tree.links.new(reset_children, self.node.inputs[2])
 
 class SetMaterial(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -2062,7 +2091,7 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
      either a list of three functions is required or a function with vector output
     :return:
     """
-    location = (location[0] * 200, location[1] * 200)
+    location = (location[0] * 200, location[1] * 100)
     if hasattr(nodes_or_tree, 'nodes'):
         tree = nodes_or_tree
         nodes = tree.nodes

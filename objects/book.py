@@ -58,7 +58,7 @@ class Book(BObject):
                 -self.scale[2] + 2 * self.cover_thickness + 2 * i / pages * (self.scale[2] - 2 * self.cover_thickness),
                 0, 0]
             page = Cube(scale=scale, rotation_euler=[np.pi / 2, 0, 0],
-                        location=[0.99 * scale[0], 0, 0], origin=Vector(), x_loop_cuts=39, apply_rotation=True,
+                        location=[0.99 * scale[0], 0, 0], origin=Vector(), x_loop_cuts=39,y_loop_cuts = 39, apply_rotation=True,
                         name='page',collection="BookCollection")
             page.ref_obj.location = location
             page.add_mesh_modifier(type='SIMPLE_DEFORM', deform_method='BEND', deform_axis='Z', angle=0, name='deform')
@@ -122,4 +122,12 @@ class Book(BObject):
                                        begin_frame=begin_time * FRAME_RATE + half + 1, frame_duration=half)
         return begin_time + transition_time
 
+    def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+               clear_data=False, silent=False,linked=False, nice_alpha=False,**kwargs):
 
+        #override standard appear that every child can be made disappearing individually
+        self.cover.appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,silent=silent,linked=linked,nice_alpha=nice_alpha,**kwargs)
+        self.back.appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,silent=silent,linked=linked,nice_alpha=nice_alpha,**kwargs)
+        self.spine.appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,silent=silent,linked=linked,nice_alpha=nice_alpha,**kwargs)
+        [self.page_list[i].appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,silent=silent,linked=linked,nice_alpha=nice_alpha,**kwargs) for i in range(len(self.page_list))]
+        super().appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,silent=silent,linked=linked,nice_alpha=nice_alpha,**kwargs)

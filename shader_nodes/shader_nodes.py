@@ -42,6 +42,11 @@ class SeparateXYZ(ShaderNode):
         if vector:
             tree.links.new(vector,self.node.inputs["Vector"])
 
+        self.std_out_x = self.node.outputs['X']
+        self.std_out_y = self.node.outputs['Y']
+        self.std_out_z = self.node.outputs['Z']
+
+
 class MathNode(ShaderNode):
     def __init__(self, tree, location=(0, 0), operation='ADD', input0=None, input1=None, input2=None, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeMath")
@@ -161,6 +166,7 @@ class ColorRamp(ShaderNode):
             i+=1
 
         self.std_out = self.node.outputs[0]
+        self.color_ramp = self.node.color_ramp
 
 
 class AttributeNode(ShaderNode):
@@ -183,6 +189,9 @@ class MixRGB(ShaderNode):
         self.node = tree.nodes.new(type="ShaderNodeMixRGB")
         super().__init__(tree, location, **kwargs)
 
+        self.factor=self.node.inputs[0]
+        self.color1 = self.node.inputs[1]
+        self.color2 = self.node.inputs[2]
         self.std_out = self.node.outputs[0]
 
         if isinstance(factor, (int, float)):

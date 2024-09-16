@@ -7,7 +7,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     TransformGeometry, InputVector, DeleteGeometry, IcoSphere, MeshLine, MeshToCurve, InstanceOnEdges, CubeMesh, \
     EdgeVertices, BooleanMath, SetShadeSmooth, RayCast, WireFrame, ConvexHull, InsideConvexHull, ExtrudeMesh, \
     ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch, MeshToPoints, \
-    SubdivideMesh
+    SubdivideMesh, CollectionInfo
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -46,6 +46,7 @@ class GeometryNodesModifier:
         if automatic_layout:
             layout(tree)
         self.tree = tree
+        self.nodes=self.tree.nodes # needed for ibpy.get_geometry_node_from_modifier
 
     def create_node(self, tree):
         """
@@ -1842,3 +1843,33 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
 
         create_geometry_line(tree, [sphere, attr, color,join_full,alpha_attr,set_pos,smooth], out=self.group_outputs.inputs[0])
         create_geometry_line(tree,[join,join_full])
+
+
+class NodeFromCollection(GeometryNodesModifier):
+    def __init__(self, name='NodeFromCollection',collection="Collection",translation=Vector(),rotation=Vector(),scale=Vector([1,1,1]), **kwargs):
+        """
+        create object from collection, which can be rotated
+        """
+
+        self.kwargs = kwargs
+        self.collection=collection
+        self.translation =translation
+        self.rotation = rotation
+        self.scale = scale
+
+        super().__init__(name,automatic_layout=True)
+
+    def create_node(self, tree):
+
+        out = tree.nodes.get("Group Output")
+        links = tree.links
+
+        translation = InputVector(tree,value=self.translation,name="Translation")
+        rotation = InputVector(tree,value=self.rotation,name="Rotation")
+        scale = InputVector(tree,value=self.scale,name="Scale")
+        collectionInfo = CollectionInfo(tree,collection_name=self.collection)
+        trafo = TransformGeometry(tree,rotation=rotation.std_out,translation=translation.std_out,scale=scale.std_out)
+
+        create_geometry_line(tree, [collectionInfo,
+                                trafo
+                                    ], out=self.group_outputs.inputs[0])

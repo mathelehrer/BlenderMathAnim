@@ -554,12 +554,8 @@ class BObject(object):
             obj = self.ref_obj
             if not linked:
                 if obj.name not in bpy.context.scene.objects:
-                    if self.collection is not None:
-                        # this is new, whenever an object is added to a separate collection,
-                        # all children have to be linked recursively into this collection
-                        ibpy.link(obj,collection=self.collection)
-                    else:
-                        ibpy.link(obj,collection=self.collection)
+                    ibpy.link(obj,collection=self.collection)
+
             if clear_data:  # this is useful for copies of objects to remove animation data from inherited from the parent
                 ibpy.clear_animation_data(self)
             ibpy.fade_in(self, begin_time * FRAME_RATE, np.maximum(1, transition_time * FRAME_RATE), alpha=alpha,**kwargs)

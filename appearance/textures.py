@@ -2804,6 +2804,74 @@ def get_alpha_of_material(material):
     return bsdf.inputs['Alpha']
 
 
+def highlighting_for_material(page_material,direction='Y',data = {(0,1):('drawing',0.5)}):
+    """
+
+    """
+    tree = page_material.node_tree
+    nodes = tree.nodes
+    links = tree.links
+    mapping_node=nodes.get("Mapping")
+    if mapping_node is None:
+        # create texture coordinates with mapping node
+        tex_coord = TextureCoordinate(tree,location=(-10,0))
+        mapping_node = Mapping(tree,location=(-9,0))
+        links.new (tex_coord.std_out,mapping_node.inputs['Vector'])
+        mapping_out = mapping_node.std_out
+    else:
+        mapping_out=mapping_node.outputs[0]
+    left = -8
+    sep = SeparateXYZ(tree,location=(left,0),vector=mapping_out)
+    if direction=='X':
+        sep_out=sep.std_out_x
+    elif direction=='Y':
+        sep_out=sep.std_out_y
+    else:
+        sep_out=sep.std_out_z
+    left+=1
+
+    top = len(data)*2.5
+    mixers = []
+    for key,val in data.items():
+        lleft = left
+        infimum = key[0]
+        supremum = key[1]
+        filter = make_function(tree,functions={
+            "filter":"coord,"+str(infimum)+",>,coord,"+str(supremum)+",<,*"
+        },location = (lleft,top),scalars=["filter","coord"],inputs=["coord"],outputs=["filter"],
+                               node_group_type='Shader')
+        links.new(sep_out,filter.inputs['coord'])
+        lleft+=1
+
+        ramp = ColorRamp(tree,location=(lleft,top),factor=filter.outputs['filter'])
+        ramp.color_ramp.elements[0].color=[0,0,0,0]
+        ramp.color_ramp.elements[1].color=get_color(val[0])
+        lleft+=1
+
+
+        if len(mixers)==0:
+            mix = MixRGB(tree, location=(lleft, top - 2), factor=val[1], color1=ramp.std_out)
+        else:
+            mix = MixRGB(tree, location=(lleft, top - 2), factor=val[1], color1=mixers[-1].std_out)
+            links.new(ramp.std_out,mixers[-1].color2)
+        mixers.append(mix)
+        top -=2.5
+
+    # find link to the color socket of the bsdf
+    bsdf=nodes.get("Principled BSDF")
+    if bsdf is not None:
+        for link in links:
+            if link.to_node==bsdf:
+                if link.to_socket.name=='Base Color':
+                    from_socket=link.from_socket
+        if from_socket is not None:
+            links.new(mixers[-1].color2,from_socket)
+            links.new(mixers[-1].std_out,bsdf.inputs['Base Color'])
+            links.new(mixers[-1].std_out,bsdf.inputs[EMISSION])
+
+    return mixers
+
+
 #################
 # backgrounds ###
 #################
