@@ -1463,7 +1463,7 @@ def change_material_properties(bob, slot=0, begin_frame=0, frame_duration=1, **k
             insert_keyframe(bsdf_alpha, "default_value", begin_frame + frame_duration)
 
 
-def set_alpha_for_material(material, alpha):
+def set_alpha_for_material(material, alpha, viewport = "material"):
     """
     If you want to access alpha channel and want to have fade in at the same time
     you have to create an 'AlphaFactor' mixing node
@@ -1482,8 +1482,12 @@ def set_alpha_for_material(material, alpha):
             return [alpha_node.inputs[0]]
         elif 'Principled BSDF' in material.node_tree.nodes:
             bsdf = material.node_tree.nodes['Principled BSDF']
-            bsdf.inputs['Alpha'].default_value = alpha  # standard material
-            return [bsdf.inputs['Alpha']]  # return for key_framing
+            if viewport == "solid":
+                bsdf.inputs['Base Color'].default_value[3] = alpha
+                return [bsdf.inputs['Base Color']]  # return for key_framing
+            else:
+                bsdf.inputs['Alpha'].default_value = alpha  # standard material
+                return [bsdf.inputs['Alpha']]  # return for key_framing
         elif 'Mix Shader' in material.node_tree.nodes:
             mix1 = material.node_tree.nodes['Mix Shader']
             mix2 = material.node_tree.nodes['Mix Shader.001']
@@ -1541,7 +1545,7 @@ def get_alpha_at_current_keyframe(obj, frame, slot=0):
     return 0
 
 
-def set_alpha_and_keyframe(obj, value, frame, offset_for_slots=None):
+def set_alpha_and_keyframe(obj, value, frame, offset_for_slots=None, viewport = "material"):
     """
     keyframe the alpha value of an object
     :param offset_for_slots:
@@ -1554,7 +1558,7 @@ def set_alpha_and_keyframe(obj, value, frame, offset_for_slots=None):
 
     for s, material_slot in enumerate(obj.material_slots):
         material = material_slot.material
-        dialers = set_alpha_for_material(material, value)
+        dialers = set_alpha_for_material(material, value, viewport=viewport)
         if offset_for_slots is not None and len(offset_for_slots) > s:
             offset = offset_for_slots[s] * FRAME_RATE
         else:
@@ -5882,11 +5886,12 @@ def disappear_all_copies_of_letters(begin_time=0, transition_time=DEFAULT_ANIMAT
 def fade_in(b_obj, frame, frame_duration, **kwargs):
     alpha = get_from_kwargs(kwargs, 'alpha', 1)
     offset_for_slots = get_from_kwargs(kwargs, 'offset_for_slots', None)
+    viewport = get_from_kwargs(kwargs, 'viewport', "material")
 
     obj = get_obj(b_obj)
 
-    set_alpha_and_keyframe(obj, 0, int(frame), offset_for_slots=offset_for_slots)
-    set_alpha_and_keyframe(obj, alpha, int(frame + frame_duration), offset_for_slots=offset_for_slots)
+    set_alpha_and_keyframe(obj, 0, int(frame), offset_for_slots=offset_for_slots, viewport=viewport)
+    set_alpha_and_keyframe(obj, alpha, int(frame + frame_duration), offset_for_slots=offset_for_slots, viewport=viewport)
 
     if frame_duration == 1:
         unhide_frm(b_obj, frame + frame_duration)
@@ -5895,9 +5900,9 @@ def fade_in(b_obj, frame, frame_duration, **kwargs):
     # recursively_fade_in(obj,alpha,frame,frame_duration)
 
 
-def recursively_fade_in(obj, alpha, frame, frame_duration):
-    set_alpha_and_keyframe(obj, 0, frame)
-    set_alpha_and_keyframe(obj, alpha, frame + frame_duration)
+def recursively_fade_in(obj, alpha, frame, frame_duration, viewport="material"):
+    set_alpha_and_keyframe(obj, 0, frame, viewport=viewport)
+    set_alpha_and_keyframe(obj, alpha, frame + frame_duration, viewport=viewport)
 
     for child in obj.children:
         print("DEPRECATED: fade in recursively " + child.name)
@@ -5913,7 +5918,7 @@ def change_alpha_of_material(mat, from_value=0, to_value=1, begin_time=0, transi
         raise "Cannot change Alpha for non BSDF nodes"
 
 
-def change_alpha(b_obj, frame, frame_duration, alpha=0):
+def change_alpha(b_obj, frame, frame_duration, alpha=0, viewport = "material"):
     """
     fade out b_object and hide it from scene
     it is recursively applied to all the children
@@ -5927,8 +5932,8 @@ def change_alpha(b_obj, frame, frame_duration, alpha=0):
     """
     obj = get_obj(b_obj)
     alpha0 = get_alpha_at_current_keyframe(obj, frame)
-    set_alpha_and_keyframe(obj, alpha0, frame)
-    set_alpha_and_keyframe(obj, alpha, frame + frame_duration)
+    set_alpha_and_keyframe(obj, alpha0, frame, viewport=viewport)
+    set_alpha_and_keyframe(obj, alpha, frame + frame_duration, viewport=viewport)
 
 
 def change_shader_value(b_object, node, input, initial_value=0, final_value=1, frame=0,
@@ -5963,7 +5968,7 @@ def fade_out(b_obj, frame, frame_duration, alpha=0, handwriting=False, **kwargs)
         hide_frm(b_obj, frame + frame_duration)
 
 
-def fade_out_quickly(obj, frame, frame_duration):
+def fade_out_quickly(obj, frame, frame_duration, viewport="material"):
     """
     quick fade out assumes that the object was fully visible at the time of disappearance
     :param obj:
@@ -5971,16 +5976,16 @@ def fade_out_quickly(obj, frame, frame_duration):
     :param frame_duration:
     :return:
     """
-    set_alpha_and_keyframe(obj, 1, frame)
-    set_alpha_and_keyframe(obj, 0, frame + frame_duration)
+    set_alpha_and_keyframe(obj, 1, frame, viewport=viewport)
+    set_alpha_and_keyframe(obj, 0, frame + frame_duration, viewport=viewport)
 
 
-def recursive_fade_out(obj, frame, frame_duration, handwriting=False, alpha=0, slot=0):
+def recursive_fade_out(obj, frame, frame_duration, handwriting=False, alpha=0, slot=0, viewport="material"):
     # retrieve current alpha state  to fade out from the current state
     if not "hand_written" in obj.name or handwriting:
         alpha0 = get_alpha_at_current_keyframe(obj, frame, slot)
-        set_alpha_and_keyframe(obj, alpha0, frame)
-        set_alpha_and_keyframe(obj, alpha, frame + frame_duration)
+        set_alpha_and_keyframe(obj, alpha0, frame, viewport=viewport)
+        set_alpha_and_keyframe(obj, alpha, frame + frame_duration, viewport=viewport)
 
     for child in obj.children:
         recursive_fade_out(child, frame, frame_duration, alpha=alpha)
