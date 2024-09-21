@@ -36,7 +36,7 @@
       <excludeFolder url="file://$MODULE_DIR$/video_short_moebius/media/svg" />
       <excludeFolder url="file://$MODULE_DIR$/video_primes2/media" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.11 (BlenderMathAnim)" jdkType="Python SDK" />
+    <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

@@ -32,8 +32,8 @@ class TexBObject(BObject):
         typeface = self.get_from_kwargs('typeface', 'default')
         name = self.get_from_kwargs('name', 'Extended_Tex')
         self.text_only = self.get_from_kwargs('text_only', False)
-        location = self.get_from_kwargs('location',Vector())
-        rotation_euler = self.get_from_kwargs('rotation_euler',[0,0,0])
+        location = self.get_from_kwargs('location', Vector())
+        rotation_euler = self.get_from_kwargs('rotation_euler', [0, 0, 0])
         if 'rotation_quaternion' or 'rotation_euler' in kwargs:
             pass
         else:
@@ -62,13 +62,13 @@ class TexBObject(BObject):
                                  **kwargs)
             )
 
-        self.get_from_kwargs('bevel',0) # remove bevel to not interfer with mesh-objects
-        super().__init__(children=self.objects,location=location,rotation_euler=rotation_euler, **kwargs)
+        self.get_from_kwargs('bevel', 0)  # remove bevel to not interfer with mesh-objects
+        super().__init__(children=self.objects, location=location, rotation_euler=rotation_euler, **kwargs)
         for sub_objects in self.objects:
             sub_objects.ref_obj.parent = self.ref_obj
 
         self.morph_counter = 0  # controls the position that is morphed to
-        self.created_null_curves = self.objects[0].created_null_curves # create reference to newly created letters
+        self.created_null_curves = self.objects[0].created_null_curves  # create reference to newly created letters
 
     def get_number_of_expressions(self):
         return len(self.objects)
@@ -96,18 +96,17 @@ class TexBObject(BObject):
 
         return self.write_index(0, begin_time=begin_time, transition_time=transition_time)
 
-
     def write_index(self, expression_index, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
         ibpy.link(self.ref_obj)
         self.objects[expression_index].write(begin_time=begin_time, transition_time=transition_time)
-        return begin_time+transition_time
+        return begin_time + transition_time
 
     def move(self, direction, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for obj in self.objects:
             obj.move(direction, begin_time=begin_time, transition_time=transition_time)
-        return begin_time+transition_time
+        return begin_time + transition_time
 
-    def next(self, letter_range=None, img_letter_range=None,begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
+    def next(self, letter_range=None, img_letter_range=None, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
         """
         the first object in self.objects remains the main object
         the next object in self.objects is always converted into a shape key transformation for the first object
@@ -123,15 +122,15 @@ class TexBObject(BObject):
             img_letter_range = [0, len(self.objects[1].letters)]
 
         # all data of the morph is stored in one single data struct
-        if isinstance(self.objects[0].color,list):
+        if isinstance(self.objects[0].color, list):
             color_src = self.objects[0].color
         else:
-            color_src=[self.objects[0].color]
+            color_src = [self.objects[0].color]
 
-        if isinstance(self.objects[1].color,list):
+        if isinstance(self.objects[1].color, list):
             color_img = self.objects[1].color
         else:
-            color_img=[self.objects[1].color]
+            color_img = [self.objects[1].color]
 
         self.objects[0].add_to_morph_chain(self.objects[1],
                                            letter_range, img_letter_range,
@@ -144,13 +143,13 @@ class TexBObject(BObject):
         # dest_name=self.objects[self.morph_counter+1].ref_obj.name
         self.objects.pop(1)
         self.morph_counter += 1  # is needed for the correct change of colors
-        return begin_time+transition_time
+        return begin_time + transition_time
 
     def perform_morphing(self):
         for obj in self.objects:
             obj.perform_morphing()
 
-    def morph_and_move(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def morph_and_move(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
 
         bb1 = self.get_first_text_bounding_box()
         bb2 = self.get_text_bounding_box()
@@ -165,7 +164,7 @@ class TexBObject(BObject):
         shift = -0.5 * Vector([bb3[3] - bb3[0] - bb1[3] + bb1[0], 0, 0])
 
         self.move(direction=shift, begin_time=begin_time, transition_time=transition_time)
-        return begin_time+transition_time
+        return begin_time + transition_time
 
     def get_location(self, letter=0):
         return self.ref_obj.location
@@ -178,20 +177,21 @@ class TexBObject(BObject):
         :return:
         '''
 
-        bounds =[part.get_text_bounding_box() for part in self.objects]
-        x_min=min([x[0] for x in bounds])
-        y_min=min([x[1] for x in bounds])
-        z_min=min([x[2] for x in bounds])
-        x_max=max([x[3] for x in bounds])
-        y_max=max([x[4] for x in bounds])
-        z_max=max([x[5] for x in bounds])
-        return [x_min,y_min,z_min,x_max,y_max,z_max]
+        bounds = [part.get_text_bounding_box() for part in self.objects]
+        x_min = min([x[0] for x in bounds])
+        y_min = min([x[1] for x in bounds])
+        z_min = min([x[2] for x in bounds])
+        x_max = max([x[3] for x in bounds])
+        y_max = max([x[4] for x in bounds])
+        z_max = max([x[5] for x in bounds])
+        return [x_min, y_min, z_min, x_max, y_max, z_max]
 
     def get_first_text_bounding_box(self):
         return self.objects[0].get_text_bounding_box()
 
     def get_second_text_bounding_box(self):
         return self.objects[1].get_text_bounding_box()
+
 
 class FastTexBObject(SVGBObject):
     """
@@ -210,7 +210,7 @@ class FastTexBObject(SVGBObject):
         self.min_length = 1  # don't know what this is for yet
         self.reindex_points_before_morph = True
         self.text_only = self.get_from_kwargs('text_only', False)
-        self.recreate = self.get_from_kwargs('recreate',False)
+        self.recreate = self.get_from_kwargs('recreate', False)
 
         if 'vert_align_centers' not in kwargs:
             kwargs['vert_align_centers'] = True
@@ -252,7 +252,7 @@ class FastTexBObject(SVGBObject):
             if not os.path.exists(template):
                 raise Warning(r'Can\'t find template tex file for that font.')
 
-        self.path = tex_to_svg_file(expression, template, self.typeface, self.text_only,self.recreate)
+        self.path = tex_to_svg_file(expression, template, self.typeface, self.text_only, self.recreate)
 
     def open_path_object_from(self, b_obj, re_index=True):
         ref = b_obj.ref_obj
@@ -307,8 +307,8 @@ class SimpleTexBObject(SVGBObject):
         self.centered = self.get_from_kwargs('centered', False)
         self.typeface = self.get_from_kwargs('typeface', 'default')
         self.text_only = self.get_from_kwargs('text_only', False)
-        self.recreate = self.get_from_kwargs('recreate',False)
-        self.center_letters_origin = self.get_from_kwargs('center_letters_origin',False)
+        self.recreate = self.get_from_kwargs('recreate', False)
+        self.center_letters_origin = self.get_from_kwargs('center_letters_origin', False)
         if 'rotation_quaternion' in kwargs:
             pass
         elif 'rotation_euler' not in kwargs:
@@ -351,7 +351,7 @@ class SimpleTexBObject(SVGBObject):
         self.copies_of_letters = []
         # take care of shadows
         for c in self.ref_obj.children:
-            ibpy.set_shadow_of_object(c,self.shadow)
+            ibpy.set_shadow_of_object(c, self.shadow)
 
         ende = time.perf_counter()
         # print("construction of "+self.ref_obj.name+" took "+str(ende-start)+" s.")
@@ -398,16 +398,25 @@ class SimpleTexBObject(SVGBObject):
                 z_max = box[5]
         return [x_min, y_min, z_min, x_max, y_max, z_max]
 
-
     def get_letters(self):
         return self.letters
 
+    def get_copy_of_letters(self, letter_list=None):
+        if letter_list is None:
+            letter_list = []
+        copies = []
+        for idx in letter_list:
+            letter_copy = self.letters[idx].copy(clear_animation_data=True)
+            self.copies_of_letters.append(letter_copy)
+            copies.append(letter_copy)
+        return copies
+
     def copy(self, letter_range=None):
         if 'name' in self.kwargs_copy:
-            name = "Copy_of_"+self.kwargs_copy.pop('name')
+            name = "Copy_of_" + self.kwargs_copy.pop('name')
         else:
-            name="Copy_of_"+self.name
-        c = SimpleTexBObject(self.expression_copy,name = name,**self.kwargs_copy)
+            name = "Copy_of_" + self.name
+        c = SimpleTexBObject(self.expression_copy, name=name, **self.kwargs_copy)
         return c
 
     def remove_letter(self, letter, ipby=None):
@@ -422,13 +431,13 @@ class SimpleTexBObject(SVGBObject):
     # additional Animations ###
     ###########################
 
-    def to_second_shape(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def to_second_shape(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for letter in self.letters:
             # shape keys
             ref_char1 = letter.ref_obj
-            start_frame=begin_time*FRAME_RATE
-            end_frame=(begin_time+transition_time)*FRAME_RATE
-            if len(ref_char1.data.shape_keys.key_blocks)>1:
+            start_frame = begin_time * FRAME_RATE
+            end_frame = (begin_time + transition_time) * FRAME_RATE
+            if len(ref_char1.data.shape_keys.key_blocks) > 1:
                 eval_time = ref_char1.data.shape_keys.key_blocks[-2].frame
                 ref_char1.data.shape_keys.eval_time = eval_time
                 ref_char1.data.shape_keys.keyframe_insert(data_path='eval_time', frame=start_frame)
@@ -454,9 +463,10 @@ class SimpleTexBObject(SVGBObject):
                 ref_char1.data.shape_keys.keyframe_insert(data_path='eval_time', frame=end_frame)
                 ref_char1.data.shape_keys.eval_time = 0
 
-    def shader_value(self,old_value,new_value,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def shader_value(self, old_value, new_value, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for letter in self.letters:
-            letter.shader_value(old_value=old_value,new_value=new_value,begin_time=begin_time,transition_time=transition_time)
+            letter.shader_value(old_value=old_value, new_value=new_value, begin_time=begin_time,
+                                transition_time=transition_time)
 
     def transform_mesh(self, transformation, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
 
@@ -486,7 +496,7 @@ class SimpleTexBObject(SVGBObject):
 
     def write(self, letter_set=None, letter_range=None, letters=None, begin_time=0,
               transition_time=OBJECT_APPEARANCE_TIME, alpha=1,
-              writing=True, sorting=None, order=None,verbose=False):
+              writing=True, sorting=None, order=None, verbose=False):
         """
         write expression, just the outline is drawn for each letter then the letter fades in
         :param letter_set:
@@ -500,7 +510,7 @@ class SimpleTexBObject(SVGBObject):
         :return:
         """
 
-        if sorting=='natural':
+        if sorting == 'natural':
             for render in self.rendered_objects:
                 ibpy.link(render)
                 ibpy.set_origin(render, type='ORIGIN_GEOMETRY')
@@ -544,7 +554,7 @@ class SimpleTexBObject(SVGBObject):
             rows = []
             # extended letters like fraction lines, backets or borderlines are captured as special objects
             specials = []
-            extension_parameter = 15.3 # it is chosen such that a minus sign is still not a special letter
+            extension_parameter = 15.3  # it is chosen such that a minus sign is still not a special letter
             for i, letter in enumerate(selected_letters):
                 bb = ibpy.get_bounding_box_for_letter(letter)
                 ratio = (bb[3] - bb[0]) / (bb[4] - bb[1])
@@ -616,14 +626,12 @@ class SimpleTexBObject(SVGBObject):
                 if not self.shadow:
                     curve3.visible_shadow = False
 
-            apply_material(curve, self.color_map[letter], emission=self.emission, brighter=self.brighter,**self.kwargs)
-            apply_material(curve2, self.color_map[letter], emission=50, brighter=self.brighter,**self.kwargs)
+            apply_material(curve, self.color_map[letter], emission=self.emission, brighter=self.brighter, **self.kwargs)
+            apply_material(curve2, self.color_map[letter], emission=50, brighter=self.brighter, **self.kwargs)
             ibpy.set_shadow_of_object(curve2, self.shadow)
 
             if writing:
                 link(curve2)
-                if self.center_letters_origin:
-                    ibpy.set_origin(b_curve2,type='ORIGIN_GEOMETRY')
                 if int(frames_per_shape) > 0:
                     set_bevel_factor_and_keyframe(curve2_data, 0, frame - 1)
                     frame1 = frame + np.maximum(1, int(0.9 * frames_per_shape))
@@ -631,29 +639,37 @@ class SimpleTexBObject(SVGBObject):
                     set_bevel_factor_and_keyframe(curve2_data, 0.75, frame1)
                     frame2 = frame + np.maximum(1, int(frames_per_shape))
                     duration = np.maximum(5, frame2 - frame1)
-                    render.appear(alpha=alpha,begin_time=frame1 / FRAME_RATE, transition_time=duration / FRAME_RATE, silent=True)
+                    render.appear(alpha=alpha, begin_time=frame1 / FRAME_RATE, transition_time=duration / FRAME_RATE,
+                                  silent=True)
                     set_bevel_factor_and_keyframe(curve2_data, 1, frame2)
                     fade_out(b_curve2, frame2, duration, handwriting=True)
                 else:
-                    render.appear(alpha=alpha,begin_time=frame / FRAME_RATE, transition_time=1 / FRAME_RATE, silent=True)
+                    render.appear(alpha=alpha, begin_time=frame / FRAME_RATE, transition_time=1 / FRAME_RATE,
+                                  silent=True)
                     set_bevel_factor_and_keyframe(curve2_data, 0, frame)
                     set_bevel_factor_and_keyframe(curve2_data, 1, frame + 1)
                     fade_out(b_curve2, frame, 10, handwriting=True)
             else:
                 if int(frames_per_shape) > 0:
                     set_alpha_and_keyframe(curve, 0, frame)
-                    render.appear(alpha=alpha,begin_time=frame / FRAME_RATE, transition_time=frames_per_shape / FRAME_RATE,
+                    render.appear(alpha=alpha, begin_time=frame / FRAME_RATE,
+                                  transition_time=frames_per_shape / FRAME_RATE,
                                   silent=True)
                 else:
-                    render.appear(alpha=alpha,begin_time=frame / FRAME_RATE, transition_time=0, silent=True)
+                    render.appear(alpha=alpha, begin_time=frame / FRAME_RATE, transition_time=0, silent=True)
 
             if self.outlined:
-                b_curve3.appear(alpha=alpha,begin_time=frame / FRAME_RATE, transition_time=frames_per_shape / FRAME_RATE,
+                b_curve3.appear(alpha=alpha, begin_time=frame / FRAME_RATE,
+                                transition_time=frames_per_shape / FRAME_RATE,
                                 silent=True)
                 if self.center_letters_origin:
-                    ibpy.set_origin(b_curve3,type='ORIGIN_GEOMETRY')
+                    ibpy.set_origin(b_curve3, type='ORIGIN_GEOMETRY')
+
+            if self.center_letters_origin:
+                ibpy.set_origin(letter, type='ORIGIN_GEOMETRY')
+
         if verbose:
-            print("Wrote: "+self.name+" at "+str(begin_time))
+            print("Wrote: " + self.name + " at " + str(begin_time))
         return begin_time + transition_time
 
     def appear(self, letter_set=None, letter_range=None, begin_time=0, transition_time=0, **kwargs):
@@ -666,14 +682,14 @@ class SimpleTexBObject(SVGBObject):
         :param kwargs:
         :return:
         """
-        writing = get_from_kwargs(kwargs,'writing',True)
+        writing = get_from_kwargs(kwargs, 'writing', True)
         self.write(letter_set=letter_set, letter_range=letter_range, begin_time=begin_time,
                    transition_time=transition_time, writing=writing)
 
-    def change_alpha(self,alpha=1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
-        [letter.change_alpha(alpha=alpha,begin_time=begin_time,transition_time=transition_time) for letter in self.letters]
-        return begin_time+transition_time
-
+    def change_alpha(self, alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        [letter.change_alpha(alpha=alpha, begin_time=begin_time, transition_time=transition_time) for letter in
+         self.letters]
+        return begin_time + transition_time
 
     def align(self, other, char_index=0, other_char_index=0):
         # align with other
@@ -683,7 +699,6 @@ class SimpleTexBObject(SVGBObject):
         diff = other.letters[other_char_index].ref_obj.location[0] - self.letters[char_index].ref_obj.location[0]
         for letter in self.letters:
             letter.ref_obj.location[0] += diff
-
 
     def batch_replace(self, b_tex_obj, src_ranges=None, img_ranges=None, shifts=[[0, 0]], begin_time=0,
                       transition_time=DEFAULT_ANIMATION_TIME):
@@ -699,10 +714,9 @@ class SimpleTexBObject(SVGBObject):
                          transition_time=transition_time, morphing=False)
         self.perform_morphing()
 
-
     def replace(self, b_tex_obj, src_letter_range=None, img_letter_range=None, rescale=[1, 1, 1], shift=[0, 0],
                 begin_time=0,
-                transition_time=OBJECT_APPEARANCE_TIME, morphing=True, keep_color=False,in_place=False):
+                transition_time=OBJECT_APPEARANCE_TIME, morphing=True, keep_color=False, in_place=False):
         """
         this is supposed to be a one-time replacement
         the replaced object cannot be changed again.
@@ -736,12 +750,12 @@ class SimpleTexBObject(SVGBObject):
 
         self.add_to_morph_chain(b_tex_obj, src_letter_range, img_letter_range, rescale, shift,
                                 src_color, img_color,
-                                begin_time=begin_time, transition_time=transition_time, keep_color=keep_color,in_place=in_place)
+                                begin_time=begin_time, transition_time=transition_time, keep_color=keep_color,
+                                in_place=in_place)
         if morphing:
             self.perform_morphing()
         if begin_time is not None:
             return begin_time + transition_time
-
 
     def replace2(self, b_tex_obj, src_letter_range=None, img_letter_range=None, rescale=[1, 1, 1], shift=[0, 0],
                  begin_time=0,
@@ -792,13 +806,11 @@ class SimpleTexBObject(SVGBObject):
             for i in range(src_letter_range[0], src_letter_range[1]):
                 self.letters[i].disappear(begin_time=begin_time + transition_time, transition_time=0)
 
-
     def grow_letter(self, index, final_scale=1, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
         letter = self.letters[index]
         letter.appear(begin_time=begin_time, transition_time=transition_time)
         letter.grow(final_scale, begin_time=begin_time, transition_time=transition_time)
         self.write(letter_set={index}, begin_time=begin_time * 1.02, transition_time=0)
-
 
     def move_to_match_letter(self, target=None, src_letter_index=0, target_letter_index=0, begin_time=0,
                              transition_time=DEFAULT_ANIMATION_TIME):
@@ -816,22 +828,67 @@ class SimpleTexBObject(SVGBObject):
 
         ibpy.set_location(self, location=target_location)
 
-
-    def move_copy_of_letter_to(self,index,target_location,begin_time=0,rescale=1,transition_time=DEFAULT_ANIMATION_TIME):
+    def move_copy_of_letter_to(self, index, target_location, begin_time=0, rescale=1,
+                               transition_time=DEFAULT_ANIMATION_TIME):
         if self.copies_of_letters is None:
-            self.copies_of_letters=[]
+            self.copies_of_letters = []
 
         letter_copy = self.letters[index].copy(clear_animation_data=True)
         self.copies_of_letters.append(letter_copy)
-        letter_copy.appear(begin_time=begin_time,transition_time=0)
-        if rescale!=1:
-            letter_copy.rescale(rescale=rescale,begin_time=begin_time,transition_time=transition_time)
-        return letter_copy.move_to(target_location=target_location,begin_time=begin_time,transition_time=transition_time)
+        letter_copy.appear(begin_time=begin_time, transition_time=0)
+        if rescale != 1:
+            letter_copy.rescale(rescale=rescale, begin_time=begin_time, transition_time=transition_time)
+        return letter_copy.move_to(target_location=target_location, begin_time=begin_time,
+                                   transition_time=transition_time)
 
+    def move_copy_to(self, target=None, src_letter_indices=[], target_letter_indices=[], begin_time=0, new_color=None,
+                     offset=[0, 0, 0],
+                     transition_time=DEFAULT_ANIMATION_TIME, detour=None):
+        if not target:
+            target = self
+
+        scale = self.ref_obj.scale
+        shift = ibpy.get_location(target) - ibpy.get_location(self)
+        # the shift has to be rotated by the rotation of the target and source
+
+        rotation = self.ref_obj.matrix_world.copy()
+        rotation.invert()
+        shift = rotation.to_3x3() @ shift
+        for i in range(3):
+            shift[i] /= scale[i]
+            shift[i] += offset[i]
+
+        # set default range
+        if len(src_letter_indices) == 0:
+            src_letter_indices = list(range(len(self.letters)))
+        if len(target_letter_indices) == 0:
+            target_letter_indices = list(range(len(target.letters)))
+
+        for src_index, target_index in zip(src_letter_indices, target_letter_indices):
+            letter_copy = self.letters[src_index].copy(clear_animation_data=True)
+            self.copies_of_letters.append(letter_copy)
+            letter_copy.appear(begin_time=begin_time, transition_time=0, clear_data=True)  # make copy appear
+            if detour:
+                detour = to_vector(detour)
+                letter_copy.move_to(target_location=get_location(letter_copy) + detour, begin_time=begin_time,
+                                    transition_time=transition_time / 4)
+                letter_copy.move_to(target_location=detour + shift + get_location(target.letters[target_index]),
+                                    begin_time=begin_time + transition_time / 4, transition_time=transition_time / 2)
+                letter_copy.move_to(target_location=+shift + get_location(target.letters[target_index]),
+                                    begin_time=begin_time + transition_time * 0.75, transition_time=transition_time / 4)
+            else:
+                letter_copy.move_to(target_location=shift + ibpy.get_location(target.letters[target_index]),
+                                    begin_time=begin_time, transition_time=transition_time)
+            if new_color:
+                letter_copy.change_color(new_color=new_color, begin_time=begin_time + transition_time / 2,
+                                         transition_time=transition_time / 2)
+        return begin_time + transition_time
 
     def move_letters_to(self, target=None, src_letter_indices=[], target_letter_indices=[], begin_time=0,
-                        offsets=[[0, 0, 0]],
+                        offsets=None,
                         transition_time=DEFAULT_ANIMATION_TIME):
+        if offsets is None:
+            offsets = [[0, 0, 0]]
         if not target:
             target = self
 
@@ -841,6 +898,9 @@ class SimpleTexBObject(SVGBObject):
             shift[i] /= scale[i]
 
         count = 0
+        # first save all target locations. If letters are interchanged, we need to get locations before the letters are moved
+        # otherwise only one of the exchanged letters will move
+        target_locations = []
         for src_index, target_index in zip(src_letter_indices, target_letter_indices):
             letter = self.letters[src_index]
             if len(offsets) > count:
@@ -848,10 +908,13 @@ class SimpleTexBObject(SVGBObject):
             else:
                 offset = offsets[-1]
             offset = to_vector(offset)
-            letter.move_to(target_location=shift + ibpy.get_location(target.letters[target_index]) + offset,
-                           begin_time=begin_time, transition_time=transition_time)
+            target_locations.append(shift + ibpy.get_location(target.letters[target_index]) + offset)
             count += 1
 
+        for src_index,loc in zip(src_letter_indices,target_locations):
+            self.letters[src_index].move_to(target_location=loc,begin_time=begin_time, transition_time=transition_time)
+
+        return transition_time + begin_time
 
     def move_null_curves_to(self, target=None, null_indices=[], target_letter_indices=[], begin_time=0,
                             offsets=[[0, 0, 0]],
@@ -875,7 +938,6 @@ class SimpleTexBObject(SVGBObject):
             letter.move_to(target_location=shift + ibpy.get_location(target.letters[target_index]) + offset,
                            begin_time=begin_time, transition_time=transition_time)
             count += 1
-
 
     def move_copy_to_and_remove(self, target=None, src_letter_indices=[], target_letter_indices=[], begin_time=0,
                                 rescale=None,
@@ -920,8 +982,7 @@ class SimpleTexBObject(SVGBObject):
                              frame_duration=transition_time * FRAME_RATE)
             copy.disappear(begin_time=remove_time, transition_time=transition_time / 2)
         target.write(letter_set=target_letter_indices, begin_time=remove_time, transition_time=0)
-        return begin_time+transition_time
-
+        return begin_time + transition_time
 
     def move_copy_of_null_to_and_remove(self, target=None, null_indices=[], target_letter_indices=[], begin_time=0,
                                         rescale=None,
@@ -945,51 +1006,6 @@ class SimpleTexBObject(SVGBObject):
                              frame_duration=transition_time * FRAME_RATE)
             copy.disappear(begin_time=remove_time, transition_time=transition_time / 2)
         target.write(letter_set=target_letter_indices, begin_time=begin_time + transition_time, transition_time=0)
-
-    def move_copy_to(self, target=None, src_letter_indices=[], target_letter_indices=[], begin_time=0, new_color=None,
-                     offset=[0, 0, 0],
-                     transition_time=DEFAULT_ANIMATION_TIME, detour=None):
-        if not target:
-            target = self
-
-        scale = self.ref_obj.scale
-        shift = ibpy.get_location(target) - ibpy.get_location(self)
-        # the shift has to be rotated by the rotation of the target and source
-        # TODO there is a big problem that all letters are centered vertically and the vertical shift has to be introduced manually by an offset
-        rotation = self.ref_obj.matrix_world.copy()
-        rotation.invert()
-        shift = rotation.to_3x3()@shift
-        for i in range(3):
-            shift[i] /= scale[i]
-            shift[i] += offset[i]
-
-        #set default range
-        if len(src_letter_indices)==0:
-            src_letter_indices=list(range(len(self.letters)))
-        if len(target_letter_indices)==0:
-            target_letter_indices=list(range(len(target.letters)))
-
-        for src_index, target_index in zip(src_letter_indices, target_letter_indices):
-            letter_copy = self.letters[src_index].copy(clear_animation_data=True)
-            self.copies_of_letters.append(letter_copy)
-            letter_copy.appear(begin_time=begin_time, transition_time=0, clear_data=True)  # make copy appear
-            if detour:
-                detour = to_vector(detour)
-                letter_copy.move_to(target_location=get_location(letter_copy) + detour, begin_time=begin_time,
-                                    transition_time=transition_time / 4)
-                letter_copy.move_to(target_location=detour + shift + get_location(target.letters[target_index]),
-                                    begin_time=begin_time + transition_time / 4, transition_time=transition_time / 2)
-                letter_copy.move_to(target_location=+shift + get_location(target.letters[target_index]),
-                                    begin_time=begin_time + transition_time * 0.75, transition_time=transition_time / 4)
-            else:
-                letter_copy.move_to(target_location=shift + ibpy.get_location(target.letters[target_index]),
-                                    begin_time=begin_time, transition_time=transition_time)
-            if new_color:
-                letter_copy.change_color(new_color=new_color, begin_time=begin_time + transition_time / 2,
-                                         transition_time=transition_time / 2)
-        return begin_time+transition_time
-
-
 
     def move_copy_of_null_to(self, target=None, null_indices=[], target_letter_indices=[], begin_time=0, new_color=None,
                              offset=[0, 0, 0],
@@ -1026,30 +1042,27 @@ class SimpleTexBObject(SVGBObject):
                 letter_copy.change_color(new_color=new_color, begin_time=begin_time - transition_time / 2,
                                          transition_time=transition_time)
 
-
     def disappear_copies(self, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME, display=None):
         for letter_copy in self.copies_of_letters:
             letter_copy.disappear(begin_time=begin_time, transition_time=transition_time)
             # if display:
             #     display.hide(letter_copy,begin_time=begin_time,transition_time=transition_time)
             letter_copy.toggle_hide(begin_time=(begin_time + transition_time))
-        return begin_time+transition_time
-
+        return begin_time + transition_time
 
     def hide(self, begin_time=0):
         for letter in self.letters:
             letter.toggle_hide(begin_time=begin_time)
 
-
     def disappear(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         super().disappear(begin_time=begin_time, transition_time=transition_time, **kwargs)
-        half = transition_time/2
-        delta = half/np.maximum(1,len(self.letters))
-        for i,l in enumerate(self.letters):
-            l.disappear(begin_time=begin_time+i*delta, transition_time=half, **kwargs)
-        for i,l in enumerate(self.created_null_curves):
-            l.appeared=True # make sure it is said to true otherwise the null curves won't disappear
-            l.disappear(begin_time=begin_time+i*delta,transition_time=half,**kwargs)
+        half = transition_time / 2
+        delta = half / np.maximum(1, len(self.letters))
+        for i, l in enumerate(self.letters):
+            l.disappear(begin_time=begin_time + i * delta, transition_time=half, **kwargs)
+        for i, l in enumerate(self.created_null_curves):
+            l.appeared = True  # make sure it is said to true otherwise the null curves won't disappear
+            l.disappear(begin_time=begin_time + i * delta, transition_time=half, **kwargs)
         return begin_time + transition_time
 
     def change_color(self, new_color, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
@@ -1061,10 +1074,11 @@ class SimpleTexBObject(SVGBObject):
                 letter.change_color(new_color=new_color, begin_time=begin_time, transition_time=transition_time)
         return begin_time + transition_time
 
-    def change_color_of_letters(self,indices,new_color,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def change_color_of_letters(self, indices, new_color, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for i in indices:
-            self.change_color_of_letter(i,new_color=new_color,begin_time=begin_time,transition_time=transition_time)
-        return begin_time+transition_time
+            self.change_color_of_letter(i, new_color=new_color, begin_time=begin_time, transition_time=transition_time)
+        return begin_time + transition_time
+
     def change_color_of_letter(self, index, new_color, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         self.letters[index].change_color(new_color=new_color, begin_time=begin_time, transition_time=transition_time)
         return begin_time + transition_time
@@ -1114,11 +1128,11 @@ class SimpleTexBObject(SVGBObject):
     def add_to_morph_chain(self, simple_tex_obj, src_letter_range, img_letter_range, rescale, shift, src_colors,
                            img_colors,
                            begin_time=0,
-                           transition_time=OBJECT_APPEARANCE_TIME, keep_color=False,in_place=True):
+                           transition_time=OBJECT_APPEARANCE_TIME, keep_color=False, in_place=True):
         self.morph_obj_chain.append(
             [simple_tex_obj, src_letter_range, img_letter_range,
              rescale, shift, src_colors, img_colors, begin_time,
-             transition_time, keep_color,in_place])
+             transition_time, keep_color, in_place])
 
     def perform_morphing(self):
 
@@ -1160,7 +1174,7 @@ class SimpleTexBObject(SVGBObject):
 
     def morph_to(self, simple_tex_object, src_letter_range, img_letter_range, rescale, shift,
                  color_src, color_img, begin_time=0,
-                 transition_time=OBJECT_APPEARANCE_TIME, keep_color=False,in_place=False):
+                 transition_time=OBJECT_APPEARANCE_TIME, keep_color=False, in_place=False):
         """
         In this method the morph chain will be written to blender. It is important to
         first get the entire morph chain since the number of splines and points have to be held
@@ -1181,7 +1195,6 @@ class SimpleTexBObject(SVGBObject):
         else:
             start_frame = None
 
-
         from_curves = self.rendered_objects[src_letter_range[0]:src_letter_range[1]]
         to_curves = simple_tex_object.rendered_objects[img_letter_range[0]:img_letter_range[1]]
 
@@ -1189,7 +1202,7 @@ class SimpleTexBObject(SVGBObject):
         final = to_curves
 
         # look for the same letters in source and target and try to match them
-        destinations = self.find_lazy_morph_plan(initial, final,in_place=in_place)
+        destinations = self.find_lazy_morph_plan(initial, final, in_place=in_place)
         destinations2 = self.find_bounding_box_morph_plan(initial, final)
 
         # fill destinations into destinations2
@@ -1478,7 +1491,7 @@ class SimpleTexBObject(SVGBObject):
 
         return destinations
 
-    def find_lazy_morph_plan(self, expr1, expr2, min_length=None,in_place=False):
+    def find_lazy_morph_plan(self, expr1, expr2, min_length=None, in_place=False):
         # max length of substring we bother keeping
         # Increments if shared is still too long
         if min_length is None:
@@ -1551,7 +1564,7 @@ class SimpleTexBObject(SVGBObject):
             if not os.path.exists(template):
                 raise Warning(r'Can\'t find template tex file for that font.')
 
-        self.path = tex_to_svg_file(expression, template, self.typeface, self.text_only,self.recreate)
+        self.path = tex_to_svg_file(expression, template, self.typeface, self.text_only, self.recreate)
 
     def open_path_object_from(self, b_obj, re_index=True, index=0):
         ref = b_obj.ref_obj
@@ -1703,6 +1716,7 @@ class SimpleTexBObject(SVGBObject):
                 for spline in splines:
                     self.max_point_count = np.maximum(self.max_point_count, len(ibpy.get_bezier_points(spline)))
 
+
 class MultiLineTexBObject(SimpleTexBObject):
     """
     multiple lines in one BObject,
@@ -1771,18 +1785,18 @@ class MultiLineTexBObject(SimpleTexBObject):
                         letter.appear(begin_time=t0, transition_time=ddt, **kwargs)
                         t0 += ddt
 
-    def write_line(self,line_index,letters=None,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
+    def write_line(self, line_index, letters=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         if not self.appeared:
             ibpy.link(self)
-        line=self.lines[line_index]
-        if len(line)>0:
+        line = self.lines[line_index]
+        if len(line) > 0:
             # sort letters from left to right
-            line.sort(key=lambda x:x.ref_obj.location[0])
+            line.sort(key=lambda x: x.ref_obj.location[0])
             if letters is not None:
                 selected = [line[i] for i in letters]
             else:
                 selected = line
-            self.write(letters=selected,begin_time=begin_time,transition_time=transition_time)
+            self.write(letters=selected, begin_time=begin_time, transition_time=transition_time)
         return begin_time + transition_time
 
     def appear_line(self, line_index, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
@@ -1796,7 +1810,7 @@ class MultiLineTexBObject(SimpleTexBObject):
             for letter in line:
                 letter.appear(begin_time=t0, transition_time=dt, **kwargs)
                 t0 += dt
-        return begin_time+transition_time
+        return begin_time + transition_time
 
     def disappear(self, alpha=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         t0 = begin_time
@@ -1875,8 +1889,8 @@ class MultiLineTexBObject(SimpleTexBObject):
             x_min, x_max, y_min, y_max, z_min, z_max = ibpy.analyse_bound_box(letter)
             for i in range(n - 1, -1, -1):  # look in reversed order, since the upper lines have higher y-values
                 y_center = (y_max + y_min) / 2
-                if y_bins[2 * i + 1] > y_center > y_bins[2 * i]: #(change made 2023-10-09 penrose video)
-                # if y_bins[i + 1] > y_center > y_bins[ i]:
+                if y_bins[2 * i + 1] > y_center > y_bins[2 * i]:  #(change made 2023-10-09 penrose video)
+                    # if y_bins[i + 1] > y_center > y_bins[ i]:
                     self.lines[n - i - 1].append(letter)
 
     def count_number_of_lines(self):
@@ -1895,7 +1909,7 @@ class MultiLineTexBObject(SimpleTexBObject):
             if not os.path.exists(template):
                 raise Warning(r'Can\'t find template tex file for that font.')
 
-        self.path = tex_to_svg_file(expression, template, self.typeface, self.text_only,self.recreate)
+        self.path = tex_to_svg_file(expression, template, self.typeface, self.text_only, self.recreate)
 
 
 class Row:
@@ -1927,18 +1941,18 @@ class Row:
 #######################
 
 
-def tex_to_svg_file(expression, template_tex_file, typeface, text_only,recreate=False):
+def tex_to_svg_file(expression, template_tex_file, typeface, text_only, recreate=False):
     path = os.path.join(
         SVG_DIR,
         # tex_title(expression, typeface)
         hashed_tex(expression, typeface)
     ) + ".svg"
-    if not recreate and  os.path.exists(path):
+    if not recreate and os.path.exists(path):
         return path
 
-    tex_file = generate_tex_file(expression, template_tex_file, typeface, text_only,recreate)
-    dvi_file = tex_to_dvi(tex_file,recreate)
-    return dvi_to_svg(dvi_file,recreate)
+    tex_file = generate_tex_file(expression, template_tex_file, typeface, text_only, recreate)
+    dvi_file = tex_to_dvi(tex_file, recreate)
+    return dvi_to_svg(dvi_file, recreate)
 
 
 def get_null():
@@ -1947,7 +1961,7 @@ def get_null():
     return "/dev/null"
 
 
-def dvi_to_svg(dvi_file,recreate):
+def dvi_to_svg(dvi_file, recreate):
     """
     Converts a dvi, which potentially has multiple slides, into a
     directory full of enumerated svgs corresponding with these slides.
@@ -2033,12 +2047,14 @@ def tex_title(expression, typeface):
         name = name[0:200]
     return str(name)
 
+
 def hashed_tex(expression, typeface):
     string = expression + typeface
     hasher = hashlib.sha256(string.encode())
     return hasher.hexdigest()[:16]
 
-def generate_tex_file(expression, template_tex_file, typeface, text_only,recreate):
+
+def generate_tex_file(expression, template_tex_file, typeface, text_only, recreate):
     result = os.path.join(
         TEX_DIR,
         # tex_title(expression, typeface)
@@ -2067,7 +2083,7 @@ def generate_tex_file(expression, template_tex_file, typeface, text_only,recreat
     return result
 
 
-def tex_to_dvi(tex_file,recreate):
+def tex_to_dvi(tex_file, recreate):
     result = tex_file.replace(".tex", ".dvi")
     if recreate or not os.path.exists(result):
         commands = [

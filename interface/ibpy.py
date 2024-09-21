@@ -964,7 +964,8 @@ def get_collection(name="Collection"):
 
 def link(obj, collection=None):
     obj = get_obj(obj)
-
+    if collection is None:
+        collection = 'Scene Collection' # default collection
     # check, whether already linked object is added to the correct collection
     # (when a composed objected is added to a custom collection the children are automatically added to the default collection
     # A necessary relinking is initiated
@@ -6551,6 +6552,10 @@ def get_scale_at_frame(b_obj, frame):
     set_frame(frame_old)
     return scale
 
+def get_rotation(b_obj):
+    obj = get_obj(b_obj)
+    rotation=obj.rotation_euler.copy()
+    return rotation
 
 def get_rotation_at_frame(b_obj, frame):
     obj = get_obj(b_obj)
@@ -6676,12 +6681,16 @@ def clear_parent(bob):
     obj.parent = None
 
 
-def get_oldest_parent(obj):
+def get_oldest_parent(bob):
+    obj = get_obj(bob)
     if obj.parent:
         return get_oldest_parent(obj.parent)
     else:
         return obj
 
+def get_parent(bob):
+    obj = get_obj(bob)
+    return obj.parent
 
 def set_parent(b_obj, parent):
     obj = get_obj(b_obj)
