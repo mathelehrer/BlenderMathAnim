@@ -1873,3 +1873,229 @@ class NodeFromCollection(GeometryNodesModifier):
         create_geometry_line(tree, [collectionInfo,
                                 trafo
                                     ], out=self.group_outputs.inputs[0])
+
+
+class DipoleModifier(GeometryNodesModifier):
+    def __init__(self, name='DipoleModifier', resolution=5, **kwargs):
+        """
+        creates an object that generates a scalar field corresponding to a customizable dipole
+        :param name:
+
+        :param kwargs:
+        """
+
+        self.resolution = resolution
+        self.kwargs = kwargs
+        super().__init__(name, automatic_layout=False)
+
+    def create_node(self, tree):
+
+        # create colorful wireframe of sphere
+        left = -20
+        out = tree.nodes.get("Group Output")
+        links = tree.links
+
+        reset_left = left
+
+
+        # create input vector
+
+        direction = InputVector(tree,location=(left,0),name="Direction",value=Vector([0,0,1]))
+        rotation = InputVector(tree,location=(left,-1),name="Rotation",value=Vector())
+        scale = InputValue(tree,location=(left,-2),name="Scale",value=0.1)
+
+        transformation = make_function(tree,functions={
+            "direction":"dir,s,scale,angles,rot_euler"
+        },name="Transformation",inputs=["dir","angles","s"],outputs=["direction"],
+                                       scalars=["s"],vectors=["dir","angles","direction"] )
+        attr = StoredNamedAttribute(tree, location=(left, 2), name="Temperature", data_type="FLOAT", value=result.outputs[0])
+        pi_offset = InputVector(tree, location=(left, 1), value=[0, 0, pi])
+        left += 1
+        extrude_mesh = ExtrudeMesh(tree, location=(left, 2), offset=pi_offset.std_out)
+        left += 1
+        sub_div = SubdivideMesh(tree, location=(left, 1), level=5)
+        left += 1
+        position = Position(tree, location=(left - 1, 3.5))
+
+        # trafo
+        # similar for the other components
+        x = "pos_x,cos,pos_z,pi,-,sin,*"
+        y = "pos_x,sin,pos_z,pi,-,sin,*"
+        z = "pos_z,pi,-,cos"
+
+        trafo = make_function(tree, functions={
+            "position": [
+                x,
+                y,
+                z,
+            ]
+        }, inputs=["pos"], outputs=["position"],
+                              vectors=["pos", "position"],
+                              name="Map2Sphere", location=(left, 1.5), hide=True)
+        links.new(position.std_out, trafo.inputs["pos"])
+        left += 1
+        set_pos = SetPosition(tree, location=(left, 1), position=trafo.outputs["position"])
+        left += 1
+        wireframe = WireFrame(tree, radius=0.01, location=(left, 1))
+        left += 1
+        material = gradient_from_attribute(name="Index",
+                                           function="fac," + str(self.resolution * 4) + ",/",
+                                           attr_name="Index",
+                                           gradient={0: [1, 0, 0, 1], 1: [0.8, 0, 1, 1]},
+                                           alpha_function={
+                                               "Alpha": "1,alpha,alpha,*,-"})  # fading in from -1 to 0 fading out from 0 to 1
+        mat = SetMaterial(tree, location=(left, 1), material=material)
+        self.materials.append(material)
+        left += 1
+        join = JoinGeometry(tree, location=(left, 0))
+        create_geometry_line(tree,
+                             [line, mesh2points, points2verts, attr, extrude_mesh, sub_div, set_pos, wireframe, mat,
+                              join])
+
+        # horizontal grid lines
+        left = reset_left
+
+        line = MeshLine(tree, location=(left, -2), count=self.resolution * 2, start_location=Vector([0, 0, pi]),
+                        end_location=Vector([0, 0, 0]))
+        left += 1
+        mesh2points = MeshToPoints(tree, location=(left, -2))
+        left += 1
+        points2verts = PointsToVertices(tree, location=(left, -2))
+        index = Index(tree, location=(left, 1))
+        left += 1
+        attr = StoredNamedAttribute(tree, location=(left, -2), name="Index2", data_type="INT", value=index.std_out)
+        tau_offset = InputVector(tree, location=(left, -1), value=[tau, 0, 0])
+        left += 1
+        extrude_mesh = ExtrudeMesh(tree, location=(left, -2), offset=tau_offset.std_out)
+        left += 1
+        sub_div = SubdivideMesh(tree, location=(left, -1), level=5)
+        left += 1
+        position = Position(tree, location=(left - 1, -2))
+
+        # trafo
+
+        trafo = make_function(tree, functions={
+            "position": [
+                x,
+                y,
+                z,
+            ]
+        }, inputs=["pos"], outputs=["position"],
+                              vectors=["pos", "position", "shift"],
+                              name="Map2Sphere2", location=(left, -1.5), hide=True)
+        links.new(position.std_out, trafo.inputs["pos"])
+        left += 1
+        set_pos = SetPosition(tree, location=(left, -1), position=trafo.outputs["position"])
+        left += 1
+        wireframe = WireFrame(tree, radius=0.01, location=(left, -1))
+        left += 1
+        material = gradient_from_attribute(name="Index2",
+                                           function="fac," + str(self.resolution * 2) + ",/",
+                                           attr_name="Index2",
+                                           gradient={0: [0, 1, 0.95, 1], 1: [1, 1, 0, 1]},
+                                           alpha_function={
+                                               "Alpha": "1,alpha,alpha,*,-"})  # fading in from -1 to 0 fading out from 0 to 1
+        mat = SetMaterial(tree, location=(left, 1), material=material)
+        self.materials.append(material)
+        left += 1
+
+        create_geometry_line(tree,
+                             [line, mesh2points, points2verts, attr, extrude_mesh, sub_div, set_pos, wireframe, mat,
+                              join], out=out.inputs["Geometry"])
+
+        # recalculate position of vertices
+        sphere_position = Position(tree, location=(left, 2))
+        lambda_node = InputValue(tree, name='lambda', location=(left, 1.5), value=-1)
+
+        # create default spherical geometry
+
+        sphere = UVSphere(tree, location=(left, 1), rings=2 ** self.resolution, segments=2 ** (self.resolution + 1),
+                          hide=False)
+        sphere_node_pos = left
+        left += 1
+        # convert to polar coordinates
+        cart2polar = make_function(tree, name="PolarCoordinates", hide=True, location=(left, -2),
+                                   functions={
+                                       "r": "position,length",
+                                       "theta": "position_z,acos",
+                                       "phi": "position_y,position_x,atan2"
+                                   }, inputs=["position"], outputs=["r", "theta", "phi"],
+                                   vectors=["position"], scalars=["r", "theta", "phi"])
+
+        tree.links.new(sphere_position.std_out, cart2polar.inputs["position"])
+        left += 1
+
+        # create spherical harmonics terms
+        y_lm = SphericalHarmonics(self.l, self.m, "theta", "phi")
+
+        real_part = ExpressionConverter(y_lm.real()).postfix()
+        imag_part = ExpressionConverter(y_lm.imag()).postfix()
+
+        if len(imag_part.strip()) == 0:
+            imag_part = "0"
+        print("real: ", real_part)
+        print("imag: ", imag_part)
+
+        compute_y_lm = make_function(tree, name="Y_lm", functions={
+            "re": real_part,
+            "im": imag_part
+        },
+                                     inputs=["theta", "phi"],
+                                     outputs=["re", "im"], scalars=["re", "im", "theta", "phi"], hide=True,
+                                     location=(left, -2))
+
+        tree.links.new(cart2polar.outputs["theta"], compute_y_lm.inputs["theta"])
+        tree.links.new(cart2polar.outputs["phi"], compute_y_lm.inputs["phi"])
+        left += 1
+
+        complex_analyser = make_function(tree, name="Analyser", hide=True, functions={
+            "re": "re",
+            "im": "im",
+            "absolute": "re,re,*,im,im,*,+,sqrt",
+            "phase": "im,re,atan2"
+        }, inputs=["re", "im"], outputs=["re", "im", "absolute", "phase"], scalars=["re", "im", "absolute", "phase"],
+                                         location=(left, -2))
+
+        tree.links.new(compute_y_lm.outputs["re"], complex_analyser.inputs["re"])
+        tree.links.new(compute_y_lm.outputs["im"], complex_analyser.inputs["im"])
+        left += 1
+
+        if self.m >= 0:
+            selection = "re"
+        else:
+            selection = "im"
+
+        # transform position
+        vals = ["re", "im", "absolute", "phase"]
+        trafo = make_function(tree, name="Transformation", hide=True, functions={
+            "position": "position," + selection + ",abs,lambda,lambda,0,>,*,*,1,lambda,lambda,0,>,*,-,+,scale"
+            # function is only active for lambda>0
+        }, inputs=["lambda", "position"] + vals, outputs=["position"],
+                              vectors=["position"],
+                              scalars=["lambda"] + vals, location=(left, -2))
+
+        tree.links.new(sphere_position.std_out, trafo.inputs["position"])
+        for val in vals:
+            tree.links.new(complex_analyser.outputs[val], trafo.inputs[val])
+        tree.links.new(lambda_node.std_out, trafo.inputs["lambda"])
+        left += 1
+        join_full = JoinGeometry(tree, location=(left, 0))
+        left += 1
+        alpha_attr = StoredNamedAttribute(tree, location=(left, 0), name="Alpha", value=lambda_node.std_out)
+        left += 1
+        set_pos = SetPosition(tree, location=(left, 0), position=trafo.outputs["position"])
+        left += 1
+        # store the phase for coloring
+        attr = StoredNamedAttribute(tree, location=(sphere_node_pos + 1, 1), name="Phase",
+                                    value=complex_analyser.outputs["phase"])
+        material = phase2hue_material(attribute_names=["Phase"], alpha_function={"Alpha": "alpha"}, **self.kwargs)
+        self.materials.append(material)
+
+        color = SetMaterial(tree, location=(sphere_node_pos + 2, 1), material=material)
+
+        smooth = SetShadeSmooth(tree, location=(left, 0))
+
+        create_geometry_line(tree, [sphere, attr, color, join_full, alpha_attr, set_pos, smooth],
+                             out=self.group_outputs.inputs[0])
+        create_geometry_line(tree, [join, join_full])
+
