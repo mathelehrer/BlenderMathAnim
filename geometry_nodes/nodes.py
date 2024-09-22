@@ -10,14 +10,16 @@ from mathematics.groups.e8 import E8Lattice
 
 pi = np.pi
 
+
 def maybe_flatten(list_of_lists):
     result = []
     for part in list_of_lists:
-        if isinstance(part,list):
-            result+=part
+        if isinstance(part, list):
+            result += part
         else:
             result.append(part)
     return result
+
 
 class Node:
     def __init__(self, tree, location=(0, 0), width=200, height=100, **kwargs):
@@ -36,7 +38,7 @@ class Node:
             self.node.label = self.name
             self.node.name = self.name
         else:
-            self.name="DefaultGeometryNode"
+            self.name = "DefaultGeometryNode"
         if 'label' in kwargs:
             label = kwargs.pop('label')
             self.node.label = label
@@ -84,6 +86,7 @@ class BlueNode(Node):
 
         # changed from self.std_out=self.outputs["Value"] to accomodate Vector outputs
         self.std_out = self.outputs[0]
+
 
 #################
 #  green nodes  #
@@ -150,15 +153,16 @@ class ExtrudeMesh(GreenNode):
         else:
             self.tree.links.new(offset_scale, self.node.inputs['Offset Scale'])
 
-        if isinstance(offset, (Vector,list)):
-            vector = InputVector(tree,location=(self.location[0]-1,self.location[1]-1),value=offset)
-            self.tree.links.new(vector.std_out,self.node.inputs['Offset'])
+        if isinstance(offset, (Vector, list)):
+            vector = InputVector(tree, location=(self.location[0] - 1, self.location[1] - 1), value=offset)
+            self.tree.links.new(vector.std_out, self.node.inputs['Offset'])
         else:
             self.tree.links.new(offset, self.node.inputs['Offset'])
         if selection:
             self.tree.links.new(selection, self.node.inputs['Selection'])
         if mesh:
             self.tree.links.new(mesh, self.node.inputs['Mesh'])
+
 
 class MeshToCurve(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -182,6 +186,7 @@ class MeshToCurve(GreenNode):
             self.tree.links.new(selection, self.node.inputs['Selection'])
         if mesh:
             self.tree.links.new(mesh, self.node.inputs['Mesh'])
+
 
 class MeshToPoints(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -208,10 +213,11 @@ class MeshToPoints(GreenNode):
         if mesh:
             self.tree.links.new(mesh, self.node.inputs['Mesh'])
         if position:
-            if isinstance(position,(Vector,list)):
-                self.node.inputs['Position'].default_value=position
+            if isinstance(position, (Vector, list)):
+                self.node.inputs['Position'].default_value = position
             else:
-                self.tree.links.new(position,self.node.inputs['Position'])
+                self.tree.links.new(position, self.node.inputs['Position'])
+
 
 class SubdivideMesh(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -233,10 +239,10 @@ class SubdivideMesh(GreenNode):
         if mesh:
             self.tree.links.new(mesh, self.node.inputs['Mesh'])
         if level:
-            if isinstance(level,int):
-                self.node.inputs['Level'].default_value=level
+            if isinstance(level, int):
+                self.node.inputs['Level'].default_value = level
             else:
-                self.tree.links.new(level,self.node.inputs['Level'])
+                self.tree.links.new(level, self.node.inputs['Level'])
 
 
 # point operations
@@ -264,6 +270,7 @@ class Points(GreenNode):
         else:
             self.tree.links.new(radius, self.node.inputs['Radius'])
 
+
 class PointsToVertices(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  points=None,
@@ -278,6 +285,7 @@ class PointsToVertices(GreenNode):
             self.tree.links.new(points, self.node.inputs['Points'])
         if selection:
             self.tree.links.new(selection, self.node.inputs['Selection'])
+
 
 class PointsToCurve(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -296,6 +304,7 @@ class PointsToCurve(GreenNode):
 
         self.geometry_out = self.node.outputs['Curves']
         self.geometry_in = self.node.inputs['Points']
+
 
 # curve primitives
 
@@ -328,6 +337,7 @@ class CurveCircle(GreenNode):
             self.node.inputs['Resolution'].default_value = resolution
         else:
             self.tree.links.new(resolution, self.node.inputs['Resolution'])
+
 
 # curve operations
 class CurveToMesh(GreenNode):
@@ -444,6 +454,7 @@ class CubeMesh(GreenNode):
         super().__init__(tree, location=location, **kwargs)
 
         self.geometry_out = self.node.outputs['Mesh']
+        self.uv_out = self.node.outputs['UV Map']
 
         if isinstance(vertices_x, int):
             self.node.inputs['Vertices X'].default_value = vertices_x
@@ -463,6 +474,52 @@ class CubeMesh(GreenNode):
             self.node.inputs['Size'].default_value = size
         else:
             self.tree.links.new(size, self.node.inputs['Size'])
+
+
+class CylinderMesh(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 fill_type="TRIANGLE_FAN", vertices=32, side_segments=1, fill_segments=1, radius=1, depth=2, **kwargs
+                 ):
+        """
+        :param fill_type: ('NONE', 'NGON', 'TRIANGLE_FAN')
+
+        """
+
+        self.node = tree.nodes.new(type="GeometryNodeMeshCylinder")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs['Mesh']
+        self.top_out = self.node.outputs['Top']
+        self.side_out = self.node.outputs['Side']
+        self.bottom_out = self.node.outputs['Bottom']
+        self.uv_out = self.node.outputs['UV Map']
+
+        self.node.fill_type = fill_type
+
+        if isinstance(vertices, int):
+            self.node.inputs['Vertices'].default_value = vertices
+        else:
+            self.node.inputs['Vertices'] = vertices
+
+        if isinstance(side_segments, int):
+            self.node.inputs['Side Segments'].default_value = side_segments
+        else:
+            self.node.inputs['Side Segments'] = side_segments
+
+        if isinstance(fill_segments, int):
+            self.node.inputs['Fill Segments'].default_value = fill_segments
+        else:
+            self.node.inputs['Fill Segments'] = fill_segments
+
+        if isinstance(radius, (int, float)):
+            self.node.inputs['Radius'].default_value = radius
+        else:
+            self.node.inputs['Radius'] = radius
+
+        if isinstance(depth, (int, float)):
+            self.node.inputs['Depth'].default_value = depth
+        else:
+            self.node.inputs['Depth'] = depth
 
 
 class InstanceOnPoints(GreenNode):
@@ -795,9 +852,10 @@ class NamedAttribute(RedNode):
         else:
             self.tree.links.new(name, self.node.inputs['Name'])
 
+
 class CollectionInfo(RedNode):
     def __init__(self, tree, location=(0, 0),
-                    transform_space='ORIGINAL',
+                 transform_space='ORIGINAL',
                  collection_name="Collection",
                  separate_children=False,
                  reset_children=False, **kwargs
@@ -812,9 +870,9 @@ class CollectionInfo(RedNode):
         self.node = tree.nodes.new(type="GeometryNodeCollectionInfo")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out=self.node.outputs['Instances']
-        self.node.transform_space=transform_space
-        self.node.inputs[0].default_value=ibpy.get_collection(collection_name)
+        self.geometry_out = self.node.outputs['Instances']
+        self.node.transform_space = transform_space
+        self.node.inputs[0].default_value = ibpy.get_collection(collection_name)
         if isinstance(separate_children, bool):
             self.node.inputs[1].default_value = separate_children
         else:
@@ -823,6 +881,7 @@ class CollectionInfo(RedNode):
             self.node.inputs[2].default_value = reset_children
         else:
             self.tree.links.new(reset_children, self.node.inputs[2])
+
 
 class SetMaterial(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -843,15 +902,15 @@ class SetMaterial(GreenNode):
             self.tree.links.new(selection, self.node.inputs['Selection'])
         if callable(material):  # call passed function
             if "attribute_names" in kwargs:
-                material= material(attribute_names=kwargs.pop("attribute_names"), **kwargs)
+                material = material(attribute_names=kwargs.pop("attribute_names"), **kwargs)
             else:
                 material = material(**kwargs)
             self.inputs['Material'].default_value = material
         elif isinstance(material, str):  # create material from passed string
             material = get_material(material, **kwargs)
             self.inputs['Material'].default_value = material
-        elif isinstance(material,bpy.types.Material):
-            self.inputs['Material'].default_value=material
+        elif isinstance(material, bpy.types.Material):
+            self.inputs['Material'].default_value = material
         else:  # link socket
             self.tree.links.new(material, self.inputs['Material'])
 
@@ -1054,6 +1113,7 @@ class SceneTime(RedNode):
 
         self.std_out = self.node.outputs[std_out]
 
+
 # Function Nodes #
 class InputBoolean(RedNode):
     def __init__(self, tree, location=(0, 0), value=True, **kwargs):
@@ -1062,6 +1122,7 @@ class InputBoolean(RedNode):
 
         self.std_out = self.node.outputs['Boolean']
         self.node.boolean = value
+
 
 class InputVector(RedNode):
     def __init__(self, tree, location=(0, 0), value=Vector()
@@ -1273,8 +1334,8 @@ class VectorMath(BlueNode):
 
 
 class Switch(BlueNode):
-    def __init__(self, tree, location=(0, 0),input_type="Geometry",
-                 switch=None,false=None,true=None,**kwargs):
+    def __init__(self, tree, location=(0, 0), input_type="Geometry",
+                 switch=None, false=None, true=None, **kwargs):
 
         self.node = tree.nodes.new(type="GeometryNodeSwitch")
         super().__init__(tree, location=location, **kwargs)
@@ -1285,13 +1346,13 @@ class Switch(BlueNode):
         self.false = self.node.inputs['False']
 
         if switch:
-            tree.links.new(switch,self.switch)
+            tree.links.new(switch, self.switch)
 
         if true:
-            tree.links.new(true,self.true)
+            tree.links.new(true, self.true)
 
         if false:
-            tree.links.new(false,self.false)
+            tree.links.new(false, self.false)
 
 
 # zones
@@ -1356,14 +1417,14 @@ class Simulation(GreenNode):
         if geometry is not None:
             tree.links.new(geometry, self.simulation_input.inputs['Geometry'])
 
-    def add_socket(self, socket_type='GEOMETRY', name="socket",value=0):
+    def add_socket(self, socket_type='GEOMETRY', name="socket", value=0):
         """
         :param socket_type: 'FLOAT', 'INT', 'BOOLEAN', 'VECTOR', 'ROTATION', 'STRING', 'RGBA', 'OBJECT', 'IMAGE', 'GEOMETRY', 'COLLECTION', 'TEXTURE', 'MATERIAL'
         :param name:
         :return:
         """
         self.simulation_output.state_items.new(socket_type, name)
-        self.simulation_input.outputs[name].default_value=value
+        self.simulation_input.outputs[name].default_value = value
 
     def join_in_geometries(self, out_socket_name=None):
         join = JoinGeometry(self.tree, geometry=self.simulation_input.outputs[0:-1])
@@ -2427,7 +2488,7 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
                 new_node_math = tree.nodes.new(type='ShaderNodeMath')
                 new_node_math.operation = 'LOGARITHM'
                 new_node_math.label = 'lg'
-                new_node_math.inputs[1].default_value=10
+                new_node_math.inputs[1].default_value = 10
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.out = new_node_math.outputs['Value']

@@ -42,7 +42,7 @@ class Sphere(GeoBObject):
                             enter_editmode=False,
                             align='WORLD',smooth=smooth)
 
-        super().__init__(obj=sphere, name=name, **kwargs)
+        super().__init__(obj=sphere, name=name, smooth=smooth,**kwargs)
         self.label_sep = 2 * r  # override default label separation
 
 

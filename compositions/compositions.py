@@ -20,6 +20,7 @@ def create_composition(denoising=None):
     links = bpy.context.scene.node_tree.links
 
     composite = nodes["Composite"]
+    composite.use_alpha=False
     layers = nodes["Render Layers"]
     if denoising:
         denoise = nodes.new(type="CompositorNodeDenoise")

@@ -1043,6 +1043,7 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
         engine = BLENDER_EEVEE
     scene.render.engine = engine
     scene.render.use_compositing = True
+
     scene.render.resolution_percentage = resolution_percentage
     scene.render.film_transparent = transparent
 
