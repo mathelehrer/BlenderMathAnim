@@ -65,6 +65,8 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
                 material = ibpy.get_material(col, **kwargs)
             elif callable(col):
                 material = col(**kwargs)
+            else: # assuming that the color is already a material
+                material =col
 
             if shading is None:
                 obj.active_material = material
@@ -842,9 +844,9 @@ def dipole_texture(**kwargs):
                           location=(left, -1))
     links.new(coords.std_out, polar.inputs["uv"])
 
-    a = InputValue(tree, location=(left, 1.5), value=1)
-    alpha = InputValue(tree, location=(left, 1), value=-1)
-    b = InputValue(tree, location=(left, 0.5), value=-1)
+    a = InputValue(tree, location=(left, 1.5), value=0,name="xValue")
+    alpha = InputValue(tree, location=(left, 1), value=0,name="yValue")
+    b = InputValue(tree, location=(left, 0.5), value=0, name="zValue")
     left += 1
 
     in_sockets = [a.std_out, alpha.std_out, b.std_out, polar.outputs["theta"], polar.outputs["phi"]]
@@ -879,7 +881,7 @@ def dipole_texture(**kwargs):
                          values=[0, 0.5, 1],
                          colors=[[0, 1, 0, 1], [0, 0, 1, 1], [1, 0, 1, 1]], hide=False)
 
-    left += 1
+    left += 2
 
     mix = MixRGB(tree, location=(left, 0), factor=abs_temp.outputs["positive"],
                  color1=ramp_pos.std_out, color2=ramp_neg.std_out)

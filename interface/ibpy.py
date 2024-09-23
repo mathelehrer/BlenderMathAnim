@@ -2217,6 +2217,13 @@ def get_geometry_node_from_modifier(modifier, label):
     return None
 
 
+def get_shader_node_from_material(material, label):
+    for n in material.node_tree.nodes:
+        if label in n.label or label in n.name:
+            return n
+    return None
+
+
 def get_material_from_modifier(modifier, label):
     for n in modifier.nodes:
         if label in n.label or label in n.name:
@@ -2784,6 +2791,10 @@ def change_mixer(mixer, begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME 
 
 def change_default_value(slot, from_value, to_value, begin_time=None, transition_time=None, data_path="default_value",
                          begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME * FRAME_RATE):
+    # dig down to the slot, if the node is given instead
+    if isinstance(slot,bpy.types.ShaderNodeValue):
+        slot=slot.outputs[0]
+
     if begin_time:
         begin_frame = begin_time * FRAME_RATE
     else:

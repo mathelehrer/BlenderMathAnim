@@ -17,7 +17,7 @@ from utils.constants import FRAME_RATE
 from utils.kwargs import get_from_kwargs
 
 pi = np.pi
-tau = 2*pi
+tau = 2 * pi
 r2 = np.sqrt(2)
 r3 = np.sqrt(3)
 
@@ -33,7 +33,7 @@ class GeometryNodesModifier:
     base class that organizes the boilerplate code for the creation of a geometry nodes modifier
     """
 
-    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True,group_input=False):
+    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True, group_input=False):
         tree = get_node_tree(name=name, type='GeometryNodeTree')
 
         # if  materials are created inside the geometry node, they are stored inside the following array
@@ -50,7 +50,7 @@ class GeometryNodesModifier:
         if automatic_layout:
             layout(tree)
         self.tree = tree
-        self.nodes=self.tree.nodes # needed for ibpy.get_geometry_node_from_modifier
+        self.nodes = self.tree.nodes  # needed for ibpy.get_geometry_node_from_modifier
 
     def create_node(self, tree):
         """
@@ -74,8 +74,9 @@ class SpherePreImage(GeometryNodesModifier):
     theta-phi-domain that gets mapped into a sphere
 
     """
+
     def __init__(self):
-        super().__init__(name="SpherePreImage",automatic_layout=False)
+        super().__init__(name="SpherePreImage", automatic_layout=False)
 
     def create_node(self, tree):
         out = tree.nodes.get("Group Output")
@@ -84,26 +85,26 @@ class SpherePreImage(GeometryNodesModifier):
         left = -15
         reset_left = left
         # vertical grid lines
-        line = MeshLine(tree,location=(left,2),count=20,start_location=Vector(),end_location=Vector([tau,0,0]))
-        left+=1
-        mesh2points = MeshToPoints(tree,location=(left,2))
-        left+=1
-        points2verts = PointsToVertices(tree,location=(left,2))
-        index = Index(tree,location=(left,1))
-        left+=1
-        attr = StoredNamedAttribute(tree,location=(left,2),name="Index",data_type="INT",value=index.std_out)
-        pi_offset = InputVector(tree,location=(left,1),value=[0,0,pi])
-        left+=1
-        extrude_mesh = ExtrudeMesh(tree,location=(left,2),offset=pi_offset.std_out)
-        left+=1
-        sub_div = SubdivideMesh(tree,location=(left,1),level=5)
-        left+=1
-        lmda = InputValue(tree,location=(left-1,4),value=0,name="lambda")
-        position = Position(tree,location=(left-1,3.5))
+        line = MeshLine(tree, location=(left, 2), count=20, start_location=Vector(), end_location=Vector([tau, 0, 0]))
+        left += 1
+        mesh2points = MeshToPoints(tree, location=(left, 2))
+        left += 1
+        points2verts = PointsToVertices(tree, location=(left, 2))
+        index = Index(tree, location=(left, 1))
+        left += 1
+        attr = StoredNamedAttribute(tree, location=(left, 2), name="Index", data_type="INT", value=index.std_out)
+        pi_offset = InputVector(tree, location=(left, 1), value=[0, 0, pi])
+        left += 1
+        extrude_mesh = ExtrudeMesh(tree, location=(left, 2), offset=pi_offset.std_out)
+        left += 1
+        sub_div = SubdivideMesh(tree, location=(left, 1), level=5)
+        left += 1
+        lmda = InputValue(tree, location=(left - 1, 4), value=0, name="lambda")
+        position = Position(tree, location=(left - 1, 3.5))
         shift = InputVector(tree, location=(left - 1, 3), value=[-4.5, 0, -1.5], name="shift")
-        radius = InputValue(tree, location=(left - 1, 2.5), value=2.5,name="r")
-        selected_index = InputValue(tree,location=(left-1,2),value=0,name="idx0")
-        named_attr = NamedAttribute(tree,location=(left-1,1.5),data_type="INT",name="Index")
+        radius = InputValue(tree, location=(left - 1, 2.5), value=2.5, name="r")
+        selected_index = InputValue(tree, location=(left - 1, 2), value=0, name="idx0")
+        named_attr = NamedAttribute(tree, location=(left - 1, 1.5), data_type="INT", name="Index")
 
         # mega trafo
         # (r cos\phi sin(\theta-pi) + shift_x)*(idx<idx_0)+[(r cos\phi sin(\theta-pi) + shift_x)*lambda+pos_x*(1-lambda)]*(idx=idx_0)+pos_x*(idx>idx_0)
@@ -115,58 +116,62 @@ class SpherePreImage(GeometryNodesModifier):
         equal = "index,idx0,="
         more = "index,idx0,<"
 
-        trafo = make_function(tree,functions={
-            "position":[
-                x+","+more+",*,"+x+",lambda,*,pos_x,1,lambda,-,*,+,"+equal+",*,+,pos_x,"+less+",*,+",
-                y+","+more+",*,"+y+",lambda,*,pos_y,1,lambda,-,*,+,"+equal+",*,+,pos_y,"+less+",*,+",
-                z+","+more+",*,"+z+",lambda,*,pos_z,1,lambda,-,*,+,"+equal+",*,+,pos_z,"+less+",*,+",
-             ]
-        },inputs=["lambda","pos","shift","r","idx0","index"],outputs=["position"],
-        scalars=["lambda","r","idx0","index"],vectors=["pos","position","shift"],name="Map2Sphere",location=(left,1.5),hide=True)
-        links.new(lmda.std_out,trafo.inputs["lambda"])
-        links.new(position.std_out,trafo.inputs["pos"])
-        links.new(radius.std_out,trafo.inputs["r"])
-        links.new(shift.std_out,trafo.inputs["shift"])
-        links.new(named_attr.std_out,trafo.inputs["index"])
-        links.new(selected_index.std_out,trafo.inputs["idx0"])
-        left+=1
-        set_pos = SetPosition(tree,location=(left,1),position=trafo.outputs["position"])
-        left+=1
-        wireframe = WireFrame(tree,location=(left,1))
-        left+=1
+        trafo = make_function(tree, functions={
+            "position": [
+                x + "," + more + ",*," + x + ",lambda,*,pos_x,1,lambda,-,*,+," + equal + ",*,+,pos_x," + less + ",*,+",
+                y + "," + more + ",*," + y + ",lambda,*,pos_y,1,lambda,-,*,+," + equal + ",*,+,pos_y," + less + ",*,+",
+                z + "," + more + ",*," + z + ",lambda,*,pos_z,1,lambda,-,*,+," + equal + ",*,+,pos_z," + less + ",*,+",
+            ]
+        }, inputs=["lambda", "pos", "shift", "r", "idx0", "index"], outputs=["position"],
+                              scalars=["lambda", "r", "idx0", "index"], vectors=["pos", "position", "shift"],
+                              name="Map2Sphere", location=(left, 1.5), hide=True)
+        links.new(lmda.std_out, trafo.inputs["lambda"])
+        links.new(position.std_out, trafo.inputs["pos"])
+        links.new(radius.std_out, trafo.inputs["r"])
+        links.new(shift.std_out, trafo.inputs["shift"])
+        links.new(named_attr.std_out, trafo.inputs["index"])
+        links.new(selected_index.std_out, trafo.inputs["idx0"])
+        left += 1
+        set_pos = SetPosition(tree, location=(left, 1), position=trafo.outputs["position"])
+        left += 1
+        wireframe = WireFrame(tree, location=(left, 1))
+        left += 1
         material = gradient_from_attribute(name="Index",
                                            function="fac,20,/",
                                            attr_name="Index",
-                                           gradient={0:[1,0,0,1],1:[0.8,0,1,1]})
-        mat = SetMaterial(tree,location=(left,1),material=material)
+                                           gradient={0: [1, 0, 0, 1], 1: [0.8, 0, 1, 1]})
+        mat = SetMaterial(tree, location=(left, 1), material=material)
         self.materials.append(material)
-        left+=1
-        join = JoinGeometry(tree,location=(left,0))
-        create_geometry_line(tree,[line,mesh2points,points2verts,attr,extrude_mesh,sub_div,set_pos,wireframe,mat,join])
+        left += 1
+        join = JoinGeometry(tree, location=(left, 0))
+        create_geometry_line(tree,
+                             [line, mesh2points, points2verts, attr, extrude_mesh, sub_div, set_pos, wireframe, mat,
+                              join])
 
         # horizontal grid lines
         left = reset_left
 
-        line = MeshLine(tree,location=(left,-2),count=10,start_location=Vector([0,0,pi]),end_location=Vector([0,0,0]))
-        left+=1
-        mesh2points = MeshToPoints(tree,location=(left,-2))
-        left+=1
-        points2verts = PointsToVertices(tree,location=(left,-2))
-        index = Index(tree,location=(left,1))
-        left+=1
-        attr = StoredNamedAttribute(tree,location=(left,-2),name="Index2",data_type="INT",value=index.std_out)
-        tau_offset = InputVector(tree,location=(left,-1),value=[tau,0,0])
-        left+=1
-        extrude_mesh = ExtrudeMesh(tree,location=(left,-2),offset=tau_offset.std_out)
-        left+=1
-        sub_div = SubdivideMesh(tree,location=(left,-1),level=5)
-        left+=1
-        lmda = InputValue(tree,location=(left-1,-1.5),value=0,name="lambda2")
-        position = Position(tree,location=(left-1,-2))
+        line = MeshLine(tree, location=(left, -2), count=10, start_location=Vector([0, 0, pi]),
+                        end_location=Vector([0, 0, 0]))
+        left += 1
+        mesh2points = MeshToPoints(tree, location=(left, -2))
+        left += 1
+        points2verts = PointsToVertices(tree, location=(left, -2))
+        index = Index(tree, location=(left, 1))
+        left += 1
+        attr = StoredNamedAttribute(tree, location=(left, -2), name="Index2", data_type="INT", value=index.std_out)
+        tau_offset = InputVector(tree, location=(left, -1), value=[tau, 0, 0])
+        left += 1
+        extrude_mesh = ExtrudeMesh(tree, location=(left, -2), offset=tau_offset.std_out)
+        left += 1
+        sub_div = SubdivideMesh(tree, location=(left, -1), level=5)
+        left += 1
+        lmda = InputValue(tree, location=(left - 1, -1.5), value=0, name="lambda2")
+        position = Position(tree, location=(left - 1, -2))
         shift = InputVector(tree, location=(left - 1, -2.5), value=[-4.5, 0, -1.5], name="shift")
-        radius = InputValue(tree, location=(left - 1, -3), value=2.5,name="r")
-        selected_index = InputValue(tree,location=(left-1,-3.5),value=0,name="idx02")
-        named_attr = NamedAttribute(tree,location=(left-1,-4),data_type="INT",name="Index2")
+        radius = InputValue(tree, location=(left - 1, -3), value=2.5, name="r")
+        selected_index = InputValue(tree, location=(left - 1, -3.5), value=0, name="idx02")
+        named_attr = NamedAttribute(tree, location=(left - 1, -4), data_type="INT", name="Index2")
 
         # mega trafo
         # (r cos\phi sin(\theta-pi) + shift_x)*(idx<idx_0)+[(r cos\phi sin(\theta-pi) + shift_x)*lambda+pos_x*(1-lambda)]*(idx=idx_0)+pos_x*(idx>idx_0)
@@ -178,48 +183,52 @@ class SpherePreImage(GeometryNodesModifier):
         equal = "index,idx0,="
         more = "index,idx0,<"
 
-        trafo = make_function(tree,functions={
-            "position":[
-                x+","+more+",*,"+x+",lambda,*,pos_x,1,lambda,-,*,+,"+equal+",*,+,pos_x,"+less+",*,+",
-                y+","+more+",*,"+y+",lambda,*,pos_y,1,lambda,-,*,+,"+equal+",*,+,pos_y,"+less+",*,+",
-                z+","+more+",*,"+z+",lambda,*,pos_z,1,lambda,-,*,+,"+equal+",*,+,pos_z,"+less+",*,+",
-             ]
-        },inputs=["lambda","pos","shift","r","idx0","index"],outputs=["position"],
-        scalars=["lambda","r","idx0","index"],vectors=["pos","position","shift"],name="Map2Sphere",location=(left,-1.5),hide=True)
-        links.new(lmda.std_out,trafo.inputs["lambda"])
-        links.new(position.std_out,trafo.inputs["pos"])
-        links.new(radius.std_out,trafo.inputs["r"])
-        links.new(shift.std_out,trafo.inputs["shift"])
-        links.new(named_attr.std_out,trafo.inputs["index"])
-        links.new(selected_index.std_out,trafo.inputs["idx0"])
-        left+=1
-        set_pos = SetPosition(tree,location=(left,-1),position=trafo.outputs["position"])
-        left+=1
-        wireframe = WireFrame(tree,location=(left,-1))
-        left+=1
+        trafo = make_function(tree, functions={
+            "position": [
+                x + "," + more + ",*," + x + ",lambda,*,pos_x,1,lambda,-,*,+," + equal + ",*,+,pos_x," + less + ",*,+",
+                y + "," + more + ",*," + y + ",lambda,*,pos_y,1,lambda,-,*,+," + equal + ",*,+,pos_y," + less + ",*,+",
+                z + "," + more + ",*," + z + ",lambda,*,pos_z,1,lambda,-,*,+," + equal + ",*,+,pos_z," + less + ",*,+",
+            ]
+        }, inputs=["lambda", "pos", "shift", "r", "idx0", "index"], outputs=["position"],
+                              scalars=["lambda", "r", "idx0", "index"], vectors=["pos", "position", "shift"],
+                              name="Map2Sphere", location=(left, -1.5), hide=True)
+        links.new(lmda.std_out, trafo.inputs["lambda"])
+        links.new(position.std_out, trafo.inputs["pos"])
+        links.new(radius.std_out, trafo.inputs["r"])
+        links.new(shift.std_out, trafo.inputs["shift"])
+        links.new(named_attr.std_out, trafo.inputs["index"])
+        links.new(selected_index.std_out, trafo.inputs["idx0"])
+        left += 1
+        set_pos = SetPosition(tree, location=(left, -1), position=trafo.outputs["position"])
+        left += 1
+        wireframe = WireFrame(tree, location=(left, -1))
+        left += 1
         material = gradient_from_attribute(name="Index2",
                                            function="fac,10,/",
                                            attr_name="Index2",
-                                           gradient={0: [0, 1, 0.95, 1], 1: [1, 1,0, 1]})
+                                           gradient={0: [0, 1, 0.95, 1], 1: [1, 1, 0, 1]})
         mat = SetMaterial(tree, location=(left, 1), material=material)
         self.materials.append(material)
-        left+=1
-        rot = InputVector(tree,location=(left,-1),name='rotation')
-        trafo1 = TransformGeometry(tree,location=(left,0),translation=Vector([4.5,0,1.5]))
-        left+=1
-        trafo2 = TransformGeometry(tree, location=(left, 0),rotation=rot.std_out)
+        left += 1
+        rot = InputVector(tree, location=(left, -1), name='rotation')
+        trafo1 = TransformGeometry(tree, location=(left, 0), translation=Vector([4.5, 0, 1.5]))
+        left += 1
+        trafo2 = TransformGeometry(tree, location=(left, 0), rotation=rot.std_out)
         left += 1
         trafo3 = TransformGeometry(tree, location=(left, 0), translation=Vector([-4.5, 0, -1.5]))
         left += 1
 
-        create_geometry_line(tree,[line,mesh2points,points2verts,attr,extrude_mesh,sub_div,set_pos,wireframe,mat,join,trafo1,trafo2,trafo3],out=out.inputs["Geometry"])
+        create_geometry_line(tree,
+                             [line, mesh2points, points2verts, attr, extrude_mesh, sub_div, set_pos, wireframe, mat,
+                              join, trafo1, trafo2, trafo3], out=out.inputs["Geometry"])
+
 
 class MathematicalSurface(GeometryNodesModifier):
     """
     geometry node setup to display a mathematical surface in explicit form
     """
 
-    def __init__(self, function="x,y,+,2,**", name="(x+y)**2", resolution=100, automatic_layout=False,**kwargs):
+    def __init__(self, function="x,y,+,2,**", name="(x+y)**2", resolution=100, automatic_layout=False, **kwargs):
         self.function = function
         self.resolution = resolution
         self.name = name
@@ -275,7 +284,7 @@ class MathematicalSurface(GeometryNodesModifier):
         left += 1
 
         # custom material that is a gradient in z-direction
-        gradient_material=z_gradient(**self.kwargs)
+        gradient_material = z_gradient(**self.kwargs)
         self.materials.append(gradient_material)
         mat = SetMaterial(tree, location=(left, 0), material=gradient_material)
 
@@ -1559,7 +1568,7 @@ class SphericalHarmonicsNode(GeometryNodesModifier):
     def create_node(self, tree):
         # recalculate position of vertices
         position = Position(tree, location=(-6, 0))
-        lmbda = InputValue(tree,name='lambda',location=(-6,1))
+        lmbda = InputValue(tree, name='lambda', location=(-6, 1))
 
         # convert to polar coordinates
         cart2polar = make_function(tree, name="PolarCoordinates", hide=True, location=(-5, 0),
@@ -1608,14 +1617,14 @@ class SphericalHarmonicsNode(GeometryNodesModifier):
         vals = ["re", "im", "absolute", "phase"]
         trafo = make_function(tree, name="Transformation", hide=True, functions={
             "position": "position,re,abs,lambda,*,1,lambda,-,+,scale"
-        }, inputs=["lambda","position"]+vals, outputs=["position"],
+        }, inputs=["lambda", "position"] + vals, outputs=["position"],
                               vectors=["position"],
-                              scalars=["lambda"]+vals, location=(-2, 0))
+                              scalars=["lambda"] + vals, location=(-2, 0))
 
         tree.links.new(position.std_out, trafo.inputs["position"])
         for val in vals:
             tree.links.new(complex_analyser.outputs[val], trafo.inputs[val])
-        tree.links.new(lmbda.std_out,trafo.inputs["lambda"])
+        tree.links.new(lmbda.std_out, trafo.inputs["lambda"])
         # create default spherical geometry
         sphere = UVSphere(tree, location=(-3, 1), rings=2 ** self.resolution, segments=2 ** (self.resolution + 1),
                           hide=False)
@@ -1631,6 +1640,7 @@ class SphericalHarmonicsNode(GeometryNodesModifier):
 
         create_geometry_line(tree, [sphere, set_pos, attr, color, smooth], out=self.group_outputs.inputs[0])
 
+
 class SphericalHarmonicsNode2(GeometryNodesModifier):
     def __init__(self, l=0, m=0, name='SphericalHarmonics', resolution=5, **kwargs):
         """
@@ -1644,18 +1654,19 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         self.m = m
         self.resolution = resolution
         self.kwargs = kwargs
-        super().__init__(name,automatic_layout=False)
+        super().__init__(name, automatic_layout=False)
 
     def create_node(self, tree):
 
         # create colorful wireframe of sphere
-        left= -20
+        left = -20
         out = tree.nodes.get("Group Output")
         links = tree.links
 
         reset_left = left
         # vertical grid lines
-        line = MeshLine(tree, location=(left, 2), count=self.resolution*4, start_location=Vector(), end_location=Vector([tau, 0, 0]))
+        line = MeshLine(tree, location=(left, 2), count=self.resolution * 4, start_location=Vector(),
+                        end_location=Vector([tau, 0, 0]))
         left += 1
         mesh2points = MeshToPoints(tree, location=(left, 2))
         left += 1
@@ -1679,24 +1690,25 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
 
         trafo = make_function(tree, functions={
             "position": [
-                x ,
-                y ,
-                z ,
+                x,
+                y,
+                z,
             ]
-        }, inputs=[ "pos"], outputs=["position"],
-                               vectors=["pos", "position"],
+        }, inputs=["pos"], outputs=["position"],
+                              vectors=["pos", "position"],
                               name="Map2Sphere", location=(left, 1.5), hide=True)
         links.new(position.std_out, trafo.inputs["pos"])
         left += 1
         set_pos = SetPosition(tree, location=(left, 1), position=trafo.outputs["position"])
         left += 1
-        wireframe = WireFrame(tree, radius=0.01,location=(left, 1))
+        wireframe = WireFrame(tree, radius=0.01, location=(left, 1))
         left += 1
         material = gradient_from_attribute(name="Index",
-                                           function="fac,"+str(self.resolution*4)+",/",
+                                           function="fac," + str(self.resolution * 4) + ",/",
                                            attr_name="Index",
                                            gradient={0: [1, 0, 0, 1], 1: [0.8, 0, 1, 1]},
-                                           alpha_function={"Alpha":"1,alpha,alpha,*,-"}) # fading in from -1 to 0 fading out from 0 to 1
+                                           alpha_function={
+                                               "Alpha": "1,alpha,alpha,*,-"})  # fading in from -1 to 0 fading out from 0 to 1
         mat = SetMaterial(tree, location=(left, 1), material=material)
         self.materials.append(material)
         left += 1
@@ -1708,7 +1720,7 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         # horizontal grid lines
         left = reset_left
 
-        line = MeshLine(tree, location=(left, -2), count=self.resolution*2, start_location=Vector([0, 0, pi]),
+        line = MeshLine(tree, location=(left, -2), count=self.resolution * 2, start_location=Vector([0, 0, pi]),
                         end_location=Vector([0, 0, 0]))
         left += 1
         mesh2points = MeshToPoints(tree, location=(left, -2))
@@ -1729,11 +1741,11 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
 
         trafo = make_function(tree, functions={
             "position": [
-                x ,
-                y ,
+                x,
+                y,
                 z,
             ]
-        }, inputs=[ "pos"], outputs=["position"],
+        }, inputs=["pos"], outputs=["position"],
                               vectors=["pos", "position", "shift"],
                               name="Map2Sphere2", location=(left, -1.5), hide=True)
         links.new(position.std_out, trafo.inputs["pos"])
@@ -1743,10 +1755,11 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         wireframe = WireFrame(tree, radius=0.01, location=(left, -1))
         left += 1
         material = gradient_from_attribute(name="Index2",
-                                           function="fac,"+str(self.resolution*2)+",/",
+                                           function="fac," + str(self.resolution * 2) + ",/",
                                            attr_name="Index2",
                                            gradient={0: [0, 1, 0.95, 1], 1: [1, 1, 0, 1]},
-                                           alpha_function={"Alpha":"1,alpha,alpha,*,-"}) # fading in from -1 to 0 fading out from 0 to 1
+                                           alpha_function={
+                                               "Alpha": "1,alpha,alpha,*,-"})  # fading in from -1 to 0 fading out from 0 to 1
         mat = SetMaterial(tree, location=(left, 1), material=material)
         self.materials.append(material)
         left += 1
@@ -1757,14 +1770,14 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
 
         # recalculate position of vertices
         sphere_position = Position(tree, location=(left, 2))
-        lambda_node = InputValue(tree,name='lambda',location=(left,1.5),value=-1)
+        lambda_node = InputValue(tree, name='lambda', location=(left, 1.5), value=-1)
 
         # create default spherical geometry
 
         sphere = UVSphere(tree, location=(left, 1), rings=2 ** self.resolution, segments=2 ** (self.resolution + 1),
                           hide=False)
-        sphere_node_pos =left
-        left+=1
+        sphere_node_pos = left
+        left += 1
         # convert to polar coordinates
         cart2polar = make_function(tree, name="PolarCoordinates", hide=True, location=(left, -2),
                                    functions={
@@ -1775,7 +1788,7 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
                                    vectors=["position"], scalars=["r", "theta", "phi"])
 
         tree.links.new(sphere_position.std_out, cart2polar.inputs["position"])
-        left+=1
+        left += 1
 
         # create spherical harmonics terms
         y_lm = SphericalHarmonics(self.l, self.m, "theta", "phi")
@@ -1798,7 +1811,7 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
 
         tree.links.new(cart2polar.outputs["theta"], compute_y_lm.inputs["theta"])
         tree.links.new(cart2polar.outputs["phi"], compute_y_lm.inputs["phi"])
-        left+=1
+        left += 1
 
         complex_analyser = make_function(tree, name="Analyser", hide=True, functions={
             "re": "re",
@@ -1810,9 +1823,9 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
 
         tree.links.new(compute_y_lm.outputs["re"], complex_analyser.inputs["re"])
         tree.links.new(compute_y_lm.outputs["im"], complex_analyser.inputs["im"])
-        left+=1
+        left += 1
 
-        if self.m>=0:
+        if self.m >= 0:
             selection = "re"
         else:
             selection = "im"
@@ -1820,63 +1833,67 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         # transform position
         vals = ["re", "im", "absolute", "phase"]
         trafo = make_function(tree, name="Transformation", hide=True, functions={
-            "position": "position,"+selection+",abs,lambda,lambda,0,>,*,*,1,lambda,lambda,0,>,*,-,+,scale" # function is only active for lambda>0
-        }, inputs=["lambda","position"]+vals, outputs=["position"],
+            "position": "position," + selection + ",abs,lambda,lambda,0,>,*,*,1,lambda,lambda,0,>,*,-,+,scale"
+            # function is only active for lambda>0
+        }, inputs=["lambda", "position"] + vals, outputs=["position"],
                               vectors=["position"],
-                              scalars=["lambda"]+vals, location=(left, -2))
+                              scalars=["lambda"] + vals, location=(left, -2))
 
         tree.links.new(sphere_position.std_out, trafo.inputs["position"])
         for val in vals:
             tree.links.new(complex_analyser.outputs[val], trafo.inputs[val])
-        tree.links.new(lambda_node.std_out,trafo.inputs["lambda"])
-        left+=1
-        join_full = JoinGeometry(tree,location=(left,0))
-        left+=1
-        alpha_attr = StoredNamedAttribute(tree,location=(left,0),name="Alpha",value=lambda_node.std_out)
-        left+=1
-        set_pos = SetPosition(tree, location=(left,0), position=trafo.outputs["position"])
-        left+=1
+        tree.links.new(lambda_node.std_out, trafo.inputs["lambda"])
+        left += 1
+        join_full = JoinGeometry(tree, location=(left, 0))
+        left += 1
+        alpha_attr = StoredNamedAttribute(tree, location=(left, 0), name="Alpha", value=lambda_node.std_out)
+        left += 1
+        set_pos = SetPosition(tree, location=(left, 0), position=trafo.outputs["position"])
+        left += 1
         # store the phase for coloring
-        attr = StoredNamedAttribute(tree, location=(sphere_node_pos+1,1), name="Phase", value=complex_analyser.outputs["phase"])
-        material = phase2hue_material(attribute_names=["Phase"], alpha_function = {"Alpha":"alpha"},**self.kwargs)
+        attr = StoredNamedAttribute(tree, location=(sphere_node_pos + 1, 1), name="Phase",
+                                    value=complex_analyser.outputs["phase"])
+        material = phase2hue_material(attribute_names=["Phase"], alpha_function={"Alpha": "alpha"}, **self.kwargs)
         self.materials.append(material)
 
-        color = SetMaterial(tree, location=(sphere_node_pos+2, 1), material=material)
+        color = SetMaterial(tree, location=(sphere_node_pos + 2, 1), material=material)
 
-        smooth = SetShadeSmooth(tree, location=(left,0))
+        smooth = SetShadeSmooth(tree, location=(left, 0))
 
-        create_geometry_line(tree, [sphere, attr, color,join_full,alpha_attr,set_pos,smooth], out=self.group_outputs.inputs[0])
-        create_geometry_line(tree,[join,join_full])
+        create_geometry_line(tree, [sphere, attr, color, join_full, alpha_attr, set_pos, smooth],
+                             out=self.group_outputs.inputs[0])
+        create_geometry_line(tree, [join, join_full])
 
 
 class NodeFromCollection(GeometryNodesModifier):
-    def __init__(self, name='NodeFromCollection',collection="Collection",translation=Vector(),rotation=Vector(),scale=Vector([1,1,1]), **kwargs):
+    def __init__(self, name='NodeFromCollection', collection="Collection", translation=Vector(), rotation=Vector(),
+                 scale=Vector([1, 1, 1]), **kwargs):
         """
         create object from collection, which can be rotated
         """
 
         self.kwargs = kwargs
-        self.collection=collection
-        self.translation =translation
+        self.collection = collection
+        self.translation = translation
         self.rotation = rotation
         self.scale = scale
 
-        super().__init__(name,automatic_layout=True)
+        super().__init__(name, automatic_layout=True)
 
     def create_node(self, tree):
-
         out = tree.nodes.get("Group Output")
         links = tree.links
 
-        translation = InputVector(tree,value=self.translation,name="Translation")
-        rotation = InputVector(tree,value=self.rotation,name="Rotation")
-        scale = InputVector(tree,value=self.scale,name="Scale")
-        collectionInfo = CollectionInfo(tree,collection_name=self.collection)
-        trafo = TransformGeometry(tree,rotation=rotation.std_out,translation=translation.std_out,scale=scale.std_out)
+        translation = InputVector(tree, value=self.translation, name="Translation")
+        rotation = InputVector(tree, value=self.rotation, name="Rotation")
+        scale = InputVector(tree, value=self.scale, name="Scale")
+        collectionInfo = CollectionInfo(tree, collection_name=self.collection)
+        trafo = TransformGeometry(tree, rotation=rotation.std_out, translation=translation.std_out, scale=scale.std_out)
 
         create_geometry_line(tree, [collectionInfo,
-                                trafo
+                                    trafo
                                     ], out=self.group_outputs.inputs[0])
+
 
 class SliderModifier(GeometryNodesModifier):
     def __init__(self, name='SliderModifier', **kwargs):
@@ -1886,7 +1903,7 @@ class SliderModifier(GeometryNodesModifier):
 
         self.kwargs = kwargs
         self.label_position = Vector()
-        super().__init__(name, group_input=False,automatic_layout=False)
+        super().__init__(name, group_input=False, automatic_layout=False)
 
     def create_node(self, tree):
         out = self.group_outputs
@@ -1895,80 +1912,83 @@ class SliderModifier(GeometryNodesModifier):
         left = -10
         slider_value = InputValue(tree, location=(left, -1), name="SliderValue")
 
-          # dimension
-        dimension = get_from_kwargs(self.kwargs,"dimension",[0.25,0.25,2])
-        scale = InputVector(tree,location=(left,-1.5),value=Vector(dimension),name="Scale")
+        # dimesions
+        dimesions = get_from_kwargs(self.kwargs, "dimensions", [0.25, 0.25, 2])
+        scale = InputVector(tree, location=(left, -1.5), value=Vector(dimesions), name="Scale")
 
         #orientation
-        orientation = get_from_kwargs(self.kwargs,"orientation","horizontal")
+        orientation = get_from_kwargs(self.kwargs, "orientation", "horizontal")
         # position
-        position = get_from_kwargs(self.kwargs,"position",[0,0,0])
-        pos = InputVector(tree,location=(left,-2),value=Vector(position),name="Position")
+        position = get_from_kwargs(self.kwargs, "position", [0, 0, 0])
+        pos = InputVector(tree, location=(left, -2), value=Vector(position), name="Position")
         # shape
-        shape = get_from_kwargs(self.kwargs,"shape","cylinder")
+        shape = get_from_kwargs(self.kwargs, "shape", "cylinder")
         if shape == 'cubic':
-            geometry = CubeMesh(tree,size=dimension,location=(left,0))
+            geometry = CubeMesh(tree, size=dimesions, location=(left, 0))
         else:
-            geometry = CylinderMesh(tree,radius=1,vertices = 16,depth=2,fill_type='NGON', side_segments=2,location=(left,0))
-            left+=1
-            l = dimension[2]
-            if orientation=="horizontal":
-                rotation=[0,pi/2,0]
-                self.label_position = Vector(position)-Vector([1.1*l,0,0])
-                position_function=["pos_x,value,2,/,s_z,*,+", "pos_y", "pos_z"]
-                scale_function=["s_x", "s_y", "s_z,value,2,/,*"]
+            geometry = CylinderMesh(tree, radius=1, vertices=16, depth=2, fill_type='NGON', side_segments=2,
+                                    location=(left, 0))
+            left += 1
+            l = dimesions[2]
+            if orientation == "horizontal":
+                rotation = [0, pi / 2, 0]
+                self.label_position = Vector(position) - Vector([1.1 * l, 0, 0])
+                position_function = ["pos_x,value,2,/,s_z,*,+", "pos_y", "pos_z"]
+                scale_function = ["s_x", "s_y", "s_z,value,2,/,*"]
             else:
-                rotation=[0,0,0]
-                self.label_position =Vector(position)-Vector([0,0,1.1*l])
+                rotation = [0, 0, 0]
+                self.label_position = Vector(position) - Vector([0, 0, 1.1 * l])
                 position_function = ["pos_x", "pos_y", "pos_z,value,2,/,s_z,*,+"]
                 scale_function = ["s_x", "s_y", "s_z,value,2,/,*"]
         left += 1
 
-
         slider_trafo = make_function(tree, location=(left, -1),
                                      functions={
-                                         "position":position_function ,
+                                         "position": position_function,
                                          "scale": scale_function,
                                      },
                                      inputs=["value", "pos", "s"], outputs=["position", "scale"],
                                      scalars=["value"], vectors=["position", "scale", "pos", "s"])
 
-        links.new(slider_value.std_out,slider_trafo.inputs["value"])
-        links.new(pos.std_out,slider_trafo.inputs["pos"])
-        links.new(scale.std_out,slider_trafo.inputs["s"])
+        links.new(slider_value.std_out, slider_trafo.inputs["value"])
+        links.new(pos.std_out, slider_trafo.inputs["pos"])
+        links.new(scale.std_out, slider_trafo.inputs["s"])
 
-        left+=1
-        transformation =TransformGeometry(tree,location=(left,0),translation=pos.std_out,rotation=rotation,scale=scale.std_out)
-        inside_transformation = TransformGeometry(tree,location=(left,-1),
-                                                  translation=slider_trafo.outputs["position"],rotation=rotation,
+        left += 1
+        transformation = TransformGeometry(tree, location=(left, 0), translation=pos.std_out, rotation=rotation,
+                                           scale=scale.std_out)
+        inside_transformation = TransformGeometry(tree, location=(left, -1),
+                                                  translation=slider_trafo.outputs["position"], rotation=rotation,
                                                   scale=slider_trafo.outputs["scale"])
-        left +=1
-        wireframe = WireFrame(tree,radius =0.005,location=(left,0))
-        left+=1
-        subdiv = SubdivideMesh(tree,level=5,location=(left,0))
+        left += 1
+        wireframe = WireFrame(tree, radius=0.005, location=(left, 0))
+        left += 1
+        subdiv = SubdivideMesh(tree, level=5, location=(left, 0))
 
-        gradient_material = double_gradient(functions={"uv":["uv_x,0.5,-,2,*","uv_y,0.5,-,2,*","uv_z,0.5,-,2,*"],"abs_uv":["uv_x,0.5,-,2,*,abs","uv_y,0.5,-,2,*,abs","uv_z,0.5,-,2,*,abs"]})
+        gradient_material = double_gradient(functions={"uv": ["uv_x,0.5,-,2,*", "uv_y,0.5,-,2,*", "uv_z,0.5,-,2,*"],
+                                                       "abs_uv": ["uv_x,0.5,-,2,*,abs", "uv_y,0.5,-,2,*,abs",
+                                                                  "uv_z,0.5,-,2,*,abs"]})
         self.materials.append(gradient_material)
-        material = SetMaterial(tree,location=(left,-1),material=gradient_material)
-        pos = Position(tree,location=(left,-2))
-        growth = InputValue(tree,location=(left,-3),value=-l)
-        left+=1
+        material = SetMaterial(tree, location=(left, -1), material=gradient_material)
+        pos = Position(tree, location=(left, -2))
+        growth = InputValue(tree, location=(left, -3), value=-l,name="Growth")
+        left += 1
         join = JoinGeometry(tree, location=(left, 0))
 
-        if orientation=="horizontal":
-            sel_pos="pos_x"
+        if orientation == "horizontal":
+            sel_pos = "pos_x"
         else:
-            sel_pos="pos_z"
-        sel_fcn=make_function(tree,location=(left,-1),name="GrowthSelector",
-                              functions = {"selection":sel_pos+",growth,>"
-                              },inputs=["pos","growth"],outputs=["selection"],
-                              scalars=["growth","selection"],vectors=["pos"])
-        links.new(pos.std_out,sel_fcn.inputs["pos"])
-        links.new(growth.std_out,sel_fcn.inputs["growth"])
-        left+=1
+            sel_pos = "pos_z"
+        sel_fcn = make_function(tree, location=(left, -1), name="GrowthSelector",
+                                functions={"selection": sel_pos + ",growth,>"
+                                           }, inputs=["pos", "growth"], outputs=["selection"],
+                                scalars=["growth", "selection"], vectors=["pos"])
+        links.new(pos.std_out, sel_fcn.inputs["pos"])
+        links.new(growth.std_out, sel_fcn.inputs["growth"])
+        left += 1
 
-        del_geo = DeleteGeometry(tree,location=(left,0),selection=sel_fcn.outputs["selection"])
+        del_geo = DeleteGeometry(tree, location=(left, 0), selection=sel_fcn.outputs["selection"])
 
-        create_geometry_line(tree, [geometry,inside_transformation,material,join])
-        create_geometry_line(tree, [geometry,transformation,wireframe,subdiv,join,del_geo
+        create_geometry_line(tree, [geometry, inside_transformation, material, join])
+        create_geometry_line(tree, [geometry, transformation, wireframe, subdiv, join, del_geo
                                     ], out=out.inputs[0])
