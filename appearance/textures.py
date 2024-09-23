@@ -410,27 +410,27 @@ def gradient_from_attribute(name="AngleDisplacement", **kwargs):
     customize_material(mat, **kwargs)
     bsdf = nodes.get("Principled BSDF")
 
-    attr_name = get_from_kwargs(kwargs,"attr_name","attributeName")
-    attr_type = get_from_kwargs(kwargs,"attr_type","GEOMETRY")
-    gradient = get_from_kwargs(kwargs,"gradient",{0:[1,0,0,1],0.5:[0,1,0,1],1:[0,0,1,1]})
-    function = get_from_kwargs(kwargs,"function","fac,2,pi,*,/,0.5,+")
+    attr_name = get_from_kwargs(kwargs, "attr_name", "attributeName")
+    attr_type = get_from_kwargs(kwargs, "attr_type", "GEOMETRY")
+    gradient = get_from_kwargs(kwargs, "gradient", {0: [1, 0, 0, 1], 0.5: [0, 1, 0, 1], 1: [0, 0, 1, 1]})
+    function = get_from_kwargs(kwargs, "function", "fac,2,pi,*,/,0.5,+")
 
     attr = AttributeNode(tree, location=(-4, 0),
-                         attribute_name=attr_name,type=attr_type)
+                         attribute_name=attr_name, type=attr_type)
     trafo = make_function(tree, functions={
         "factor": function
-    }, location=(-3, 0), name=attr_name+"_transform",
-                     node_group_type='Shader',
+    }, location=(-3, 0), name=attr_name + "_transform",
+                          node_group_type='Shader',
                           inputs=["fac"], outputs=["factor"], scalars=["fac", "factor"])
-    ramp = ColorRamp(tree, location=(-2, 0),factor=trafo.outputs["factor"],hide=False)
-    links.new(attr.fac_out,trafo.inputs["fac"])
-    ramp.node.color_ramp.elements.new(len(gradient)-2)
+    ramp = ColorRamp(tree, location=(-2, 0), factor=trafo.outputs["factor"], hide=False)
+    links.new(attr.fac_out, trafo.inputs["fac"])
+    ramp.node.color_ramp.elements.new(len(gradient) - 2)
 
-    i=0
-    for key,val in gradient.items():
+    i = 0
+    for key, val in gradient.items():
         ramp.node.color_ramp.elements[i].position = key
         ramp.node.color_ramp.elements[i].color = val
-        i=i+1
+        i = i + 1
 
     links.new(ramp.std_out, bsdf.inputs["Base Color"])
     links.new(ramp.std_out, bsdf.inputs[EMISSION])
@@ -439,13 +439,13 @@ def gradient_from_attribute(name="AngleDisplacement", **kwargs):
         dict = kwargs.pop("alpha_function")
 
         key = str(next(iter(dict)))
-        attr2 = AttributeNode(tree, location=(-2,2), attribute_name=key,std_out='Fac')
-        trafo = make_function(tree,functions={
-            "alpha":dict[key]
-        },node_group_type="Shader",inputs=["alpha"],outputs=["alpha"],scalars=["alpha"],location=(-2,1))
+        attr2 = AttributeNode(tree, location=(-2, 2), attribute_name=key, std_out='Fac')
+        trafo = make_function(tree, functions={
+            "alpha": dict[key]
+        }, node_group_type="Shader", inputs=["alpha"], outputs=["alpha"], scalars=["alpha"], location=(-2, 1))
 
-        links.new(attr2.fac_out,trafo.inputs["alpha"])
-        links.new(trafo.outputs["alpha"],bsdf.inputs["Alpha"])
+        links.new(attr2.fac_out, trafo.inputs["alpha"])
+        links.new(trafo.outputs["alpha"], bsdf.inputs["Alpha"])
     return mat
 
 
@@ -471,6 +471,40 @@ def z_gradient(name="zGradient", **kwargs):
     coords = TextureCoordinate(tree, location=(-4, 0), std_out='Generated')
     sep_xyz = SeparateXYZ(tree, location=(-3, 0), vector=coords.std_out)
     ramp = ColorRamp(tree, location=(-1, 0), factor=sep_xyz.node.outputs['Z'])
+    ramp.node.color_ramp.elements.new(1)
+    ramp.node.color_ramp.elements[0].position = 0.00
+    ramp.node.color_ramp.elements[0].color = [0, 0, 1, 1]
+    ramp.node.color_ramp.elements[1].position = 0.555
+    ramp.node.color_ramp.elements[1].color = [0, 1, 0, 1]
+    ramp.node.color_ramp.elements[2].position = 1
+    ramp.node.color_ramp.elements[2].color = [1, 0, 0, 1]
+    links.new(ramp.std_out, bsdf.inputs["Base Color"])
+    links.new(ramp.std_out, bsdf.inputs[EMISSION])
+    return mat
+
+
+def x_gradient(name="xGradient", **kwargs):
+    """
+    create a color gradient
+    just a quick simple implementation, lots of customization is possible
+    :param name:
+    :param kwargs:
+    :return:
+    """
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+
+    mat.name = name
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+
+    customize_material(mat, **kwargs)
+    bsdf = nodes.get("Principled BSDF")
+
+    coords = TextureCoordinate(tree, location=(-4, 0), std_out='Generated')
+    sep_xyz = SeparateXYZ(tree, location=(-3, 0), vector=coords.std_out)
+    ramp = ColorRamp(tree, location=(-1, 0), factor=sep_xyz.node.outputs['X'])
     ramp.node.color_ramp.elements.new(1)
     ramp.node.color_ramp.elements[0].position = 0.00
     ramp.node.color_ramp.elements[0].color = [0, 0, 1, 1]
@@ -696,6 +730,72 @@ def multipole_texture(l_max=5, **kwargs):
     left += 2
 
     mix = MixRGB(tree, location=(left, 0), factor=abs_temp.outputs["positive"],
+                 color1=ramp_pos.std_out, color2=ramp_neg.std_out)
+
+    bsdf = nodes.get('Principled BSDF')
+    links.new(mix.std_out, bsdf.inputs['Base Color'])
+    links.new(mix.std_out, bsdf.inputs[EMISSION])
+
+    customize_material(mat, **kwargs)
+    return mat
+
+
+def double_gradient(functions={"uv":["uv_x","uv_y","0"],"abs_uv":["uv_x,abs","uv_y,abs","uv_z,abs"]},name="DoubleGradient",direction='x', **kwargs):
+    """
+       this texture creates a coordinate-dependent gradient that is different for positive and negative values
+       @type direction: str
+
+
+       """
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+
+
+    left = -10
+
+    coords = TextureCoordinate(tree, location=(left, 0),std_out="Generated")
+    left += 1
+    trafo= make_function(nodes, functions=functions,
+                          inputs=["uv"], vectors=["uv","abs_uv"],
+                          outputs=["uv","abs_uv"],
+                          node_group_type='ShaderNodes',
+                          location=(left, -1),name="Trafo")
+    links.new(coords.std_out, trafo.inputs["uv"])
+
+    left += 1
+
+    # positive branch
+    sep = SeparateXYZ(tree,location=(left,0),vector=trafo.outputs["uv"])
+    abs_sep = SeparateXYZ(tree,location=(left,-0.5),vector=trafo.outputs["abs_uv"])
+
+    left+=1
+    if direction=='x':
+        factor=sep.std_out_x
+        abs_factor = abs_sep.std_out_x
+    elif direction=='y':
+        factor=sep.std_out_y
+        abs_factor = abs_sep.std_out_y
+    else:
+        factor=sep.std_out_z
+        abs_factor = abs_sep.std_out_z
+    # color ramp for the nice color gradient
+    ramp_pos = ColorRamp(tree, location=(left, 1), factor=abs_factor,
+                         values=[0, 0.5, 1], colors=[[0, 1, 0, 1], [1, 1, 0, 1], [1, 0, 0, 1]], hide=False)
+
+    # negative branch
+    ramp_neg = ColorRamp(tree, location=(left, -1), factor=abs_factor,
+                         values=[0, 0.5, 1],
+                         colors=[[0, 1, 0, 1], [0, 0, 1, 1], [1, 0, 1, 1]], hide=False)
+
+    left += 2
+    sign = MathNode(tree,location=(left,0),operation='SIGN',input0 = factor,input1=0)
+
+    left+=1
+    mix = MixRGB(tree, location=(left, 0), factor=sign.std_out,
                  color1=ramp_pos.std_out, color2=ramp_neg.std_out)
 
     bsdf = nodes.get('Principled BSDF')
@@ -939,13 +1039,13 @@ def phase2hue_material(attribute_names=None, **kwargs):
         dict = kwargs.pop("alpha_function")
 
         key = str(next(iter(dict)))
-        attr2 = AttributeNode(tree, location=(-2,2), attribute_name=key,std_out='Fac')
-        trafo = make_function(tree,functions={
-            "alpha":dict[key]
-        },node_group_type="Shader",inputs=["alpha"],outputs=["alpha"],scalars=["alpha"],location=(-2,1))
+        attr2 = AttributeNode(tree, location=(-2, 2), attribute_name=key, std_out='Fac')
+        trafo = make_function(tree, functions={
+            "alpha": dict[key]
+        }, node_group_type="Shader", inputs=["alpha"], outputs=["alpha"], scalars=["alpha"], location=(-2, 1))
 
-        links.new(attr2.fac_out,trafo.inputs["alpha"])
-        links.new(trafo.outputs["alpha"],bsdf.inputs["Alpha"])
+        links.new(attr2.fac_out, trafo.inputs["alpha"])
+        links.new(trafo.outputs["alpha"], bsdf.inputs["Alpha"])
     return mat
 
 
@@ -981,7 +1081,7 @@ def create_material_for_e8_visuals(attribute_names=None, **kwargs):
         mixer_sockets.append(mix.inputs[0])
         last_mixer = mix
 
-    #create attribute node and pipe the result
+    # create attribute node and pipe the result
     for i, name in enumerate(attribute_names):
         attr = nodes.new(type='ShaderNodeAttribute')
         attr.attribute_type = "INSTANCER"
@@ -1789,7 +1889,7 @@ def make_fake_glass_material(rgb=None, name=None, absorption_density=0.5, ior=1)
     bsdf.inputs['Metallic'].default_value = 0
     bsdf.inputs[TRANSMISSION].default_value = 1
     bsdf.inputs['IOR'].default_value = ior  # no refraction
-    #bsdf.inputs['Sheen Tint'].default_value = [1, 1, 1, 1]
+    # bsdf.inputs['Sheen Tint'].default_value = [1, 1, 1, 1]
 
     links.new(bsdf.outputs['BSDF'], out.inputs['Surface'])
 
@@ -2804,70 +2904,69 @@ def get_alpha_of_material(material):
     return bsdf.inputs['Alpha']
 
 
-def highlighting_for_material(page_material,direction='Y',data = {(0,1):('drawing',0.5)}):
+def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('drawing', 0.5)}):
     """
 
     """
     tree = page_material.node_tree
     nodes = tree.nodes
     links = tree.links
-    mapping_node=nodes.get("Mapping")
+    mapping_node = nodes.get("Mapping")
     if mapping_node is None:
         # create texture coordinates with mapping node
-        tex_coord = TextureCoordinate(tree,location=(-10,0))
-        mapping_node = Mapping(tree,location=(-9,0))
-        links.new (tex_coord.std_out,mapping_node.inputs['Vector'])
+        tex_coord = TextureCoordinate(tree, location=(-10, 0))
+        mapping_node = Mapping(tree, location=(-9, 0))
+        links.new(tex_coord.std_out, mapping_node.inputs['Vector'])
         mapping_out = mapping_node.std_out
     else:
-        mapping_out=mapping_node.outputs[0]
+        mapping_out = mapping_node.outputs[0]
     left = -8
-    sep = SeparateXYZ(tree,location=(left,0),vector=mapping_out)
-    if direction=='X':
-        sep_out=sep.std_out_x
-    elif direction=='Y':
-        sep_out=sep.std_out_y
+    sep = SeparateXYZ(tree, location=(left, 0), vector=mapping_out)
+    if direction == 'X':
+        sep_out = sep.std_out_x
+    elif direction == 'Y':
+        sep_out = sep.std_out_y
     else:
-        sep_out=sep.std_out_z
-    left+=1
+        sep_out = sep.std_out_z
+    left += 1
 
-    top = len(data)*2.5
+    top = len(data) * 2.5
     mixers = []
-    for key,val in data.items():
+    for key, val in data.items():
         lleft = left
         infimum = key[0]
         supremum = key[1]
-        filter = make_function(tree,functions={
-            "filter":"coord,"+str(infimum)+",>,coord,"+str(supremum)+",<,*"
-        },location = (lleft,top),scalars=["filter","coord"],inputs=["coord"],outputs=["filter"],
+        filter = make_function(tree, functions={
+            "filter": "coord," + str(infimum) + ",>,coord," + str(supremum) + ",<,*"
+        }, location=(lleft, top), scalars=["filter", "coord"], inputs=["coord"], outputs=["filter"],
                                node_group_type='Shader')
-        links.new(sep_out,filter.inputs['coord'])
-        lleft+=1
+        links.new(sep_out, filter.inputs['coord'])
+        lleft += 1
 
-        ramp = ColorRamp(tree,location=(lleft,top),factor=filter.outputs['filter'])
-        ramp.color_ramp.elements[0].color=[0,0,0,0]
-        ramp.color_ramp.elements[1].color=get_color(val[0])
-        lleft+=1
+        ramp = ColorRamp(tree, location=(lleft, top), factor=filter.outputs['filter'])
+        ramp.color_ramp.elements[0].color = [0, 0, 0, 0]
+        ramp.color_ramp.elements[1].color = get_color(val[0])
+        lleft += 1
 
-
-        if len(mixers)==0:
+        if len(mixers) == 0:
             mix = MixRGB(tree, location=(lleft, top - 2), factor=val[1], color1=ramp.std_out)
         else:
             mix = MixRGB(tree, location=(lleft, top - 2), factor=val[1], color1=mixers[-1].std_out)
-            links.new(ramp.std_out,mixers[-1].color2)
+            links.new(ramp.std_out, mixers[-1].color2)
         mixers.append(mix)
-        top -=2.5
+        top -= 2.5
 
     # find link to the color socket of the bsdf
-    bsdf=nodes.get("Principled BSDF")
+    bsdf = nodes.get("Principled BSDF")
     if bsdf is not None:
         for link in links:
-            if link.to_node==bsdf:
-                if link.to_socket.name=='Base Color':
-                    from_socket=link.from_socket
+            if link.to_node == bsdf:
+                if link.to_socket.name == 'Base Color':
+                    from_socket = link.from_socket
         if from_socket is not None:
-            links.new(mixers[-1].color2,from_socket)
-            links.new(mixers[-1].std_out,bsdf.inputs['Base Color'])
-            links.new(mixers[-1].std_out,bsdf.inputs[EMISSION])
+            links.new(mixers[-1].color2, from_socket)
+            links.new(mixers[-1].std_out, bsdf.inputs['Base Color'])
+            links.new(mixers[-1].std_out, bsdf.inputs[EMISSION])
 
     return mixers
 

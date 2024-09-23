@@ -1,6 +1,6 @@
 import numpy as np
 
-from appearance.textures import phase2hue_material, gradient_from_attribute, z_gradient
+from appearance.textures import phase2hue_material, gradient_from_attribute, z_gradient, x_gradient, double_gradient
 from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, InstanceOnPoints, JoinGeometry, \
     create_geometry_line, RealizeInstances, Position, make_function, ObjectInfo, SetPosition, Index, SetMaterial, \
     RandomValue, RepeatZone, StoredNamedAttribute, NamedAttribute, VectorMath, CurveToMesh, PointsToCurve, Grid, \
@@ -1886,7 +1886,7 @@ class SliderModifier(GeometryNodesModifier):
 
         self.kwargs = kwargs
         self.label_position = Vector()
-        super().__init__(name, group_input=False,automatic_layout=True)
+        super().__init__(name, group_input=False,automatic_layout=False)
 
     def create_node(self, tree):
         out = self.group_outputs
@@ -1937,18 +1937,38 @@ class SliderModifier(GeometryNodesModifier):
         links.new(pos.std_out,slider_trafo.inputs["pos"])
         links.new(scale.std_out,slider_trafo.inputs["s"])
 
+        left+=1
         transformation =TransformGeometry(tree,location=(left,0),translation=pos.std_out,rotation=rotation,scale=scale.std_out)
         inside_transformation = TransformGeometry(tree,location=(left,-1),
                                                   translation=slider_trafo.outputs["position"],rotation=rotation,
                                                   scale=slider_trafo.outputs["scale"])
         left +=1
-        join = JoinGeometry(tree,location=(left,0))
-
         wireframe = WireFrame(tree,radius =0.005,location=(left,0))
-        gradient_material = z_gradient()
+        left+=1
+        subdiv = SubdivideMesh(tree,level=5,location=(left,0))
+
+        gradient_material = double_gradient(functions={"uv":["uv_x,0.5,-,2,*","uv_y,0.5,-,2,*","uv_z,0.5,-,2,*"],"abs_uv":["uv_x,0.5,-,2,*,abs","uv_y,0.5,-,2,*,abs","uv_z,0.5,-,2,*,abs"]})
         self.materials.append(gradient_material)
         material = SetMaterial(tree,location=(left,-1),material=gradient_material)
+        pos = Position(tree,location=(left,-2))
+        growth = InputValue(tree,location=(left,-3),value=-l)
+        left+=1
+        join = JoinGeometry(tree, location=(left, 0))
+
+        if orientation=="horizontal":
+            sel_pos="pos_x"
+        else:
+            sel_pos="pos_z"
+        sel_fcn=make_function(tree,location=(left,-1),name="GrowthSelector",
+                              functions = {"selection":sel_pos+",growth,>"
+                              },inputs=["pos","growth"],outputs=["selection"],
+                              scalars=["growth","selection"],vectors=["pos"])
+        links.new(pos.std_out,sel_fcn.inputs["pos"])
+        links.new(growth.std_out,sel_fcn.inputs["growth"])
+        left+=1
+
+        del_geo = DeleteGeometry(tree,location=(left,0),selection=sel_fcn.outputs["selection"])
 
         create_geometry_line(tree, [geometry,inside_transformation,material,join])
-        create_geometry_line(tree, [geometry,transformation,wireframe,join
+        create_geometry_line(tree, [geometry,transformation,wireframe,subdiv,join,del_geo
                                     ], out=out.inputs[0])
