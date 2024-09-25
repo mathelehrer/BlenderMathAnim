@@ -16,7 +16,7 @@ from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import TextureCoordinate, Mapping, ColorRamp, AttributeNode, HueSaturationValueNode, \
-    MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ
+    MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ, Displacement
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR
 from utils.kwargs import get_from_kwargs
 
@@ -805,6 +805,7 @@ def double_gradient(functions={"uv":["uv_x","uv_y","0"],"abs_uv":["uv_x,abs","uv
     links.new(mix.std_out, bsdf.inputs[EMISSION])
 
     customize_material(mat, **kwargs)
+
     return mat
 
 
@@ -816,6 +817,7 @@ def dipole_texture(**kwargs):
     tree = mat.node_tree
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
+    material_out=nodes.get("Material Output")
 
     y11 = SphericalHarmonics(1, 1, "theta", "phi")
     y10 = SphericalHarmonics(1, 0, "theta", "phi")
@@ -890,6 +892,13 @@ def dipole_texture(**kwargs):
     links.new(mix.std_out, bsdf.inputs['Base Color'])
     links.new(mix.std_out, bsdf.inputs[EMISSION])
 
+    # introduce displacement
+    scale=InputValue(tree,location=(left-1,-2),name="DisplacementScale",value=0)
+
+    displace = Displacement(tree,location=(left,-2),height=abs_temp.outputs["abs"],scale=scale.std_out)
+    mat.displacement_method="DISPLACEMENT"
+
+    links.new(displace.std_out,material_out.inputs["Displacement"])
     customize_material(mat, **kwargs)
     return mat
 

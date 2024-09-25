@@ -250,3 +250,31 @@ class InputValue(ShaderNode):
 
         self.std_out = self.node.outputs['Value']
         self.node.outputs['Value'].default_value = value
+
+class Displacement(ShaderNode):
+    def __init__(self, tree, location=(0, 0),
+                 height=0,
+                 midlevel=0.5,
+                 scale= 1., **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeDisplacement")
+        super().__init__(tree, location, **kwargs)
+
+        self.height=self.node.inputs[0]
+        self.midlevel = self.node.inputs[1]
+        self.scale = self.node.inputs[2]
+        self.std_out = self.node.outputs[0]
+
+        if isinstance(midlevel, (int, float)):
+            self.midlevel.default_value = midlevel
+        else:
+            self.tree.links.new(midlevel, self.midlevel)
+
+        if isinstance(scale, (int, float)):
+            self.scale.default_value = scale
+        else:
+            self.tree.links.new(scale, self.scale)
+
+        if isinstance(height, (int, float)):
+            self.height.default_value = height
+        else:
+            self.tree.links.new(height, self.height)
