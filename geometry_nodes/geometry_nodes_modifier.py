@@ -1961,7 +1961,7 @@ class SliderModifier(GeometryNodesModifier):
                                                   translation=slider_trafo.outputs["position"], rotation=rotation,
                                                   scale=slider_trafo.outputs["scale"])
         left += 1
-        wireframe = WireFrame(tree, radius=0.005, location=(left, 0))
+        wireframe = WireFrame(tree, radius=0.0025, location=(left, 0))
         left += 1
         subdiv = SubdivideMesh(tree, level=5, location=(left, 0))
 

@@ -12,7 +12,8 @@ from appearance.textures import make_basic_material, make_creature_material, mak
     make_fake_glass_material, make_plastic_material, make_checker_material, make_mirror_material, make_sand_material, \
     make_gold_material, make_silver_material, make_screen_material, make_marble_material, make_metal_materials, \
     make_wood_material, make_scattering_material, make_silk_material, make_magnet_material, make_sign_material
-from interface.ibpy import select, link, delete, Vector, Quaternion
+
+from interface.ibpy import select, link, Vector, delete, Quaternion
 from utils.constants import COLORS, COLOR_NAMES
 
 pi = np.pi

@@ -3,10 +3,9 @@ from functools import partial
 import bpy
 import math
 import numpy as np
-from mathutils import Vector
 
 from interface import ibpy
-from interface.ibpy import add_shape_key, morph_to_next_shape
+from interface.ibpy import add_shape_key, morph_to_next_shape, Vector
 from objects.bobject import BObject
 from objects.cylinder import Cylinder
 from objects.geometry.geo_bobject import GeoBObject

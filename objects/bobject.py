@@ -1,10 +1,9 @@
 import bmesh
 import bpy
-from mathutils import Quaternion
 
 from appearance.textures import apply_material
 from interface import ibpy
-from interface.ibpy import change_emission, Vector
+from interface.ibpy import change_emission, Vector, Quaternion
 from utils.constants import *
 from utils.utils import to_vector
 
@@ -575,6 +574,7 @@ class BObject(object):
             transition_frames = transition_time * FRAME_RATE
 
         ibpy.change_alpha(self, begin_time*FRAME_RATE, transition_frames, alpha=alpha, **kwargs)
+        return begin_time+transition_time
 
     def toggle_hide(self,begin_time=0):
         self.hide=not self.hide
