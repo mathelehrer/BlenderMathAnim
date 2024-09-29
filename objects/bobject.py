@@ -13,20 +13,22 @@ class BObject(object):
     This is the base class for all objects that can be added to a blender scene and moved
     """
 
-    def __init__(self, **kwargs):
-        """
+    def __init__(self,no_material=False, **kwargs):
+        r"""
             this class can handle the following kwargs
             |
-            | name: name of the object
-            | obj: an existing blender object (constructed in a subclass) can be connected to the base class
-            | location: position of the object in the world
-            | rotation_euler: rotation of the object
-            | rotation_quaternion: rotation of the object in terms of quaternions
-            | scale
-            | objects: blender children of this object
-            | mat
             |
-        :param kwargs:
+            |
+        :param no_material: no material is created, useful for objects created with geometry nodes or empties
+        : Keyword Arguments:
+            * name: name of the object
+            * obj: an existing blender object (constructed in a subclass) can be connected to the base class
+            * location: position of the object in the world
+            * rotation_euler: rotation of the object
+            * rotation_quaternion: rotation of the object in terms of quaternions
+            * scale
+            * objects: blender children of this object
+            * mat
         """
         # register bpy object from sub class or create default object
 
@@ -85,17 +87,18 @@ class BObject(object):
 
 
         # set color
-        self.color = self.get_from_kwargs('color',None)
-        self.colors = self.get_from_kwargs('colors', None)
+        if not no_material:
+            self.color = self.get_from_kwargs('color',None)
+            self.colors = self.get_from_kwargs('colors', None)
 
 
-        if self.colors is not None:
-            apply_material(self.ref_obj, self.color, colors=self.colors, **kwargs)
-        else:
-            apply_material(self.ref_obj, self.color,**kwargs)
-        # do not automatically apply material to the children
-        # [apply_material(child,self.color,**kwargs) for child in self.b_children]
-        # for multiple slots
+            if self.colors is not None:
+                apply_material(self.ref_obj, self.color, colors=self.colors, **kwargs)
+            else:
+                apply_material(self.ref_obj, self.color,**kwargs)
+            # do not automatically apply material to the children
+            # [apply_material(child,self.color,**kwargs) for child in self.b_children]
+            # for multiple slots
 
 
         smooth = self.get_from_kwargs('smooth', 0)

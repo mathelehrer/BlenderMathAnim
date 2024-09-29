@@ -1,3 +1,9 @@
+import hashlib
+import math
+import os
+from copy import deepcopy
+
+import bpy
 import numpy as np
 
 from appearance.textures import phase2hue_material, gradient_from_attribute, z_gradient, x_gradient, double_gradient
@@ -7,13 +13,14 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     TransformGeometry, InputVector, DeleteGeometry, IcoSphere, MeshLine, MeshToCurve, InstanceOnEdges, CubeMesh, \
     EdgeVertices, BooleanMath, SetShadeSmooth, RayCast, WireFrame, ConvexHull, InsideConvexHull, ExtrudeMesh, \
     ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch, MeshToPoints, \
-    SubdivideMesh, CollectionInfo, CylinderMesh
+    SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputBoolean
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
 from objects.derived_objects.p_arrow import PArrow
-from utils.constants import FRAME_RATE
+from utils.constants import FRAME_RATE, TEMPLATE_TEXT_FILE, SVG_DIR, TEX_DIR, TEX_TEXT_TO_REPLACE, TEMPLATE_TEX_FILE, \
+    TEX_LOCAL_SCALE_UP
 from utils.kwargs import get_from_kwargs
 
 pi = np.pi
@@ -33,7 +40,7 @@ class GeometryNodesModifier:
     base class that organizes the boilerplate code for the creation of a geometry nodes modifier
     """
 
-    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True, group_input=False):
+    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True, group_input=False,**kwargs):
         tree = get_node_tree(name=name, type='GeometryNodeTree')
 
         # if  materials are created inside the geometry node, they are stored inside the following array
@@ -45,7 +52,7 @@ class GeometryNodesModifier:
         if group_input:
             self.group_inputs = tree.nodes.new('NodeGroupInput')
             make_new_socket(tree, name='Geometry', io='INPUT', type='NodeSocketGeometry')
-        self.create_node(tree)
+        self.create_node(tree,**kwargs)
         # automatically layout nodes
         if automatic_layout:
             layout(tree)
@@ -63,7 +70,6 @@ class GeometryNodesModifier:
 
     def get_node_tree(self):
         return self.tree
-
 
 ##################
 ## Applications ##
@@ -1962,6 +1968,8 @@ class SliderModifier(GeometryNodesModifier):
                                                   scale=slider_trafo.outputs["scale"])
         left += 1
         wireframe = WireFrame(tree, radius=0.0025, location=(left, 0))
+        left+=1
+        grid_material = SetMaterial(tree,location=(left,0),material='text',emission=1)
         left += 1
         subdiv = SubdivideMesh(tree, level=5, location=(left, 0))
 
@@ -1990,5 +1998,494 @@ class SliderModifier(GeometryNodesModifier):
         del_geo = DeleteGeometry(tree, location=(left, 0), selection=sel_fcn.outputs["selection"])
 
         create_geometry_line(tree, [geometry, inside_transformation, material, join])
-        create_geometry_line(tree, [geometry, transformation, wireframe, subdiv, join, del_geo
+        create_geometry_line(tree, [geometry, transformation, wireframe, grid_material, subdiv, join, del_geo
                                     ], out=out.inputs[0])
+
+
+class NumberlineModifier(GeometryNodesModifier):
+    def __init__(self, name='NumberlineModifier', **kwargs):
+        """
+        create geometry for the numberline
+        """
+
+        super().__init__(name, group_input=False, automatic_layout=True,**kwargs)
+
+    def create_node(self, tree,**kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        # input parameters
+        domain = get_from_kwargs(kwargs,'domain',[0,10])
+        tic_labels=get_from_kwargs(kwargs,'tic_labels','AUTO')
+        tic_label_digits=get_from_kwargs(kwargs,'tic_label_digits',1)
+        max_length = get_from_kwargs(kwargs,'length',5)
+        radius = get_from_kwargs(kwargs,'radius',0.025)
+        tip_length=get_from_kwargs(kwargs,'tip_length',0.1)
+        n_tics = get_from_kwargs(kwargs,'n_tics',5)
+        include_zero=get_from_kwargs(kwargs,'incude_zero',True)
+
+        if tic_labels=='AUTO':
+            tic_labels={}
+            # create tic_labels
+            if include_zero:
+                n=n_tics+1
+                n_0=0
+            else:
+                n=n_tics
+                n_0=1
+            dx = (domain[1]-domain[0])/n
+            p = 10**tic_label_digits # power for rounding
+            for i in range(n_0,n_tics+1):
+                tic_labels[i]=[dx*i,str(round(dx*i*p)/p)]
+
+        tic_labels = generate_labels(tic_labels,**kwargs)
+
+        in_min = InputValue(tree,name='Minimum',value=domain[0])
+        in_max = InputValue(tree,name='Maximum',value=domain[1])
+        in_length = InputValue(tree,name='Length',value=max_length)
+        in_radius = InputValue(tree,name='Radius',value=radius)
+        in_tics = InputValue(tree,name='nTics',value=n_tics)
+        in_include_zero=InputBoolean(tree,name='includeZero',value=include_zero)
+        attr = NamedAttribute(tree,name="x",data_type="FLOAT_VECTOR")
+        index = Index(tree)
+
+        # create geometry
+        # axis
+        cyl = CylinderMesh(tree,depth=in_length.std_out,radius=in_radius.std_out)
+        translation = make_function(tree,name="AxisTranslation",
+                                    functions={"translation":["0","0","l,2,/"]},
+                                    inputs=['l'],outputs=["translation"],
+                                    scalars=['l'],vectors=["translation"],
+                                    )
+        links.new(in_length.std_out,translation.inputs['l'])
+        cyl_trafo = TransformGeometry(tree,translation=translation.outputs["translation"])
+
+        # tip
+        tip_scaling = make_function(tree,name="TipScaling",
+                                    functions={
+                                        "tipLength":"l,"+str(tip_length)+",*",
+                                        "tipRadius":"r,2,*"
+                                    },
+                                    inputs=["r","l"],
+                                    outputs=["tipLength","tipRadius"],
+                                    scalars =["r","l"]+["tipLength","tipRadius"] )
+        for node,label in zip([in_radius,in_length],["r","l"]):
+            links.new(node.std_out,tip_scaling.inputs[label])
+
+        cone = ConeMesh(tree,radius_bottom=tip_scaling.outputs["tipRadius"],
+                        depth=tip_scaling.outputs["tipLength"])
+        cone_trafo = TransformGeometry(tree,translation_z=in_length)
+
+        # tics
+
+        # increase by one to include tic at zero
+        # the tic position is given by x0+(i+1-includeZero)*(x1-x0)/n mapped by f**(-1)
+        tic_domain_pos = "x0,idx,1,+,includeZero,-,x1,x0,-,n,/,*,+"
+        # this position is stored in the coordinate of the point associated with the tic
+
+        tic_function = make_function(tree,name="ticsFunction",
+                                     functions={"ntics":"n,includeZero,+,floor",
+                                                "depth":"l,500,/",
+                                                "r":"r,3,*",
+                                                "pos":["0","0",tic_domain_pos]
+                                                },
+                                     inputs=["n","l","r","idx","includeZero","x0","x1"],
+                                     outputs=["ntics","r","depth","pos","visible"],
+                                     scalars=["n","ntics","l","r","depth",
+                                              "idx","includeZero","x0","x1","visible"],
+                                     vectors=["pos"])
+        links.new(in_length.std_out, tic_function.inputs["l"])
+        links.new(in_min.std_out, tic_function.inputs["x0"])
+        links.new(in_max.std_out, tic_function.inputs["x1"])
+        links.new(in_tics.std_out,tic_function.inputs["n"])
+        links.new(in_radius.std_out,tic_function.inputs["r"])
+        links.new(index.std_out,tic_function.inputs["idx"])
+        links.new(in_include_zero.std_out,tic_function.inputs["includeZero"])
+        attr_x = StoredNamedAttribute(tree,name="x",data_type='FLOAT_VECTOR',value=tic_function.outputs["pos"])
+        points = Points(tree,count=tic_function.outputs["ntics"],position=tic_function.outputs["pos"])
+
+        tic_mesh = CylinderMesh(tree,vertices=16,radius=tic_function.outputs["r"],depth=tic_function.outputs['depth'])
+
+        # tic positioning
+        # the actual position of the tic is determined by the scale of the axis and the final position is
+        # applied to the position of the instance
+        # map f from l to x space:f(l)= x0+(x1-x0)/l_max *l
+        # map f**(-1) from x to l space f**(-1)(x) = (x-x0)/(x1-x0)*l_max
+
+        tic_axis_pos="pos_z,x0,-,x1,x0,-,/,"+str(max_length)+",*"
+        end_of_axis="x0,x1,x0,-,"+str(max_length)+",/,l,*,+"
+        tic_transformation=make_function(tree,name="TicTransformation",
+                                         functions={
+                                             "position":["0","0",tic_axis_pos],
+                                             "invisible":["pos_z,"+end_of_axis+",>"]
+                                         },inputs=["pos","x0","x1","l"],outputs=["position","invisible"],
+                                         scalars=["x0","x1","invisible","l"],vectors=["pos","position"])
+        links.new(attr.std_out,tic_transformation.inputs["pos"])
+        links.new(in_min.std_out, tic_transformation.inputs["x0"])
+        links.new(in_max.std_out, tic_transformation.inputs["x1"])
+        links.new(in_length.std_out, tic_transformation.inputs["l"])
+        set_pos = SetPosition(tree,position=tic_transformation.outputs["position"])
+        del_geo = DeleteGeometry(tree,selection=tic_transformation.outputs["invisible"])
+        iop = InstanceOnPoints(tree,instance=tic_mesh.geometry_out)
+
+        # join parts
+        join = JoinGeometry(tree)
+
+        # add tic_labels
+        delta = domain[1]-domain[0]
+        for key,val in tic_labels.items():
+            parts = val[2].split(os.path.sep)
+            coll_info = CollectionInfo(tree,collection_name=parts[-1])
+            label_pos = InputVector(tree,value=Vector([0,0,(val[0]-domain[0])*max_length/delta]) )
+            set_label_pos = SetPosition(tree,position=label_pos.std_out)
+            transform_geo = TransformGeometry(tree,rotation=[pi/2,0,0],translation=[0,0,0])
+            create_geometry_line(tree,[coll_info,transform_geo,set_label_pos,join])
+
+        pre_material = get_from_kwargs(kwargs,'color','drawing')
+        material = get_material(pre_material, **kwargs)
+        self.materials.append(material)
+        set_material = SetMaterial(tree,material=material)
+
+
+        auto_smooth = get_from_kwargs(kwargs,'auto_smooth',True)
+        if auto_smooth:
+            smooth = SetShadeSmooth(tree)
+            main_line= [cyl,cyl_trafo, join,set_material,smooth]
+        else:
+            main_line=[cyl,cyl_trafo, join,set_material]
+
+
+        create_geometry_line(tree,[cone,cone_trafo,join])
+        create_geometry_line(tree,[points,attr_x,set_pos,del_geo,iop,join])
+        create_geometry_line(tree, main_line,out=out.inputs[0])
+
+
+
+##
+# recreate the essentials to convert a latex expression into a collection of curves
+# that can be further processed in geometry nodes
+##
+def generate_labels(tic_labels,**kwargs):
+
+    vert_align_centers = get_from_kwargs(kwargs, 'vert_align_centers', 'x_and_y')
+    aliged = get_from_kwargs(kwargs, 'aligned', 'left')
+    default_color = get_from_kwargs(kwargs, 'color', 'text')
+    text_size = get_from_kwargs(kwargs, 'text_size', 'normal')
+    scale = get_from_kwargs(kwargs,'scale',1)
+
+    imported_svg_data = {}  # Build dictionary of imported svgs to use
+
+    # shape keys later and to avoid duplicate
+    for key,val in tic_labels.items():
+        path = get_file_path(val[1])
+        tic_labels[key]=val+[path]
+        # Import svg and get list of new curves in Blender
+        if path not in imported_svg_data.keys():
+            imported_svg_data[path] = {'curves': []}
+
+            previous_curves = ibpy.get_all_curves()
+            ibpy.import_curve(path)  # here the import takes place
+            # all curves are imported into a separate collection with the name path
+            new_curves = [x for x in ibpy.get_all_curves() if  x not in previous_curves]
+
+            # Arrange new curves relative to tex object's ref_obj
+            if text_size == 'normal':
+                scale_up = TEX_LOCAL_SCALE_UP
+            elif text_size == 'medium':
+                scale_up = TEX_LOCAL_SCALE_UP * 1.25
+            elif text_size == 'large':
+                scale_up = 1.5 * TEX_LOCAL_SCALE_UP
+            elif text_size == 'Large':
+                scale_up = 2 * TEX_LOCAL_SCALE_UP
+            elif text_size == 'Small':
+                scale_up = 0.8 * TEX_LOCAL_SCALE_UP
+            elif text_size == 'small':
+                scale_up = 0.7 * TEX_LOCAL_SCALE_UP
+            elif text_size == 'xs':
+                scale_up = 0.65 * TEX_LOCAL_SCALE_UP
+            elif text_size == 'tiny':
+                scale_up = 0.5 * TEX_LOCAL_SCALE_UP
+            elif text_size == 'huge':
+                scale_up = 3 * TEX_LOCAL_SCALE_UP
+            elif text_size == 'Huge':
+                scale_up = 5 * TEX_LOCAL_SCALE_UP
+            else:  # a number
+                scale_up = text_size * TEX_LOCAL_SCALE_UP
+
+            # in the following lines the location of the curve is determined from the geometry and the
+            # y-coordinates of the locations are all aligned with the reference 'H'
+            for curve in new_curves:
+                for spline in curve.data.splines:
+                    for point in spline.bezier_points:
+                        point.handle_left_type = 'FREE'
+                        point.handle_right_type = 'FREE'
+                    # This needs to be in a separate loop because moving points before
+                    # they're all 'Free' type makes the shape warp.
+                    # It makes a cool "disappear in the wind" visual, though.
+                    for point in spline.bezier_points:
+                        for i in range(len(point.co)):
+                            point.co[i] *= (scale * scale_up)
+                            point.handle_left[i] *= (scale * scale_up)
+                            point.handle_right[i] *= (scale * scale_up)
+
+                ibpy.set_origin(curve)
+                # This part is just meant for tex_objects
+                if vert_align_centers:
+                    loc = curve.location
+                    new_y = new_curves[0].location[1]  # reference location of the 'H'
+                    ibpy.set_pivot(curve, [loc[0], new_y, loc[2]])
+                ibpy.un_select(curve)
+
+                # find the collection of the curve and unlink object
+                # for collection in bpy.context.scene.collection.children:
+                #     for o in collection.objects:
+                #         if o == curve:
+                #             ibpy.un_link(curve, collection.name)
+                #             break
+
+                imported_svg_data[path]['curves'] = new_curves
+    print(imported_svg_data)
+   # align_figures()
+    return tic_labels
+
+#### Generating functions
+def get_file_path( expression,text_only=False,typeface="default"):
+        # Replaces the svg_b_object method
+        if text_only:
+            template = deepcopy(TEMPLATE_TEXT_FILE)
+        else:
+            template = deepcopy(TEMPLATE_TEX_FILE)
+        if typeface != 'default':
+            template = template[:-10]  # chop off the _arial.tex
+            template += '_' + typeface + '.tex'
+            if not os.path.exists(template):
+                raise Warning(r'Can\'t find template tex file for that font.')
+
+        return tex_to_svg_file(expression, template, typeface, text_only)
+
+def tex_to_svg_file(expression, template_tex_file, typeface, text_only):
+    path = os.path.join(
+        SVG_DIR,
+        # tex_title(expression, typeface)
+        hashed_tex(expression, typeface)
+    ) + ".svg"
+    if os.path.exists(path):
+        return path
+
+    tex_file = generate_tex_file(expression, template_tex_file, typeface, text_only)
+    dvi_file = tex_to_dvi(tex_file)
+    return dvi_to_svg(dvi_file)
+
+def generate_tex_file(expression, template_tex_file, typeface, text_only):
+    result = os.path.join(
+        TEX_DIR,
+        # tex_title(expression, typeface)
+        hashed_tex(expression, typeface)
+    ) + ".tex"
+
+    if not os.path.exists(result):
+        print("Writing \"%s\" to %s" % (
+            "".join(expression), result
+        ))
+        with open(template_tex_file, "r") as infile:
+            body = infile.read()
+            # I add an H to every expression to give a common reference point
+            # for all expressions, then hide the H character. This is necessary
+            # for consistent alignment of tex curves in blender, because
+            # blender's import svg bobject sets the object's origin depending
+            # on the expression itself, not according to a typesetting reference
+            # frame.
+            if text_only:
+                expression = 'H ' + expression
+            else:
+                expression = '\\text{H} ' + expression
+            body = body.replace(TEX_TEXT_TO_REPLACE, expression)
+        with open(result, "w") as outfile:
+            outfile.write(body)
+    return result
+
+def tex_to_dvi(tex_file):
+    result = tex_file.replace(".tex", ".dvi")
+    if not os.path.exists(result):
+        commands = [
+            "latex",
+            "-interaction=batchmode",
+            "-halt-on-error",
+            "-output-directory=" + TEX_DIR,
+            tex_file  # ,
+            # ">",
+            # get_null()
+        ]
+        exit_code = os.system(" ".join(commands))
+        if exit_code != 0:
+            latex_output = ''
+            log_file = tex_file.replace(".tex", ".log")
+            if os.path.exists(log_file):
+                with open(log_file, 'r') as f:
+                    latex_output = f.read()
+            raise Exception(
+                "Latex error converting to dvi. "
+                "See log output above or the log file: %s" % log_file)
+    return result
+
+def dvi_to_svg(dvi_file):
+    """
+    Converts a dvi, which potentially has multiple slides, into a
+    directory full of enumerated svgs corresponding with these slides.
+    Returns a list of PIL Image objects for these images sorted as they
+    where in the dvi
+    """
+
+    result = dvi_file.replace(".dvi", ".svg")
+    result = result.replace("tex", "svg")  # change directory for the svg file
+    print('svg: ', result)
+    if not os.path.exists(result):
+        commands = [
+            "dvisvgm",
+            dvi_file,
+            "-n",
+            "-v",
+            "3",
+            "-o",
+            result
+            # Not sure what these are for, and it seems to work without them
+            # so commenting out for now
+            # ,
+            # ">",
+            # get_null()
+        ]
+        os.system(" ".join(commands))
+    return result
+
+def hashed_tex(expression, typeface):
+    string = expression + typeface
+    hasher = hashlib.sha256(string.encode())
+    return hasher.hexdigest()[:16]
+
+#### Alignment functions
+
+def get_figure_curves(self, fig):
+        """
+        returns the curves
+        this method is overriden by the TexBObject to strip the leading H
+        :param fig:
+        :return:
+        """
+        if fig is None:
+            return self.imported_svg_data[fig]['curves']
+        else:
+            return self.imported_svg_data[fig]['curves'][1:]
+
+def calc_lengths(self):
+        """
+        The dimension of the object is calculated
+        The parameters are stored in
+
+        | imported_svg_data:
+        | 'length'
+        | 'height'
+        | 'centerx'
+        | 'centery'
+        | 'beginning'
+        | 'end'
+        | 'top'
+        | 'bottom'
+
+        :return:
+        """
+        for expr in self.imported_svg_data:
+            curves = self.get_figure_curves(expr)  # the H is stripped for latex formulas
+
+            max_vals = [-math.inf, -math.inf]
+            min_vals = [math.inf, math.inf]
+
+            directions = [0, 1]  # 0 horizontal
+            # 1 vertical
+
+            for direction in directions:
+                for char in curves:
+                    # char is a b_object, so reassign to the contained curve
+                    char = char.ref_obj
+                    for spline in char.data.splines:
+                        for point in spline.bezier_points:
+                            candidate = char.matrix_local.translation[direction] + point.co[direction] * char.scale[
+                                direction]  # +char.parent.matrix_local.translation[direction]
+                            if max_vals[direction] < candidate:
+                                max_vals[direction] = candidate
+                            if min_vals[direction] > candidate:
+                                min_vals[direction] = candidate
+
+            right_most_x, top_most_y = max_vals
+            left_most_x, bottom_most_y = min_vals
+
+            length = right_most_x - left_most_x
+            center = left_most_x + length / 2
+
+            self.imported_svg_data[expr]['length'] = length * self.intrinsic_scale[0]
+            self.imported_svg_data[expr]['centerx'] = center
+            self.imported_svg_data[expr]['beginning'] = left_most_x  # Untested
+            self.imported_svg_data[expr]['end'] = right_most_x
+
+            height = top_most_y - bottom_most_y
+            center = bottom_most_y + height / 2
+
+            self.imported_svg_data[expr]['top'] = top_most_y
+            self.imported_svg_data[expr]['bottom'] = bottom_most_y
+            self.imported_svg_data[expr]['height'] = height * self.intrinsic_scale[1]
+            self.imported_svg_data[expr]['centery'] = center
+
+            self.length = length * self.intrinsic_scale[0]
+
+def align_figures(self):
+    self.calc_lengths()
+    for fig in self.imported_svg_data:
+        self.align_figure(fig)
+
+def align_figure(self, fig):
+    data = self.imported_svg_data
+    curve_list = data[fig]['curves']
+    offset = list(curve_list[0].ref_obj.location)
+
+    # positioning of the first element of the list
+    if self.aligned == 'right':
+        offset[0] = data[fig]['end']
+        offset[1] = data[fig]['centery']
+    if self.aligned == 'right_bottom':
+        offset[0] = data[fig]['end']
+        offset[1] = data[fig]['bottom']
+    elif self.aligned == 'top_centered':
+        offset[0] = data[fig]['centerx']
+        offset[1] = data[fig]['top']
+    elif self.aligned == 'left_bottom':
+        offset[0] = data[fig]['beginning']
+        offset[1] = data[fig]['bottom']
+    elif self.aligned == 'left_top':
+        offset[0] = data[fig]['beginning']
+        offset[1] = data[fig]['top']
+    elif self.aligned == 'x_and_y':
+        offset[0] = data[fig]['centerx']
+        offset[1] = data[fig]['centery']
+    elif self.aligned == 'left':
+        offset[0] = data[fig]['beginning']
+        offset[1] = data[fig]['centery']
+    elif self.aligned == 'center':
+        cen = data[fig]['centerx']
+        offset[0] = cen
+        offset[1] = data[fig]['centery']
+
+    for i in range(len(curve_list)):
+        loc = list(curve_list[i].ref_obj.location)
+        new_loc = add_lists_by_element(loc, offset, subtract=True)
+        curve_list[i].ref_obj.location = new_loc
+
+    return curve_list  # needed by sub class TexBObject
+
+def add_lists_by_element(list1, list2, subtract=False):
+    if len(list1) != len(list2):
+        raise Warning("The lists aren't the same length")
+    list3 = list(deepcopy(list2))
+    if subtract:
+        for i in range(len(list3)):
+            list3[i] *= -1
+    return list(map(sum, zip(list1, list3)))
+

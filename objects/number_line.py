@@ -1,7 +1,10 @@
 import numpy as np
 from mathutils import Vector
 
+from geometry_nodes.geometry_nodes_modifier import NumberlineModifier
+from interface import ibpy
 from objects.cone import Cone
+from objects.cube import Cube
 from objects.cylinder import Cylinder
 from objects.bobject import BObject
 from objects.digital_number import DigitalRange
@@ -9,6 +12,44 @@ from objects.tex_bobject import SimpleTexBObject
 from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME
 
 
+class Numberline2(BObject):
+    def __init__(self,name='Numberline',**kwargs):
+        r"""Create a number line using geometry nodes:
+           :param name:
+               name shown in Blender
+           :type first: ``str``
+           :param \**kwargs:
+               See below
+           : Keyword Arguments:
+               * *extra* (length=1,radius=0.05,domain=[0,1],location=[0,0,0],n_tics=10,
+               label='x',
+               include_zero=True,
+               direction='vertical',
+               origin=0,
+               tic_labels='AUTO',
+               tic_label_digits=0,
+               label_unit='',
+               label_position='left',
+               label_closenss=1,
+               tip_length=0.2,
+               auto_smooth=True) --
+           """
+        self.modifier = NumberlineModifier(**kwargs)
+        cube = ibpy.add_cube()
+        self.kwargs = kwargs
+        super().__init__(obj=cube, name=name, no_material=True, **kwargs)
+        super().add_mesh_modifier('NODES',node_modifier=self.modifier)
+
+    def grow(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, modus='from_center', pivot=None,
+             initial_scale=0,alpha=1):
+        super().appear(alpha=alpha, begin_time=begin_time, transition_time=0, silent=True)
+        length_node = ibpy.get_geometry_node_from_modifier(self.modifier,"Length")
+        radius_node = ibpy.get_geometry_node_from_modifier(self.modifier,"Radius")
+        length = self.get_from_kwargs("length",1)
+        radius = self.get_from_kwargs("radius",0.05)
+        ibpy.change_default_value(length_node,from_value=0,to_value=length,begin_time=begin_time,transition_time=transition_time)
+        ibpy.change_default_value(radius_node,from_value=0,to_value=radius,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
 class NumberLine(BObject):
     """
     Create a number line :

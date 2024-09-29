@@ -54,9 +54,8 @@ class GreenNode(Node):
     def __init__(self, tree, location=(0, 0), **kwargs):
         super().__init__(tree, location=location, **kwargs)
 
-        # these ports have to be declared in the children
+        # the following ports have to be declared in the children
         # to automatically build a chain of geometry nodes
-
         self.inputs = self.node.inputs
         self.outputs = self.node.outputs
 
@@ -365,6 +364,8 @@ class CurveToMesh(GreenNode):
             self.tree.links.new(profile_curve, self.node.inputs['Profile Curve'])
 
 
+# default meshes
+
 class Grid(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  size_x=10,
@@ -396,7 +397,6 @@ class Grid(GreenNode):
         else:
             self.tree.links.new(vertices_y, self.node.inputs['Vertices Y'])
 
-
 class UVSphere(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  radius=1,
@@ -423,7 +423,6 @@ class UVSphere(GreenNode):
         else:
             self.tree.links.new(rings, self.node.inputs['Rings'])
 
-
 class IcoSphere(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  radius=0.1,
@@ -443,7 +442,6 @@ class IcoSphere(GreenNode):
             self.node.inputs['Subdivisions'].default_value = subdivisions
         else:
             self.tree.links.new(subdivisions, self.node.inputs['Subdivisions'])
-
 
 class CubeMesh(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -475,10 +473,11 @@ class CubeMesh(GreenNode):
         else:
             self.tree.links.new(size, self.node.inputs['Size'])
 
-
 class CylinderMesh(GreenNode):
     def __init__(self, tree, location=(0, 0),
-                 fill_type="TRIANGLE_FAN", vertices=32, side_segments=1, fill_segments=1, radius=1, depth=2, **kwargs
+                 fill_type="TRIANGLE_FAN", vertices=32,
+                 side_segments=1, fill_segments=1,
+                 radius=1, depth=2, **kwargs
                  ):
         """
         :param fill_type: ('NONE', 'NGON', 'TRIANGLE_FAN')
@@ -499,27 +498,78 @@ class CylinderMesh(GreenNode):
         if isinstance(vertices, int):
             self.node.inputs['Vertices'].default_value = vertices
         else:
-            self.node.inputs['Vertices'] = vertices
+            self.links.new(vertices,self.node.inputs['Vertices'])
 
         if isinstance(side_segments, int):
             self.node.inputs['Side Segments'].default_value = side_segments
         else:
-            self.node.inputs['Side Segments'] = side_segments
+            self.links.new(side_segments,self.node.inputs['Side Segments'])
 
         if isinstance(fill_segments, int):
             self.node.inputs['Fill Segments'].default_value = fill_segments
         else:
-            self.node.inputs['Fill Segments'] = fill_segments
+            self.links.new(fill_segments,self.node.inputs['Fill Segments'])
 
         if isinstance(radius, (int, float)):
             self.node.inputs['Radius'].default_value = radius
         else:
-            self.node.inputs['Radius'] = radius
+            self.links.new(radius,self.node.inputs['Radius'])
 
         if isinstance(depth, (int, float)):
             self.node.inputs['Depth'].default_value = depth
         else:
-            self.node.inputs['Depth'] = depth
+            self.links.new(depth,self.node.inputs['Depth'])
+
+class ConeMesh(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 fill_type="TRIANGLE_FAN", vertices=32, side_segments=1, fill_segments=1,
+                 radius_top=0,radius_bottom=1, depth=2, **kwargs):
+        """
+        :param fill_type: ('NONE', 'NGON', 'TRIANGLE_FAN')
+
+        """
+
+        self.node = tree.nodes.new(type="GeometryNodeMeshCone")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs['Mesh']
+        self.top_out = self.node.outputs['Top']
+        self.side_out = self.node.outputs['Side']
+        self.bottom_out = self.node.outputs['Bottom']
+        self.uv_out = self.node.outputs['UV Map']
+
+        self.node.fill_type = fill_type
+
+        if isinstance(vertices, int):
+            self.node.inputs['Vertices'].default_value = vertices
+        else:
+            self.links.new(vertices, self.node.inputs['Vertices'])
+
+        if isinstance(side_segments, int):
+            self.node.inputs['Side Segments'].default_value = side_segments
+        else:
+            self.links.new(side_segments, self.node.inputs['Side Segments'])
+
+        if isinstance(fill_segments, int):
+            self.node.inputs['Fill Segments'].default_value = fill_segments
+        else:
+            self.links.new(fill_segments, self.node.inputs['Fill Segments'])
+
+        if isinstance(radius_top, (int, float)):
+            self.node.inputs['Radius Top'].default_value = radius_top
+        else:
+            self.links.new(radius_top, self.node.inputs['Radius Top'])
+
+        if isinstance(radius_bottom, (int, float)):
+            self.node.inputs['Radius Bottom'].default_value = radius_bottom
+        else:
+            self.links.new(radius_bottom, self.node.inputs['Radius Bottom'])
+
+        if isinstance(depth, (int, float)):
+            self.node.inputs['Depth'].default_value = depth
+        else:
+            self.links.new(depth, self.node.inputs['Depth'])
+
 
 
 class InstanceOnPoints(GreenNode):
@@ -597,7 +647,7 @@ class SetPosition(GreenNode):
         self.geometry_out = self.node.outputs['Geometry']
         self.geometry_in = self.node.inputs['Geometry']
 
-        if isinstance(position, Vector):
+        if isinstance(position, (Vector,list)):
             self.node.inputs['Position'].default_value = position
         else:
             self.tree.links.new(position, self.node.inputs['Position'])
@@ -967,10 +1017,19 @@ class SetShadeSmooth(GreenNode):
 
 class TransformGeometry(GreenNode):
     def __init__(self, tree, location=(0, 0),
+                 translation_x=None,
+                 translation_y=None,
+                 translation_z=None,
                  translation=Vector(),
                  rotation=Vector(),
                  scale=Vector([1, 1, 1]), **kwargs
                  ):
+        """
+        :param translation_x: only an x component for the translation is given, this overrides the translation parameter:
+        :param translation_y: only a y component for the translation is given, this overrides the translation parameter:
+        :param translation_z: only a z component for the translation is given, this overrides the translation parameter:
+
+        """
 
         self.node = tree.nodes.new(type="GeometryNodeTransform")
         super().__init__(tree, location=location, **kwargs)
@@ -978,7 +1037,17 @@ class TransformGeometry(GreenNode):
         self.geometry_out = self.node.outputs['Geometry']
         self.geometry_in = self.node.inputs['Geometry']
 
-        if isinstance(translation, (list, Vector)):
+        if translation_z is not None or translation_y is not None or translation_x is not None:
+            if translation_z is None:
+                translation_z=0
+            if translation_y is None:
+                translation_y=0
+            if translation_x is None:
+                translation_x =0
+            sep = CombineXYZ(tree,location=(location[0]-1,location[1]),
+                             x=translation_x,y=translation_y,z=translation_z)
+            tree.links.new(sep.std_out,self.inputs['Translation'])
+        elif isinstance(translation, (list, Vector)):
             self.inputs['Translation'].default_value = translation
         else:
             self.tree.links.new(translation, self.inputs['Translation'])
@@ -992,7 +1061,6 @@ class TransformGeometry(GreenNode):
             self.inputs['Scale'].default_value = scale
         else:
             self.tree.links.new(scale, self.inputs['Scale'])
-
 
 class ObjectInfo(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -1009,7 +1077,6 @@ class ObjectInfo(GreenNode):
             self.node.inputs['Object'].default_value = object
 
         self.geometry_out = self.node.outputs['Geometry']
-
 
 class DomainSize(GreenNode):
     """
@@ -1035,7 +1102,6 @@ class DomainSize(GreenNode):
             tree.links.new(geometry, self.node.inputs['Geometry'])
 
         self.geometry_in = self.node.inputs['Geometry']
-
 
 class SampleIndex(GreenNode):
     """
@@ -1221,16 +1287,22 @@ class CombineXYZ(BlueNode):
         if isinstance(x, (int, float)):
             self.node.inputs['X'].default_value = x
         else:
+            if not isinstance(x, bpy.types.NodeSocketFloat):
+                x = x.std_out
             tree.links.new(x, self.node.inputs['X'])
 
         if isinstance(y, (int, float)):
             self.node.inputs['Y'].default_value = y
         else:
+            if not isinstance(y, bpy.types.NodeSocketFloat):
+                y = y.std_out
             tree.links.new(y, self.node.inputs['Y'])
 
         if isinstance(z, (int, float)):
             self.node.inputs['Z'].default_value = z
         else:
+            if not isinstance(z,bpy.types.NodeSocketFloat):
+                z = z.std_out
             tree.links.new(z, self.node.inputs['Z'])
 
 
@@ -2145,7 +2217,7 @@ class Structure:
 
 def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[], scalars=[],
                   node_group_type='GeometryNodes',
-                  name='FunctionNode', hide=False, location=(0, 0)):
+                  name='FunctionNode', hide=True, location=(0, 0)):
     """
     this will be the optimized prototype for a flexible function generator
     functions: a dictionary that contains a key for every output. If the key is in vectors,

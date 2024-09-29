@@ -5059,8 +5059,11 @@ def change_volume_absorption(bob, final_value, begin_time=0, transition_time=DEF
 
 
 #####################
-# work with splines #
+# work with curves and splines #
 #####################
+def import_curve(path):
+    """import curve into blender project"""
+    bpy.ops.import_curve.svg(filepath=path)
 
 def merge_splines(b_objects):
     bob0 = None
@@ -5129,6 +5132,8 @@ def get_curve_for_b_object(bob):
 def get_curve_for_object(obj):
     return bpy.data.curves[obj.name]
 
+def get_all_curves():
+    return [x for x in bpy.data.objects if x.type == 'CURVE']
 
 def separate_pieces(data):
     '''

@@ -14,6 +14,10 @@ from scipy.spatial import ConvexHull
 from interface.ibpy import Vector
 
 def choose(lst,choice):
+    '''
+    >>> choose(list(range(5)),2)
+    [[0, 1], [0, 2], [0, 3], [0, 4], [1, 2], [1, 3], [1, 4], [2, 3], [2, 4], [3, 4]]
+    '''
     return  [list(i) for i in combinations(lst, choice)]
 
 def tuples(lst, dim):
@@ -82,7 +86,7 @@ def identity_matrix(dim,unit=1,zero=0):
     [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
     """
     if zero==0:
-        return np.identiy(dim)
+        return np.identity(dim)
     result = []
     for row in np.identity(dim):
         res_row = []

@@ -1990,69 +1990,10 @@ def dvi_to_svg(dvi_file, recreate):
         os.system(" ".join(commands))
     return result
 
-
-def tex_title(expression, typeface):
-    """
-       bobject that regularizes the latex content to get but most likely unique filenames
-            | '\' -> '_bs_'
-            | '(' -> '_rob_'
-            | ')' -> '_rcb_'
-            | '^' -> '_**_'
-            | '{' -> '_cob_'
-            | '}' -> '_ccb_'
-            | '&' -> '_amp_'
-            | '$' -> '_dol_'
-            | '^' ->'_cflex_'
-            | ',' ->'_c_'
-       :param typeface:
-       :param expression:
-       :return:
-    """
-
-    name = expression
-    to_delete = ['/', '~', '\'', '\"', ' ']
-    # Replace these rather than deleting them. These are characters that I've
-    # wanted as lone expressions. (Which are also off limits in file names)
-    to_replace = {
-        '<': 'lessthan',
-        '>': 'greaterthan',
-        '?': 'questionmark',
-        '.': 'point',
-        ':': 'colon',
-        '%': 'percent',
-        '|': 'vbar',
-        '\\': '_bs_',
-        '(': '_rob_',
-        ')': '_rcb_',
-        '{': '_cob_',
-        '}': '_ccb_',
-        '^': '_**_',
-        '=': '_eq_',
-        '&': '_amp_',
-        '$': '_dol_',
-        '^': '_cflex_',
-        ',': '_c_',
-    }
-    for char in name:
-        if char in to_delete:
-            name = name.replace(char, "")
-    for char in name:
-        if char in to_replace.keys():
-            name = name.replace(char, to_replace[char])
-    # name = str(name) + '_'
-    if typeface != 'default':
-        name += '_' + typeface
-
-    if len(name) > 200:  # make sure that the filename doesn't get too long
-        name = name[0:200]
-    return str(name)
-
-
 def hashed_tex(expression, typeface):
     string = expression + typeface
     hasher = hashlib.sha256(string.encode())
     return hasher.hexdigest()[:16]
-
 
 def generate_tex_file(expression, template_tex_file, typeface, text_only, recreate):
     result = os.path.join(
@@ -2081,7 +2022,6 @@ def generate_tex_file(expression, template_tex_file, typeface, text_only, recrea
         with open(result, "w") as outfile:
             outfile.write(body)
     return result
-
 
 def tex_to_dvi(tex_file, recreate):
     result = tex_file.replace(".tex", ".dvi")

@@ -20,7 +20,7 @@ class EmptyCube(BObject):
         bpy.ops.object.empty_add(type='CUBE', align='WORLD', location=location, scale=scale)
         empty = bpy.context.object
 
-        super().__init__(obj=empty, name=name, **kwargs)
+        super().__init__(obj=empty, name=name, no_material=True, **kwargs)
         apply_location = self.get_from_kwargs('apply_location', False)
         apply_scale = self.get_from_kwargs('apply_scale', False)
         apply_rotation = self.get_from_kwargs('apply_rotation', False)
