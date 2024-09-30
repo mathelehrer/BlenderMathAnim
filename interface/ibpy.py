@@ -954,7 +954,12 @@ def make_new_collection(name="MyCollection"):
     col = bpy.data.collections.new(name)
     bpy.context.scene.collection.children.link(col)
 
-
+def remove_collection(collection):
+    if isinstance(collection,str):
+        name=collection
+    else:
+        name= collection.name
+    bpy.context.scene.collection.children.unlink(name)
 # linking and unlinking
 
 

@@ -18,6 +18,7 @@ from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
+from objects.bobject import BObject
 from objects.derived_objects.p_arrow import PArrow
 from utils.constants import FRAME_RATE, TEMPLATE_TEXT_FILE, SVG_DIR, TEX_DIR, TEX_TEXT_TO_REPLACE, TEMPLATE_TEX_FILE, \
     TEX_LOCAL_SCALE_UP
@@ -2168,7 +2169,7 @@ class NumberlineModifier(GeometryNodesModifier):
 def generate_labels(tic_labels,**kwargs):
 
     vert_align_centers = get_from_kwargs(kwargs, 'vert_align_centers', 'x_and_y')
-    aliged = get_from_kwargs(kwargs, 'aligned', 'left')
+    aligned = get_from_kwargs(kwargs, 'aligned', 'left')
     default_color = get_from_kwargs(kwargs, 'color', 'text')
     text_size = get_from_kwargs(kwargs, 'text_size', 'normal')
     scale = get_from_kwargs(kwargs,'scale',1)
@@ -2244,8 +2245,17 @@ def generate_labels(tic_labels,**kwargs):
                 #             break
 
                 imported_svg_data[path]['curves'] = new_curves
-    print(imported_svg_data)
-   # align_figures()
+    imported_svg_data=align_figures(imported_svg_data,aligned)
+    for label, expr in zip(tic_labels,imported_svg_data):
+        # create new collection for every label
+        collection = ibpy.make_new_collection(str(label))
+        for curve in imported_svg_data[expr]:
+            ibpy.link(curve,collection)
+        # remove import collection
+        old_collection = ibpy.get_collection(str(label))
+        for obj in old_collection.objects:
+            ibpy.un_link(obj,old_collection.name)
+        ibpy.remove_collection(old_collection)
     return tic_labels
 
 #### Generating functions
@@ -2364,19 +2374,17 @@ def hashed_tex(expression, typeface):
 
 #### Alignment functions
 
-def get_figure_curves(self, fig):
+def get_figure_curves(imported_svg_data, fig):
         """
         returns the curves
         this method is overriden by the TexBObject to strip the leading H
         :param fig:
         :return:
         """
-        if fig is None:
-            return self.imported_svg_data[fig]['curves']
-        else:
-            return self.imported_svg_data[fig]['curves'][1:]
+       
+        return imported_svg_data[fig]['curves'][1:]
 
-def calc_lengths(self):
+def calc_lengths(imported_svg_data):
         """
         The dimension of the object is calculated
         The parameters are stored in
@@ -2393,8 +2401,9 @@ def calc_lengths(self):
 
         :return:
         """
-        for expr in self.imported_svg_data:
-            curves = self.get_figure_curves(expr)  # the H is stripped for latex formulas
+        lengths = []
+        for expr in imported_svg_data:
+            curves = get_figure_curves(imported_svg_data,expr)  # the H is stripped for latex formulas
 
             max_vals = [-math.inf, -math.inf]
             min_vals = [math.inf, math.inf]
@@ -2404,8 +2413,6 @@ def calc_lengths(self):
 
             for direction in directions:
                 for char in curves:
-                    # char is a b_object, so reassign to the contained curve
-                    char = char.ref_obj
                     for spline in char.data.splines:
                         for point in spline.bezier_points:
                             candidate = char.matrix_local.translation[direction] + point.co[direction] * char.scale[
@@ -2421,64 +2428,67 @@ def calc_lengths(self):
             length = right_most_x - left_most_x
             center = left_most_x + length / 2
 
-            self.imported_svg_data[expr]['length'] = length * self.intrinsic_scale[0]
-            self.imported_svg_data[expr]['centerx'] = center
-            self.imported_svg_data[expr]['beginning'] = left_most_x  # Untested
-            self.imported_svg_data[expr]['end'] = right_most_x
+            imported_svg_data[expr]['length'] = length 
+            imported_svg_data[expr]['centerx'] = center
+            imported_svg_data[expr]['beginning'] = left_most_x  # Untested
+            imported_svg_data[expr]['end'] = right_most_x
 
             height = top_most_y - bottom_most_y
             center = bottom_most_y + height / 2
 
-            self.imported_svg_data[expr]['top'] = top_most_y
-            self.imported_svg_data[expr]['bottom'] = bottom_most_y
-            self.imported_svg_data[expr]['height'] = height * self.intrinsic_scale[1]
-            self.imported_svg_data[expr]['centery'] = center
+            imported_svg_data[expr]['top'] = top_most_y
+            imported_svg_data[expr]['bottom'] = bottom_most_y
+            imported_svg_data[expr]['height'] = height
+            imported_svg_data[expr]['centery'] = center
+            imported_svg_data[expr]['curves']=curves
+        return imported_svg_data
 
-            self.length = length * self.intrinsic_scale[0]
+            
 
-def align_figures(self):
-    self.calc_lengths()
-    for fig in self.imported_svg_data:
-        self.align_figure(fig)
+def align_figures(imported_svg_data,aligned):
+    imported_svg_data = calc_lengths(imported_svg_data)
+    for fig in imported_svg_data:
+        imported_svg_data[fig]=align_figure(fig,imported_svg_data,aligned)
+    return imported_svg_data
 
-def align_figure(self, fig):
-    data = self.imported_svg_data
+def align_figure(fig,imported_svg_data,aligned):
+    data = imported_svg_data
     curve_list = data[fig]['curves']
-    offset = list(curve_list[0].ref_obj.location)
+    offset = list(curve_list[0].location)
 
     # positioning of the first element of the list
-    if self.aligned == 'right':
+    if aligned == 'right':
         offset[0] = data[fig]['end']
         offset[1] = data[fig]['centery']
-    if self.aligned == 'right_bottom':
+    if aligned == 'right_bottom':
         offset[0] = data[fig]['end']
         offset[1] = data[fig]['bottom']
-    elif self.aligned == 'top_centered':
+    elif aligned == 'top_centered':
         offset[0] = data[fig]['centerx']
         offset[1] = data[fig]['top']
-    elif self.aligned == 'left_bottom':
+    elif aligned == 'left_bottom':
         offset[0] = data[fig]['beginning']
         offset[1] = data[fig]['bottom']
-    elif self.aligned == 'left_top':
+    elif aligned == 'left_top':
         offset[0] = data[fig]['beginning']
         offset[1] = data[fig]['top']
-    elif self.aligned == 'x_and_y':
+    elif aligned == 'x_and_y':
         offset[0] = data[fig]['centerx']
         offset[1] = data[fig]['centery']
-    elif self.aligned == 'left':
+    elif aligned == 'left':
         offset[0] = data[fig]['beginning']
         offset[1] = data[fig]['centery']
-    elif self.aligned == 'center':
+    elif aligned == 'center':
         cen = data[fig]['centerx']
         offset[0] = cen
         offset[1] = data[fig]['centery']
 
     for i in range(len(curve_list)):
-        loc = list(curve_list[i].ref_obj.location)
+        loc = list(curve_list[i].location)
         new_loc = add_lists_by_element(loc, offset, subtract=True)
-        curve_list[i].ref_obj.location = new_loc
+        curve_list[i].location = new_loc
 
-    return curve_list  # needed by sub class TexBObject
+    return curve_list
 
 def add_lists_by_element(list1, list2, subtract=False):
     if len(list1) != len(list2):
