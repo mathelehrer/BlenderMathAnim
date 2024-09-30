@@ -7,11 +7,52 @@ from interface import ibpy
 
 from objects.cylinder import Cylinder
 from objects.function import Function, MeshFunction
-from objects.number_line import NumberLine, DynamicNumberLine
+from objects.number_line import NumberLine, DynamicNumberLine, NumberLine2
 from objects.bobject import BObject
 from utils.constants import OBJECT_APPEARANCE_TIME, FRAME_RATE, DEFAULT_ANIMATION_TIME
 from utils.kwargs import get_from_kwargs
 from utils.utils import to_vector
+
+class CoordinateSystem2(BObject):
+    def __init__(self,**kwargs):
+        """
+            creates a coordinate system
+
+            use dim=2 for two-dimensional and dim=3 for three-dimensional coordinate systems
+            the length of the arrays should correspond to the number of dimensions
+
+            for each dimension an Numberline is created
+            in geometry nodes
+            """
+
+        self.kwargs = kwargs
+        self.origin = self.get_from_kwargs('origin', [0, 0])
+        self.dimension = self.get_from_kwargs('dim', 2)
+        self.location = self.get_from_kwargs('location', Vector([0, 0]))
+        self.lengths = self.get_from_kwargs('lengths', [7,7])
+        self.radii = self.get_from_kwargs('radii', [0.05, 0.05])
+        self.domains = self.get_from_kwargs("domains",[[0,10],[0,10]])
+        self.include_zeros =self.get_from_kwargs("include_zeros",[False,False])
+        self.colors = self.get_from_kwargs('colors',['drawing','drawing'])
+
+        self.axes = []
+        if self.dimension ==2:
+            names= ["xAxis","yAxis"]
+            directions = ["HORIZONTAL","VERTICAL"]
+            for i in range(2):
+                self.axes.append(NumberLine2(name=names[i],direction=directions[i],domain=self.domains[i],
+                                         include_zero=self.include_zeros[i],length=self.lengths[i],
+                                 color=self.colors[i],**kwargs))
+
+
+        super().__init__(children=self.axes,name=str(self.dimension)+"D-CoordinateSystem",location=self.location,**kwargs)
+
+    def appear(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,alpha=1):
+        super().appear(scale=scale,begin_time=begin_time,transition_time=transition_time,alpha=alpha)
+        for axis in self.axes:
+            axis.grow(scale=scale,begin_time=begin_time,transition_time=transition_time,alpha=alpha)
+        return begin_time+transition_time
+
 class CoordinateSystem(BObject):
     """
     creates a coordinate system

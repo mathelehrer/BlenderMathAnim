@@ -1206,13 +1206,13 @@ class InputRotation(RedNode):
         self.node = tree.nodes.new(type="FunctionNodeInputRotation")
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_out = self.node.outputs[0]
-        self.node.outputs[0].default_value = rotation
+        self.std_out = self.node.outputs["Rotation"]
+        self.node.rotation_euler = rotation
 
 class InvertRotation(RedNode):
     def __init__(self, tree, location=(0, 0), in_rotation=Vector()
                  , **kwargs):
-        self.node = tree.nodes.new(type="FunctionNodeInputRotation")
+        self.node = tree.nodes.new(type="FunctionNodeInvertRotation")
         super().__init__(tree, location=location, **kwargs)
 
         self.std_out = self.node.outputs["Rotation"]
@@ -1226,7 +1226,7 @@ class InvertRotation(RedNode):
 class RotateRotation(RedNode):
     def __init__(self, tree, location=(0, 0), rotation=Vector(), rotate_by=Vector()
                  , **kwargs):
-        self.node = tree.nodes.new(type="FunctionNodeInputRotateRotation")
+        self.node = tree.nodes.new(type="FunctionNodeRotateRotation")
         super().__init__(tree, location=location, **kwargs)
 
         self.std_out = self.node.outputs["Rotation"]

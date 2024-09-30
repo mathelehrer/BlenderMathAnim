@@ -12,7 +12,7 @@ from objects.tex_bobject import SimpleTexBObject
 from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME
 
 
-class Numberline2(BObject):
+class NumberLine2(BObject):
     def __init__(self,name='Numberline',**kwargs):
         r"""Create a number line using geometry nodes:
            :param name:
@@ -32,7 +32,9 @@ class Numberline2(BObject):
                label_position='left',
                label_closeness=1,
                tip_length=0.2,
-               auto_smooth=True) --
+               auto_smooth=True,
+               direction="HORIZONAL|VERTICAL|DEEP|NONE"
+               )--
            """
 
         self.modifier = NumberLineModifier(**kwargs)

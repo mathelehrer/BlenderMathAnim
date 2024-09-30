@@ -2000,8 +2000,7 @@ class SliderModifier(GeometryNodesModifier):
         del_geo = DeleteGeometry(tree, location=(left, 0), selection=sel_fcn.outputs["selection"])
 
         create_geometry_line(tree, [geometry, inside_transformation, material, join])
-        create_geometry_line(tree, [geometry, transformation, wireframe, grid_material, sub_div, join, del_geo
-                                    ], out=out.inputs[0])
+        create_geometry_line(tree, [geometry, transformation, wireframe, grid_material, sub_div, join, del_geo], out=out.inputs[0])
 
 
 class NumberLineModifier(GeometryNodesModifier):
@@ -2025,16 +2024,25 @@ class NumberLineModifier(GeometryNodesModifier):
         tip_length = get_from_kwargs(kwargs, 'tip_length', 0.1)
         n_tics = get_from_kwargs(kwargs, 'n_tics', 5)
         include_zero = get_from_kwargs(kwargs, 'include_zero', True)
-        global_rotation = get_from_kwargs(kwargs,"rotation_euler",[0,0,0])
+        direction = get_from_kwargs(kwargs,'direction','HORIZONTAL')
+
+        if direction =="VERTICAL":
+            global_rotation = Vector()
+        elif direction == "HORIZONTAL":
+            global_rotation=Vector([0,pi/2,0])
+        elif direction == "DEEP":
+            global_rotation=Vector([pi/2,0,0])
+        else:
+            global_rotation = get_from_kwargs(kwargs,"rotation_euler",[0,0,0])
 
         # setup rotation
         # the labels have to be rotated with inverse rotation to stay in the readable orientation
 
-        in_rotation = InputRotation(tree,rotation=global_rotation)
-        global_transformation = TransformGeometry(tree,rotation=in_rotation.std_out)
+        in_rotation = InputRotation(tree,rotation=global_rotation,name="GlobalRotation")
+        global_transformation = TransformGeometry(tree,rotation=in_rotation.std_out,name="GlobalTransformation")
         inv_rotation = InvertRotation(tree,in_rotation=in_rotation.std_out)
 
-        label_rotation0 = InputRotation(tree,rotation=[pi/2,0,0])
+        label_rotation0 = InputRotation(tree,rotation=[pi/2,0,0],name="InitialLabelRotation")
         label_rotation = RotateRotation(tree,rotation=label_rotation0.std_out,rotate_by=inv_rotation.std_out)
 
 
@@ -2167,7 +2175,7 @@ class NumberLineModifier(GeometryNodesModifier):
             links.new(in_max.std_out, tic_label_function.inputs["x1"])
             links.new(value.std_out, tic_label_function.inputs["val"])
             set_label_pos = SetPosition(tree, position=tic_label_function.outputs["position"],
-                                        offset=Vector([8 * radius, 0, 0]))
+                                        offset=Vector([12 * radius, 0, 0]))
             del_label_geo = DeleteGeometry(tree, selection=tic_label_function.outputs["invisible"])
             create_geometry_line(tree, [coll_info, transform_geo, del_label_geo, set_label_pos, join])
 
@@ -2179,9 +2187,9 @@ class NumberLineModifier(GeometryNodesModifier):
         auto_smooth = get_from_kwargs(kwargs, 'auto_smooth', True)
         if auto_smooth:
             smooth = SetShadeSmooth(tree)
-            main_line = [cyl, cyl_transformation, join, set_material, smooth]
+            main_line = [cyl, cyl_transformation, join, global_transformation, set_material, smooth]
         else:
-            main_line = [cyl, cyl_transformation, join, set_material]
+            main_line = [cyl, cyl_transformation, join, global_transformation, set_material]
 
         create_geometry_line(tree, [cone, cone_transformation, join])
         create_geometry_line(tree, [points, attr_x, set_pos, del_geo, iop, join])
@@ -2275,7 +2283,7 @@ def generate_labels(tic_labels, **kwargs):
     # cleaning up
     for label, expr in zip(tic_labels, imported_svg_data):
         # create new collection for every label
-        collection = ibpy.make_new_collection(str(label))
+        collection = ibpy.make_new_collection(str(label),hide_render=True,hide_viewport=True)
         for curve in imported_svg_data[expr]:
             ibpy.link(curve, collection)
         # remove import collection

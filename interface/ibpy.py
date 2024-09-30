@@ -950,14 +950,26 @@ def get_frame():
     return bpy.context.scene.frame_current
 
 
-def make_new_collection(name="MyCollection"):
+def make_new_collection(name="MyCollection",hide_render=False,hide_viewport=False):
     col = bpy.data.collections.new(name)
+    col.hide_render=hide_render
+    col.hide_viewport=hide_viewport
     bpy.context.scene.collection.children.link(col)
     return col
 
 
 def remove_collection(collection):
-    bpy.context.scene.collection.children.unlink(collection)
+    if collection.name in bpy.data.collections:
+        # if an svg is imported twice, we have to unlink name.svg.001 instead of name.svg
+        collections = []
+        for col in bpy.data.collections:
+            if collection.name in col.name:
+                collections.append(col)
+        for col in collections:
+            try:
+                bpy.context.scene.collection.children.unlink(col)
+            except:
+                print("Could not unlink: ",col)
 # linking and unlinking
 
 
@@ -986,13 +998,25 @@ def link(obj, collection=None):
             if obj.name not in bpy.context.scene.collection.objects:
                 bpy.context.scene.collection.objects.link(obj)
         else:
-            if collection.name not in bpy.context.scene.collection.children:
+            if collection_to_string(collection) not in bpy.context.scene.collection.children:
                 make_new_collection(collection)
-            collection.objects.link(obj)
+            to_collection(collection).objects.link(obj)
             ### if there are children they need to be relinked if there is a custom collection
             for child in obj.children:
                 link(child, collection=collection)
 
+
+def collection_to_string(collection):
+    if isinstance(collection,str):
+        return collection
+    else:
+        return collection.name
+
+def to_collection(collection):
+    if isinstance(collection,str):
+        return bpy.data.collections[collection]
+    else:
+        return collection
 
 def recursive_link(obj, collection=None):
     """
