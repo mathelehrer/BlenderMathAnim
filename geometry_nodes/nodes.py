@@ -1200,6 +1200,52 @@ class InputVector(RedNode):
         self.node.vector = value
 
 
+class InputRotation(RedNode):
+    def __init__(self, tree, location=(0, 0), rotation=Vector()
+                 , **kwargs):
+        self.node = tree.nodes.new(type="FunctionNodeInputRotation")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs[0]
+        self.node.outputs[0].default_value = rotation
+
+class InvertRotation(RedNode):
+    def __init__(self, tree, location=(0, 0), in_rotation=Vector()
+                 , **kwargs):
+        self.node = tree.nodes.new(type="FunctionNodeInputRotation")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Rotation"]
+
+        if isinstance(in_rotation,(list,Vector)):
+            self.node.inputs["Rotation"].default_value=in_rotation
+        else:
+            tree.links.new(in_rotation,self.node.inputs["Rotation"])
+
+
+class RotateRotation(RedNode):
+    def __init__(self, tree, location=(0, 0), rotation=Vector(), rotate_by=Vector()
+                 , **kwargs):
+        self.node = tree.nodes.new(type="FunctionNodeInputRotateRotation")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Rotation"]
+
+        if isinstance(rotation,(list,Vector)):
+            self.node.inputs["Rotation"].vector=rotation
+        else:
+            tree.links.new(rotation,self.node.inputs["Rotation"])
+
+        if isinstance(rotate_by,(list,Vector)):
+            self.node.inputs["Rotate By"].vector=rotate_by
+        else:
+            tree.links.new(rotate_by,self.node.inputs["Rotate By"])
+
+
+
+
+
+
 # blue nodes
 class RandomValue(BlueNode):
     def __init__(self, tree, data_type='FLOAT_VECTOR', location=(0, 0), min=-1 * Vector([1, 1, 1]),

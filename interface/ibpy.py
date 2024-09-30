@@ -953,13 +953,11 @@ def get_frame():
 def make_new_collection(name="MyCollection"):
     col = bpy.data.collections.new(name)
     bpy.context.scene.collection.children.link(col)
+    return col
+
 
 def remove_collection(collection):
-    if isinstance(collection,str):
-        name=collection
-    else:
-        name= collection.name
-    bpy.context.scene.collection.children.unlink(name)
+    bpy.context.scene.collection.children.unlink(collection)
 # linking and unlinking
 
 
@@ -971,12 +969,15 @@ def link(obj, collection=None):
     obj = get_obj(obj)
     if collection is None:
         collection = 'Scene Collection' # default collection
+    elif isinstance(collection,str):
+        collection = bpy.data.collections[collection]
     # check, whether already linked object is added to the correct collection
-    # (when a composed objected is added to a custom collection the children are automatically added to the default collection
+    # (when a composed objected is added to a custom collection the children are
+    # automatically added to the default collection
     # A necessary relinking is initiated
     if len(obj.users_collection) > 0:
         old_collection = obj.users_collection[0].name
-        if old_collection != collection:
+        if old_collection != collection.name:
             un_link(obj, old_collection)
             link(obj, collection)
     else:
@@ -985,9 +986,9 @@ def link(obj, collection=None):
             if obj.name not in bpy.context.scene.collection.objects:
                 bpy.context.scene.collection.objects.link(obj)
         else:
-            if collection not in bpy.context.scene.collection.children:
+            if collection.name not in bpy.context.scene.collection.children:
                 make_new_collection(collection)
-            bpy.context.scene.collection.children[collection].objects.link(obj)
+            collection.objects.link(obj)
             ### if there are children they need to be relinked if there is a custom collection
             for child in obj.children:
                 link(child, collection=collection)

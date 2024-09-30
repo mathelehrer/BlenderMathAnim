@@ -13,7 +13,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     TransformGeometry, InputVector, DeleteGeometry, IcoSphere, MeshLine, MeshToCurve, InstanceOnEdges, CubeMesh, \
     EdgeVertices, BooleanMath, SetShadeSmooth, RayCast, WireFrame, ConvexHull, InsideConvexHull, ExtrudeMesh, \
     ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch, MeshToPoints, \
-    SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputBoolean
+    SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputBoolean, InputRotation, InvertRotation, RotateRotation
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -41,7 +41,7 @@ class GeometryNodesModifier:
     base class that organizes the boilerplate code for the creation of a geometry nodes modifier
     """
 
-    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True, group_input=False,**kwargs):
+    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True, group_input=False, **kwargs):
         tree = get_node_tree(name=name, type='GeometryNodeTree')
 
         # if  materials are created inside the geometry node, they are stored inside the following array
@@ -53,7 +53,7 @@ class GeometryNodesModifier:
         if group_input:
             self.group_inputs = tree.nodes.new('NodeGroupInput')
             make_new_socket(tree, name='Geometry', io='INPUT', type='NodeSocketGeometry')
-        self.create_node(tree,**kwargs)
+        self.create_node(tree, **kwargs)
         # automatically layout nodes
         if automatic_layout:
             layout(tree)
@@ -71,6 +71,7 @@ class GeometryNodesModifier:
 
     def get_node_tree(self):
         return self.tree
+
 
 ##################
 ## Applications ##
@@ -1919,9 +1920,9 @@ class SliderModifier(GeometryNodesModifier):
         left = -10
         slider_value = InputValue(tree, location=(left, -1), name="SliderValue")
 
-        # dimesions
-        dimesions = get_from_kwargs(self.kwargs, "dimensions", [0.25, 0.25, 2])
-        scale = InputVector(tree, location=(left, -1.5), value=Vector(dimesions), name="Scale")
+        # dimensions
+        dimensions = get_from_kwargs(self.kwargs, "dimensions", [0.25, 0.25, 2])
+        scale = InputVector(tree, location=(left, -1.5), value=Vector(dimensions), name="Scale")
 
         #orientation
         orientation = get_from_kwargs(self.kwargs, "orientation", "horizontal")
@@ -1931,12 +1932,12 @@ class SliderModifier(GeometryNodesModifier):
         # shape
         shape = get_from_kwargs(self.kwargs, "shape", "cylinder")
         if shape == 'cubic':
-            geometry = CubeMesh(tree, size=dimesions, location=(left, 0))
+            geometry = CubeMesh(tree, size=dimensions, location=(left, 0))
         else:
             geometry = CylinderMesh(tree, radius=1, vertices=16, depth=2, fill_type='NGON', side_segments=2,
                                     location=(left, 0))
             left += 1
-            l = dimesions[2]
+            l = dimensions[2]
             if orientation == "horizontal":
                 rotation = [0, pi / 2, 0]
                 self.label_position = Vector(position) - Vector([1.1 * l, 0, 0])
@@ -1969,10 +1970,10 @@ class SliderModifier(GeometryNodesModifier):
                                                   scale=slider_trafo.outputs["scale"])
         left += 1
         wireframe = WireFrame(tree, radius=0.0025, location=(left, 0))
-        left+=1
-        grid_material = SetMaterial(tree,location=(left,0),material='text',emission=1)
         left += 1
-        subdiv = SubdivideMesh(tree, level=5, location=(left, 0))
+        grid_material = SetMaterial(tree, location=(left, 0), material='text', emission=1)
+        left += 1
+        sub_div = SubdivideMesh(tree, level=5, location=(left, 0))
 
         gradient_material = double_gradient(functions={"uv": ["uv_x,0.5,-,2,*", "uv_y,0.5,-,2,*", "uv_z,0.5,-,2,*"],
                                                        "abs_uv": ["uv_x,0.5,-,2,*,abs", "uv_y,0.5,-,2,*,abs",
@@ -1980,7 +1981,7 @@ class SliderModifier(GeometryNodesModifier):
         self.materials.append(gradient_material)
         material = SetMaterial(tree, location=(left, -1), material=gradient_material)
         pos = Position(tree, location=(left, -2))
-        growth = InputValue(tree, location=(left, -3), value=-l,name="Growth")
+        growth = InputValue(tree, location=(left, -3), value=-l, name="Growth")
         left += 1
         join = JoinGeometry(tree, location=(left, 0))
 
@@ -1999,83 +2000,97 @@ class SliderModifier(GeometryNodesModifier):
         del_geo = DeleteGeometry(tree, location=(left, 0), selection=sel_fcn.outputs["selection"])
 
         create_geometry_line(tree, [geometry, inside_transformation, material, join])
-        create_geometry_line(tree, [geometry, transformation, wireframe, grid_material, subdiv, join, del_geo
+        create_geometry_line(tree, [geometry, transformation, wireframe, grid_material, sub_div, join, del_geo
                                     ], out=out.inputs[0])
 
 
-class NumberlineModifier(GeometryNodesModifier):
-    def __init__(self, name='NumberlineModifier', **kwargs):
+class NumberLineModifier(GeometryNodesModifier):
+    def __init__(self, name='NumberLineModifier', **kwargs):
         """
-        create geometry for the numberline
+        create geometry for the number line
         """
 
-        super().__init__(name, group_input=False, automatic_layout=True,**kwargs)
+        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
 
-    def create_node(self, tree,**kwargs):
+    def create_node(self, tree, **kwargs):
         out = self.group_outputs
         links = tree.links
 
         # input parameters
-        domain = get_from_kwargs(kwargs,'domain',[0,10])
-        tic_labels=get_from_kwargs(kwargs,'tic_labels','AUTO')
-        tic_label_digits=get_from_kwargs(kwargs,'tic_label_digits',1)
-        max_length = get_from_kwargs(kwargs,'length',5)
-        radius = get_from_kwargs(kwargs,'radius',0.025)
-        tip_length=get_from_kwargs(kwargs,'tip_length',0.1)
-        n_tics = get_from_kwargs(kwargs,'n_tics',5)
-        include_zero=get_from_kwargs(kwargs,'incude_zero',True)
+        domain = get_from_kwargs(kwargs, 'domain', [0, 10])
+        tic_labels = get_from_kwargs(kwargs, 'tic_labels', 'AUTO')
+        tic_label_digits = get_from_kwargs(kwargs, 'tic_label_digits', 1)
+        max_length = get_from_kwargs(kwargs, 'length', 5)
+        radius = get_from_kwargs(kwargs, 'radius', 0.025)
+        tip_length = get_from_kwargs(kwargs, 'tip_length', 0.1)
+        n_tics = get_from_kwargs(kwargs, 'n_tics', 5)
+        include_zero = get_from_kwargs(kwargs, 'include_zero', True)
+        global_rotation = get_from_kwargs(kwargs,"rotation_euler",[0,0,0])
 
-        if tic_labels=='AUTO':
-            tic_labels={}
+        # setup rotation
+        # the labels have to be rotated with inverse rotation to stay in the readable orientation
+
+        in_rotation = InputRotation(tree,rotation=global_rotation)
+        global_transformation = TransformGeometry(tree,rotation=in_rotation.std_out)
+        inv_rotation = InvertRotation(tree,in_rotation=in_rotation.std_out)
+
+        label_rotation0 = InputRotation(tree,rotation=[pi/2,0,0])
+        label_rotation = RotateRotation(tree,rotation=label_rotation0.std_out,rotate_by=inv_rotation.std_out)
+
+
+        if tic_labels == 'AUTO':
+            tic_labels = {}
             # create tic_labels
             if include_zero:
-                n=n_tics+1
-                n_0=0
+                n_0 = 0
             else:
-                n=n_tics
-                n_0=1
-            dx = (domain[1]-domain[0])/n
-            p = 10**tic_label_digits # power for rounding
-            for i in range(n_0,n_tics+1):
-                tic_labels[i]=[dx*i,str(round(dx*i*p)/p)]
+                n_0 = 1
+            dx = (domain[1] - domain[0]) / n_tics
+            p = 10 ** tic_label_digits  # power for rounding
+            for i in range(n_0, n_tics + 1):
+                if p == 1:
+                    rounded_val = str(int(round(dx * i)))
+                else:
+                    rounded_val = str(round(dx * i * p) / p)
+                tic_labels[rounded_val] = [dx * i, rounded_val]
 
-        tic_labels = generate_labels(tic_labels,**kwargs)
+        tic_labels = generate_labels(tic_labels, **kwargs)
 
-        in_min = InputValue(tree,name='Minimum',value=domain[0])
-        in_max = InputValue(tree,name='Maximum',value=domain[1])
-        in_length = InputValue(tree,name='Length',value=max_length)
-        in_radius = InputValue(tree,name='Radius',value=radius)
-        in_tics = InputValue(tree,name='nTics',value=n_tics)
-        in_include_zero=InputBoolean(tree,name='includeZero',value=include_zero)
-        attr = NamedAttribute(tree,name="x",data_type="FLOAT_VECTOR")
+        in_min = InputValue(tree, name='Minimum', value=domain[0])
+        in_max = InputValue(tree, name='Maximum', value=domain[1])
+        in_length = InputValue(tree, name='Length', value=max_length)
+        in_radius = InputValue(tree, name='Radius', value=radius)
+        in_tics = InputValue(tree, name='nTics', value=n_tics)
+        in_include_zero = InputBoolean(tree, name='includeZero', value=include_zero)
+        attr = NamedAttribute(tree, name="x", data_type="FLOAT_VECTOR")
         index = Index(tree)
 
         # create geometry
         # axis
-        cyl = CylinderMesh(tree,depth=in_length.std_out,radius=in_radius.std_out)
-        translation = make_function(tree,name="AxisTranslation",
-                                    functions={"translation":["0","0","l,2,/"]},
-                                    inputs=['l'],outputs=["translation"],
-                                    scalars=['l'],vectors=["translation"],
+        cyl = CylinderMesh(tree, depth=in_length.std_out, radius=in_radius.std_out)
+        translation = make_function(tree, name="AxisTranslation",
+                                    functions={"translation": ["0", "0", "l,2,/"]},
+                                    inputs=['l'], outputs=["translation"],
+                                    scalars=['l'], vectors=["translation"],
                                     )
-        links.new(in_length.std_out,translation.inputs['l'])
-        cyl_trafo = TransformGeometry(tree,translation=translation.outputs["translation"])
+        links.new(in_length.std_out, translation.inputs['l'])
+        cyl_transformation = TransformGeometry(tree, translation=translation.outputs["translation"])
 
         # tip
-        tip_scaling = make_function(tree,name="TipScaling",
+        tip_scaling = make_function(tree, name="TipScaling",
                                     functions={
-                                        "tipLength":"l,"+str(tip_length)+",*",
-                                        "tipRadius":"r,2,*"
+                                        "tipLength": "l," + str(tip_length) + ",*",
+                                        "tipRadius": "r,2,*"
                                     },
-                                    inputs=["r","l"],
-                                    outputs=["tipLength","tipRadius"],
-                                    scalars =["r","l"]+["tipLength","tipRadius"] )
-        for node,label in zip([in_radius,in_length],["r","l"]):
-            links.new(node.std_out,tip_scaling.inputs[label])
+                                    inputs=["r", "l"],
+                                    outputs=["tipLength", "tipRadius"],
+                                    scalars=["r", "l"] + ["tipLength", "tipRadius"])
+        for node, label in zip([in_radius, in_length], ["r", "l"]):
+            links.new(node.std_out, tip_scaling.inputs[label])
 
-        cone = ConeMesh(tree,radius_bottom=tip_scaling.outputs["tipRadius"],
+        cone = ConeMesh(tree, radius_bottom=tip_scaling.outputs["tipRadius"],
                         depth=tip_scaling.outputs["tipLength"])
-        cone_trafo = TransformGeometry(tree,translation_z=in_length)
+        cone_transformation = TransformGeometry(tree, translation_z=in_length)
 
         # tics
 
@@ -2084,28 +2099,29 @@ class NumberlineModifier(GeometryNodesModifier):
         tic_domain_pos = "x0,idx,1,+,includeZero,-,x1,x0,-,n,/,*,+"
         # this position is stored in the coordinate of the point associated with the tic
 
-        tic_function = make_function(tree,name="ticsFunction",
-                                     functions={"ntics":"n,includeZero,+,floor",
-                                                "depth":"l,500,/",
-                                                "r":"r,3,*",
-                                                "pos":["0","0",tic_domain_pos]
+        tic_function = make_function(tree, name="ticsFunction",
+                                     functions={"ntics": "n,includeZero,+,floor",
+                                                "depth": "l,500,/",
+                                                "r": "r,3,*",
+                                                "pos": ["0", "0", tic_domain_pos]
                                                 },
-                                     inputs=["n","l","r","idx","includeZero","x0","x1"],
-                                     outputs=["ntics","r","depth","pos","visible"],
-                                     scalars=["n","ntics","l","r","depth",
-                                              "idx","includeZero","x0","x1","visible"],
+                                     inputs=["n", "l", "r", "idx", "includeZero", "x0", "x1"],
+                                     outputs=["ntics", "r", "depth", "pos", "visible"],
+                                     scalars=["n", "ntics", "l", "r", "depth",
+                                              "idx", "includeZero", "x0", "x1", "visible"],
                                      vectors=["pos"])
         links.new(in_length.std_out, tic_function.inputs["l"])
         links.new(in_min.std_out, tic_function.inputs["x0"])
         links.new(in_max.std_out, tic_function.inputs["x1"])
-        links.new(in_tics.std_out,tic_function.inputs["n"])
-        links.new(in_radius.std_out,tic_function.inputs["r"])
-        links.new(index.std_out,tic_function.inputs["idx"])
-        links.new(in_include_zero.std_out,tic_function.inputs["includeZero"])
-        attr_x = StoredNamedAttribute(tree,name="x",data_type='FLOAT_VECTOR',value=tic_function.outputs["pos"])
-        points = Points(tree,count=tic_function.outputs["ntics"],position=tic_function.outputs["pos"])
+        links.new(in_tics.std_out, tic_function.inputs["n"])
+        links.new(in_radius.std_out, tic_function.inputs["r"])
+        links.new(index.std_out, tic_function.inputs["idx"])
+        links.new(in_include_zero.std_out, tic_function.inputs["includeZero"])
+        attr_x = StoredNamedAttribute(tree, name="x", data_type='FLOAT_VECTOR', value=tic_function.outputs["pos"])
+        points = Points(tree, count=tic_function.outputs["ntics"], position=tic_function.outputs["pos"])
 
-        tic_mesh = CylinderMesh(tree,vertices=16,radius=tic_function.outputs["r"],depth=tic_function.outputs['depth'])
+        tic_mesh = CylinderMesh(tree, vertices=16, radius=tic_function.outputs["r"],
+                                depth=tic_function.outputs['depth'])
 
         # tic positioning
         # the actual position of the tic is determined by the scale of the axis and the final position is
@@ -2113,73 +2129,82 @@ class NumberlineModifier(GeometryNodesModifier):
         # map f from l to x space:f(l)= x0+(x1-x0)/l_max *l
         # map f**(-1) from x to l space f**(-1)(x) = (x-x0)/(x1-x0)*l_max
 
-        tic_axis_pos="pos_z,x0,-,x1,x0,-,/,"+str(max_length)+",*"
-        end_of_axis="x0,x1,x0,-,"+str(max_length)+",/,l,*,+"
-        tic_transformation=make_function(tree,name="TicTransformation",
-                                         functions={
-                                             "position":["0","0",tic_axis_pos],
-                                             "invisible":["pos_z,"+end_of_axis+",>"]
-                                         },inputs=["pos","x0","x1","l"],outputs=["position","invisible"],
-                                         scalars=["x0","x1","invisible","l"],vectors=["pos","position"])
-        links.new(attr.std_out,tic_transformation.inputs["pos"])
+        tic_axis_pos = "pos_z,x0,-,x1,x0,-,/," + str(max_length) + ",*"
+        end_of_axis = "x0,x1,x0,-," + str(max_length) + ",/,l,*,+"
+        tic_transformation = make_function(tree, name="TicTransformation",
+                                           functions={
+                                               "position": ["0", "0", tic_axis_pos],
+                                               "invisible": ["pos_z," + end_of_axis + ",>"]
+                                           }, inputs=["pos", "x0", "x1", "l"], outputs=["position", "invisible"],
+                                           scalars=["x0", "x1", "invisible", "l"], vectors=["pos", "position"])
+        links.new(attr.std_out, tic_transformation.inputs["pos"])
         links.new(in_min.std_out, tic_transformation.inputs["x0"])
         links.new(in_max.std_out, tic_transformation.inputs["x1"])
         links.new(in_length.std_out, tic_transformation.inputs["l"])
-        set_pos = SetPosition(tree,position=tic_transformation.outputs["position"])
-        del_geo = DeleteGeometry(tree,selection=tic_transformation.outputs["invisible"])
-        iop = InstanceOnPoints(tree,instance=tic_mesh.geometry_out)
+        set_pos = SetPosition(tree, position=tic_transformation.outputs["position"])
+        del_geo = DeleteGeometry(tree, selection=tic_transformation.outputs["invisible"])
+        iop = InstanceOnPoints(tree, instance=tic_mesh.geometry_out)
 
         # join parts
         join = JoinGeometry(tree)
 
         # add tic_labels
-        delta = domain[1]-domain[0]
-        for key,val in tic_labels.items():
-            parts = val[2].split(os.path.sep)
-            coll_info = CollectionInfo(tree,collection_name=parts[-1])
-            label_pos = InputVector(tree,value=Vector([0,0,(val[0]-domain[0])*max_length/delta]) )
-            set_label_pos = SetPosition(tree,position=label_pos.std_out)
-            transform_geo = TransformGeometry(tree,rotation=[pi/2,0,0],translation=[0,0,0])
-            create_geometry_line(tree,[coll_info,transform_geo,set_label_pos,join])
+        delta = domain[1] - domain[0]
+        for key, val in tic_labels.items():
+            coll_info = CollectionInfo(tree, collection_name=str(key), name=str(key))
+            value = InputValue(tree, name="LabelValue=" + str(val[0]), value=val[0])
+            transform_geo = TransformGeometry(tree, rotation=label_rotation.std_out, translation=[0, 0, 0])
 
-        pre_material = get_from_kwargs(kwargs,'color','drawing')
+            tic_label_function = make_function(tree, name="LabelPositionVisibility" + str(key),
+                                               functions={
+                                                   "position":["0","0", "val,x0,-,x1,x0,-,/," + str(max_length) + ",*"],
+                                                   "invisible": "l,val,x0,-,x1,x0,-,/," + str(max_length) + ",*,<"
+                                               }, inputs=["val", "x0", "x1", "l"], outputs=["position", "invisible"],
+                                               scalars=["val", "x0", "x1", "invisible", "l"], vectors=["position"])
+
+            links.new(in_length.std_out, tic_label_function.inputs["l"])
+            links.new(in_min.std_out, tic_label_function.inputs["x0"])
+            links.new(in_max.std_out, tic_label_function.inputs["x1"])
+            links.new(value.std_out, tic_label_function.inputs["val"])
+            set_label_pos = SetPosition(tree, position=tic_label_function.outputs["position"],
+                                        offset=Vector([8 * radius, 0, 0]))
+            del_label_geo = DeleteGeometry(tree, selection=tic_label_function.outputs["invisible"])
+            create_geometry_line(tree, [coll_info, transform_geo, del_label_geo, set_label_pos, join])
+
+        pre_material = get_from_kwargs(kwargs, 'color', 'drawing')
         material = get_material(pre_material, **kwargs)
         self.materials.append(material)
-        set_material = SetMaterial(tree,material=material)
+        set_material = SetMaterial(tree, material=material)
 
-
-        auto_smooth = get_from_kwargs(kwargs,'auto_smooth',True)
+        auto_smooth = get_from_kwargs(kwargs, 'auto_smooth', True)
         if auto_smooth:
             smooth = SetShadeSmooth(tree)
-            main_line= [cyl,cyl_trafo, join,set_material,smooth]
+            main_line = [cyl, cyl_transformation, join, set_material, smooth]
         else:
-            main_line=[cyl,cyl_trafo, join,set_material]
+            main_line = [cyl, cyl_transformation, join, set_material]
 
-
-        create_geometry_line(tree,[cone,cone_trafo,join])
-        create_geometry_line(tree,[points,attr_x,set_pos,del_geo,iop,join])
-        create_geometry_line(tree, main_line,out=out.inputs[0])
-
+        create_geometry_line(tree, [cone, cone_transformation, join])
+        create_geometry_line(tree, [points, attr_x, set_pos, del_geo, iop, join])
+        create_geometry_line(tree, main_line, out=out.inputs[0])
 
 
 ##
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
 ##
-def generate_labels(tic_labels,**kwargs):
-
+def generate_labels(tic_labels, **kwargs):
     vert_align_centers = get_from_kwargs(kwargs, 'vert_align_centers', 'x_and_y')
     aligned = get_from_kwargs(kwargs, 'aligned', 'left')
     default_color = get_from_kwargs(kwargs, 'color', 'text')
     text_size = get_from_kwargs(kwargs, 'text_size', 'normal')
-    scale = get_from_kwargs(kwargs,'scale',1)
+    scale = get_from_kwargs(kwargs, 'scale', 1)
 
     imported_svg_data = {}  # Build dictionary of imported svgs to use
 
     # shape keys later and to avoid duplicate
-    for key,val in tic_labels.items():
+    for key, val in tic_labels.items():
         path = get_file_path(val[1])
-        tic_labels[key]=val+[path]
+        tic_labels[key] = val + [path]
         # Import svg and get list of new curves in Blender
         if path not in imported_svg_data.keys():
             imported_svg_data[path] = {'curves': []}
@@ -2187,7 +2212,7 @@ def generate_labels(tic_labels,**kwargs):
             previous_curves = ibpy.get_all_curves()
             ibpy.import_curve(path)  # here the import takes place
             # all curves are imported into a separate collection with the name path
-            new_curves = [x for x in ibpy.get_all_curves() if  x not in previous_curves]
+            new_curves = [x for x in ibpy.get_all_curves() if x not in previous_curves]
 
             # Arrange new curves relative to tex object's ref_obj
             if text_size == 'normal':
@@ -2245,33 +2270,38 @@ def generate_labels(tic_labels,**kwargs):
                 #             break
 
                 imported_svg_data[path]['curves'] = new_curves
-    imported_svg_data=align_figures(imported_svg_data,aligned)
-    for label, expr in zip(tic_labels,imported_svg_data):
+    imported_svg_data = align_figures(imported_svg_data, aligned)
+
+    # cleaning up
+    for label, expr in zip(tic_labels, imported_svg_data):
         # create new collection for every label
         collection = ibpy.make_new_collection(str(label))
         for curve in imported_svg_data[expr]:
-            ibpy.link(curve,collection)
+            ibpy.link(curve, collection)
         # remove import collection
-        old_collection = ibpy.get_collection(str(label))
+        collection_name = expr.split(os.path.sep)[-1]
+        old_collection = ibpy.get_collection(collection_name)
         for obj in old_collection.objects:
-            ibpy.un_link(obj,old_collection.name)
+            ibpy.un_link(obj, old_collection.name)
         ibpy.remove_collection(old_collection)
     return tic_labels
 
-#### Generating functions
-def get_file_path( expression,text_only=False,typeface="default"):
-        # Replaces the svg_b_object method
-        if text_only:
-            template = deepcopy(TEMPLATE_TEXT_FILE)
-        else:
-            template = deepcopy(TEMPLATE_TEX_FILE)
-        if typeface != 'default':
-            template = template[:-10]  # chop off the _arial.tex
-            template += '_' + typeface + '.tex'
-            if not os.path.exists(template):
-                raise Warning(r'Can\'t find template tex file for that font.')
 
-        return tex_to_svg_file(expression, template, typeface, text_only)
+#### Generating functions
+def get_file_path(expression, text_only=False, typeface="default"):
+    # Replaces the svg_b_object method
+    if text_only:
+        template = deepcopy(TEMPLATE_TEXT_FILE)
+    else:
+        template = deepcopy(TEMPLATE_TEX_FILE)
+    if typeface != 'default':
+        template = template[:-10]  # chop off the _arial.tex
+        template += '_' + typeface + '.tex'
+        if not os.path.exists(template):
+            raise Warning(r'Can\'t find template tex file for that font.')
+
+    return tex_to_svg_file(expression, template, typeface, text_only)
+
 
 def tex_to_svg_file(expression, template_tex_file, typeface, text_only):
     path = os.path.join(
@@ -2285,6 +2315,7 @@ def tex_to_svg_file(expression, template_tex_file, typeface, text_only):
     tex_file = generate_tex_file(expression, template_tex_file, typeface, text_only)
     dvi_file = tex_to_dvi(tex_file)
     return dvi_to_svg(dvi_file)
+
 
 def generate_tex_file(expression, template_tex_file, typeface, text_only):
     result = os.path.join(
@@ -2314,6 +2345,7 @@ def generate_tex_file(expression, template_tex_file, typeface, text_only):
             outfile.write(body)
     return result
 
+
 def tex_to_dvi(tex_file):
     result = tex_file.replace(".tex", ".dvi")
     if not os.path.exists(result):
@@ -2337,6 +2369,7 @@ def tex_to_dvi(tex_file):
                 "Latex error converting to dvi. "
                 "See log output above or the log file: %s" % log_file)
     return result
+
 
 def dvi_to_svg(dvi_file):
     """
@@ -2367,25 +2400,28 @@ def dvi_to_svg(dvi_file):
         os.system(" ".join(commands))
     return result
 
+
 def hashed_tex(expression, typeface):
     string = expression + typeface
     hasher = hashlib.sha256(string.encode())
     return hasher.hexdigest()[:16]
 
+
 #### Alignment functions
 
 def get_figure_curves(imported_svg_data, fig):
-        """
+    """
         returns the curves
         this method is overriden by the TexBObject to strip the leading H
         :param fig:
         :return:
         """
-       
-        return imported_svg_data[fig]['curves'][1:]
+
+    return imported_svg_data[fig]['curves'][1:]
+
 
 def calc_lengths(imported_svg_data):
-        """
+    """
         The dimension of the object is calculated
         The parameters are stored in
 
@@ -2401,57 +2437,57 @@ def calc_lengths(imported_svg_data):
 
         :return:
         """
-        lengths = []
-        for expr in imported_svg_data:
-            curves = get_figure_curves(imported_svg_data,expr)  # the H is stripped for latex formulas
+    lengths = []
+    for expr in imported_svg_data:
+        curves = get_figure_curves(imported_svg_data, expr)  # the H is stripped for latex formulas
 
-            max_vals = [-math.inf, -math.inf]
-            min_vals = [math.inf, math.inf]
+        max_vals = [-math.inf, -math.inf]
+        min_vals = [math.inf, math.inf]
 
-            directions = [0, 1]  # 0 horizontal
-            # 1 vertical
+        directions = [0, 1]  # 0 horizontal
+        # 1 vertical
 
-            for direction in directions:
-                for char in curves:
-                    for spline in char.data.splines:
-                        for point in spline.bezier_points:
-                            candidate = char.matrix_local.translation[direction] + point.co[direction] * char.scale[
-                                direction]  # +char.parent.matrix_local.translation[direction]
-                            if max_vals[direction] < candidate:
-                                max_vals[direction] = candidate
-                            if min_vals[direction] > candidate:
-                                min_vals[direction] = candidate
+        for direction in directions:
+            for char in curves:
+                for spline in char.data.splines:
+                    for point in spline.bezier_points:
+                        candidate = char.matrix_local.translation[direction] + point.co[direction] * char.scale[
+                            direction]  # +char.parent.matrix_local.translation[direction]
+                        if max_vals[direction] < candidate:
+                            max_vals[direction] = candidate
+                        if min_vals[direction] > candidate:
+                            min_vals[direction] = candidate
 
-            right_most_x, top_most_y = max_vals
-            left_most_x, bottom_most_y = min_vals
+        right_most_x, top_most_y = max_vals
+        left_most_x, bottom_most_y = min_vals
 
-            length = right_most_x - left_most_x
-            center = left_most_x + length / 2
+        length = right_most_x - left_most_x
+        center = left_most_x + length / 2
 
-            imported_svg_data[expr]['length'] = length 
-            imported_svg_data[expr]['centerx'] = center
-            imported_svg_data[expr]['beginning'] = left_most_x  # Untested
-            imported_svg_data[expr]['end'] = right_most_x
+        imported_svg_data[expr]['length'] = length
+        imported_svg_data[expr]['centerx'] = center
+        imported_svg_data[expr]['beginning'] = left_most_x  # Untested
+        imported_svg_data[expr]['end'] = right_most_x
 
-            height = top_most_y - bottom_most_y
-            center = bottom_most_y + height / 2
+        height = top_most_y - bottom_most_y
+        center = bottom_most_y + height / 2
 
-            imported_svg_data[expr]['top'] = top_most_y
-            imported_svg_data[expr]['bottom'] = bottom_most_y
-            imported_svg_data[expr]['height'] = height
-            imported_svg_data[expr]['centery'] = center
-            imported_svg_data[expr]['curves']=curves
-        return imported_svg_data
-
-            
-
-def align_figures(imported_svg_data,aligned):
-    imported_svg_data = calc_lengths(imported_svg_data)
-    for fig in imported_svg_data:
-        imported_svg_data[fig]=align_figure(fig,imported_svg_data,aligned)
+        imported_svg_data[expr]['top'] = top_most_y
+        imported_svg_data[expr]['bottom'] = bottom_most_y
+        imported_svg_data[expr]['height'] = height
+        imported_svg_data[expr]['centery'] = center
+        imported_svg_data[expr]['curves'] = curves
     return imported_svg_data
 
-def align_figure(fig,imported_svg_data,aligned):
+
+def align_figures(imported_svg_data, aligned):
+    imported_svg_data = calc_lengths(imported_svg_data)
+    for fig in imported_svg_data:
+        imported_svg_data[fig] = align_figure(fig, imported_svg_data, aligned)
+    return imported_svg_data
+
+
+def align_figure(fig, imported_svg_data, aligned):
     data = imported_svg_data
     curve_list = data[fig]['curves']
     offset = list(curve_list[0].location)
@@ -2490,6 +2526,7 @@ def align_figure(fig,imported_svg_data,aligned):
 
     return curve_list
 
+
 def add_lists_by_element(list1, list2, subtract=False):
     if len(list1) != len(list2):
         raise Warning("The lists aren't the same length")
@@ -2498,4 +2535,3 @@ def add_lists_by_element(list1, list2, subtract=False):
         for i in range(len(list3)):
             list3[i] *= -1
     return list(map(sum, zip(list1, list3)))
-

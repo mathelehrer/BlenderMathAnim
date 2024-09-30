@@ -1,7 +1,7 @@
 import numpy as np
 from mathutils import Vector
 
-from geometry_nodes.geometry_nodes_modifier import NumberlineModifier
+from geometry_nodes.geometry_nodes_modifier import NumberLineModifier
 from interface import ibpy
 from objects.cone import Cone
 from objects.cube import Cube
@@ -30,11 +30,12 @@ class Numberline2(BObject):
                tic_label_digits=0,
                label_unit='',
                label_position='left',
-               label_closenss=1,
+               label_closeness=1,
                tip_length=0.2,
                auto_smooth=True) --
            """
-        self.modifier = NumberlineModifier(**kwargs)
+
+        self.modifier = NumberLineModifier(**kwargs)
         cube = ibpy.add_cube()
         self.kwargs = kwargs
         super().__init__(obj=cube, name=name, no_material=True, **kwargs)
@@ -50,6 +51,7 @@ class Numberline2(BObject):
         ibpy.change_default_value(length_node,from_value=0,to_value=length,begin_time=begin_time,transition_time=transition_time)
         ibpy.change_default_value(radius_node,from_value=0,to_value=radius,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
+
 class NumberLine(BObject):
     """
     Create a number line :
