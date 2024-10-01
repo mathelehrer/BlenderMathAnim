@@ -28,7 +28,7 @@ class CoordinateSystem2(BObject):
         self.kwargs = kwargs
         self.origin = self.get_from_kwargs('origin', [0, 0])
         self.dimension = self.get_from_kwargs('dim', 2)
-        self.location = self.get_from_kwargs('location', Vector([0, 0]))
+        self.location = self.get_from_kwargs('location', Vector([0, 0, 0]))
         self.lengths = self.get_from_kwargs('lengths', [7,7])
         self.radii = self.get_from_kwargs('radii', [0.05, 0.05])
         self.domains = self.get_from_kwargs("domains",[[0,10],[0,10]])
@@ -44,7 +44,9 @@ class CoordinateSystem2(BObject):
                                          include_zero=self.include_zeros[i],length=self.lengths[i],
                                  color=self.colors[i],**kwargs))
 
-
+        data = self.get_from_kwargs('data')
+        data_modifier=DataModifier(x_domain=self.domains[0],y_domain=self.domains[1])
+        data.add_mesh_modifier(type='NODES',node_modifier=data_modifier)
         super().__init__(children=self.axes,name=str(self.dimension)+"D-CoordinateSystem",location=self.location,**kwargs)
 
     def appear(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,alpha=1):

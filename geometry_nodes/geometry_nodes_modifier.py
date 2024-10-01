@@ -2195,6 +2195,26 @@ class NumberLineModifier(GeometryNodesModifier):
         create_geometry_line(tree, [points, attr_x, set_pos, del_geo, iop, join])
         create_geometry_line(tree, main_line, out=out.inputs[0])
 
+class DataModifier(GeometryNodesModifier):
+    def __init__(self, name='DataModifier', **kwargs):
+        """
+        create geometry to display a point cloud of data points
+        """
+
+        super().__init__(name, group_input=True, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        ins = self.group_inputs
+        links = tree.links
+
+        # input parameters
+        x_domain = get_from_kwargs(kwargs, 'x_domain', [0, 10])
+        y_domain = get_from_kwargs(kwargs, 'y_domain', [0, 10])
+        width = get_from_kwargs(kwargs,"width",10)
+        height= get_from_kwargs(kwargs,"height",7)
+
+        create_geometry_line(tree, [], ins = ins.outputs[0],out=out.inputs[0])
 
 ##
 # recreate the essentials to convert a latex expression into a collection of curves
