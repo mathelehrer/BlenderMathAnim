@@ -21,6 +21,18 @@ def maybe_flatten(list_of_lists):
     return result
 
 
+class Frame:
+    def __init__(self,tree,name="Frame"):
+        self.frame = tree.nodes.new(type='NodeFrame')
+        self.frame.name=name
+        self.frame.label=name
+
+    def add(self,node):
+        if isinstance(node,list):
+            for n in node:
+                n.parent=self.frame
+        else:
+            node.parent=self.frame
 class Node:
     def __init__(self, tree, location=(0, 0), width=200, height=100, **kwargs):
         self.tree = tree
@@ -2237,17 +2249,20 @@ class ProjectionMap(GreenNode):
 
 def create_geometry_line(tree, green_nodes, out=None, ins=None):
     first = True
-    for gn in green_nodes:
-        if first:
-            first = False
-            last_gn = gn
-            if ins:
-                tree.links.new(ins, last_gn.geometry_in)
-        else:
-            tree.links.new(last_gn.geometry_out, gn.geometry_in)
-            last_gn = gn
-    if out:
-        tree.links.new(last_gn.geometry_out, out)
+    if len(green_nodes)==0:
+        tree.links.new(ins,out)
+    else:
+        for gn in green_nodes:
+            if first:
+                first = False
+                last_gn = gn
+                if ins:
+                    tree.links.new(ins, last_gn.geometry_in)
+            else:
+                tree.links.new(last_gn.geometry_out, gn.geometry_in)
+                last_gn = gn
+        if out:
+            tree.links.new(last_gn.geometry_out, out)
 
 
 def add_locations(loc1, loc2):

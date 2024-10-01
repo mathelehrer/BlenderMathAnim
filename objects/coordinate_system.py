@@ -2,7 +2,7 @@ import mathutils
 from mathutils import Vector
 import numpy as np
 
-
+from geometry_nodes.geometry_nodes_modifier import DataModifier
 from interface import ibpy
 
 from objects.cylinder import Cylinder
@@ -26,14 +26,18 @@ class CoordinateSystem2(BObject):
             """
 
         self.kwargs = kwargs
+        self.data_rows =[]
         self.origin = self.get_from_kwargs('origin', [0, 0])
         self.dimension = self.get_from_kwargs('dim', 2)
         self.location = self.get_from_kwargs('location', Vector([0, 0, 0]))
         self.lengths = self.get_from_kwargs('lengths', [7,7])
         self.radii = self.get_from_kwargs('radii', [0.05, 0.05])
         self.domains = self.get_from_kwargs("domains",[[0,10],[0,10]])
+        self.tic_labels=self.get_from_kwargs("tic_labels",["AUTO","AUTO"])
+        self.tic_label_digits =self.get_from_kwargs("tic_label_digits",[False,False])
         self.include_zeros =self.get_from_kwargs("include_zeros",[False,False])
         self.colors = self.get_from_kwargs('colors',['drawing','drawing'])
+        self.data = self.get_from_kwargs('data',None)
 
         self.axes = []
         if self.dimension ==2:
@@ -41,13 +45,16 @@ class CoordinateSystem2(BObject):
             directions = ["HORIZONTAL","VERTICAL"]
             for i in range(2):
                 self.axes.append(NumberLine2(name=names[i],direction=directions[i],domain=self.domains[i],
+                                             tic_labels=self.tic_labels[i],
+                                             tic_label_digits=self.tic_label_digits[i],
                                          include_zero=self.include_zeros[i],length=self.lengths[i],
                                  color=self.colors[i],**kwargs))
 
-        data = self.get_from_kwargs('data')
-        data_modifier=DataModifier(x_domain=self.domains[0],y_domain=self.domains[1])
-        data.add_mesh_modifier(type='NODES',node_modifier=data_modifier)
-        super().__init__(children=self.axes,name=str(self.dimension)+"D-CoordinateSystem",location=self.location,**kwargs)
+        if self.data:
+            children = self.axes+[self.data]
+        else:
+            children = self.axes
+        super().__init__(children=children,name=str(self.dimension)+"D-CoordinateSystem",location=self.location,**kwargs)
 
     def appear(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,alpha=1):
         super().appear(scale=scale,begin_time=begin_time,transition_time=transition_time,alpha=alpha)
@@ -55,6 +62,30 @@ class CoordinateSystem2(BObject):
             axis.grow(scale=scale,begin_time=begin_time,transition_time=transition_time,alpha=alpha)
         return begin_time+transition_time
 
+    def zoom_x(self,from_domain=[0,1],to_domain=[0,2],begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        min_node=ibpy.get_geometry_node_from_modifier(self.axes[0].modifier,"Minimum")
+        max_node=ibpy.get_geometry_node_from_modifier(self.axes[0].modifier,"Maximum")
+        ibpy.change_default_value(min_node,from_value=from_domain[0],to_value=to_domain[0],begin_time=begin_time,transition_time=transition_time)
+        ibpy.change_default_value(max_node,from_value=from_domain[1],to_value=to_domain[1],begin_time=begin_time,transition_time=transition_time)
+        for row in self.data_rows:
+            row.zoom_x(from_domain=from_domain,to_domain=to_domain,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def zoom_y(self, from_domain=[0, 1], to_domain=[0, 2], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        min_node = ibpy.get_geometry_node_from_modifier(self.axes[1].modifier, "Minimum")
+        max_node = ibpy.get_geometry_node_from_modifier(self.axes[1].modifier, "Maximum")
+        ibpy.change_default_value(min_node, from_value=from_domain[0], to_value=to_domain[0], begin_time=begin_time,
+                                  transition_time=transition_time)
+        ibpy.change_default_value(max_node, from_value=from_domain[1], to_value=to_domain[1], begin_time=begin_time,
+                                  transition_time=transition_time)
+        for row in self.data_rows:
+            row.zoom_y(from_domain=from_domain, to_domain=to_domain, begin_time=begin_time,
+                     transition_time=transition_time)
+        return begin_time + transition_time
+
+    def add_data(self,bob_data):
+        ibpy.set_parent(bob_data,self)
+        self.data_rows.append(bob_data)
 class CoordinateSystem(BObject):
     """
     creates a coordinate system
