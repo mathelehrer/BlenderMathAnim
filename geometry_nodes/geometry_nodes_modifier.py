@@ -2127,11 +2127,6 @@ class NumberLineModifier(GeometryNodesModifier):
         links.new(in_radius.std_out, tic_function.inputs["r"])
         links.new(index.std_out, tic_function.inputs["idx"])
         links.new(in_include_zero.std_out, tic_function.inputs["includeZero"])
-        attr_x = StoredNamedAttribute(tree,location=(left,2), name="x", data_type='FLOAT_VECTOR', value=tic_function.outputs["pos"])
-        points = Points(tree,location=(left-1,1), count=tic_function.outputs["ntics"], position=tic_function.outputs["pos"])
-
-        tic_mesh = CylinderMesh(tree,location=(left,1), vertices=16, radius=tic_function.outputs["r"],
-                                depth=tic_function.outputs['depth'])
         left+=1
         # tic positioning
         # the actual position of the tic is determined by the scale of the axis and the final position is
@@ -2141,7 +2136,7 @@ class NumberLineModifier(GeometryNodesModifier):
 
         tic_axis_pos = "pos_z,x0,-,x1,x0,-,/," + str(max_length) + ",*"
         end_of_axis = "x0,x1,x0,-," + str(max_length) + ",/,l,*,+"
-        tic_transformation = make_function(tree,location=(left,1), name="TicTransformation",
+        tic_transformation = make_function(tree,location=(left-1,0), name="TicTransformation",
                                            functions={
                                                "position": ["0", "0", tic_axis_pos],
                                                "invisible": ["pos_z," + end_of_axis + ",>"]
@@ -2151,9 +2146,6 @@ class NumberLineModifier(GeometryNodesModifier):
         links.new(in_min.std_out, tic_transformation.inputs["x0"])
         links.new(in_max.std_out, tic_transformation.inputs["x1"])
         links.new(in_length.std_out, tic_transformation.inputs["l"])
-        set_pos = SetPosition(tree,location=(left+1,1), position=tic_transformation.outputs["position"])
-        del_geo = DeleteGeometry(tree,location=(left+2,1), selection=tic_transformation.outputs["invisible"])
-        iop = InstanceOnPoints(tree,location=(left+3,1), instance=tic_mesh.geometry_out)
 
         # join parts
         join = JoinGeometry(tree,location=(left+4,0))
@@ -2180,13 +2172,17 @@ class NumberLineModifier(GeometryNodesModifier):
             links.new(in_max.std_out, tic_label_function.inputs["x1"])
             links.new(value.std_out, tic_label_function.inputs["val"])
             label_frame.add(tic_label_function)
-            del_label_geo = DeleteGeometry(tree, location=(left,downshift+0.25*count),selection=tic_label_function.outputs["invisible"])
+            tic_mesh = CylinderMesh(tree, location=(left, downshift+0.25*count+3), vertices=16, radius=tic_function.outputs["r"],depth=tic_function.outputs['depth'])
+            set_tic_pos = TransformGeometry(tree, location=(left + 1,  downshift+0.25*count+3),translation=tic_label_function.outputs["position"])
+            local_join = JoinGeometry(tree,location=(left+2, downshift+0.25*count+1.5))
+            del_label_geo = DeleteGeometry(tree, location=(left+3,downshift+0.25*count),selection=tic_label_function.outputs["invisible"])
             label_frame.add(del_label_geo)
+            create_geometry_line(tree,[tic_mesh, set_tic_pos, local_join])
             set_label_pos = SetPosition(tree, location=(left+1, downshift + 0.25 * count),
                                         position=tic_label_function.outputs["position"],
                                         offset=Vector([12 * radius, 0, 0]))
             label_frame.add(set_label_pos)
-            create_geometry_line(tree, [coll_info, transform_geo, del_label_geo, set_label_pos, join])
+            create_geometry_line(tree, [coll_info, transform_geo,  set_label_pos, local_join,del_label_geo,join])
             count+=1
 
         # finalize
@@ -2206,7 +2202,6 @@ class NumberLineModifier(GeometryNodesModifier):
             main_line = [cyl, cyl_transformation, join, global_transformation, set_material]
 
         create_geometry_line(tree, [cone, cone_transformation, join])
-        create_geometry_line(tree, [points, attr_x, set_pos, del_geo, iop, join])
         create_geometry_line(tree, main_line, out=out.inputs[0])
 
 class DataModifier(GeometryNodesModifier):
