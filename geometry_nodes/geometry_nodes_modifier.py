@@ -7,6 +7,7 @@ import bpy
 import numpy as np
 
 from appearance.textures import phase2hue_material, gradient_from_attribute, z_gradient, double_gradient
+from extended_math_nodes.generic_nodes import LegendrePolynomial, AssociatedLegendrePolynomial
 from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, InstanceOnPoints, JoinGeometry, \
     create_geometry_line, RealizeInstances, Position, make_function, ObjectInfo, SetPosition, Index, SetMaterial, \
     RandomValue, RepeatZone, StoredNamedAttribute, NamedAttribute, VectorMath, CurveToMesh, PointsToCurve, Grid, \
@@ -14,7 +15,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     EdgeVertices, BooleanMath, SetShadeSmooth, RayCast, WireFrame, ConvexHull, InsideConvexHull, ExtrudeMesh, \
     ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch, MeshToPoints, \
     SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputBoolean, InputRotation, InvertRotation, RotateRotation, \
-    Frame
+    Frame, SeparateXYZ
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -53,6 +54,7 @@ class GeometryNodesModifier:
         if group_input:
             self.group_inputs = tree.nodes.new('NodeGroupInput')
             make_new_socket(tree, name='Geometry', io='INPUT', type='NodeSocketGeometry')
+        self.group_output = tree.nodes.get("Group Output")
         self.create_node(tree, **kwargs)
         # automatically layout nodes
         if automatic_layout:
@@ -67,11 +69,11 @@ class GeometryNodesModifier:
         :param links:
         :return:
         """
+
         pass
 
     def get_node_tree(self):
         return self.tree
-
 
 ##################
 ## Applications ##
@@ -793,7 +795,7 @@ class VectorLogo(GeometryNodesModifier):
         tree.links.new(yellow_circles.outputs['radius'], mul_yellow.inputs['radius'])
         instance = InstanceOnPoints(tree, instance=circle.geometry_out, scale=mul_yellow.outputs['s'])
 
-        # rotation = make_function(tree.nodes, functions={
+        # rotation = make_function(group_tree.nodes, functions={
         #     "Rotation": "pos,e_z,cross,pi,-2,/,axis_rot,rot2euler"
         # }, name="Rotation", inputs=["pos"], outputs=["Rotation"], vectors=["pos", "Rotation"])
         instance2 = InstanceOnPoints(tree, instance=object_info.geometry_out)
@@ -823,7 +825,7 @@ class VectorLogo(GeometryNodesModifier):
         tree.links.new(blue_circles.outputs['radius'], mul_blue.inputs['radius'])
         instance = InstanceOnPoints(tree, instance=circle.geometry_out, scale=mul_blue.outputs['s'])
 
-        # rotation = make_function(tree.nodes, functions={
+        # rotation = make_function(group_tree.nodes, functions={
         #     "Rotation": "pos,e_z,cross,pi,-2,/,axis_rot,rot2euler"
         # }, name="Rotation", inputs=["pos"], outputs=["Rotation"], vectors=["pos", "Rotation"])
         instance2 = InstanceOnPoints(tree, instance=object_info.geometry_out)
@@ -1456,9 +1458,9 @@ class ConvexHull2D(GeometryNodesModifier):
         mat_line = SetMaterial(tree, material='plastic_custom1', name="ProjectionMaterial")
 
         # orthogonal plane
-        # orthogonal_grid = Grid(tree,size_x=2*size,size_y=2*size,vertices_x=2*size+1,vertices_y=2*size+1,name="OrthogonalPlane")
-        # rotate_orthogonal_grid = TransformGeometry(tree,rotation=normalizer.outputs['euler'])
-        # orthogonal_wire_frame = WireFrame(tree,name="OrthogonalPlaneWire")
+        # orthogonal_grid = Grid(group_tree,size_x=2*size,size_y=2*size,vertices_x=2*size+1,vertices_y=2*size+1,name="OrthogonalPlane")
+        # rotate_orthogonal_grid = TransformGeometry(group_tree,rotation=normalizer.outputs['euler'])
+        # orthogonal_wire_frame = WireFrame(group_tree,name="OrthogonalPlaneWire")
 
         # projector
 
@@ -1542,7 +1544,7 @@ class ConvexHull2D(GeometryNodesModifier):
         # projection line
         create_geometry_line(tree, [projection_line, instance_on_edge, mat_line, join])
         # orthogonal space
-        # create_geometry_line(tree,[orthogonal_grid,rotate_orthogonal_grid,orthogonal_wire_frame,join])
+        # create_geometry_line(group_tree,[orthogonal_grid,rotate_orthogonal_grid,orthogonal_wire_frame,join])
         # display convex hull geometry
         create_geometry_line(tree,
                              [transform_geo, set_projected_pos, move_to_max, wire_frame_max, convex_hull_max_material,
@@ -1562,6 +1564,7 @@ class SphericalHarmonicsNode(GeometryNodesModifier):
     def __init__(self, l=0, m=0, name='SphericalHarmonics', resolution=5, **kwargs):
         """
         creates an object that represents a spherical harmonics
+        with input value lambda the magnitude of the real value is imprinted into the geometry
         :param name:
         :param l: orbital quantum number
         :param m: magnetic quantum number
@@ -1648,11 +1651,12 @@ class SphericalHarmonicsNode(GeometryNodesModifier):
 
         create_geometry_line(tree, [sphere, set_pos, attr, color, smooth], out=self.group_outputs.inputs[0])
 
-
 class SphericalHarmonicsNode2(GeometryNodesModifier):
     def __init__(self, l=0, m=0, name='SphericalHarmonics', resolution=5, **kwargs):
         """
         creates an object that morphs from a sphere to the represention of a spherical harmonics
+        specialized node setup that is used in the video_cmb
+        From a wireframe sphere into a spherical harmonics
         :param name:
         :param l: orbital quantum number
         :param m: magnetic quantum number
@@ -2025,6 +2029,8 @@ class NumberLineModifier(GeometryNodesModifier):
         n_tics = get_from_kwargs(kwargs, 'n_tics', 5)
         include_zero = get_from_kwargs(kwargs, 'include_zero', True)
         direction = get_from_kwargs(kwargs,'direction','HORIZONTAL')
+        axis_label=get_from_kwargs(kwargs,'axis_label',"x")
+        axis_label_location=get_from_kwargs(kwargs,'axis_label_location','AUTO')
 
         if direction =="VERTICAL":
             global_rotation = Vector()
@@ -2063,16 +2069,12 @@ class NumberLineModifier(GeometryNodesModifier):
                     rounded_val = str(round(dx * i * p) / p)
                 tic_labels[rounded_val] = [dx * i]
 
-        tic_labels = generate_labels(tic_labels, **kwargs)
+        tic_labels, axis_label = generate_labels(tic_labels,axis_label, **kwargs)
         downshift=-5
         in_min = InputValue(tree,location=(left,downshift), name='Minimum', value=domain[0])
         in_max = InputValue(tree,location=(left,downshift+0.25), name='Maximum', value=domain[1])
         in_length = InputValue(tree,location=(left,downshift+0.5), name='Length', value=max_length)
         in_radius = InputValue(tree,location=(left,downshift+0.75), name='Radius', value=radius)
-        in_tics = InputValue(tree,location=(left,downshift+1), name='nTics', value=n_tics)
-        in_include_zero = InputBoolean(tree,location=(left,downshift+1.25), name='includeZero', value=include_zero)
-        attr = NamedAttribute(tree, name="x", location=(left,downshift+1.5),data_type="FLOAT_VECTOR")
-        index = Index(tree,location=(left,downshift+1.75))
 
         # create geometry
         # axis
@@ -2106,53 +2108,26 @@ class NumberLineModifier(GeometryNodesModifier):
         # tics
         # increase by one to include tic at zero
         # the tic position is given by x0+(i+1-includeZero)*(x1-x0)/n mapped by f**(-1)
-        tic_domain_pos = "x0,idx,1,+,includeZero,-,x1,x0,-,n,/,*,+"
         # this position is stored in the coordinate of the point associated with the tic
-        tic_function = make_function(tree, location=(left-2,5),name="ticsFunction",
-                                     functions={"ntics": "n,includeZero,+,floor",
+
+        tic_function = make_function(tree, location=(left-2,0),name="ticsFunction",
+                                     functions={
                                                 "depth": "l,500,/",
                                                 "r": "r,3,*",
-                                                "pos": ["0", "0", tic_domain_pos]
                                                 },
-                                     inputs=["n", "l", "r", "idx", "includeZero", "x0", "x1"],
-                                     outputs=["ntics", "r", "depth", "pos", "visible"],
-                                     scalars=["n", "ntics", "l", "r", "depth",
-                                              "idx", "includeZero", "x0", "x1", "visible"],
-                                     vectors=["pos"])
+                                     inputs=[ "l", "r"],
+                                     outputs=[ "r", "depth"],
+                                     scalars=[ "l", "r", "depth"])
 
         links.new(in_length.std_out, tic_function.inputs["l"])
-        links.new(in_min.std_out, tic_function.inputs["x0"])
-        links.new(in_max.std_out, tic_function.inputs["x1"])
-        links.new(in_tics.std_out, tic_function.inputs["n"])
         links.new(in_radius.std_out, tic_function.inputs["r"])
-        links.new(index.std_out, tic_function.inputs["idx"])
-        links.new(in_include_zero.std_out, tic_function.inputs["includeZero"])
         left+=1
-        # tic positioning
-        # the actual position of the tic is determined by the scale of the axis and the final position is
-        # applied to the position of the instance
-        # map f from l to x space:f(l)= x0+(x1-x0)/l_max *l
-        # map f**(-1) from x to l space f**(-1)(x) = (x-x0)/(x1-x0)*l_max
-
-        tic_axis_pos = "pos_z,x0,-,x1,x0,-,/," + str(max_length) + ",*"
-        end_of_axis = "x0,x1,x0,-," + str(max_length) + ",/,l,*,+"
-        tic_transformation = make_function(tree,location=(left-1,0), name="TicTransformation",
-                                           functions={
-                                               "position": ["0", "0", tic_axis_pos],
-                                               "invisible": ["pos_z," + end_of_axis + ",>"]
-                                           }, inputs=["pos", "x0", "x1", "l"], outputs=["position", "invisible"],
-                                           scalars=["x0", "x1", "invisible", "l"], vectors=["pos", "position"])
-        links.new(attr.std_out, tic_transformation.inputs["pos"])
-        links.new(in_min.std_out, tic_transformation.inputs["x0"])
-        links.new(in_max.std_out, tic_transformation.inputs["x1"])
-        links.new(in_length.std_out, tic_transformation.inputs["l"])
 
         # join parts
         join = JoinGeometry(tree,location=(left+4,0))
 
         label_frame =  Frame(tree,name="LabelFrame")
         # add tic_labels
-        delta = domain[1] - domain[0]
         count=0
         for key, val in tic_labels.items():
             coll_info = CollectionInfo(tree,location=(left-3,downshift-0.5*count), collection_name=str(key), name=str(key))
@@ -2184,6 +2159,16 @@ class NumberLineModifier(GeometryNodesModifier):
             label_frame.add(set_label_pos)
             create_geometry_line(tree, [coll_info, transform_geo,  set_label_pos, local_join,del_label_geo,join])
             count+=1
+
+        # take care of the axis label
+        if axis_label_location=='AUTO':
+            axis_label_location=[2*radius,0,max_length]
+
+        label_info = CollectionInfo(tree, location=(left - 3, downshift+0.25*count+3), collection_name=axis_label,
+                                   name="AxisLabel")
+        label_trafo= TransformGeometry(tree, location=(left - 2, downshift + 0.5 + 0.25 * count),
+                                          rotation=label_rotation.std_out, translation=axis_label_location)
+        create_geometry_line(tree,[label_info,label_trafo,join])
 
         # finalize
         left+=5
@@ -2271,88 +2256,129 @@ class DataModifier(GeometryNodesModifier):
         set_material = SetMaterial(tree,material=mat)
         create_geometry_line(tree, [del_geo,set_pos,iop,set_material], ins = ins.outputs[0],out=out.inputs[0])
 
+class LegendrePolynomials(GeometryNodesModifier):
+    def __init__(self,l_range=range(10), name='LegendrePolynomials', **kwargs):
+        """
+        geometry nodes that turn a set of mesh lines into Legendre Polynomials
+        """
+        self.l_range = l_range
+        if begin_time :=kwargs.pop("begin_time"):
+            self.begin_time=begin_time
+        else:
+            self.begin_time=0
+        if transition_time :=kwargs.pop("transition_time"):
+            self.transition_time=transition_time
+        else:
+            self.transition_time=0
+
+        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        transform=TransformGeometry(tree,scale=[7]*3)
+        join = JoinGeometry(tree)
+        time = SceneTime(tree)
+        dt = self.transition_time/len(list(self.l_range))
+
+        colors = ["drawing","joker","important","custom1","custom2","custom3","custom4","gray_4"]
+        count = 0
+        for l in self.l_range:
+            mesh_line = MeshLine(tree,count=l*20+10,start_location=[-1,0,0],end_location=[1,0,0])
+            position = Position(tree)
+            separate = SeparateXYZ(tree,vector=position.std_out)
+            pl = LegendrePolynomial(tree,l=l,x=separate.x)
+            appear_function = make_function(tree, name="AppearFunction",
+                                            functions={
+                                                "selection": "t," + str(self.begin_time) + ",-," + str(dt) + ",/,"+str(count)+",<"
+                                            },
+                                inputs=["t"],outputs=["selection"],scalars=["t","selection"])
+            links.new(time.std_out,appear_function.inputs["t"])
+            combine = CombineXYZ(tree,x=separate.x,y=0,z=pl.std_out)
+            set_pos = SetPosition(tree,position=combine.std_out)
+            wireframe = WireFrame(tree,radius=0.0025)
+            del_geo = DeleteGeometry(tree,selection=appear_function.outputs["selection"])
+
+            if count<len(colors):
+                color=colors[count]
+            else:
+                color=colors[-1]
+            set_mat = SetMaterial(tree,material=color)
+            create_geometry_line(tree,[mesh_line,set_pos,del_geo,wireframe,set_mat,join])
+            count+=1
+
+        create_geometry_line(tree,[join,transform],out=out.inputs[0])
+
+class AssociatedLegendreP(GeometryNodesModifier):
+    def __init__(self,l_range=range(10), name='AssociatedLegendrePolynomials', **kwargs):
+        """
+        geometry nodes that turn a set of mesh lines into Legendre Polynomials
+        """
+        self.l_range = l_range
+        if begin_time :=kwargs.pop("begin_time"):
+            self.begin_time=begin_time
+        else:
+            self.begin_time=0
+        if transition_time :=kwargs.pop("transition_time"):
+            self.transition_time=transition_time
+        else:
+            self.transition_time=0
+
+        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        transform=TransformGeometry(tree,scale=[7]*3)
+        join = JoinGeometry(tree)
+        time = SceneTime(tree)
+        dt = self.transition_time/len(list(self.l_range))
+
+        colors = ["drawing","joker","important","custom1","custom2","custom3","custom4","gray_4"]
+        count = 0
+        for l in self.l_range:
+            mesh_line = MeshLine(tree,count=l*20+10,start_location=[-1,0,0],end_location=[1,0,0])
+            position = Position(tree)
+            separate = SeparateXYZ(tree,vector=position.std_out)
+            pl = AssociatedLegendrePolynomial(tree,l=l,x=separate.x)
+            appear_function = make_function(tree, name="AppearFunction",
+                                            functions={
+                                                "selection": "t," + str(self.begin_time) + ",-," + str(dt) + ",/,"+str(count)+",<"
+                                            },
+                                inputs=["t"],outputs=["selection"],scalars=["t","selection"])
+            links.new(time.std_out,appear_function.inputs["t"])
+            combine = CombineXYZ(tree,x=separate.x,y=0,z=pl.std_out)
+            set_pos = SetPosition(tree,position=combine.std_out)
+            wireframe = WireFrame(tree,radius=0.0025)
+            del_geo = DeleteGeometry(tree,selection=appear_function.outputs["selection"])
+
+            if count<len(colors):
+                color=colors[count]
+            else:
+                color=colors[-1]
+            set_mat = SetMaterial(tree,material=color)
+            create_geometry_line(tree,[mesh_line,set_pos,del_geo,wireframe,set_mat,join])
+            count+=1
+
+        create_geometry_line(tree,[join,transform],out=out.inputs[0])
+
+
 ##
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
 ##
-def generate_labels(tic_labels, **kwargs):
-    vert_align_centers = get_from_kwargs(kwargs, 'vert_align_centers', 'x_and_y')
+def generate_labels(tic_labels,axis_label, **kwargs):
     aligned = get_from_kwargs(kwargs, 'aligned', 'left')
-    default_color = get_from_kwargs(kwargs, 'color', 'text')
-    text_size = get_from_kwargs(kwargs, 'text_size', 'normal')
-    scale = get_from_kwargs(kwargs, 'scale', 1)
-
     imported_svg_data = {}  # Build dictionary of imported svgs to use
 
     # shape keys later and to avoid duplicate
     for key, val in tic_labels.items():
         path = get_file_path(key)
         tic_labels[key] = [val] + [path]
-        # Import svg and get list of new curves in Blender
-        if path not in imported_svg_data.keys():
-            imported_svg_data[path] = {'curves': []}
+        imported_svg_data=import_svg_data(imported_svg_data,path,kwargs)
 
-            previous_curves = ibpy.get_all_curves()
-            ibpy.import_curve(path)  # here the import takes place
-            # all curves are imported into a separate collection with the name path
-            new_curves = [x for x in ibpy.get_all_curves() if x not in previous_curves]
-
-            # Arrange new curves relative to tex object's ref_obj
-            if text_size == 'normal':
-                scale_up = TEX_LOCAL_SCALE_UP
-            elif text_size == 'medium':
-                scale_up = TEX_LOCAL_SCALE_UP * 1.25
-            elif text_size == 'large':
-                scale_up = 1.5 * TEX_LOCAL_SCALE_UP
-            elif text_size == 'Large':
-                scale_up = 2 * TEX_LOCAL_SCALE_UP
-            elif text_size == 'Small':
-                scale_up = 0.8 * TEX_LOCAL_SCALE_UP
-            elif text_size == 'small':
-                scale_up = 0.7 * TEX_LOCAL_SCALE_UP
-            elif text_size == 'xs':
-                scale_up = 0.65 * TEX_LOCAL_SCALE_UP
-            elif text_size == 'tiny':
-                scale_up = 0.5 * TEX_LOCAL_SCALE_UP
-            elif text_size == 'huge':
-                scale_up = 3 * TEX_LOCAL_SCALE_UP
-            elif text_size == 'Huge':
-                scale_up = 5 * TEX_LOCAL_SCALE_UP
-            else:  # a number
-                scale_up = text_size * TEX_LOCAL_SCALE_UP
-
-            # in the following lines the location of the curve is determined from the geometry and the
-            # y-coordinates of the locations are all aligned with the reference 'H'
-            for curve in new_curves:
-                for spline in curve.data.splines:
-                    for point in spline.bezier_points:
-                        point.handle_left_type = 'FREE'
-                        point.handle_right_type = 'FREE'
-                    # This needs to be in a separate loop because moving points before
-                    # they're all 'Free' type makes the shape warp.
-                    # It makes a cool "disappear in the wind" visual, though.
-                    for point in spline.bezier_points:
-                        for i in range(len(point.co)):
-                            point.co[i] *= (scale * scale_up)
-                            point.handle_left[i] *= (scale * scale_up)
-                            point.handle_right[i] *= (scale * scale_up)
-
-                ibpy.set_origin(curve)
-                # This part is just meant for tex_objects
-                if vert_align_centers:
-                    loc = curve.location
-                    new_y = new_curves[0].location[1]  # reference location of the 'H'
-                    ibpy.set_pivot(curve, [loc[0], new_y, loc[2]])
-                ibpy.un_select(curve)
-
-                # find the collection of the curve and unlink object
-                # for collection in bpy.context.scene.collection.children:
-                #     for o in collection.objects:
-                #         if o == curve:
-                #             ibpy.un_link(curve, collection.name)
-                #             break
-
-                imported_svg_data[path]['curves'] = new_curves
     imported_svg_data = align_figures(imported_svg_data, aligned)
 
     # cleaning up
@@ -2367,8 +2393,98 @@ def generate_labels(tic_labels, **kwargs):
         for obj in old_collection.objects:
             ibpy.un_link(obj, old_collection.name)
         ibpy.remove_collection(old_collection)
-    return tic_labels
 
+    # prepare axis label
+    imported_svg_data={}
+    path=get_file_path(axis_label)
+    imported_svg_data = import_svg_data(imported_svg_data,path,kwargs)
+    imported_svg_data = align_figures(imported_svg_data, "left")
+    collection = ibpy.make_new_collection(axis_label,hide_render=True,hide_viewport=True)
+    for curve in imported_svg_data[list(imported_svg_data.keys())[-1]]:
+        ibpy.link(curve,collection)
+
+    # replace default import collection with a more appropriately named collection
+    collection_name = path.split(os.sep)[-1]
+    old_collection=ibpy.get_collection(collection_name)
+    for obj in old_collection.objects:
+        ibpy.un_link(obj, old_collection.name)
+    ibpy.remove_collection(old_collection)
+
+    return tic_labels, collection.name
+
+
+def import_svg_data(imported_svg_data,path,kwargs):
+    default_color = get_from_kwargs(kwargs, 'color', 'text')
+    text_size = get_from_kwargs(kwargs, 'text_size', 'normal')
+    scale = get_from_kwargs(kwargs, 'scale', 1)
+    vert_align_centers = get_from_kwargs(kwargs, 'vert_align_centers', 'x_and_y')
+
+    # Import svg and get list of new curves in Blender
+    if path not in imported_svg_data.keys():
+        imported_svg_data[path] = {'curves': []}
+
+        previous_curves = ibpy.get_all_curves()
+        ibpy.import_curve(path)  # here the import takes place
+        # all curves are imported into a separate collection with the name path
+        new_curves = [x for x in ibpy.get_all_curves() if x not in previous_curves]
+
+        # Arrange new curves relative to tex object's ref_obj
+        if text_size == 'normal':
+            scale_up = TEX_LOCAL_SCALE_UP
+        elif text_size == 'medium':
+            scale_up = TEX_LOCAL_SCALE_UP * 1.25
+        elif text_size == 'large':
+            scale_up = 1.5 * TEX_LOCAL_SCALE_UP
+        elif text_size == 'Large':
+            scale_up = 2 * TEX_LOCAL_SCALE_UP
+        elif text_size == 'Small':
+            scale_up = 0.8 * TEX_LOCAL_SCALE_UP
+        elif text_size == 'small':
+            scale_up = 0.7 * TEX_LOCAL_SCALE_UP
+        elif text_size == 'xs':
+            scale_up = 0.65 * TEX_LOCAL_SCALE_UP
+        elif text_size == 'tiny':
+            scale_up = 0.5 * TEX_LOCAL_SCALE_UP
+        elif text_size == 'huge':
+            scale_up = 3 * TEX_LOCAL_SCALE_UP
+        elif text_size == 'Huge':
+            scale_up = 5 * TEX_LOCAL_SCALE_UP
+        else:  # a number
+            scale_up = text_size * TEX_LOCAL_SCALE_UP
+
+        # in the following lines the location of the curve is determined from the geometry and the
+        # y-coordinates of the locations are all aligned with the reference 'H'
+        for curve in new_curves:
+            for spline in curve.data.splines:
+                for point in spline.bezier_points:
+                    point.handle_left_type = 'FREE'
+                    point.handle_right_type = 'FREE'
+                # This needs to be in a separate loop because moving points before
+                # they're all 'Free' type makes the shape warp.
+                # It makes a cool "disappear in the wind" visual, though.
+                for point in spline.bezier_points:
+                    for i in range(len(point.co)):
+                        point.co[i] *= (scale * scale_up)
+                        point.handle_left[i] *= (scale * scale_up)
+                        point.handle_right[i] *= (scale * scale_up)
+
+            ibpy.set_origin(curve)
+            # This part is just meant for tex_objects
+            if vert_align_centers:
+                loc = curve.location
+                new_y = new_curves[0].location[1]  # reference location of the 'H'
+                ibpy.set_pivot(curve, [loc[0], new_y, loc[2]])
+            ibpy.un_select(curve)
+
+            # find the collection of the curve and unlink object
+            # for collection in bpy.context.scene.collection.children:
+            #     for o in collection.objects:
+            #         if o == curve:
+            #             ibpy.un_link(curve, collection.name)
+            #             break
+
+            imported_svg_data[path]['curves'] = new_curves
+    return imported_svg_data
 
 #### Generating functions
 def get_file_path(expression, text_only=False, typeface="default"):

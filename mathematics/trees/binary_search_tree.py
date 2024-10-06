@@ -14,11 +14,11 @@ class BSTNode:
 # A utility function to insert
 # a new node with the given key in BST
 def insert(node,key):
-    # if the tree is empty, return a new node
+    # if the group_tree is empty, return a new node
     if node is None:
         return BSTNode(key),True
 
-    # otherwise, recur down the tree
+    # otherwise, recur down the group_tree
     if key<node.key:
         node.left, success = insert(node.left,key)
     elif key>node.key:

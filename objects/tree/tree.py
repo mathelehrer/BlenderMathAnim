@@ -9,7 +9,7 @@ from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME
 
 class Tree(BObject):
     """
-    Generates a tree object
+    Generates a group_tree object
     example
 
     """
@@ -26,7 +26,7 @@ class Tree(BObject):
 
         self.nodes = []
         self.lines = []
-        self.name = self.get_from_kwargs('name', 'tree')
+        self.name = self.get_from_kwargs('name', 'group_tree')
         location = self.get_from_kwargs('location', Vector([0, 0, 0]))
         self.scale = self.get_from_kwargs('scale', 1)
         self.node_circles = self.get_from_kwargs('node_circles', True)

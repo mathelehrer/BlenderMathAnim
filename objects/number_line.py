@@ -33,6 +33,7 @@ class NumberLine2(BObject):
                label_closeness=1,
                tip_length=0.2,
                auto_smooth=True,
+               axis_label=['x'],
                direction="HORIZONAL|VERTICAL|DEEP|NONE"
                )--
            """

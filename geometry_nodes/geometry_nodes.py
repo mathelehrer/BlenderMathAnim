@@ -49,7 +49,7 @@ def setup_geometry_nodes(name, group_input=False):
     auxiliary function to provide boilerplate code
     should be used more frequently,
     haven't got accustomed to it yet
-    it's a little awkward, the group_output_node has to collected from the tree
+    it's a little awkward, the group_output_node has to collected from the group_tree
     for the creation of the geometry line
     out = node_tree.nodes.get("Group Output"), when this function is used
     """

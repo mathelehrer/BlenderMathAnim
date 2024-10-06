@@ -5,7 +5,7 @@ from random import random
 
 import bpy
 import numpy as np
-from sympy import Symbol, re, im
+from sympy import Symbol, re, im, sqrt, factorial, simplify, factor
 
 from geometry_nodes.nodes import make_function
 from interface import ibpy
@@ -13,7 +13,7 @@ from interface.ibpy import customize_material, make_alpha_frame, create_group_fr
     Vector, set_material, get_color_from_string, create_iterator_group, get_obj, get_color, animate_sky_background
 from interface.interface_constants import TRANSMISSION, SPECULAR, EMISSION
 from mathematics.parsing.parser import ExpressionConverter
-from mathematics.spherical_harmonics import SphericalHarmonics
+from mathematics.spherical_harmonics import SphericalHarmonics, AssociatedLegendre
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import TextureCoordinate, Mapping, ColorRamp, AttributeNode, HueSaturationValueNode, \
     MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ, Displacement
@@ -962,6 +962,108 @@ def multipole_texture(l=6,**kwargs):
         "positive": "temp,0,>"
     }, inputs=["temp"], outputs=["abs", "positive"], scalars=["temp", "abs", "positive"],
                              location=(left, 0), node_group_type='ShaderNodes')
+    links.new(temperature.outputs["temp"], abs_temp.inputs["temp"])
+    left += 1
+
+    # positive branch
+
+    # color ramp for the nice color gradient
+    ramp_pos = ColorRamp(tree, location=(left, 1), factor=abs_temp.outputs["abs"],
+                         values=[0, 0.5, 1], colors=[[0, 1, 0, 1], [1, 1, 0, 1], [1, 0, 0, 1]], hide=False)
+
+    # negative branch
+    ramp_neg = ColorRamp(tree, location=(left, -1), factor=abs_temp.outputs["abs"],
+                         values=[0, 0.5, 1],
+                         colors=[[0, 1, 0, 1], [0, 0, 1, 1], [1, 0, 1, 1]], hide=False)
+
+    left += 2
+
+    mix = MixRGB(tree, location=(left, 0), factor=abs_temp.outputs["positive"],
+                 color1=ramp_pos.std_out, color2=ramp_neg.std_out)
+
+    bsdf = nodes.get('Principled BSDF')
+    links.new(mix.std_out, bsdf.inputs['Base Color'])
+    links.new(mix.std_out, bsdf.inputs[EMISSION])
+
+    # introduce displacement
+    scale=InputValue(tree,location=(left-1,-2),name="DisplacementScale",value=0)
+
+    displace = Displacement(tree,location=(left,-2),height=abs_temp.outputs["abs"],scale=scale.std_out)
+    mat.displacement_method="DISPLACEMENT"
+
+    links.new(displace.std_out,material_out.inputs["Displacement"])
+    customize_material(mat, **kwargs)
+    return mat
+
+def multipole_texture_optimized(l=6,m=3,**kwargs):
+    mat = bpy.data.materials.new(name="MultipolePoleTexture_l=" + str(l))
+    mat.use_nodes = True
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    material_out=nodes.get("Material Output")
+
+    # parts of the normalization needs to be included into the expression for the associated legendre polynomials
+
+
+    associated_legendre =sqrt((2*l+1)*factorial(l-m)/factorial(l+m))* AssociatedLegendre(l,m,"x").poly
+    associated_legendre = str(simplify(associated_legendre))
+    associated_legendre =associated_legendre.replace("sqrt(1 - x**2)",'y')
+    associated_legendre =associated_legendre.replace("(1 - x**2)",'y**2')
+
+    left = -7
+    coords = TextureCoordinate(tree, location=(left, 0))
+    left += 1
+    polar = make_function(nodes, functions={
+        "cos_theta": "uv_y,pi,*,cos",
+        "sin_theta": "uv_y,pi,*,sin",
+        "phi": "uv_x,pi,*,2,*"
+    },
+                          inputs=["uv"], vectors=["uv"],
+                          outputs=["sin_theta","cos_theta", "phi"],
+                          scalars=["sin_theta","cos_theta", "phi"],
+                          node_group_type='ShaderNodes',
+                          location=(left, -1),
+                          name="PolarCoordinates")
+    links.new(coords.std_out, polar.inputs["uv"])
+
+    inputValues = [InputValue(tree,location=(left,0+0.25*i),name="a"+str(i),value=2*(i%2)) for i  in range(2)]
+    left += 1
+
+    in_sockets = [inputValue.std_out for inputValue in inputValues]
+
+    expr = ExpressionConverter(str(associated_legendre)).postfix()
+
+    al=make_function(tree,functions={
+        "associated_legendre":expr+",2,/,pi,sqrt,/"
+    },
+    inputs=["x","y",],outputs=["associated_legendre"],
+    scalars=["x","y","associated_legendre"],name="AssociatedLegendre",
+                     node_group_type='ShaderNodes',location=(left,0))
+    links.new(polar.outputs["cos_theta"],al.inputs["x"])
+    links.new(polar.outputs["sin_theta"],al.inputs["y"])
+    left+=1
+
+    ins = ["a" + str(i) for i in range(2)] + ["associated_legendre", "phi"]
+
+
+    temperature = make_function(nodes, functions={
+        "temp": "a0,associated_legendre,*,phi,"+str(m)+",*,cos,*,a1,associated_legendre,*,phi,"+str(m)+",*,sin,*,+"
+    }, inputs=ins, outputs=["temp"],scalars=ins+["temp"],
+                                node_group_type='ShaderNodes', location=(left, 0),
+                                name="Temperature")
+
+    in_sockets+=[al.outputs["associated_legendre"],polar.outputs["phi"]]
+    for socket, label in zip(in_sockets, ins):
+        links.new(socket, temperature.inputs[label])
+    left += 1
+
+    abs_temp = make_function(nodes, functions={
+        "abs": "temp,abs",
+        "positive": "temp,0,>"
+    }, inputs=["temp"], outputs=["abs", "positive"], scalars=["temp", "abs", "positive"],
+                             location=(left, 0), node_group_type='ShaderNodes',
+                             name="ComponentExtraction")
     links.new(temperature.outputs["temp"], abs_temp.inputs["temp"])
     left += 1
 

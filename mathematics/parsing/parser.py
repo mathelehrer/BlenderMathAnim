@@ -63,6 +63,10 @@ class ExpressionConverter:
 
     def postfix(self):
         """
+        >>> ExpressionConverter('3465*x**5*sqrt(1 - x**2)/2 - 2205*x**3*sqrt(1 - x**2) + 945*x*sqrt(1 - x**2)/2').postfix()
+        '3465,x,5,**,*,1,x,2,**,-,sqrt,*,2,/,2205,x,3,**,*,1,x,2,**,-,sqrt,*,-,945,x,*,1,x,2,**,-,sqrt,*,2,/,+'
+        >>> ExpressionConverter("sqrt(1-x**2)/2").postfix()
+        '1,x,2,**,-,sqrt,2,/'
         >>> ExpressionConverter('sqrt(385)*(1-9*cos(theta)**2)*sin(3*phi)*sin(theta)**3/(32*sqrt(pi))').postfix()
         '385,sqrt,1,9,theta,cos,2,**,*,-,*,3,phi,*,sin,*,theta,sin,3,**,*,32,pi,sqrt,*,/'
         >>> ExpressionConverter("alpha+b*(c**d-e)**(f+g*h)-i").postfix()
@@ -128,6 +132,7 @@ class ExpressionConverter:
         while stack:
             if len(operand) > 0:
                 result.append("".join(operand))
+                operand=""
             result.append(stack.pop())
 
         return ','.join(result)

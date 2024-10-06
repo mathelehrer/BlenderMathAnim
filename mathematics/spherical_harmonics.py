@@ -1,4 +1,5 @@
-from sympy import legendre, Symbol, assoc_legendre, Ynm, simplify, expand_complex, exp, conjugate, I, arg
+from sympy import legendre, Symbol, assoc_legendre, Ynm, simplify, expand_complex, exp, conjugate, I, arg, factorial, \
+    sqrt
 
 z = Symbol("z")
 print(expand_complex(exp(z)))
@@ -41,6 +42,8 @@ class AssociatedLegendre:
         :return: String representation of the polynomial
         >>> str(AssociatedLegendre(5,3,"x"))
         '-(1 - x**2)**(3/2)*(945*x**2/2 - 105/2)'
+        >>> str(AssociatedLegendre(5,3,"x").poly)
+        '-3*(1 - x**2)**(3/2)*(945*x**2/2 - 105/2)'
         """
         return str(self.poly)
 
@@ -79,3 +82,8 @@ class SphericalHarmonics:
         'sqrt(385)*(1 - 9*cos(theta)**2)*sin(3*phi)*sin(theta)**3/(32*sqrt(pi))'
         """
         return expand_complex((self.poly - self.poly.conjugate()) / 2 / I, deep=True)
+
+if __name__ == '__main__':
+    l=5
+    m=3
+    print(sqrt((2*l+1)*factorial(l-m)/factorial(l+m)))

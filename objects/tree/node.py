@@ -12,7 +12,7 @@ from utils.constants import OBJECT_APPEARANCE_TIME
 
 class Node(BObject, NodeMixin):
     """
-    A node of a tree that consists of
+    A node of a group_tree that consists of
     * a label
     * a box
     * a connection to the parent
@@ -121,7 +121,7 @@ class Node(BObject, NodeMixin):
                                                    color=color,
                                                    name='connection_to_' + self.name,
                                                    thickness=0.5 * self.thickness,
-                                                   **kwargs)  # the line is not part of the node, it is a child of the tree
+                                                   **kwargs)  # the line is not part of the node, it is a child of the group_tree
             children=[self.texBObject]
             if hasattr(self,'bFrame'):
                 children.append(self.bFrame)

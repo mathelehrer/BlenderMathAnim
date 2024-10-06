@@ -987,7 +987,7 @@ def link(obj, collection=None):
     # (when a composed objected is added to a custom collection the children are
     # automatically added to the default collection
     # A necessary relinking is initiated
-    if len(obj.users_collection) > 0:
+    if hasattr(obj,"users_collection") and len(obj.users_collection) > 0:
         old_collection = obj.users_collection[0].name
         if old_collection != collection.name:
             un_link(obj, old_collection)
@@ -3603,13 +3603,13 @@ def create_iterator_group(nodes, functions, parameters, iterations, name='Iterat
     group_outputs = tree_nodes.new('NodeGroupOutput')
 
     make_new_socket(tree, name='In', io='INPUT', type='NodeSocketVector')
-    # tree.inputs.new('NodeSocketVector', 'In')
+    # group_tree.inputs.new('NodeSocketVector', 'In')
     if len(functions) > 1:
         make_new_socket(tree, name='Out', io='OUTPUT', type='NodeSocketVector')
-        # tree.outputs.new('NodeSocketVector', 'Out')
+        # group_tree.outputs.new('NodeSocketVector', 'Out')
     else:
         make_new_socket(tree, name='OUT', io='OURPUT', type='NodeSocketFloat')
-        # tree.outputs.new('NodeSocketFloat', 'Out')
+        # group_tree.outputs.new('NodeSocketFloat', 'Out')
 
     group = nodes.new(type='ShaderNodeGroup')
     group.node_tree = tree
@@ -3682,10 +3682,10 @@ def if_node(nodes, bool_function, parameters=['True', 'False'], scalar_parameter
     # create input nodes
     for i, parameter in enumerate(parameters):
         make_new_socket(tree, name=parameter, io='INPUT', type='NodeSocketVector')
-        # tree.inputs.new('NodeSocketVector', parameter)
+        # group_tree.inputs.new('NodeSocketVector', parameter)
     for j, parameter in enumerate(scalar_parameters):
         make_new_socket(tree, name=parameter, io='INPUT', type='NodeSocketFloat')
-        # tree.inputs.new('NodeSocketFloat', parameter)
+        # group_tree.inputs.new('NodeSocketFloat', parameter)
 
     seps = []
     all_terms = bool_function.split(",")
@@ -3779,7 +3779,7 @@ def create_group_from_vector_function(nodes, functions, parameters=[], scalar_pa
     # analyse function
     # we use standard variables v: vector, x,y,z: components of the vector
     make_new_socket(tree, name='In', io='INPUT', type='NodeSocketVector')
-    # tree.inputs.new('NodeSocketVector', 'In')
+    # group_tree.inputs.new('NodeSocketVector', 'In')
     last = functions[0].split(',')[-1]
     if last in VECTOR_OPERATORS:
         last_op = 'VECTOR'
@@ -3795,10 +3795,10 @@ def create_group_from_vector_function(nodes, functions, parameters=[], scalar_pa
 
     if out_float:
         make_new_socket(tree, name='Out', io='OUTPUT', type='NodeSocketFloat')
-        # tree.outputs.new('NodeSocketFloat','Out')
+        # group_tree.outputs.new('NodeSocketFloat','Out')
     else:
         make_new_socket(tree, name='Out', io='OUTPUT', type='NodeSocketVector')
-        # tree.outputs.new('NodeSocketVector','Out')
+        # group_tree.outputs.new('NodeSocketVector','Out')
 
     # create component nodes if necessary
     seps = []
@@ -3817,7 +3817,7 @@ def create_group_from_vector_function(nodes, functions, parameters=[], scalar_pa
 
     for i, parameter in enumerate(parameters):
         make_new_socket(tree, name=parameter, io='INPUT', type='NodeSocketVector')
-        # tree.inputs.new('NodeSocketVector', parameter)
+        # group_tree.inputs.new('NodeSocketVector', parameter)
         # create separate xyz for each parameter if ncessary
         if (parameter + "_x" in all_terms) or (parameter + "_y" in all_terms) or (parameter + "_z" in all_terms):
             sep = tree_nodes.new(type='ShaderNodeSeparateXYZ')
@@ -3830,7 +3830,7 @@ def create_group_from_vector_function(nodes, functions, parameters=[], scalar_pa
 
     for j, parameter in enumerate(scalar_parameters):
         make_new_socket(tree, name=parameter, io='INPUT', type='NodeSocketFloat')
-        # tree.inputs.new('NodeSocketFloat', parameter)
+        # group_tree.inputs.new('NodeSocketFloat', parameter)
         seps.append(group_inputs.outputs[len(parameters) + j + 1])
 
     length -= 1
@@ -3960,7 +3960,7 @@ def build_group_component(tree, stack, parameters=[], scalar_parameters=[], seps
     """
     there is a subtlety with VectorMath nodes, they always carry two outputs. The first one is 'Vector' and the second one is 'Value'
     there is more work to be done, to do this correctly, so far there is only a workaround to incorporate the 'LENGTH' operation, which yields a scalar output
-    :param level: captures the structure of the tree to place the node at the right location
+    :param level: captures the structure of the group_tree to place the node at the right location
     :param scalar_parameters:
     :param tree:
     :param stack:
@@ -4262,7 +4262,7 @@ def build_group_component(tree, stack, parameters=[], scalar_parameters=[], seps
 def build_scalar_group_component(tree, stack, parameters=[], vector_parameters=[], inputs=None,
                                  out=None, length=1, unary=None, last_operator=None, height=0, level=[0]):
     """
-    :param level: captures the structure of the tree to place the node at the right location
+    :param level: captures the structure of the group_tree to place the node at the right location
     :param tree:
     :param stack:
     :param parameters:
@@ -4597,7 +4597,7 @@ def create_shader_group_from_function(nodes, function, parameters=[], inputType=
 
     for parameter in parameters:
         make_new_socket(tree, name=parameter, io='INPUT', type='NodeSocketFloat')
-        # tree.inputs.new('NodeSocketFloat', parameter)
+        # group_tree.inputs.new('NodeSocketFloat', parameter)
 
     stack = function.split(',')
     for s in stack:
@@ -4616,7 +4616,7 @@ def create_shader_group_from_function(nodes, function, parameters=[], inputType=
         tree_links.new(group_inputs.outputs['In'], sep.inputs['Vector'])
         sep.location = (-length * delta, 0)
         length -= 1
-    # tree is built from right to left therefore the length is 0 initially
+    # group_tree is built from right to left therefore the length is 0 initially
     build_group(tree, stack, parameters=parameters, sep=sep, input=group_inputs, output=group_outputs, length=0)
 
     length += 1
@@ -4867,9 +4867,9 @@ def create_shader_from_function(material, hue_functions, scale=[1, 1, 1], emissi
 
 def create_part(function, nodes, links, out_x, out_y, out_z, x_loc=0, y_loc=0):
     """
-    This method systematically builds the node tree from the function.
+    This method systematically builds the node group_tree from the function.
     First a stack is created to process the entries from last to first.
-    The function should be a post-order traverse of the tree that will be built
+    The function should be a post-order traverse of the group_tree that will be built
     :param function:
     :param nodes:
     :param links:
@@ -5883,14 +5883,15 @@ def add_mesh_modifier(bob, **kwargs):
             # transfer possible color to the material slot of the blender object
             for mat in node_modifier.materials:
                 obj.data.materials.append(mat)
-        if 'node_group' in kwargs:
+        elif 'node_group' in kwargs:
             node_group = kwargs.pop('node_group')
             modifiers.node_group = node_group
             if 'attribute_names' in kwargs:
                 attribute_names = kwargs.pop('attribute_names')
                 for i, name in enumerate(attribute_names):
                     modifiers["Output_" + str(i + 1) + "_attribute_name"] = name
-
+        else:
+            print("No node data was provided! You either need to add a 'node_group' or a  'node_modifier' keyword")
 
 def apply_modifiers(bob):
     obj = get_obj(bob)

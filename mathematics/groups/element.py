@@ -7,7 +7,7 @@ primes = [104729, 224737, 350377, 479909, 611953, 746773, 882377, 1020379, 11595
 
 class Element(NodeMixin):
     '''
-    shortest_word is the word of an equivalent element that has been generated earlier in the tree of elements
+    shortest_word is the word of an equivalent element that has been generated earlier in the group_tree of elements
     '''
 
     def __init__(self, matrix, word, shortest_word=None,group=None, **kwargs):

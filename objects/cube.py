@@ -1,8 +1,6 @@
-import bmesh
-from mathutils import Vector
 
 from interface import ibpy
-from interface.ibpy import add_cone
+from interface.ibpy import Vector
 from objects.bobject import BObject
 from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
 from utils.utils import to_vector

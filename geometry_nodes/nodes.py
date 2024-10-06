@@ -33,6 +33,7 @@ class Frame:
                 n.parent=self.frame
         else:
             node.parent=self.frame
+
 class Node:
     def __init__(self, tree, location=(0, 0), width=200, height=100, **kwargs):
         self.tree = tree
@@ -123,11 +124,11 @@ class MeshLine(GreenNode):
             self.node.inputs['Count'].default_value = count
         else:
             self.tree.links.new(count, self.node.inputs['Count'])
-        if isinstance(start_location, Vector):
+        if isinstance(start_location, (list,Vector)):
             self.node.inputs['Start Location'].default_value = start_location
         else:
             self.tree.links.new(start_location, self.node.inputs['Start Location'])
-        if isinstance(end_location, Vector):
+        if isinstance(end_location,(list,Vector)):
             self.node.inputs['Offset'].default_value = end_location
         else:
             self.tree.links.new(end_location, self.node.inputs['Offset'])
@@ -2461,13 +2462,13 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
     :return:
     """
 
-    # recursively build a tree structure with left and right sub-tree. For unary operators only the left tree is used
+    # recursively build a group_tree structure with left and right sub-group_tree. For unary operators only the left group_tree is used
 
     fcn_spacing = 500
 
     left_empty = True
     if unary:
-        right_empty = False  # no need for a right sub-tree
+        right_empty = False  # no need for a right sub-group_tree
     else:
         right_empty = True
 
@@ -2831,14 +2832,14 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
                 # success = False
                 # for o in new_node_math.outputs:
                 #     if o.type == last_operator.inputs[1].type:
-                #         tree.links.new(o, last_operator.inputs[1])
+                #         group_tree.links.new(o, last_operator.inputs[1])
                 #         success = True
                 #         break
                 # if not success:
                 #     # try the other way round
                 #     for i in range(len(last_operator.inputs) - 1, -1, -1):
                 #         if last_operator.inputs[i].type == new_node_math.outputs[0].type:
-                #             tree.links.new(new_node_math.outputs[0], last_operator.inputs[i])
+                #             group_tree.links.new(new_node_math.outputs[0], last_operator.inputs[i])
                 #             break
                 right_empty = False
             elif left_empty:
@@ -2847,13 +2848,13 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
                 # success = False
                 # for o in new_node_math.outputs:
                 #     if o.type == last_operator.inputs[0].type:
-                #         tree.links.new(o, last_operator.inputs[0])
+                #         group_tree.links.new(o, last_operator.inputs[0])
                 #         success = True
                 #         break
                 # if not success:
                 #     for i in range(len(last_operator.inputs)):
                 #         if last_operator.inputs[i].type == new_node_math.outputs[0].type:
-                #             tree.links.new(new_node_math.outputs[0], last_operator.inputs[i])
+                #             group_tree.links.new(new_node_math.outputs[0], last_operator.inputs[i])
                 #             break
                 left_empty = False
 

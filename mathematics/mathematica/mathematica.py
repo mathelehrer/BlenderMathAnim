@@ -8,11 +8,20 @@ from itertools import combinations
 import numpy as np
 import sympy
 from numpy.linalg import matrix_rank, solve
-from numpy.linalg.linalg import LinAlgError
+from numpy.linalg import LinAlgError
 from scipy.spatial import ConvexHull
 
 from interface.ibpy import Vector
 
+def factorial(n:int)->int:
+    """
+    Computes the factorial of an integer
+    >>> factorial(8)
+    40320
+    """
+    if n==0 or n==1:
+        return 1
+    return n*factorial(n-1)
 def choose(lst,choice):
     '''
     >>> choose(list(range(5)),2)

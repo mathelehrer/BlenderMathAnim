@@ -557,7 +557,7 @@ class graph_core(object):
         Vertex.ncur = 1
         for v in self.sV:
             v.ind = 0
-        # start exploring tree from roots:
+        # start exploring group_tree from roots:
         for v in roots:
             vv = self.sV.get(v)
             if vv is None:

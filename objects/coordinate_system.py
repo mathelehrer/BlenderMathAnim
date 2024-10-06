@@ -37,24 +37,35 @@ class CoordinateSystem2(BObject):
         self.tic_label_digits =self.get_from_kwargs("tic_label_digits",[False,False])
         self.include_zeros =self.get_from_kwargs("include_zeros",[False,False])
         self.colors = self.get_from_kwargs('colors',['drawing','drawing'])
+        self.axes_labels = self.get_from_kwargs('axes_labels',{'x':"AUTO",'y':"AUTO"})
         self.data = self.get_from_kwargs('data',None)
-
+        self.name = self.get_from_kwargs('name',str(self.dimension)+"D-CoordinateSystem")
         self.axes = []
+
+        # compute axes locations
+        # the center of the coordinate system is the point (0,0)
+        e = [Vector([1,0,0]), Vector([0,0,1])]
+        axis_locations = [
+            to_vector(self.location)+self.domains[i][0]*self.lengths[i]/(self.domains[i][1]-self.domains[i][0])*e[i] for i in range(2)]
+
         if self.dimension ==2:
             names= ["xAxis","yAxis"]
             directions = ["HORIZONTAL","VERTICAL"]
+            axis_label_keys = list(self.axes_labels.keys())
             for i in range(2):
                 self.axes.append(NumberLine2(name=names[i],direction=directions[i],domain=self.domains[i],
+                                             location=axis_locations[i],
                                              tic_labels=self.tic_labels[i],
                                              tic_label_digits=self.tic_label_digits[i],
                                          include_zero=self.include_zeros[i],length=self.lengths[i],
-                                 color=self.colors[i],**kwargs))
+                                 color=self.colors[i],axis_label=axis_label_keys[i],
+                                             axis_label_location=self.axes_labels[axis_label_keys[i]],**kwargs))
 
         if self.data:
             children = self.axes+[self.data]
         else:
             children = self.axes
-        super().__init__(children=children,name=str(self.dimension)+"D-CoordinateSystem",location=self.location,**kwargs)
+        super().__init__(children=children,name=self.name,location=self.location,**kwargs)
 
     def appear(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,alpha=1):
         super().appear(scale=scale,begin_time=begin_time,transition_time=transition_time,alpha=alpha)
