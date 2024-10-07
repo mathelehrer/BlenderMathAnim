@@ -28,27 +28,28 @@ class CoordinateSystem2(BObject):
         self.kwargs = kwargs
         self.data_rows =[]
         self.origin = self.get_from_kwargs('origin', [0, 0])
-        self.dimension = self.get_from_kwargs('dim', 2)
+        self.dimension = self.get_from_kwargs('dimension', 2)
         self.location = self.get_from_kwargs('location', Vector([0, 0, 0]))
         self.lengths = self.get_from_kwargs('lengths', [7,7])
         self.radii = self.get_from_kwargs('radii', [0.05, 0.05])
         self.domains = self.get_from_kwargs("domains",[[0,10],[0,10]])
         self.tic_labels=self.get_from_kwargs("tic_labels",["AUTO","AUTO"])
-        self.tic_label_digits =self.get_from_kwargs("tic_label_digits",[False,False])
-        self.include_zeros =self.get_from_kwargs("include_zeros",[False,False])
+        self.n_tics=self.get_from_kwargs("n_tics",[2,2,2])
+        self.tic_label_digits =self.get_from_kwargs("tic_label_digits",[False,False,False])
         self.colors = self.get_from_kwargs('colors',['drawing','drawing'])
         self.axes_labels = self.get_from_kwargs('axes_labels',{'x':"AUTO",'y':"AUTO"})
         self.data = self.get_from_kwargs('data',None)
         self.name = self.get_from_kwargs('name',str(self.dimension)+"D-CoordinateSystem")
         self.axes = []
 
-        # compute axes locations
-        # the center of the coordinate system is the point (0,0)
-        e = [Vector([1,0,0]), Vector([0,0,1])]
-        axis_locations = [
-            to_vector(self.location)+self.domains[i][0]*self.lengths[i]/(self.domains[i][1]-self.domains[i][0])*e[i] for i in range(2)]
-
         if self.dimension ==2:
+            # compute axes locations
+            # the center of the coordinate system is the point (0,0)
+            e = [Vector([1, 0, 0]), Vector([0, 0, 1])]
+            axis_locations = [
+                 self.domains[i][0] * self.lengths[i] / (
+                            self.domains[i][1] - self.domains[i][0]) * e[i] for i in range(2)]
+
             names= ["xAxis","yAxis"]
             directions = ["HORIZONTAL","VERTICAL"]
             axis_label_keys = list(self.axes_labels.keys())
@@ -56,9 +57,29 @@ class CoordinateSystem2(BObject):
                 self.axes.append(NumberLine2(name=names[i],direction=directions[i],domain=self.domains[i],
                                              location=axis_locations[i],
                                              tic_labels=self.tic_labels[i],
+                                             n_tics = self.n_tics[i],
                                              tic_label_digits=self.tic_label_digits[i],
-                                         include_zero=self.include_zeros[i],length=self.lengths[i],
+                                        length=self.lengths[i],
                                  color=self.colors[i],axis_label=axis_label_keys[i],
+                                             axis_label_location=self.axes_labels[axis_label_keys[i]],**kwargs))
+        elif self.dimension ==3:
+            # compute axes locations
+            # the center of the coordinate system is the point (0,0)
+            e = [Vector([1, 0, 0]),Vector([0,1,0]), Vector([0, 0, 1])]
+            axis_locations = [
+                to_vector(self.location) + self.domains[i][0] * self.lengths[i] / (
+                            self.domains[i][1] - self.domains[i][0]) * e[i] for i in range(3)]
+
+            names = ["xAxis", "yAxis","zAxis"]
+            directions = ["HORIZONTAL", "DEEP","VERTICAL"]
+            axis_label_keys = list(self.axes_labels.keys())
+            for i in range(3):
+                self.axes.append(NumberLine2(name=names[i],direction=directions[i],domain=self.domains[i],
+                                             location=axis_locations[i],
+                                             tic_labels=self.tic_labels[i],
+                                             n_tics = self.n_tics[i],
+                                             tic_label_digits=self.tic_label_digits[i],
+                                            color=self.colors[i],axis_label=axis_label_keys[i],
                                              axis_label_location=self.axes_labels[axis_label_keys[i]],**kwargs))
 
         if self.data:

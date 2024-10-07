@@ -23,7 +23,6 @@ class NumberLine2(BObject):
            : Keyword Arguments:
                * *extra* (length=1,radius=0.05,domain=[0,1],location=[0,0,0],n_tics=10,
                label='x',
-               include_zero=True,
                direction='vertical',
                origin=0,
                tic_labels='AUTO',

@@ -1,6 +1,7 @@
 from interface import ibpy
 from interface.ibpy import Vector
 from objects.bobject import BObject
+from utils.constants import DEFAULT_ANIMATION_TIME
 
 
 class TextScaleBox(BObject):
@@ -29,3 +30,10 @@ class TextScaleBox(BObject):
         if grandparent:
             ibpy.set_parent(self, grandparent)  # if it is text located inside a display, the display will be parent of
             # the ScaleBox
+
+    def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+               clear_data=False, silent=False,linked=False, nice_alpha=False,**kwargs):
+        super().appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,
+                       clear_data=clear_data,silent=silent,linked=linked,nice_alpha=nice_alpha,**kwargs)
+        for child in self.children:
+            child.appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,clear_data=clear_data,silent=silent,linked=linked,nice_alpha=nice_alpha)

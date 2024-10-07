@@ -115,7 +115,7 @@ class LegendrePolynomial(GenericNode):
 
 
 class AssociatedLegendrePolynomial(GenericNode):
-    def __init__(self,tree,l=3,m=2,location=(0,0),x=0,**kwargs):
+    def __init__(self,tree,l=3,m=2,location=(0,0),x=0,y=0,**kwargs):
         """
         a collection of function group nodes are combined into one node
         The values of the associated Legendre polynomial are computed recursively,
@@ -151,10 +151,10 @@ class AssociatedLegendrePolynomial(GenericNode):
         make_new_socket(sub_tree,name="y",io='INPUT',type='NodeSocketFloat')
         make_new_socket(sub_tree,name=self.name,io='OUTPUT',type='NodeSocketFloat')
 
-        group_inputs.location=(-(0.5*l+1)*200,0)
+        group_inputs.location=(-(0.85*l+1+m)*200,0)
         group_outputs.location=(0,0)
 
-        left = -0.5*l
+        left = -0.85*l-m
         # make Legendre polynomials
         p0 = make_function(sub_tree.nodes,
             functions={
@@ -186,7 +186,7 @@ class AssociatedLegendrePolynomial(GenericNode):
                                    functions={
                                        "P"+str(l):expr
                                    },
-                                   location=(left+0.5*(l-1),  l%2),
+                                   location=(left+0.85*(l-1),  l%2),
                                    inputs=["x","P"+str(l-1),"P"+str(l-2)], outputs=["P"+str(l)],
                                    scalars=["x", "P"+str(l),"P"+str(l-1),"P"+str(l-2)],
                                    node_group_type=self.node_group_type,
@@ -203,7 +203,7 @@ class AssociatedLegendrePolynomial(GenericNode):
 
         # make derivatives
 
-        left = -0.5 * l
+        left = -0.85 * l-m
         # make Legendre polynomials
         dp0 = make_function(sub_tree.nodes,
                            functions={
@@ -236,7 +236,7 @@ class AssociatedLegendrePolynomial(GenericNode):
                                    functions={
                                        "P'" + str(l): expr
                                    },
-                                   location=(left + 0.5 * (l - 1),-2+ l % 2),
+                                   location=(left + 0.85 * (l - 1),-2+ l % 2),
                                    inputs=["x","P"+str(l-1), "P'" + str(l - 1), "P'" + str(l - 2)],
                                     outputs=["P'" + str(l)],
                                    scalars=["x", "P"+str(l-1),"P'" + str(l), "P'" + str(l - 1), "P'" + str(l - 2)],
@@ -253,26 +253,75 @@ class AssociatedLegendrePolynomial(GenericNode):
             sub_tree.links.new(group_inputs.outputs[0], dp.inputs["x"])
         sub_tree.links.new(dps[-1].outputs[0], group_outputs.inputs[0])
 
+
+        left = -m
         # make associated Legendre functions
-        # use the following recursive relation y P^(m+1)_l=(l-m)xP^m_l-(l+m)P^m_{l-1}
+        # use the following recursive relation P_l^{m} = -(l+m-1)(l-m+2)P_{l}^{m-2}-2(m-1)*x/y*P_l^{m-1}
         al0 = make_function(sub_tree.nodes,
             functions={
-                "aP0":"1"
+                "P"+str(l)+"_0":"P"+str(l)
             },
-            location =(left,0),
-            inputs=["x"],outputs=["P0"],
-            scalars=["x","P0"],
+            location =(left,-4),
+            inputs=["x","y","P"+str(l)],outputs=["P"+str(l)+"_0"],
+            scalars=["x","y","P"+str(l),"P"+str(l)+"_0"],
             node_group_type=self.node_group_type,
-            name="P0",
+            name="P"+str(l)+"_0",
         )
-        ps = [p0]
+        sub_tree.links.new(ps[l].outputs[0], al0.inputs["P"+str(l)])
+        als = [al0]
 
+        al1 = make_function(sub_tree.nodes,
+                            functions={
+                                "P"+str(l)+"_1":"-1,y,*,P'"+str(l)+",*"
+            },
+            location =(left,-3),
+            inputs=["x","y","P"+str(l),"P'"+str(l)],outputs=["P"+str(l)+"_1"],
+            scalars=["x","y","P"+str(l),"P'"+str(l),"P"+str(l)+"_1"],
+            node_group_type=self.node_group_type,
+            name="P"+str(l)+"_1")
+        sub_tree.links.new(ps[l].outputs[0], al1.inputs["P" + str(l)])
+        sub_tree.links.new(dps[l].outputs[0], al1.inputs["P'" + str(l)])
 
+        als.append(al1)
+
+        # use the following recursive relation P_l^{m} = -(l+m-1)(l-m+2)P_{l}^{m-2}-2(m-1)*x/y*P_l^{m-1}
+        for m in range(2,abs(m)+1):
+            expr = str(-(l+m-1)*(l-m+2))+",P"+str(l)+"_"+str(m-2)+",*,"+str(2*(m-1))+",x,*,y,/,P"+str(l)+"_"+str(m-1)+",*,-"
+            al_next = make_function(sub_tree.nodes,
+                                    functions={
+                                        "P" + str(l)+"_"+str(m): expr
+                                    },
+                                    location=(left + 0.85 * (m - 1), -2 + m % 2),
+                                    inputs=["x","y", "P" + str(l)+"_"+str(m-1),"P"+str(l)+"_"+str(m-2)],
+                                    outputs=["P" + str(l)+"_"+str(m)],
+                                    scalars=["x","y", "P" + str(l)+"_"+str(m-1), "P" + str(l)+"_"+str(m-2),"P" + str(l)+"_"+str(m)],
+
+                                    node_group_type=self.node_group_type,
+                                    name="P" + str(l)+"_"+str(m),
+                                    )
+            sub_tree.links.new(als[-1].outputs[0], al_next.inputs["P" + str(l)+"_"+str(m-1)])
+            sub_tree.links.new(als[-2].outputs[0], al_next.inputs["P" + str(l)+"_"+str(m-2)])
+
+            als.append(al_next)
+
+        for al in als:
+            sub_tree.links.new(group_inputs.outputs[0], al.inputs["x"])
+            sub_tree.links.new(group_inputs.outputs[1], al.inputs["y"])
+
+        if m==0:
+            sub_tree.links.new(als[-2].outputs[0], group_outputs.inputs[0])
+        else:
+            sub_tree.links.new(als[-1].outputs[0], group_outputs.inputs[0])
+
+        # finalizing things
         self.node = group
-
         if isinstance(x, (float, int)):
             self.node.inputs["x"].default_value = x
         else:
             tree.links.new(x, self.node.inputs["x"])
 
+        if isinstance(y, (float, int)):
+            self.node.inputs["y"].default_value = y
+        else:
+            tree.links.new(y, self.node.inputs["y"])
         self.std_out = self.node.outputs[0]

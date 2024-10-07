@@ -2027,7 +2027,6 @@ class NumberLineModifier(GeometryNodesModifier):
         radius = get_from_kwargs(kwargs, 'radius', 0.025)
         tip_length = get_from_kwargs(kwargs, 'tip_length', 0.1)
         n_tics = get_from_kwargs(kwargs, 'n_tics', 5)
-        include_zero = get_from_kwargs(kwargs, 'include_zero', True)
         direction = get_from_kwargs(kwargs,'direction','HORIZONTAL')
         axis_label=get_from_kwargs(kwargs,'axis_label',"x")
         axis_label_location=get_from_kwargs(kwargs,'axis_label_location','AUTO')
@@ -2037,7 +2036,7 @@ class NumberLineModifier(GeometryNodesModifier):
         elif direction == "HORIZONTAL":
             global_rotation=Vector([0,pi/2,0])
         elif direction == "DEEP":
-            global_rotation=Vector([pi/2,0,0])
+            global_rotation=Vector([-pi/2,0,0])
         else:
             global_rotation = get_from_kwargs(kwargs,"rotation_euler",[0,0,0])
 
@@ -2056,18 +2055,15 @@ class NumberLineModifier(GeometryNodesModifier):
         if tic_labels == 'AUTO':
             tic_labels = {}
             # create tic_labels
-            if include_zero:
-                n_0 = 0
-            else:
-                n_0 = 1
+            x0 = domain[0]
             dx = (domain[1] - domain[0]) / n_tics
             p = 10 ** tic_label_digits  # power for rounding
-            for i in range(n_0, n_tics + 1):
+            for i in range(0, n_tics + 1):
                 if p == 1:
-                    rounded_val = str(int(round(dx * i)))
+                    rounded_val = str(int(round(x0+dx * i)))
                 else:
-                    rounded_val = str(round(dx * i * p) / p)
-                tic_labels[rounded_val] = [dx * i]
+                    rounded_val = str(round((x0+dx * i) * p) / p)
+                tic_labels[rounded_val] = [x0+dx * i]
 
         tic_labels, axis_label = generate_labels(tic_labels,axis_label, **kwargs)
         downshift=-5
@@ -2262,68 +2258,14 @@ class LegendrePolynomials(GeometryNodesModifier):
         geometry nodes that turn a set of mesh lines into Legendre Polynomials
         """
         self.l_range = l_range
-        if begin_time :=kwargs.pop("begin_time"):
-            self.begin_time=begin_time
+        if "begin_time" in kwargs:
+            self.begin_time = kwargs.pop("begin_time")
         else:
-            self.begin_time=0
-        if transition_time :=kwargs.pop("transition_time"):
-            self.transition_time=transition_time
+            self.begin_time = 0
+        if "transition_time" in kwargs:
+            self.transition_time = kwargs.pop("transition_time")
         else:
-            self.transition_time=0
-
-        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
-
-    def create_node(self, tree, **kwargs):
-        out = self.group_outputs
-        links = tree.links
-
-        transform=TransformGeometry(tree,scale=[7]*3)
-        join = JoinGeometry(tree)
-        time = SceneTime(tree)
-        dt = self.transition_time/len(list(self.l_range))
-
-        colors = ["drawing","joker","important","custom1","custom2","custom3","custom4","gray_4"]
-        count = 0
-        for l in self.l_range:
-            mesh_line = MeshLine(tree,count=l*20+10,start_location=[-1,0,0],end_location=[1,0,0])
-            position = Position(tree)
-            separate = SeparateXYZ(tree,vector=position.std_out)
-            pl = LegendrePolynomial(tree,l=l,x=separate.x)
-            appear_function = make_function(tree, name="AppearFunction",
-                                            functions={
-                                                "selection": "t," + str(self.begin_time) + ",-," + str(dt) + ",/,"+str(count)+",<"
-                                            },
-                                inputs=["t"],outputs=["selection"],scalars=["t","selection"])
-            links.new(time.std_out,appear_function.inputs["t"])
-            combine = CombineXYZ(tree,x=separate.x,y=0,z=pl.std_out)
-            set_pos = SetPosition(tree,position=combine.std_out)
-            wireframe = WireFrame(tree,radius=0.0025)
-            del_geo = DeleteGeometry(tree,selection=appear_function.outputs["selection"])
-
-            if count<len(colors):
-                color=colors[count]
-            else:
-                color=colors[-1]
-            set_mat = SetMaterial(tree,material=color)
-            create_geometry_line(tree,[mesh_line,set_pos,del_geo,wireframe,set_mat,join])
-            count+=1
-
-        create_geometry_line(tree,[join,transform],out=out.inputs[0])
-
-class AssociatedLegendreP(GeometryNodesModifier):
-    def __init__(self,l_range=range(10), name='AssociatedLegendrePolynomials', **kwargs):
-        """
-        geometry nodes that turn a set of mesh lines into Legendre Polynomials
-        """
-        self.l_range = l_range
-        if begin_time :=kwargs.pop("begin_time"):
-            self.begin_time=begin_time
-        else:
-            self.begin_time=0
-        if transition_time :=kwargs.pop("transition_time"):
-            self.transition_time=transition_time
-        else:
-            self.transition_time=0
+            self.transition_time = 0
 
         super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
 
@@ -2364,7 +2306,119 @@ class AssociatedLegendreP(GeometryNodesModifier):
 
         create_geometry_line(tree,[join,transform],out=out.inputs[0])
 
+class AssociatedLegendreP(GeometryNodesModifier):
+    def __init__(self,l_range=range(0,5),m=1, name='AssociatedLegendrePolynomials', **kwargs):
+        """
+        geometry nodes that turn a set of mesh lines into associated Legendre Polynomials
+        """
+        self.m=m
+        self.l_range=l_range
+        if begin_time :=kwargs.pop("begin_time"):
+            self.begin_time=begin_time
+        else:
+            self.begin_time=0
+        if transition_time :=kwargs.pop("transition_time"):
+            self.transition_time=transition_time
+        else:
+            self.transition_time=0
+        if 'scale' in kwargs:
+            self.scale=kwargs.pop('scale')
+        else:
+            self.scale = [1]*3
 
+        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        transform = TransformGeometry(tree, scale=self.scale)
+        join = JoinGeometry(tree)
+        time = SceneTime(tree)
+        dt = self.transition_time / len(list(self.l_range))
+
+        colors = ["drawing", "joker", "important", "custom1", "custom2", "custom3", "custom4", "gray_4"]
+        count = 0
+        for l in self.l_range:
+            mesh_line = MeshLine(tree, count=l * 20 + 10, start_location=[-1, 0, 0], end_location=[1, 0, 0])
+            position = Position(tree)
+            y = make_function(tree, name="y",
+                              functions={
+                                  "y": "x,acos,sin"
+                              }, inputs=["x"], outputs=["y"],
+                              scalars=["x", "y"])
+
+            separate = SeparateXYZ(tree, vector=position.std_out)
+            links.new(separate.x, y.inputs["x"])
+            alp = AssociatedLegendrePolynomial(tree, l=l, m=self.m, x=separate.x, y=y.outputs[0])
+
+            appear_function = make_function(tree, name="AppearFunction",
+                                            functions={
+                                                "selection": "t," + str(self.begin_time) + ",-," + str(
+                                                    dt) + ",/," + str(count) + ",<"
+                                            },
+                                            inputs=["t"], outputs=["selection"], scalars=["t", "selection"])
+            links.new(time.std_out, appear_function.inputs["t"])
+            combine = CombineXYZ(tree, x=separate.x, y=0, z=alp.std_out)
+            set_pos = SetPosition(tree, position=combine.std_out)
+            wireframe = WireFrame(tree, radius=0.0025)
+            del_geo = DeleteGeometry(tree, selection=appear_function.outputs["selection"])
+
+            if count < len(colors):
+                color = colors[count]
+            else:
+                color = colors[-1]
+            set_mat = SetMaterial(tree, material=color)
+            create_geometry_line(tree, [mesh_line, set_pos, del_geo, wireframe, set_mat, join])
+            count += 1
+
+        create_geometry_line(tree, [join, transform], out=out.inputs[0])
+
+
+class PlmSurface(GeometryNodesModifier):
+    def __init__(self, domain = [[-1,1],[0,1]], l=6,m=3, name='AssociatedLegendrePolynomialSurface',
+                 begin_time=0,transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+        """
+        geometry nodes that turn a set of mesh lines into Legendre Polynomials
+        """
+        self.domain = domain
+        self.l = l
+        self.m = m
+        if "begin_time" in kwargs:
+            self.begin_time=kwargs.pop("begin_time")
+        else:
+            self.begin_time =0
+        if "transition_time" in kwargs:
+            self.transition_time=kwargs.pop("transition_time")
+        else:
+            self.transition_time = 0
+
+        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        size_x = self.domain[0][1]-self.domain[0][0]
+        size_y = self.domain[1][1]-self.domain[1][0]
+        mesh = Grid(tree,size_x=size_x,size_y=size_y,vertices_y=100,vertices_x=100)
+        translation_x=(self.domain[0][1]+self.domain[0][0])/2
+        translation_y=(self.domain[1][1]+self.domain[1][0])/2
+        # move mesh to the coordinates of its middle
+        transform = TransformGeometry(tree,translation_x=translation_x,translation_y=translation_y)
+        position = Position(tree)
+        sep = SeparateXYZ(tree,vector=position.std_out)
+        function  = AssociatedLegendrePolynomial(tree,l=self.l,m=self.m,x=sep.x,y=sep.y)
+        combine = CombineXYZ(tree,x=sep.x,y=sep.y,z=function.std_out)
+        set_pos = SetPosition(tree,position=combine.std_out)
+        if 'scale' in kwargs:
+            scale = kwargs.pop('scale')
+            transform2 = TransformGeometry(tree,scale=scale)
+        else:
+            transform2 = TransformGeometry(tree)
+        wireframe=WireFrame(tree)
+
+        create_geometry_line(tree, [mesh,transform,set_pos,transform2,wireframe], out=out.inputs[0])
 ##
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
@@ -2376,7 +2430,9 @@ def generate_labels(tic_labels,axis_label, **kwargs):
     # shape keys later and to avoid duplicate
     for key, val in tic_labels.items():
         path = get_file_path(key)
-        tic_labels[key] = [val] + [path]
+        if isinstance(val,(float,int)):
+            val=[val]
+        tic_labels[key] = val + [path]
         imported_svg_data=import_svg_data(imported_svg_data,path,kwargs)
 
     imported_svg_data = align_figures(imported_svg_data, aligned)
