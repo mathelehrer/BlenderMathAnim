@@ -7,19 +7,18 @@ import bpy
 import numpy as np
 
 from appearance.textures import phase2hue_material, gradient_from_attribute, z_gradient, double_gradient
-from extended_math_nodes.generic_nodes import LegendrePolynomial, AssociatedLegendrePolynomial
+from extended_math_nodes.generic_nodes import LegendrePolynomial, AssociatedLegendrePolynomial, SphericalHarmonicsRekursive
 from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, InstanceOnPoints, JoinGeometry, \
     create_geometry_line, RealizeInstances, Position, make_function, ObjectInfo, SetPosition, Index, SetMaterial, \
     RandomValue, RepeatZone, StoredNamedAttribute, NamedAttribute, VectorMath, CurveToMesh, PointsToCurve, Grid, \
     TransformGeometry, InputVector, DeleteGeometry, IcoSphere, MeshLine, InstanceOnEdges, CubeMesh, \
     EdgeVertices, BooleanMath, SetShadeSmooth, RayCast, WireFrame, ConvexHull, InsideConvexHull, ExtrudeMesh, \
     ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch, MeshToPoints, \
-    SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputBoolean, InputRotation, InvertRotation, RotateRotation, \
+    SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh,  InputRotation, InvertRotation, RotateRotation, \
     Frame, SeparateXYZ
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
-from mathematics.spherical_harmonics import SphericalHarmonics
 from objects.derived_objects.p_arrow import PArrow
 from utils.constants import FRAME_RATE, TEMPLATE_TEXT_FILE, SVG_DIR, TEX_DIR, TEX_TEXT_TO_REPLACE, TEMPLATE_TEX_FILE, \
     TEX_LOCAL_SCALE_UP, DEFAULT_ANIMATION_TIME
@@ -1592,7 +1591,7 @@ class SphericalHarmonicsNode(GeometryNodesModifier):
 
         tree.links.new(position.std_out, cart2polar.inputs["position"])
         # create spherical harmonics terms
-        y_lm = SphericalHarmonics(self.l, self.m, "theta", "phi")
+        y_lm = SphericalHarmonicsRekursive(self.l, self.m, "theta", "phi")
 
         real_part = ExpressionConverter(y_lm.real()).postfix()
         imag_part = ExpressionConverter(y_lm.imag()).postfix()
@@ -1803,7 +1802,7 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         left += 1
 
         # create spherical harmonics terms
-        y_lm = SphericalHarmonics(self.l, self.m, "theta", "phi")
+        y_lm = SphericalHarmonicsRekursive(self.l, self.m, "theta", "phi")
 
         real_part = ExpressionConverter(y_lm.real()).postfix()
         imag_part = ExpressionConverter(y_lm.imag()).postfix()
@@ -2332,7 +2331,6 @@ class AssociatedLegendreP(GeometryNodesModifier):
         out = self.group_outputs
         links = tree.links
 
-        transform = TransformGeometry(tree, scale=self.scale)
         join = JoinGeometry(tree)
         time = SceneTime(tree)
         dt = self.transition_time / len(list(self.l_range))
@@ -2340,7 +2338,7 @@ class AssociatedLegendreP(GeometryNodesModifier):
         colors = ["drawing", "joker", "important", "custom1", "custom2", "custom3", "custom4", "gray_4"]
         count = 0
         for l in self.l_range:
-            mesh_line = MeshLine(tree, count=l * 20 + 10, start_location=[-1, 0, 0], end_location=[1, 0, 0])
+            mesh_line = MeshLine(tree, count=l * 100 + 10, start_location=[-0.999, 0, 0], end_location=[0.999, 0, 0]) # avoid numerical singularity at \pm 1
             position = Position(tree)
             y = make_function(tree, name="y",
                               functions={
@@ -2361,7 +2359,8 @@ class AssociatedLegendreP(GeometryNodesModifier):
             links.new(time.std_out, appear_function.inputs["t"])
             combine = CombineXYZ(tree, x=separate.x, y=0, z=alp.std_out)
             set_pos = SetPosition(tree, position=combine.std_out)
-            wireframe = WireFrame(tree, radius=0.0025)
+            transform = TransformGeometry(tree, scale=self.scale)
+            wireframe = WireFrame(tree, radius=0.02)
             del_geo = DeleteGeometry(tree, selection=appear_function.outputs["selection"])
 
             if count < len(colors):
@@ -2369,10 +2368,78 @@ class AssociatedLegendreP(GeometryNodesModifier):
             else:
                 color = colors[-1]
             set_mat = SetMaterial(tree, material=color)
-            create_geometry_line(tree, [mesh_line, set_pos, del_geo, wireframe, set_mat, join])
+            create_geometry_line(tree, [mesh_line, set_pos, del_geo, transform,wireframe, set_mat, join])
             count += 1
 
-        create_geometry_line(tree, [join, transform], out=out.inputs[0])
+        create_geometry_line(tree, [join], out=out.inputs[0])
+
+class SphericalHarmonicsNode(GeometryNodesModifier):
+    def __init__(self,l_range=range(0,5),m=1, name='SphericalHarmonics', **kwargs):
+        """
+        geometry nodes that turn a set of mesh lines into associated Legendre Polynomials
+        """
+        self.m=m
+        self.l_range=l_range
+        if begin_time :=kwargs.pop("begin_time"):
+            self.begin_time=begin_time
+        else:
+            self.begin_time=0
+        if transition_time :=kwargs.pop("transition_time"):
+            self.transition_time=transition_time
+        else:
+            self.transition_time=0
+        if 'scale' in kwargs:
+            self.scale=kwargs.pop('scale')
+        else:
+            self.scale = [1]*3
+
+        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        join = JoinGeometry(tree)
+        time = SceneTime(tree)
+        dt = self.transition_time / len(list(self.l_range))
+
+        colors = ["drawing", "joker", "important", "custom1", "custom2", "custom3", "custom4", "gray_4"]
+        count = 0
+        for l in self.l_range:
+            mesh_line = MeshLine(tree, count=l * 100 + 10, start_location=[-0.999, 0, 0], end_location=[0.999, 0, 0]) # avoid numerical singularity at \pm 1
+            position = Position(tree)
+            y = make_function(tree, name="y",
+                              functions={
+                                  "y": "x,acos,sin"
+                              }, inputs=["x"], outputs=["y"],
+                              scalars=["x", "y"])
+
+            separate = SeparateXYZ(tree, vector=position.std_out)
+            links.new(separate.x, y.inputs["x"])
+            alp = SphericalHarmonicsRekursive(tree, l=l, m=self.m, x=separate.x, y=y.outputs[0])
+
+            appear_function = make_function(tree, name="AppearFunction",
+                                            functions={
+                                                "selection": "t," + str(self.begin_time) + ",-," + str(
+                                                    dt) + ",/," + str(count) + ",<"
+                                            },
+                                            inputs=["t"], outputs=["selection"], scalars=["t", "selection"])
+            links.new(time.std_out, appear_function.inputs["t"])
+            combine = CombineXYZ(tree, x=separate.x, y=0, z=alp.std_out)
+            set_pos = SetPosition(tree, position=combine.std_out)
+            transform = TransformGeometry(tree, scale=self.scale)
+            wireframe = WireFrame(tree, radius=0.02)
+            del_geo = DeleteGeometry(tree, selection=appear_function.outputs["selection"])
+
+            if count < len(colors):
+                color = colors[count]
+            else:
+                color = colors[-1]
+            set_mat = SetMaterial(tree, material=color)
+            create_geometry_line(tree, [mesh_line, set_pos, del_geo, transform,wireframe, set_mat, join])
+            count += 1
+
+        create_geometry_line(tree, [join], out=out.inputs[0])
 
 
 class PlmSurface(GeometryNodesModifier):
