@@ -19,6 +19,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
+from mathematics.spherical_harmonics import SphericalHarmonics
 from objects.derived_objects.p_arrow import PArrow
 from utils.constants import FRAME_RATE, TEMPLATE_TEXT_FILE, SVG_DIR, TEX_DIR, TEX_TEXT_TO_REPLACE, TEMPLATE_TEX_FILE, \
     TEX_LOCAL_SCALE_UP, DEFAULT_ANIMATION_TIME
@@ -1802,7 +1803,7 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         left += 1
 
         # create spherical harmonics terms
-        y_lm = SphericalHarmonicsRekursive(self.l, self.m, "theta", "phi")
+        y_lm = SphericalHarmonics(self.l, self.m, "theta", "phi")
 
         real_part = ExpressionConverter(y_lm.real()).postfix()
         imag_part = ExpressionConverter(y_lm.imag()).postfix()
@@ -2486,6 +2487,123 @@ class PlmSurface(GeometryNodesModifier):
         wireframe=WireFrame(tree)
 
         create_geometry_line(tree, [mesh,transform,set_pos,transform2,wireframe], out=out.inputs[0])
+
+
+class YlmSurface(GeometryNodesModifier):
+    def __init__(self, domain = [[-pi,pi],[0,pi]], l=3,m=2, name="SphericalHarmonicsSurface",
+                  **kwargs):
+        """
+        geometry nodes that turn a grid into a representation of a spherical harmonics function
+        """
+        self.domain = domain
+        self.l = l
+        self.m = m
+        if "begin_time" in kwargs:
+            self.begin_time=kwargs.pop("begin_time")
+        else:
+            self.begin_time =0
+        if "transition_time" in kwargs:
+            self.transition_time=kwargs.pop("transition_time")
+        else:
+            self.transition_time = 0
+
+        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        size_x = self.domain[0][1]-self.domain[0][0]
+        size_y = self.domain[1][1]-self.domain[1][0]
+        mesh = Grid(tree,size_x=size_x,size_y=size_y,vertices_y=self.l*10+20,vertices_x=self.l*10+20)
+
+        translation_x=(self.domain[0][1]+self.domain[0][0])/2
+        translation_y=(self.domain[1][1]+self.domain[1][0])/2
+        # move mesh to the coordinates of its middle
+        transform = TransformGeometry(tree,translation_x=translation_x,translation_y=translation_y)
+        position = Position(tree)
+        sep = SeparateXYZ(tree,vector=position.std_out)
+        function  = SphericalHarmonicsRekursive(tree,l=self.l,m=self.m,phi=sep.x,theta=sep.y)
+        combine = CombineXYZ(tree,x=sep.x,y=sep.y,z=function.re)
+        set_pos = SetPosition(tree,position=combine.std_out)
+        if 'scale' in kwargs:
+            scale = kwargs.pop('scale')
+            transform2 = TransformGeometry(tree,scale=scale)
+        else:
+            transform2 = TransformGeometry(tree)
+        wireframe=WireFrame(tree)
+
+        create_geometry_line(tree, [mesh,transform,set_pos,transform2,wireframe], out=out.inputs[0])
+
+
+class YlmSurfaceReference(GeometryNodesModifier):
+    def __init__(self, domain = [[-pi,pi],[0,pi]], l=3,m=2, name="SphericalHarmonicsSurfaceReference",
+                  **kwargs):
+        """
+        geometry nodes that turn a grid into a representation of a spherical harmonics function
+        """
+        self.domain = domain
+        self.l = l
+        self.m = m
+        if "begin_time" in kwargs:
+            self.begin_time=kwargs.pop("begin_time")
+        else:
+            self.begin_time =0
+        if "transition_time" in kwargs:
+            self.transition_time=kwargs.pop("transition_time")
+        else:
+            self.transition_time = 0
+
+        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        size_x = self.domain[0][1]-self.domain[0][0]
+        size_y = self.domain[1][1]-self.domain[1][0]
+        mesh = Grid(tree,size_x=size_x,size_y=size_y,vertices_y=self.l*10+20,vertices_x=self.l*10+20)
+
+        translation_x=(self.domain[0][1]+self.domain[0][0])/2
+        translation_y=(self.domain[1][1]+self.domain[1][0])/2
+        # move mesh to the coordinates of its middle
+        transform = TransformGeometry(tree,translation_x=translation_x,translation_y=translation_y)
+        position = Position(tree)
+        sep = SeparateXYZ(tree,vector=position.std_out)
+        # create spherical harmonics terms
+
+        y_lm = SphericalHarmonics(self.l, self.m, "theta", "phi")
+
+        real_part = ExpressionConverter(y_lm.real()).postfix()
+        imag_part = ExpressionConverter(y_lm.imag()).postfix()
+
+        if imag_part=='':
+            imag_part='0'
+
+        compute_y_lm = make_function(tree, name="Y_lm", functions={
+            "re": real_part,
+            "im": imag_part
+        },
+                                     inputs=["theta", "phi"],
+                                     outputs=["re", "im"], scalars=["re", "im", "theta", "phi"], hide=True,
+        )
+
+        tree.links.new(sep.y, compute_y_lm.inputs["theta"])
+        tree.links.new(sep.x, compute_y_lm.inputs["phi"])
+
+        combine = CombineXYZ(tree,x=sep.x,y=sep.y,z=compute_y_lm.outputs["re"])
+        set_pos = SetPosition(tree,position=combine.std_out)
+        if 'scale' in kwargs:
+            scale = kwargs.pop('scale')
+            transform2 = TransformGeometry(tree,scale=scale)
+        else:
+            transform2 = TransformGeometry(tree)
+        material = SetMaterial(tree,material=z_gradient)
+
+        create_geometry_line(tree, [mesh,transform,set_pos,transform2,material], out=out.inputs[0])
+
+
+
 ##
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes

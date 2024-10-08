@@ -79,6 +79,7 @@ class CoordinateSystem2(BObject):
                                              tic_labels=self.tic_labels[i],
                                              n_tics = self.n_tics[i],
                                              tic_label_digits=self.tic_label_digits[i],
+                                             length=self.lengths[i],
                                             color=self.colors[i],axis_label=axis_label_keys[i],
                                              axis_label_location=self.axes_labels[axis_label_keys[i]],**kwargs))
 

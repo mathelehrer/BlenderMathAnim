@@ -563,7 +563,7 @@ class SphericalHarmonicsRekursive(GenericNode):
         # use the following recursive relation P_l^{m} = -(l+m-1)(l-m+2)P_{l}^{m-2}-2(m-1)*x/y*P_l^{m-1}
         if m>0:
             for m in range(2,m+1):
-                expr = str(-(l+m-1)*(l-m+2))+","+str((l+m)*(l-m+1))+",/,sqrt"+",P"+str(l)+"_"+str(m-2)+",*,"+str(2*(m-1))+","+str((l+m)*(l-m+1))+",sqrt,/,x,*,y,/,P"+str(l)+"_"+str(m-1)+",*,-"
+                expr = str((l+m-1)*(l-m+2))+","+str((l+m)*(l-m+1))+",/,sqrt"+",P"+str(l)+"_"+str(m-2)+",*,-1,*,"+str(2*(m-1))+","+str((l+m)*(l-m+1))+",sqrt,/,x,*,y,/,P"+str(l)+"_"+str(m-1)+",*,-"
                 al_next = make_function(sub_tree.nodes,
                                         functions={
                                             "P" + str(l)+"_"+str(m): expr
@@ -582,8 +582,8 @@ class SphericalHarmonicsRekursive(GenericNode):
         else:
             for m in range(2, abs(m) + 1):
                 # only one sign different
-                expr = str(-(l + m - 1) * (l - m + 2)) + "," + str((l + m) * (l - m + 1)) + ",/,sqrt" + ",P" + str(
-                    l) + "_" + str(-m + 2) + ",*," + str(2 * (m - 1)) + "," + str(
+                expr = str((l + m - 1) * (l - m + 2)) + "," + str((l + m) * (l - m + 1)) + ",/,sqrt" + ",P" + str(
+                    l) + "_" + str(-m + 2) + ",*,-1,*," + str(2 * (m - 1)) + "," + str(
                     (l + m) * (l - m + 1)) + ",sqrt,/,x,*,y,/,P" + str(l) + "_" + str(-m + 1) + ",*,+"
                 al_next = make_function(sub_tree.nodes,
                                         functions={
@@ -615,13 +615,14 @@ class SphericalHarmonicsRekursive(GenericNode):
             alp = als[-1]
 
         left+=1
+        # include phi, and rescaling by
         output = make_function(sub_tree,name="Y_lm",
                     functions={
-                        "re":"alp,"+str(self.m)+",phi,*,cos,*",
-                        "im":"alp,"+str(self.m)+",phi,*,sin,*",
+                        "re":"alp,"+str(self.m)+",phi,*,cos,*,2,/,"+str(2*l+1)+",pi,/,sqrt,*",
+                        "im":"alp,"+str(self.m)+",phi,*,sin,*,2,/,"+str(2*l+1)+",pi,/,sqrt,*",
                     },inputs=["alp","phi"],outputs=["re","im"],
                     scalars=["alp","phi","re","im"],location=(left,0))
-        sub_tree.links.new(alp.std_out,output.inputs["alp"])
+        sub_tree.links.new(alp.outputs[0],output.inputs["alp"])
         sub_tree.links.new(group_inputs.outputs["phi"],output.inputs["phi"])
 
         sub_tree.links.new(output.outputs["re"],group_outputs.inputs[0])
@@ -637,3 +638,6 @@ class SphericalHarmonicsRekursive(GenericNode):
             self.node.inputs["phi"].default_value = phi
         else:
             tree.links.new(phi, self.node.inputs["phi"])
+
+        self.re = self.node.outputs[self.name+"_re"]
+        self.im = self.node.outputs[self.name+"_im"]
