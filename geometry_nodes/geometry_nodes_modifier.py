@@ -2506,6 +2506,7 @@ class YlmSurface(GeometryNodesModifier):
             self.transition_time=kwargs.pop("transition_time")
         else:
             self.transition_time = 0
+        self.thickness = get_from_kwargs(kwargs,"thickness",1)
 
         super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
 
@@ -2531,7 +2532,7 @@ class YlmSurface(GeometryNodesModifier):
             transform2 = TransformGeometry(tree,scale=scale)
         else:
             transform2 = TransformGeometry(tree)
-        wireframe=WireFrame(tree)
+        wireframe=WireFrame(tree,radius=0.02*self.thickness)
 
         create_geometry_line(tree, [mesh,transform,set_pos,transform2,wireframe], out=out.inputs[0])
 

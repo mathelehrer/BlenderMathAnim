@@ -618,8 +618,8 @@ class SphericalHarmonicsRekursive(GenericNode):
         # include phi, and rescaling by
         output = make_function(sub_tree,name="Y_lm",
                     functions={
-                        "re":"alp,"+str(self.m)+",phi,*,cos,*,2,/,"+str(2*l+1)+",pi,/,sqrt,*",
-                        "im":"alp,"+str(self.m)+",phi,*,sin,*,2,/,"+str(2*l+1)+",pi,/,sqrt,*",
+                        "re":"alp,"+str(self.m)+",phi,*,cos,*,2,/,"+str(2*l+1)+",pi,/,sqrt,*,-1,"+str(self.m)+",**,*",
+                        "im":"alp,"+str(self.m)+",phi,*,sin,*,2,/,"+str(2*l+1)+",pi,/,sqrt,*,-1,"+str(self.m)+",**,*"
                     },inputs=["alp","phi"],outputs=["re","im"],
                     scalars=["alp","phi","re","im"],location=(left,0))
         sub_tree.links.new(alp.outputs[0],output.inputs["alp"])
