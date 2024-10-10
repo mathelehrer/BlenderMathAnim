@@ -1,7 +1,9 @@
 import bpy
+import numpy as np
 
-from geometry_nodes.nodes import make_function
+from geometry_nodes.nodes import make_function, Switch
 from interface.ibpy import make_new_socket
+from shader_nodes.shader_nodes import MixNode
 from utils.kwargs import get_from_kwargs
 
 
@@ -416,6 +418,31 @@ class SphericalHarmonicsRekursive(GenericNode):
         x_socket = xy.outputs["x"]
         y_socket = xy.outputs["y"]
 
+        m=abs(self.m)
+        factor = 1
+        for i in range(-m+1,m+1):
+            factor=factor*np.sqrt(m+i)
+            if i>0:
+                factor/=2*i
+        factor*=np.sqrt((2*self.l+1) / 4 / np.pi)
+
+        sign_neg = 1
+        if self.m<0:
+            sign_neg *=(-1)**(self.l+self.m)
+        else:
+            sign_neg *=(-1)**self.l
+        sign_pos = 1
+        if self.m>=0:
+            sign_pos *=(-1)**self.m
+        approx = make_function(sub_tree, name="Asymptotics",
+                                    functions={
+                                        "approx":str(factor)+",y,"+str(abs(self.m))+",**,*,"+str(sign_pos)+",x,0,<,not,*,"+str(sign_neg)+",x,0,<,*,+,*"
+                                    }, inputs=["x","y"], outputs=["approx"],
+                                    scalars=["x","y","approx"],
+                                    location= (left,3),node_group_type=self.node_group_type)
+        sub_tree.links.new(x_socket,approx.inputs["x"])
+        sub_tree.links.new(y_socket,approx.inputs["y"])
+
         left = -0.85*l-abs(m)
         # make Legendre polynomials
         p0 = make_function(sub_tree.nodes,
@@ -615,6 +642,15 @@ class SphericalHarmonicsRekursive(GenericNode):
             alp = als[-1]
 
         left+=1
+        approximation = make_function(sub_tree, name="YlmAsymptotics",
+                                      functions={
+                                          "re": "approx," + str(self.m) + ",phi,*,cos,*",
+                                          "im": "approx," + str(self.m) + ",phi,*,sin,*"
+                                      }, inputs=["approx", "phi"], outputs=["re", "im"],
+                                      scalars=["re", "im", "approx", "phi"], location=(left-2, 3))
+        sub_tree.links.new(approx.outputs["approx"],approximation.inputs["approx"])
+        sub_tree.links.new(group_inputs.outputs["phi"],approximation.inputs["phi"])
+        left+=1
         # include phi, and rescaling by
         output = make_function(sub_tree,name="Y_lm",
                     functions={
@@ -625,8 +661,39 @@ class SphericalHarmonicsRekursive(GenericNode):
         sub_tree.links.new(alp.outputs[0],output.inputs["alp"])
         sub_tree.links.new(group_inputs.outputs["phi"],output.inputs["phi"])
 
-        sub_tree.links.new(output.outputs["re"],group_outputs.inputs[0])
-        sub_tree.links.new(output.outputs["im"],group_outputs.inputs[1])
+        left+=1
+        switch_function = make_function(sub_tree, name="switchFunction",
+                                        functions={
+                                            "switch": "approx,abs,0.001,<"
+                                        }, inputs=["approx"], outputs=["switch"],
+                                        scalars=["approx", "switch"], location=(left , 3))
+        sub_tree.links.new(approx.outputs["approx"],switch_function.inputs["approx"])
+
+        left+=1
+        if self.node_group_type == 'Shader':
+            mix_re = MixNode(sub_tree, factor=switch_function.outputs["switch"],
+                             caseA=approximation.outputs["re"],
+                             caseB=output.outputs["re"],
+                             location=(left,3)
+                             )
+            mix_im = MixNode(sub_tree, factor=switch_function.outputs["switch"],
+                         caseA=approximation.outputs["im"],
+                             caseB=output.outputs["im"],
+                             location=(left,1))
+        else:
+            mix_re = Switch(sub_tree,switch=switch_function.outputs["switch"],
+                                false=output.outputs["re"],
+                                true=approximation.outputs["re"],
+                            input_type="FLOAT",
+                                location=(left,3))
+            mix_im = Switch(sub_tree, switch=switch_function.outputs["switch"],
+                                false=output.outputs["im"],
+                                true=approximation.outputs["im"],
+                            input_type="FLOAT",
+                                location=(left, 1))
+
+        sub_tree.links.new(mix_re.outputs[0],group_outputs.inputs[0])
+        sub_tree.links.new(mix_im.outputs[0],group_outputs.inputs[1])
 
         self.node = group
         if isinstance(theta, (float, int)):

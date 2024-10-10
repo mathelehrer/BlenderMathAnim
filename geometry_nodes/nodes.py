@@ -1469,6 +1469,7 @@ class Switch(BlueNode):
                  switch=None, false=None, true=None, **kwargs):
 
         self.node = tree.nodes.new(type="GeometryNodeSwitch")
+        self.node.input_type=input_type
         super().__init__(tree, location=location, **kwargs)
 
         self.std_out = self.node.outputs['Output']

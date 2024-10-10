@@ -71,6 +71,25 @@ class MathNode(ShaderNode):
             else:
                 self.tree.links.new(input2, self.node.inputs[2])
 
+class MixNode(ShaderNode):
+    def __init__(self,tree,location,type='FLOAT',factor=0,caseA=0,caseB=0,**kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeMix")
+        super().__init__(tree,location,**kwargs)
+
+        if isinstance(factor,(int,float)):
+            self.node.inputs['Factor'].default_value=factor
+        else:
+            self.tree.links.new(factor,self.node.inputs['Factor'])
+
+        if isinstance(caseA,(int,float)):
+            self.node.inputs['A'].default_value=caseA
+        else:
+            self.tree.links.new(caseA,self.node.inputs['A'])
+
+        if isinstance(caseB, (int, float)):
+            self.node.inputs['B'].default_value = caseB
+        else:
+            self.tree.links.new(caseB, self.node.inputs['B'])
 
 class Mapping(ShaderNode):
     def __init__(self, tree, location=(0, 0), type='POINT', vector=None,
