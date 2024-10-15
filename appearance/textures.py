@@ -7,6 +7,7 @@ import bpy
 import numpy as np
 from sympy import Symbol, re, im, sqrt, factorial, simplify, factor
 
+from extended_math_nodes.generic_nodes import SphericalHarmonics200, SphericalHarmonicsRekursive
 from geometry_nodes.nodes import make_function
 from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
@@ -1003,57 +1004,55 @@ def multipole_texture_optimized(l=6,m=3,**kwargs):
     links = mat.node_tree.links
     material_out=nodes.get("Material Output")
 
-    # parts of the normalization needs to be included into the expression for the associated legendre polynomials
 
-
-    associated_legendre =sqrt((2*l+1)*factorial(l-m)/factorial(l+m))* AssociatedLegendre(l,m,"x").poly
-    associated_legendre = str(simplify(associated_legendre))
-    associated_legendre =associated_legendre.replace("sqrt(1 - x**2)",'y')
-    associated_legendre =associated_legendre.replace("(1 - x**2)",'y**2')
-
-    left = -7
+    left = -10
     coords = TextureCoordinate(tree, location=(left, 0))
     left += 1
     polar = make_function(nodes, functions={
-        "cos_theta": "uv_y,pi,*,cos",
-        "sin_theta": "uv_y,pi,*,sin",
+        "theta": "uv_y,pi,*",
         "phi": "uv_x,pi,*,2,*"
     },
                           inputs=["uv"], vectors=["uv"],
-                          outputs=["sin_theta","cos_theta", "phi"],
-                          scalars=["sin_theta","cos_theta", "phi"],
+                          outputs=["theta", "phi"],
+                          scalars=["theta", "phi"],
                           node_group_type='ShaderNodes',
                           location=(left, -1),
                           name="PolarCoordinates")
     links.new(coords.std_out, polar.inputs["uv"])
-
-    inputValues = [InputValue(tree,location=(left,0+0.25*i),name="a"+str(i),value=2*(i%2)) for i  in range(2)]
-    left += 1
-
-    in_sockets = [inputValue.std_out for inputValue in inputValues]
-
-    expr = ExpressionConverter(str(associated_legendre)).postfix()
-
-    al=make_function(tree,functions={
-        "associated_legendre":expr+",2,/,pi,sqrt,/"
-    },
-    inputs=["x","y",],outputs=["associated_legendre"],
-    scalars=["x","y","associated_legendre"],name="AssociatedLegendre",
-                     node_group_type='ShaderNodes',location=(left,0))
-    links.new(polar.outputs["cos_theta"],al.inputs["x"])
-    links.new(polar.outputs["sin_theta"],al.inputs["y"])
     left+=1
 
-    ins = ["a" + str(i) for i in range(2)] + ["associated_legendre", "phi"]
+    m_range = [50,100]
+    harmonics_list = [SphericalHarmonics200(tree, m=m, location=(left, -0.25 * m/10),hide=True) for m in m_range]
+    for y in harmonics_list:
+        tree.links.new(polar.outputs["theta"],y.theta)
+        tree.links.new(polar.outputs["phi"],y.phi)
 
+    inputValues = [InputValue(tree, location=(left, 0 + 0.25 * m/10), name="a" + str(l) + "_" + str(m)) for m in m_range]
+    left += 1
+
+    y_labels = ["Y" + str(l) + "_" + str(m) for m in m_range]
+    in_sockets = [inputValue.std_out for inputValue in inputValues] + [y.re for y in harmonics_list]
+    ins =[inputValue.name for inputValue in inputValues] +y_labels
+
+    outs = ["temp"]
+
+    count = 0
+    expr = ""
+    for a_value,y_label in zip(inputValues,y_labels):
+        expr+=a_value.name+","+y_label
+        if count>0:
+            expr+=",*,+,"
+        else:
+            expr+=",*,"
+        count+=1
+
+    expr = expr[0:-1]
 
     temperature = make_function(nodes, functions={
-        "temp": "a0,associated_legendre,*,phi,"+str(m)+",*,cos,*,a1,associated_legendre,*,phi,"+str(m)+",*,sin,*,+"
-    }, inputs=ins, outputs=["temp"],scalars=ins+["temp"],
-                                node_group_type='ShaderNodes', location=(left, 0),
-                                name="Temperature")
+        "temp": expr
+    }, inputs=ins, outputs=outs, scalars=ins + outs,
+                                node_group_type='ShaderNodes', location=(left, 0))
 
-    in_sockets+=[al.outputs["associated_legendre"],polar.outputs["phi"]]
     for socket, label in zip(in_sockets, ins):
         links.new(socket, temperature.inputs[label])
     left += 1
@@ -1062,15 +1061,14 @@ def multipole_texture_optimized(l=6,m=3,**kwargs):
         "abs": "temp,abs",
         "positive": "temp,0,>"
     }, inputs=["temp"], outputs=["abs", "positive"], scalars=["temp", "abs", "positive"],
-                             location=(left, 0), node_group_type='ShaderNodes',
-                             name="ComponentExtraction")
+                             location=(left, 0), node_group_type='ShaderNodes')
     links.new(temperature.outputs["temp"], abs_temp.inputs["temp"])
     left += 1
 
     # positive branch
 
     # color ramp for the nice color gradient
-    ramp_pos = ColorRamp(tree, location=(left, 1), factor=abs_temp.outputs["abs"],
+    ramp_pos = ColorRamp(tree, location=(left, 2), factor=abs_temp.outputs["abs"],
                          values=[0, 0.5, 1], colors=[[0, 1, 0, 1], [1, 1, 0, 1], [1, 0, 0, 1]], hide=False)
 
     # negative branch

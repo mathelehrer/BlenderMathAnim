@@ -22,6 +22,7 @@ class ShaderNode:
             name = kwargs.pop('name')
             self.node.label = name
             self.node.name = name
+            self.name = name
         if 'label' in kwargs:
             label = kwargs.pop('label')
             self.node.label = label
@@ -74,6 +75,7 @@ class MathNode(ShaderNode):
 class MixNode(ShaderNode):
     def __init__(self,tree,location,type='FLOAT',factor=0,caseA=0,caseB=0,**kwargs):
         self.node = tree.nodes.new(type="ShaderNodeMix")
+        self.std_out = self.node.outputs[0]
         super().__init__(tree,location,**kwargs)
 
         if isinstance(factor,(int,float)):

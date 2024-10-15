@@ -7,7 +7,8 @@ import bpy
 import numpy as np
 
 from appearance.textures import phase2hue_material, gradient_from_attribute, z_gradient, double_gradient
-from extended_math_nodes.generic_nodes import LegendrePolynomial, AssociatedLegendrePolynomial, SphericalHarmonicsRekursive
+from extended_math_nodes.generic_nodes import LegendrePolynomial, AssociatedLegendrePolynomial, \
+    SphericalHarmonicsRekursive, SphericalHarmonics200
 from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, InstanceOnPoints, JoinGeometry, \
     create_geometry_line, RealizeInstances, Position, make_function, ObjectInfo, SetPosition, Index, SetMaterial, \
     RandomValue, RepeatZone, StoredNamedAttribute, NamedAttribute, VectorMath, CurveToMesh, PointsToCurve, Grid, \
@@ -2525,6 +2526,53 @@ class YlmSurface(GeometryNodesModifier):
         position = Position(tree)
         sep = SeparateXYZ(tree,vector=position.std_out)
         function  = SphericalHarmonicsRekursive(tree,l=self.l,m=self.m,phi=sep.x,theta=sep.y)
+        combine = CombineXYZ(tree,x=sep.x,y=sep.y,z=function.re)
+        set_pos = SetPosition(tree,position=combine.std_out)
+        if 'scale' in kwargs:
+            scale = kwargs.pop('scale')
+            transform2 = TransformGeometry(tree,scale=scale)
+        else:
+            transform2 = TransformGeometry(tree)
+        wireframe=WireFrame(tree,radius=0.02*self.thickness)
+
+        create_geometry_line(tree, [mesh,transform,set_pos,transform2,wireframe], out=out.inputs[0])
+
+class YlmSurface_200(GeometryNodesModifier):
+    def __init__(self, domain = [[-pi,pi],[0,pi]], l=3,m=2, name="SphericalHarmonicsSurface",
+                  **kwargs):
+        """
+        geometry nodes that turn a grid into a representation of a spherical harmonics function
+        """
+        self.domain = domain
+        self.l = l
+        self.m = m
+        if "begin_time" in kwargs:
+            self.begin_time=kwargs.pop("begin_time")
+        else:
+            self.begin_time =0
+        if "transition_time" in kwargs:
+            self.transition_time=kwargs.pop("transition_time")
+        else:
+            self.transition_time = 0
+        self.thickness = get_from_kwargs(kwargs,"thickness",1)
+
+        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        size_x = self.domain[0][1]-self.domain[0][0]
+        size_y = self.domain[1][1]-self.domain[1][0]
+        mesh = Grid(tree,size_x=size_x,size_y=size_y,vertices_y=self.l*10+20,vertices_x=self.l*10+20)
+
+        translation_x=(self.domain[0][1]+self.domain[0][0])/2
+        translation_y=(self.domain[1][1]+self.domain[1][0])/2
+        # move mesh to the coordinates of its middle
+        transform = TransformGeometry(tree,translation_x=translation_x,translation_y=translation_y)
+        position = Position(tree)
+        sep = SeparateXYZ(tree,vector=position.std_out)
+        function  = SphericalHarmonics200(tree,m=self.m,phi=sep.x,theta=sep.y)
         combine = CombineXYZ(tree,x=sep.x,y=sep.y,z=function.re)
         set_pos = SetPosition(tree,position=combine.std_out)
         if 'scale' in kwargs:
