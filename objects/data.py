@@ -11,7 +11,13 @@ class Data(BObject):
         Two dimensional data that is converted into geometry that can be displayed in a coordinate system
 
         """
-        super().__init__(mesh=create_mesh(data),name=name)
+        # create edges, when the option linesize appears as keyword argument
+        edges =[]
+
+        if "linesize" in kwargs:
+            for i in range(len(data)-1):
+                edges.append([i,i+1])
+        super().__init__(mesh=create_mesh(data,edges),name=name)
         self.data_modifier = None
 
         if coordinate_system:
@@ -20,6 +26,12 @@ class Data(BObject):
         if data:
             self.data_modifier = DataModifier(x_domain=domains[0], y_domain=domains[1],**kwargs)
             self.add_mesh_modifier(type='NODES', node_modifier=self.data_modifier)
+
+    def change_pointsize(self,from_pointsize=1,to_pointsize=0.5,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        pointsize_node = ibpy.get_geometry_node_from_modifier(self.data_modifier,label="PointSize")
+        ibpy.change_default_value(pointsize_node,from_value=0.05*from_pointsize,to_value=0.05*to_pointsize,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
 
     def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
                clear_data=False, silent=False,linked=False, nice_alpha=False,**kwargs):
@@ -52,3 +64,8 @@ class Data(BObject):
             ibpy.change_default_value(max_node, from_value=from_domain[1], to_value=to_domain[1], begin_time=begin_time,
                                       transition_time=transition_time)
         return begin_time+transition_time
+
+    def to_log_x(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        log_node = ibpy.get_geometry_node_from_modifier(self.data_modifier, "Log")
+        return ibpy.change_default_value(log_node, from_value=0, to_value=1, begin_time=begin_time,
+                                  transition_time=transition_time)

@@ -27,7 +27,7 @@ class CoordinateSystem2(BObject):
 
         self.kwargs = kwargs
         self.data_rows =[]
-        self.origin = self.get_from_kwargs('origin', [0, 0])
+        self.origin = self.get_from_kwargs('origin', [0, 0,0])
         self.dimension = self.get_from_kwargs('dimension', 2)
         self.location = self.get_from_kwargs('location', Vector([0, 0, 0]))
         self.lengths = self.get_from_kwargs('lengths', [7,7])
@@ -36,6 +36,7 @@ class CoordinateSystem2(BObject):
         self.tic_labels=self.get_from_kwargs("tic_labels",["AUTO","AUTO"])
         self.n_tics=self.get_from_kwargs("n_tics",[2,2,2])
         self.tic_label_digits =self.get_from_kwargs("tic_label_digits",[False,False,False])
+        self.tic_label_shifts =self.get_from_kwargs("tic_label_shifts",[Vector(),Vector(),Vector()])
         self.colors = self.get_from_kwargs('colors',['drawing','drawing'])
         self.axes_labels = self.get_from_kwargs('axes_labels',{'x':"AUTO",'y':"AUTO"})
         self.data = self.get_from_kwargs('data',None)
@@ -44,11 +45,13 @@ class CoordinateSystem2(BObject):
 
         if self.dimension ==2:
             # compute axes locations
-            # the center of the coordinate system is the point (0,0)
+            # the center of the coordinate system is the self.origin
+            if len(self.origin)==2:
+                self.origin+=[0]
             e = [Vector([1, 0, 0]), Vector([0, 0, 1])]
             axis_locations = [
                  self.domains[i][0] * self.lengths[i] / (
-                            self.domains[i][1] - self.domains[i][0]) * e[i] for i in range(2)]
+                            self.domains[i][1] - self.domains[i][0]) * (e[i]-to_vector(self.origin)) for i in range(2)]
 
             names= ["xAxis","yAxis"]
             directions = ["HORIZONTAL","VERTICAL"]
@@ -59,6 +62,7 @@ class CoordinateSystem2(BObject):
                                              tic_labels=self.tic_labels[i],
                                              n_tics = self.n_tics[i],
                                              tic_label_digits=self.tic_label_digits[i],
+                                             tic_label_shift= self.tic_label_shifts[i],
                                         length=self.lengths[i],
                                  color=self.colors[i],axis_label=axis_label_keys[i],
                                              axis_label_location=self.axes_labels[axis_label_keys[i]],**kwargs))
@@ -79,6 +83,7 @@ class CoordinateSystem2(BObject):
                                              tic_labels=self.tic_labels[i],
                                              n_tics = self.n_tics[i],
                                              tic_label_digits=self.tic_label_digits[i],
+                                             tic_label_shift=self.tic_label_shifts[i],
                                              length=self.lengths[i],
                                             color=self.colors[i],axis_label=axis_label_keys[i],
                                              axis_label_location=self.axes_labels[axis_label_keys[i]],**kwargs))
@@ -115,6 +120,11 @@ class CoordinateSystem2(BObject):
             row.zoom_y(from_domain=from_domain, to_domain=to_domain, begin_time=begin_time,
                      transition_time=transition_time)
         return begin_time + transition_time
+
+    def log_x(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        for data in self.data_rows:
+            data.to_log_x(begin_time=begin_time,transition_time=transition_time)
+        return self.axes[0].to_log(begin_time=begin_time,transition_time=transition_time)
 
     def add_data(self,bob_data):
         ibpy.set_parent(bob_data,self)

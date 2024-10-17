@@ -23,10 +23,12 @@ class NumberLine2(BObject):
            : Keyword Arguments:
                * *extra* (length=1,radius=0.05,domain=[0,1],location=[0,0,0],n_tics=10,
                label='x',
-               direction='vertical',
+               direction='VERTICAL',
                origin=0,
                tic_labels='AUTO',
                tic_label_digits=0,
+               tic_label_aligned='center',
+               tic_label_shift=[0,0,0],
                label_unit='',
                label_position='left',
                label_closeness=1,
@@ -52,6 +54,13 @@ class NumberLine2(BObject):
         radius = self.get_from_kwargs("radius",0.05)
         ibpy.change_default_value(length_node,from_value=0,to_value=length,begin_time=begin_time,transition_time=transition_time)
         ibpy.change_default_value(radius_node,from_value=0,to_value=radius,begin_time=begin_time,transition_time=transition_time)
+        label_scale = ibpy.get_geometry_node_from_modifier(self.modifier,"LabelScale")
+        ibpy.change_default_value(label_scale,from_value=0,to_value=1,begin_time=begin_time+0.9*transition_time,transition_time=0.1*transition_time)
+        return begin_time+transition_time
+
+    def to_log(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        log_node = ibpy.get_geometry_node_from_modifier(self.modifier,"Log")
+        ibpy.change_default_value(log_node,from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
 
 class NumberLine(BObject):
@@ -68,7 +77,7 @@ class NumberLine(BObject):
                  label='x',
                  tic_labels='AUTO',
                  include_zero=True,
-                 direction='vertical',
+                 direction='VERTICAL',
                  origin=0,
                  label_digit=1,
                  label_unit='',
@@ -106,7 +115,7 @@ class NumberLine(BObject):
         self.interval = {'min': np_min, 'max': np_max}
         # this is the positioning of the labels before the axis gets rotated
         # since labels and axis are rotated in combination into the final place
-        if direction == 'vertical':
+        if direction == 'VERTICAL':
             label_rotation = [np.pi / 2, 0, 0]
             label_aligned='right'
             if label_position=='left':
@@ -118,7 +127,7 @@ class NumberLine(BObject):
             label_offset+=Vector([-label_closeness*0.1,0,0])
             rotation_euler = self.get_from_kwargs('rotation_euler', [0, 0, 0])
             self.grow_mode = 'from_bottom'
-        elif direction == 'horizontal' or direction == 'deep':
+        elif direction == 'HORIZONTAL' or direction == 'DEEP':
             label_offset = Vector([label_closeness*0.4, 0, 0])
             label_rotation = [np.pi / 2, -np.pi / 2, 0]
             if label_position == 'left':
@@ -129,7 +138,7 @@ class NumberLine(BObject):
                 label_aligned = 'center'
             rotation_euler = self.get_from_kwargs('rotation_euler', [0, np.pi / 2, 0])
             self.grow_mode = 'from_left'
-        if direction == 'deep':
+        if direction == 'DEEP':
             self.grow_mode = 'from_front'
             rotation_euler = self.get_from_kwargs('rotation_euler', [0, np.pi / 2, np.pi / 2])
 

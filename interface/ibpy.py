@@ -976,6 +976,12 @@ def remove_collection(collection):
 def get_collection(name="Collection"):
     return bpy.data.collections.get(name)
 
+def get_collection_name(obj):
+    if isinstance(obj,str):
+        return obj
+    else:
+        return obj.name
+
 
 def link(obj, collection=None):
     obj = get_obj(obj)
@@ -989,7 +995,7 @@ def link(obj, collection=None):
     # A necessary relinking is initiated
     if hasattr(obj,"users_collection") and len(obj.users_collection) > 0:
         old_collection = obj.users_collection[0].name
-        if old_collection != collection.name:
+        if old_collection != get_collection_name(collection):
             un_link(obj, old_collection)
             link(obj, collection)
     else:

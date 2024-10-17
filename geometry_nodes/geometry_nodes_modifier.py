@@ -25,6 +25,7 @@ from objects.derived_objects.p_arrow import PArrow
 from utils.constants import FRAME_RATE, TEMPLATE_TEXT_FILE, SVG_DIR, TEX_DIR, TEX_TEXT_TO_REPLACE, TEMPLATE_TEX_FILE, \
     TEX_LOCAL_SCALE_UP, DEFAULT_ANIMATION_TIME
 from utils.kwargs import get_from_kwargs
+from utils.utils import to_vector
 
 pi = np.pi
 tau = 2 * pi
@@ -1930,29 +1931,37 @@ class SliderModifier(GeometryNodesModifier):
         scale = InputVector(tree, location=(left, -1.5), value=Vector(dimensions), name="Scale")
 
         #orientation
-        orientation = get_from_kwargs(self.kwargs, "orientation", "horizontal")
+        orientation = get_from_kwargs(self.kwargs, "orientation", "HORIZONTAL")
         # position
         position = get_from_kwargs(self.kwargs, "position", [0, 0, 0])
         pos = InputVector(tree, location=(left, -2), value=Vector(position), name="Position")
         # shape
         shape = get_from_kwargs(self.kwargs, "shape", "cylinder")
+        domain = get_from_kwargs(self.kwargs,"domain",[-1,1])
+        side_segments = get_from_kwargs(self.kwargs,"side_segments",2)
+        min = max(domain[0],0)
+
+        delta = domain[1]-domain[0]
+
         if shape == 'cubic':
             geometry = CubeMesh(tree, size=dimensions, location=(left, 0))
         else:
-            geometry = CylinderMesh(tree, radius=1, vertices=16, depth=2, fill_type='NGON', side_segments=2,
+            geometry = CylinderMesh(tree, radius=1, vertices=16, depth=2, fill_type='NGON', side_segments=side_segments,
                                     location=(left, 0))
             left += 1
             l = dimensions[2]
-            if orientation == "horizontal":
+            if orientation == "HORIZONTAL":
                 rotation = [0, pi / 2, 0]
+                p0 = "pos_x,"+str(min)+",2,*,"+  str(domain[1]) + ",-,"+str(domain[0])+",-," + str(delta) + ",/,s_z,*,+"
                 self.label_position = Vector(position) - Vector([1.1 * l, 0, 0])
-                position_function = ["pos_x,value,2,/,s_z,*,+", "pos_y", "pos_z"]
-                scale_function = ["s_x", "s_y", "s_z,value,2,/,*"]
+                position_function = [p0+",value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,not,*,value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,*,+,s_z,*,+", "pos_y", "pos_z"]
+                scale_function = ["s_x", "s_y", "value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,not,*,value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,*,+,s_z,*"]
             else:
+                p0 = "pos_z," +str(min)+",2,*,"+  str(domain[1]) + ",-,"+str(domain[0])+",-," + str(delta) + ",/,s_z,*,+"
                 rotation = [0, 0, 0]
                 self.label_position = Vector(position) - Vector([0, 0, 1.1 * l])
-                position_function = ["pos_x", "pos_y", "pos_z,value,2,/,s_z,*,+"]
-                scale_function = ["s_x", "s_y", "s_z,value,2,/,*"]
+                position_function = ["pos_x", "pos_y", p0+",value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,not,*,value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,*,+,s_z,*,+"]
+                scale_function = ["s_x", "s_y", "value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,not,*,value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,*,+,s_z,*"]
         left += 1
 
         slider_trafo = make_function(tree, location=(left, -1),
@@ -1980,17 +1989,22 @@ class SliderModifier(GeometryNodesModifier):
         left += 1
         sub_div = SubdivideMesh(tree, level=5, location=(left, 0))
 
-        gradient_material = double_gradient(functions={"uv": ["uv_x,0.5,-,2,*", "uv_y,0.5,-,2,*", "uv_z,0.5,-,2,*"],
+        color = get_from_kwargs(self.kwargs,'color',None)
+        if color:
+            material = get_material(color,**self.kwargs)
+            self.materials.append(material)
+        else:
+            material = double_gradient(functions={"uv": ["uv_x,0.5,-,2,*", "uv_y,0.5,-,2,*", "uv_z,0.5,-,2,*"],
                                                        "abs_uv": ["uv_x,0.5,-,2,*,abs", "uv_y,0.5,-,2,*,abs",
                                                                   "uv_z,0.5,-,2,*,abs"]})
-        self.materials.append(gradient_material)
-        material = SetMaterial(tree, location=(left, -1), material=gradient_material)
+            self.materials.append(material)
+        material_node = SetMaterial(tree, location=(left, -1), material=material)
         pos = Position(tree, location=(left, -2))
         growth = InputValue(tree, location=(left, -3), value=-l, name="Growth")
         left += 1
         join = JoinGeometry(tree, location=(left, 0))
 
-        if orientation == "horizontal":
+        if orientation == "HORIZONTAL":
             sel_pos = "pos_x"
         else:
             sel_pos = "pos_z"
@@ -2004,7 +2018,7 @@ class SliderModifier(GeometryNodesModifier):
 
         del_geo = DeleteGeometry(tree, location=(left, 0), selection=sel_fcn.outputs["selection"])
 
-        create_geometry_line(tree, [geometry, inside_transformation, material, join])
+        create_geometry_line(tree, [geometry, inside_transformation, material_node, join])
         create_geometry_line(tree, [geometry, transformation, wireframe, grid_material, sub_div, join, del_geo], out=out.inputs[0])
 
 
@@ -2024,6 +2038,7 @@ class NumberLineModifier(GeometryNodesModifier):
         domain = get_from_kwargs(kwargs, 'domain', [0, 10])
         tic_labels = get_from_kwargs(kwargs, 'tic_labels', 'AUTO')
         tic_label_digits = get_from_kwargs(kwargs, 'tic_label_digits', 1)
+        tic_label_shift = get_from_kwargs(kwargs, 'tic_label_shift', [0,0,0])
         max_length = get_from_kwargs(kwargs, 'length', 5)
         radius = get_from_kwargs(kwargs, 'radius', 0.025)
         tip_length = get_from_kwargs(kwargs, 'tip_length', 0.1)
@@ -2066,12 +2081,15 @@ class NumberLineModifier(GeometryNodesModifier):
                     rounded_val = str(round((x0+dx * i) * p) / p)
                 tic_labels[rounded_val] = [x0+dx * i]
 
-        tic_labels, axis_label = generate_labels(tic_labels,axis_label, **kwargs)
+        tic_label_aligned = get_from_kwargs(kwargs,"tic_label_aligned","center")
+        tic_labels, axis_label = generate_labels(tic_labels,axis_label, aligned = tic_label_aligned, **kwargs)
         downshift=-5
         in_min = InputValue(tree,location=(left,downshift), name='Minimum', value=domain[0])
         in_max = InputValue(tree,location=(left,downshift+0.25), name='Maximum', value=domain[1])
         in_length = InputValue(tree,location=(left,downshift+0.5), name='Length', value=max_length)
         in_radius = InputValue(tree,location=(left,downshift+0.75), name='Radius', value=radius)
+        in_log = InputValue(tree,location=(left,downshift+1),name='Log',value=0)
+        in_label_scale = InputValue(tree,location=(left,downshift+1),name='LabelScale',value=0)
 
         # create geometry
         # axis
@@ -2130,28 +2148,30 @@ class NumberLineModifier(GeometryNodesModifier):
             coll_info = CollectionInfo(tree,location=(left-3,downshift-0.5*count), collection_name=str(key), name=str(key))
             value = InputValue(tree,location=(left-3,downshift-0.5*(count+1/2)), name="LabelValue=" + str(val[0]), value=val[0])
             label_frame.add(value)
-            transform_geo = TransformGeometry(tree,location=(left-2,downshift+0.5+0.25*count), rotation=label_rotation.std_out, translation=[0, 0, 0])
+            transform_geo = TransformGeometry(tree,location=(left-2,downshift+0.5+0.25*count), rotation=label_rotation.std_out, translation=[0,0,0])
             label_frame.add(transform_geo)
             tic_label_function = make_function(tree,location=(left-1,downshift+0.25*count), name="LabelPositionVisibility" + str(key),
                                                functions={
-                                                   "position":["0","0", "val,x0,-,x1,x0,-,/," + str(max_length) + ",*"],
+                                                   "position_tic":["0","0", "val,x0,-,x1,x0,-,/,1,lambda,-,*,val,lg,x0,lg,-,x1,lg,x0,lg,-,/,lambda,*,+," + str(max_length) + ",*"],
+                                                   "position_label":[str(tic_label_shift[0]),str(tic_label_shift[1]), str(tic_label_shift[2])+",val,x0,-,x1,x0,-,/,1,lambda,-,*,val,lg,x0,lg,-,x1,lg,x0,lg,-,/,lambda,*,+," + str(max_length) + ",*,+"],
                                                    "invisible": "l,val,x0,-,x1,x0,-,/," + str(max_length) + ",*,<"
-                                               }, inputs=["val", "x0", "x1", "l"], outputs=["position", "invisible"],
-                                               scalars=["val", "x0", "x1", "invisible", "l"], vectors=["position"])
+                                               }, inputs=["val", "x0", "x1", "l","lambda"], outputs=["position_tic","position_label", "invisible"],
+                                               scalars=["val", "x0", "x1", "invisible", "l","lambda"], vectors=["position_tic","position_label"])
 
             links.new(in_length.std_out, tic_label_function.inputs["l"])
+            links.new(in_log.std_out, tic_label_function.inputs["lambda"])
             links.new(in_min.std_out, tic_label_function.inputs["x0"])
             links.new(in_max.std_out, tic_label_function.inputs["x1"])
             links.new(value.std_out, tic_label_function.inputs["val"])
             label_frame.add(tic_label_function)
             tic_mesh = CylinderMesh(tree, location=(left, downshift+0.25*count+3), vertices=16, radius=tic_function.outputs["r"],depth=tic_function.outputs['depth'])
-            set_tic_pos = TransformGeometry(tree, location=(left + 1,  downshift+0.25*count+3),translation=tic_label_function.outputs["position"])
+            set_tic_pos = TransformGeometry(tree, location=(left + 1,  downshift+0.25*count+3),translation=tic_label_function.outputs["position_tic"])
             local_join = JoinGeometry(tree,location=(left+2, downshift+0.25*count+1.5))
             del_label_geo = DeleteGeometry(tree, location=(left+3,downshift+0.25*count),selection=tic_label_function.outputs["invisible"])
             label_frame.add(del_label_geo)
             create_geometry_line(tree,[tic_mesh, set_tic_pos, local_join])
             set_label_pos = SetPosition(tree, location=(left+1, downshift + 0.25 * count),
-                                        position=tic_label_function.outputs["position"],
+                                        position=tic_label_function.outputs["position_label"],
                                         offset=Vector([12 * radius, 0, 0]))
             label_frame.add(set_label_pos)
             create_geometry_line(tree, [coll_info, transform_geo,  set_label_pos, local_join,del_label_geo,join])
@@ -2161,11 +2181,15 @@ class NumberLineModifier(GeometryNodesModifier):
         if axis_label_location=='AUTO':
             axis_label_location=[2*radius,0,max_length]
 
-        label_info = CollectionInfo(tree, location=(left - 3, downshift+0.25*count+3), collection_name=axis_label,
-                                   name="AxisLabel")
-        label_trafo= TransformGeometry(tree, location=(left - 2, downshift + 0.5 + 0.25 * count),
-                                          rotation=label_rotation.std_out, translation=axis_label_location)
-        create_geometry_line(tree,[label_info,label_trafo,join])
+        if axis_label:
+            label_info = CollectionInfo(tree, location=(left - 3, downshift+0.25*count+3), collection_name=axis_label,
+                                       name="AxisLabel")
+        else:
+            label_info=None
+        if label_info:
+            label_trafo= TransformGeometry(tree, location=(left - 2, downshift + 0.5 + 0.25 * count),
+                                              rotation=label_rotation.std_out, translation=axis_label_location,scale=in_label_scale.std_out)
+            create_geometry_line(tree,[label_info,label_trafo,join])
 
         # finalize
         left+=5
@@ -2205,6 +2229,13 @@ class DataModifier(GeometryNodesModifier):
         width = get_from_kwargs(kwargs,"width",10)
         height= get_from_kwargs(kwargs,"height",7)
 
+        pointsize = get_from_kwargs(kwargs, "pointsize", None)
+        linesize = get_from_kwargs(kwargs, "linesize", None)
+        if pointsize:
+            in_pointsize = InputValue(tree,name='PointSize',value=0.05*pointsize)
+        else:
+            in_pointsize=None
+
         in_width = InputValue(tree, name='Width', value=width)
         in_height = InputValue(tree, name='Height', value=height)
         in_x_min = InputValue(tree, name='X0', value=x_domain[0])
@@ -2212,12 +2243,11 @@ class DataModifier(GeometryNodesModifier):
         in_y_min = InputValue(tree, name='Y0', value=y_domain[0])
         in_y_max = InputValue(tree, name='Y1', value=y_domain[1])
         in_time = SceneTime(tree,std_out="Seconds")
+        in_log = InputValue(tree,name='Log',value=0)
 
         in_time_min = InputValue(tree,name='T0',value=0)
         in_time_max = InputValue(tree,name='T1',value=DEFAULT_ANIMATION_TIME)
         in_pos = Position(tree)
-
-        pointsize=get_from_kwargs(kwargs,"pointsize",1)
 
         # this function takes care of
         # * positioning the data points
@@ -2225,11 +2255,11 @@ class DataModifier(GeometryNodesModifier):
         # * deleting points outside the display time
         position_function=make_function(tree,name="DataDisplayFunction",
                     functions={
-                        "position":["pos_x,x0,-,x1,x0,-,/,w,*","0","pos_z,y0,-,y1,y0,-,/,h,*"],
+                        "position":["pos_x,x0,-,x1,x0,-,/,1,l,-,*,pos_x,x0,/,lg,x1,x0,/,lg,/,l,*,+,w,*","0","pos_z,y0,-,y1,y0,-,/,h,*"],
                         "invisible":["pos_x,x0,<,pos_x,x1,>,or,pos_z,y0,<,or,pos_z,y1,>,or,t,t0,<,or,pos_x,x0,-,x1,x0,-,/,t,t0,-,t1,t0,-,/,>,or"]
                     },
-                    inputs=["pos","x0","x1","y0","y1","w","h","t0","t1","t"],outputs=["position","invisible"],
-                    scalars=["x0","x1","y0","y1","w","h","invisible","t0","t1","t"],vectors=["pos","position"])
+                    inputs=["pos","x0","x1","y0","y1","w","h","t0","t1","t","l"],outputs=["position","invisible"],
+                    scalars=["x0","x1","y0","y1","w","h","invisible","t0","t1","t","l"],vectors=["pos","position"])
         links.new(in_pos.std_out,position_function.inputs["pos"])
         links.new(in_width.std_out,position_function.inputs["w"])
         links.new(in_height.std_out,position_function.inputs["h"])
@@ -2240,18 +2270,25 @@ class DataModifier(GeometryNodesModifier):
         links.new(in_time_min.std_out, position_function.inputs["t0"])
         links.new(in_time_max.std_out, position_function.inputs["t1"])
         links.new(in_time.std_out,position_function.inputs["t"])
+        links.new(in_log.std_out,position_function.inputs["l"])
 
         del_geo = DeleteGeometry(tree,selection=position_function.outputs["invisible"])
         set_pos = SetPosition(tree,position=position_function.outputs["position"])
-        point = IcoSphere(tree,subdivisions=2,radius=0.05*pointsize)
-        iop = InstanceOnPoints(tree,instance=point.geometry_out)
+        if pointsize:
+            point = IcoSphere(tree,subdivisions=2,radius=in_pointsize.std_out)
+            iop = InstanceOnPoints(tree,instance=point.geometry_out)
+        if linesize:
+            wireframe = WireFrame(tree,radius=0.02*linesize,**kwargs)
 
         mat = get_from_kwargs(kwargs,"material",None)
         if mat:
             mat = get_material(mat,**kwargs)
             self.materials.append(mat)
         set_material = SetMaterial(tree,material=mat)
-        create_geometry_line(tree, [del_geo,set_pos,iop,set_material], ins = ins.outputs[0],out=out.inputs[0])
+        if pointsize:
+            create_geometry_line(tree, [del_geo,set_pos,iop,set_material], ins = ins.outputs[0],out=out.inputs[0])
+        if linesize:
+            create_geometry_line(tree, [del_geo,set_pos,wireframe,set_material], ins = ins.outputs[0],out=out.inputs[0])
 
 class LegendrePolynomials(GeometryNodesModifier):
     def __init__(self,l_range=range(10), name='LegendrePolynomials', **kwargs):
@@ -2685,22 +2722,26 @@ def generate_labels(tic_labels,axis_label, **kwargs):
         ibpy.remove_collection(old_collection)
 
     # prepare axis label
-    imported_svg_data={}
-    path=get_file_path(axis_label)
-    imported_svg_data = import_svg_data(imported_svg_data,path,kwargs)
-    imported_svg_data = align_figures(imported_svg_data, "left")
-    collection = ibpy.make_new_collection(axis_label,hide_render=True,hide_viewport=True)
-    for curve in imported_svg_data[list(imported_svg_data.keys())[-1]]:
-        ibpy.link(curve,collection)
+    if len(axis_label)>0:
+        imported_svg_data={}
+        path=get_file_path(axis_label)
+        imported_svg_data = import_svg_data(imported_svg_data,path,kwargs)
+        imported_svg_data = align_figures(imported_svg_data, "left")
+        collection = ibpy.make_new_collection(axis_label,hide_render=True,hide_viewport=True)
+        for curve in imported_svg_data[list(imported_svg_data.keys())[-1]]:
+            ibpy.link(curve,collection)
 
-    # replace default import collection with a more appropriately named collection
-    collection_name = path.split(os.sep)[-1]
-    old_collection=ibpy.get_collection(collection_name)
-    for obj in old_collection.objects:
-        ibpy.un_link(obj, old_collection.name)
-    ibpy.remove_collection(old_collection)
+        # replace default import collection with a more appropriately named collection
+        collection_name = path.split(os.sep)[-1]
+        old_collection=ibpy.get_collection(collection_name)
+        for obj in old_collection.objects:
+            ibpy.un_link(obj, old_collection.name)
+        ibpy.remove_collection(old_collection)
+        label = collection.name
+    else:
+        label=None
 
-    return tic_labels, collection.name
+    return tic_labels, label
 
 
 def import_svg_data(imported_svg_data,path,kwargs):
