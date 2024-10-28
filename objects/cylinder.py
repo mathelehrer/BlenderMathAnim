@@ -94,6 +94,23 @@ class Cylinder(GeoBObject):
         self.appeared =True
         return begin_time+transition_time
 
+    def shrink(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, modus='from_start',
+             initial_scale=0):
+
+        print("Shrink " + self.ref_obj.name)
+        if not scale:
+            scale = self.ref_obj.scale.copy()
+        if modus == 'from_start' and self.start:
+            ibpy.shrink_from(self, self.start, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
+        elif modus == 'from_end' and self.end:
+            ibpy.shrink_from(self, self.end, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
+        elif modus == 'from_center' and self.start and self.end:
+            ibpy.shrink_from(self, 0.5 * (self.start + self.end), begin_time * FRAME_RATE, transition_time * FRAME_RATE)
+        else:
+            ibpy.shrink(self, scale, begin_time * FRAME_RATE, transition_time * FRAME_RATE, modus=modus,
+                      initial_scale=initial_scale)
+        return begin_time + transition_time
+
     def move_end_point(self, target_location=Vector(), begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         ab = (self.end - self.start)
         length = ab.length

@@ -1,8 +1,12 @@
 import numpy as np
 
+from geometry_nodes.geometry_nodes_modifier import LogoModifier
+from interface import ibpy
+from interface.ibpy import create_mesh
 from objects.bobject import BObject
 from objects.circle import Circle, Circle2
 from objects.coordinate_system import CoordinateSystem
+from objects.cube import Cube
 from utils.constants import DEFAULT_ANIMATION_TIME
 
 def logo_curve(t=0,n=20):
@@ -197,3 +201,68 @@ class LogoPreImage(BObject):
     def transform(self,transformation, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for child in self.b_children:
             child.transform(transformation,begin_time=begin_time,transition_time=transition_time)
+
+class GeometryLogo(BObject):
+    def __init__(self,n=20,**kwargs):
+
+        circle1_vertices = []
+        circle2_vertices = []
+        circle3_vertices = []
+
+        for i in range(0, n + 1):
+            den = 2 + i * i
+            r = 1 / den
+            x = 2 * i / den
+            y = 3 / den
+            circle1_vertices.append([x, y, r])
+
+            if i > 0:
+                den = 2 + i * i
+                r = 1 / den
+                x = -2 * i / den
+                y = 3 / den
+                circle1_vertices.append([x, y, r])
+
+        for i in range(1, n + 1):
+            den = 6 + 4 * i * (i - 1)
+            r = 1 / den
+            x = (8 * i - 4) / den
+            y = 9 / den
+            circle2_vertices.append([x, y, r])
+
+            j = i - 1
+            den = 6 + 4 * j * (j + 1)
+            r = 1 / den
+            x = (-8 * j - 4) / den
+            y = 9 / den
+            circle2_vertices.append([x, y,r])
+
+        for i in range(1, n + 1):
+            den = 15 + 4 * i * (i - 1)
+            r = 1 / den
+            x = (8 * i - 4) / den
+            y = 15 / den
+            circle3_vertices.append([x, y, r])
+            j = i - 1
+            den = 15 + 4 * j * (j + 1)
+            r = 1 / den
+            x = (-8 * j - 4) / den
+            y = 15 / den
+            circle3_vertices.append([x, y, r])
+
+        circles1 =BObject(mesh=create_mesh(vertices=circle1_vertices,name="Circle1Mesh"),name="RedCircles")
+        circles2 =BObject(mesh=create_mesh(vertices=circle2_vertices,name="Circle1Mesh"),name="GreenCircles")
+        circles3 =BObject(mesh=create_mesh(vertices=circle3_vertices,name="Circle1Mesh"),name="BlueCircles")
+
+        cube = Cube()
+
+        super().__init__(obj=cube.ref_obj, children = [circles1,circles2,circles3],name="Logo",**kwargs)
+        self.logo_modifier = LogoModifier(**kwargs)
+        self.add_mesh_modifier(type="NODES", node_modifier=self.logo_modifier)
+
+
+    def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+               clear_data=False, silent=False,linked=False, nice_alpha=False,children=False,**kwargs):
+        return super().appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,clear_data=clear_data,
+                              silent=silent,linked=linked,nice_alpha=nice_alpha,children=children,**kwargs)
+

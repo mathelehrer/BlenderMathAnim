@@ -532,7 +532,7 @@ class BObject(object):
         return begin_time + transition_time
 
     def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
-               clear_data=False, silent=False,linked=False, nice_alpha=False,**kwargs):
+               clear_data=False, silent=False,linked=False, nice_alpha=False,children=True,**kwargs):
         """
         makes the object simply fade in with in the transition time
         from alpha = 0 to alpha defined in kwargs (default 1)
@@ -562,6 +562,10 @@ class BObject(object):
                 ibpy.clear_animation_data(self)
             ibpy.fade_in(self, begin_time * FRAME_RATE, np.maximum(1, transition_time * FRAME_RATE), alpha=alpha,**kwargs)
             self.appeared = True
+
+        if children:
+            for child in self.b_children:
+                child.appear(begin_time=begin_time,transition_time=transition_time)
         return begin_time + transition_time
 
     def change_alpha(self, alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
@@ -733,14 +737,14 @@ class BObject(object):
         ibpy.grow(self, scale, begin_time * FRAME_RATE, transition_time * FRAME_RATE, initial_scale, modus)
         return begin_time + transition_time
 
-    def shrink(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+    def shrink(self,scale=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         """
         shrink an object to 0
         :param begin_time: starting time
         :param transition_time: duration
         :return:
         """
-        ibpy.shrink(self, begin_time, transition_time)
+        ibpy.shrink(self, begin_frame=begin_time*FRAME_RATE, frame_duration=FRAME_RATE*transition_time,scale=0)
 
     def next_to(self, parent, direction=RIGHT, buff=SMALL_BUFF, shift=0 * RIGHT):
         """

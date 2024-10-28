@@ -11,6 +11,7 @@ from mathutils import Vector, Quaternion, Matrix
 
 from compositions.compositions import create_composition
 from interface.interface_constants import EMISSION, TRANSMISSION, BLENDER_EEVEE, blender_version
+from shader_nodes.shader_nodes import Displacement
 
 from utils.constants import BLEND_DIR, FRAME_RATE, OBJECT_APPEARANCE_TIME, OSL_DIR, COLOR_NAMES, COLORS_SCALED, IMG_DIR, \
     DEFAULT_ANIMATION_TIME, RES_HDRI_DIR, FINAL_DIR, VID_DIR, COLOR_PREFIXES, SPECIALS, COLORS, APPEND_DIR
@@ -1731,9 +1732,11 @@ def customize_material(material, **kwargs):
 
 
 def get_material(material, **kwargs):
+    if isinstance(material,bpy.types.Material):
+        return material
     if isinstance(material, str):
         if material == 'image' and 'src' in kwargs:
-            return make_image_material(kwargs['src']).copy()
+            return make_image_material(**kwargs).copy()
         elif material == 'gradient':
             material = make_gradient_material(**kwargs)
         elif material == 'dashed':
@@ -3015,6 +3018,7 @@ def make_image_material(src=None, **kwargs):
     color.use_nodes = True
     nodes = color.node_tree.nodes
     bsdf = nodes['Principled BSDF']
+    mat = nodes['Material Output']
     img = nodes.new('ShaderNodeTexImage')
     img.location = (-400, 0)
     coords = nodes.new('ShaderNodeTexCoord')
@@ -3051,6 +3055,32 @@ def make_image_material(src=None, **kwargs):
 
     emission = get_from_kwargs(kwargs, 'emission', 0)
     bsdf.inputs['Emission Strength'].default_value = emission
+
+    displacement = get_from_kwargs(kwargs,'displacement',None)
+    if displacement=='color':
+        sep = nodes.new(type='ShaderNodeSeparateXYZ')
+        links.new(img.outputs['Color'], sep.inputs['Vector'])
+        sep.location = (0, -300)
+        sep.hide = True
+
+        #convert red blue into height
+        displacement = nodes.new(type="ShaderNodeMath")
+        displacement.operation = 'SUBTRACT'
+        displacement.hide=True
+        displacement.location=(50,-400)
+        links.new(sep.outputs[0],displacement.inputs[0])
+        links.new(sep.outputs[2],displacement.inputs[1])
+
+        displace = nodes.new(type="ShaderNodeDisplacement")
+        displace.location=(100,-500)
+        displace.inputs["Midlevel"].default_value=0
+        displacement_scale = get_from_kwargs(kwargs,'displacement_scale',1)
+        displace.inputs["Scale"].default_value=displacement_scale
+        links.new(displacement.outputs[0],displace.inputs['Height'])
+
+        color.displacement_method = "DISPLACEMENT"
+        links.new(displace.outputs[0], mat.inputs["Displacement"])
+
 
     return color
 
@@ -6158,6 +6188,18 @@ def grow_from(b_obj, pivot, begin_frame, frame_duration):
     obj.scale = scale
     insert_keyframe(obj, "scale", int(begin_frame + np.maximum(1, frame_duration)))
 
+def shrink_from(b_obj, pivot, begin_frame, frame_duration):
+    obj = get_obj(b_obj)
+    if pivot:
+        set_pivot(obj, pivot)
+
+    scale = obj.scale.copy()
+    obj.scale = scale
+    insert_keyframe(obj, "scale", int(begin_frame))
+
+    obj.scale =  [0] * 3
+    insert_keyframe(obj, "scale", int(begin_frame + np.maximum(1, frame_duration)))
+
 
 def rescale(b_obj, re_scale, begin_frame, frame_duration):
     obj = get_obj(b_obj)
@@ -6221,6 +6263,53 @@ def grow(b_obj, scale, begin_frame, frame_duration, initial_scale=0, modus='from
 
     insert_keyframe(obj, "scale", begin_frame + np.maximum(1, frame_duration))
 
+def shrink(b_obj, scale, begin_frame, frame_duration, initial_scale=1, modus='from_center'):
+    obj = get_obj(b_obj)
+    select(obj)
+    if modus == 'from_center':
+        pivot = None
+    elif modus == 'from_left':
+        # move center of geometry to the smallest x-value
+        pivot = find_center_of_leftest_vertices(obj)
+    elif modus == 'from_right':
+        # move center of geometry to the largest x-value
+        pivot = find_center_of_rightest_vertices(obj)
+    elif modus == 'from_bottom' or modus == 'from_start':
+        # move center of geometry to the smallest x-value
+        pivot = find_center_of_lowest_vertices(obj)
+    elif modus == 'from_top':
+        # move center of geometry to the smallest x-value
+        pivot = find_center_of_highest_vertices(obj)
+    elif modus == 'from_front':
+        # move center of geometry to the smallest x-value
+        pivot = find_center_of_closed_vertices(obj)
+    elif modus == 'from_back':
+        # move center of geometry to the smallest x-value
+        pivot = find_center_of_furthest_vertices(obj)
+
+    print(
+        "Shrink " + obj.name + " at time " + str(begin_frame / FRAME_RATE) + " for " + str(
+            frame_duration / FRAME_RATE) + " seconds.")
+
+    if pivot is not None:
+        set_pivot(obj, pivot)
+
+    if isinstance(initial_scale, Vector):
+        obj.scale = [initial_scale[0], initial_scale[1], initial_scale[2]]
+    elif isinstance(initial_scale, list):
+        obj.scale = initial_scale
+    else:
+        obj.scale = [initial_scale] * 3
+
+    insert_keyframe(obj, "scale", begin_frame)
+    if isinstance(scale, Vector):
+        obj.scale = [scale[0], scale[1], scale[2]]
+    elif isinstance(scale, list):
+        obj.scale = scale
+    else:
+        obj.scale = [scale] * 3
+
+    insert_keyframe(obj, "scale", begin_frame + np.maximum(1, frame_duration))
 
 #######################
 # Auxiliary functions #

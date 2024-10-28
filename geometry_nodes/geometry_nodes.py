@@ -178,7 +178,7 @@ def create_spectral_class(type, r=10000):
     # it is raised to some power 1.35 to damp faint stars
     conversion = make_function(tree, functions={
         "Position": "unit_x,pos,angle_projection,mul,rot,r,scale",
-        "Scale": "1,pos_x,1.15,**,1,max,/"
+        "Scale": "1,pos_x,1,**,1,max,/"
     }, name="Conversion", hide=True, location=(left, -1),
                                inputs=["r", "pos", "unit_x", "angle_projection"], outputs=["Position", "Scale"],
                                scalars=["r", "Scale"], vectors=["pos", "unit_x", "Position", "angle_projection"]
@@ -199,7 +199,7 @@ def create_spectral_class(type, r=10000):
                           position=conversion.outputs['Position'])
 
     left += 1
-    material = partial(star_color, type=type, emission=1)
+    material = partial(star_color, type=type, emission=4)
     set_mat = SetMaterial(tree, material=material, location=(left, 0))
     left += 1
     smooth = SetShadeSmooth(tree, location=(left, 0))

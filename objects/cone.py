@@ -31,8 +31,7 @@ class Cone(BObject):
         ibpy.un_link(self.ref_obj,
                      collection="Collection")  # unlink the object, since it is linked automatically from the mesh creation process
 
-    def grow(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
-             initial_scale=0,pivot=None):
+    def grow(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, initial_scale=0,pivot=None):
         super().appear(begin_time=begin_time,transition_time=0)
         """
         grow an object from 0 to
@@ -47,3 +46,13 @@ class Cone(BObject):
         if not pivot:
             pivot = self.ref_obj.location
         ibpy.grow_from(self,pivot, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
+
+
+    def shrink(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, initial_scale=1,pivot=None):
+        """
+        """
+        if scale is None:
+            scale = self.intrinsic_scale
+        if not pivot:
+            pivot = self.ref_obj.location
+        ibpy.shrink_from(self,pivot, begin_time * FRAME_RATE, transition_time * FRAME_RATE)

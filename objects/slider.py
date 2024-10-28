@@ -51,7 +51,7 @@ class BSlider(BObject):
     def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
                clear_data=False, silent=False,linked=False, nice_alpha=False,**kwargs):
         super().appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,silent=silent,
-                       linked=linked,nice_alpha=nice_alpha)
+                       linked=linked,nice_alpha=nice_alpha,children=False) #children's are not allowed to appear, otherwise they labels won't be shown
         # use only one quarter of the time to write the label
         self.label.write(begin_time=begin_time+0.75*transition_time,transition_time=0.25*transition_time)
         l = max(list(self.dimensions))

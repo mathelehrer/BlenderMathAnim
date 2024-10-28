@@ -7,7 +7,7 @@ import bpy
 import numpy as np
 from sympy import Symbol, re, im, sqrt, factorial, simplify, factor
 
-from extended_math_nodes.generic_nodes import SphericalHarmonics200, SphericalHarmonicsRekursive
+from extended_math_nodes.generic_nodes import SphericalHarmonics200, SphericalHarmonicsRekursive, CMBNode
 from geometry_nodes.nodes import make_function
 from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
@@ -18,6 +18,7 @@ from mathematics.spherical_harmonics import SphericalHarmonics, AssociatedLegend
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import TextureCoordinate, Mapping, ColorRamp, AttributeNode, HueSaturationValueNode, \
     MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ, Displacement
+from utils.color_conversion import rgb2hsv, hsv2rgb
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR
 from utils.kwargs import get_from_kwargs
 
@@ -53,7 +54,7 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
     :param intensity:
     :return:
     """
-
+    obj = get_obj(obj)
     if obj.type not in ['EMPTY', 'ARMATURE']:
         if type_req is None or obj.type == type_req:
             if col == 'vertex_color':
@@ -851,9 +852,9 @@ def dipole_texture(**kwargs):
                           location=(left, -1))
     links.new(coords.std_out, polar.inputs["uv"])
 
-    a = InputValue(tree, location=(left, 1.5), value=0,name="xValue")
-    alpha = InputValue(tree, location=(left, 1), value=0,name="yValue")
-    b = InputValue(tree, location=(left, 0.5), value=0, name="zValue")
+    a = InputValue(tree, location=(left, 1.5), value=get_from_kwargs(kwargs,"x",0),name="xValue")
+    alpha = InputValue(tree, location=(left, 1), value=get_from_kwargs(kwargs,"y",0),name="yValue")
+    b = InputValue(tree, location=(left, 0.5), value=get_from_kwargs(kwargs,"z",0), name="zValue")
     left += 1
 
     in_sockets = [a.std_out, alpha.std_out, b.std_out, polar.outputs["theta"], polar.outputs["phi"]]
@@ -996,8 +997,8 @@ def multipole_texture(l=6,**kwargs):
     customize_material(mat, **kwargs)
     return mat
 
-def multipole_texture_optimized(l=6,m=3,**kwargs):
-    mat = bpy.data.materials.new(name="MultipolePoleTexture_l=" + str(l))
+def multipole_texture_optimized(ms=[0,1,2],ns=[0,1,2],**kwargs):
+    mat = bpy.data.materials.new(name="MultipolePoleTexture_l=" + str(200))
     mat.use_nodes = True
     tree = mat.node_tree
     nodes = mat.node_tree.nodes
@@ -1021,48 +1022,29 @@ def multipole_texture_optimized(l=6,m=3,**kwargs):
     links.new(coords.std_out, polar.inputs["uv"])
     left+=1
 
-    m_range = [50,100]
-    harmonics_list = [SphericalHarmonics200(tree, m=m, location=(left, -0.25 * m/10),hide=True) for m in m_range]
-    for y in harmonics_list:
-        tree.links.new(polar.outputs["theta"],y.theta)
-        tree.links.new(polar.outputs["phi"],y.phi)
+    temperature = SphericalHarmonics200(tree, ms=ms, ns=ns, location=(left, 0),hide=True)
 
-    inputValues = [InputValue(tree, location=(left, 0 + 0.25 * m/10), name="a" + str(l) + "_" + str(m)) for m in m_range]
+    tree.links.new(polar.outputs["theta"],temperature.theta)
+    tree.links.new(polar.outputs["phi"],temperature.phi)
+
+    inputValues = [InputValue(tree, location=(left-1, 0 + 0.25 * m/10), name="a_" + str(m)) for m in ms]
+    inputValues2 = [InputValue(tree, location=(left-2, 0 + 0.25 * n/10), name="b_" + str(n)) for n in ns]
     left += 1
 
-    y_labels = ["Y" + str(l) + "_" + str(m) for m in m_range]
-    in_sockets = [inputValue.std_out for inputValue in inputValues] + [y.re for y in harmonics_list]
-    ins =[inputValue.name for inputValue in inputValues] +y_labels
+    for m,input in zip(ms,inputValues):
+        links.new(input.std_out, temperature.inputs["a_"+str(m)])
+        left += 1
 
-    outs = ["temp"]
-
-    count = 0
-    expr = ""
-    for a_value,y_label in zip(inputValues,y_labels):
-        expr+=a_value.name+","+y_label
-        if count>0:
-            expr+=",*,+,"
-        else:
-            expr+=",*,"
-        count+=1
-
-    expr = expr[0:-1]
-
-    temperature = make_function(nodes, functions={
-        "temp": expr
-    }, inputs=ins, outputs=outs, scalars=ins + outs,
-                                node_group_type='ShaderNodes', location=(left, 0))
-
-    for socket, label in zip(in_sockets, ins):
-        links.new(socket, temperature.inputs[label])
-    left += 1
+    for n,input in zip(ns,inputValues2):
+        links.new(input.std_out, temperature.inputs["b_"+str(n)])
+        left += 1
 
     abs_temp = make_function(nodes, functions={
         "abs": "temp,abs",
         "positive": "temp,0,>"
     }, inputs=["temp"], outputs=["abs", "positive"], scalars=["temp", "abs", "positive"],
                              location=(left, 0), node_group_type='ShaderNodes')
-    links.new(temperature.outputs["temp"], abs_temp.inputs["temp"])
+    links.new(temperature.outputs["Y"], abs_temp.inputs["temp"])
     left += 1
 
     # positive branch
@@ -1092,6 +1074,204 @@ def multipole_texture_optimized(l=6,m=3,**kwargs):
     mat.displacement_method="DISPLACEMENT"
 
     links.new(displace.std_out,material_out.inputs["Displacement"])
+    customize_material(mat, **kwargs)
+    return mat
+
+def cmb_texture(ls = [2,3,5], powerspectrum=None,displacement=True, **kwargs):
+    mat = bpy.data.materials.new(name="CMBTexture_l")
+    mat.use_nodes = True
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    material_out=nodes.get("Material Output")
+
+
+    left = -10
+    coords = TextureCoordinate(tree, location=(left, 0))
+    left += 1
+    polar = make_function(nodes, functions={
+        "theta": "uv_y,pi,*",
+        "phi": "uv_x,pi,*,2,*"
+    },
+                          inputs=["uv"], vectors=["uv"],
+                          outputs=["theta", "phi"],
+                          scalars=["theta", "phi"],
+                          node_group_type='ShaderNodes',
+                          location=(left, -1),
+                          name="PolarCoordinates")
+    links.new(coords.std_out, polar.inputs["uv"])
+    left+=1
+
+    if powerspectrum is None:
+        # artificial power_spectrum
+        powerspectrum = [1] * len(ls)
+
+    # prepare the amplitudes
+    # the scaling of the amplitude is motivated as follows
+    # We get the Dell from the spectrum
+    # The Cell are related to the Dell by 1/l/(l+1)
+    # the amplitude is the square root of the Cell
+    # since we only plot one m instead of (2l+1) possible ones, we increase the power again by (2*l+1)
+    amplitudes = [np.sqrt(p/l/(l+1)*(2*l+1)) for (p, l) in zip(powerspectrum, ls)]
+    coefficients = []
+    for i,ampl in enumerate(amplitudes):
+        coefficients.append(InputValue(tree,location=(left,0.25*i),value=ampl,name="a"+str(i)))
+    left+=1
+
+    temperature = CMBNode(tree,ls=ls,powerspectrum=powerspectrum, location=(left, 0),hide=True,**kwargs)
+
+    tree.links.new(polar.outputs["theta"],temperature.theta)
+    tree.links.new(polar.outputs["phi"],temperature.phi)
+    for i in range(len(amplitudes)):
+        tree.links.new(coefficients[i].std_out,temperature.inputs["a"+str(i)])
+
+    scale = InputValue(tree, location=(left, 1.5), value=0.04)
+    left+=1
+
+    abs_temp = make_function(nodes,name="Extractor", functions={
+        "abs": "temp,abs,s,*",
+        "positive": "temp,0,>"
+    }, inputs=["temp","s"], outputs=["abs", "positive"], scalars=["s","temp", "abs", "positive"],
+                             location=(left, 0), node_group_type='ShaderNodes')
+    links.new(temperature.outputs["Y"], abs_temp.inputs["temp"])
+    links.new(scale.std_out,abs_temp.inputs["s"])
+
+    left += 1
+
+    # positive branch
+    # color ramp for the nice color gradient
+    ramp_pos = ColorRamp(tree, location=(left, 2), factor=abs_temp.outputs["abs"],
+                         values=[0, 0.5, 1], colors=[[1,0.9,0.8, 1], [0.1,0.7,0.8, 1], [0,0,0.9, 1]], hide=False)
+
+    # negative branch
+    ramp_neg = ColorRamp(tree, location=(left, -1), factor=abs_temp.outputs["abs"],
+                         values=[0, 0.5, 1],
+                         colors=[[1,0.9,0.8, 1], [1,0.77,0.28, 1], [0.75,0,0, 1]], hide=False)
+
+    left += 2
+
+    mix = MixRGB(tree, location=(left, 0), factor=abs_temp.outputs["positive"],
+                 color1=ramp_pos.std_out, color2=ramp_neg.std_out)
+
+    bsdf = nodes.get('Principled BSDF')
+    links.new(mix.std_out, bsdf.inputs['Base Color'])
+    links.new(mix.std_out, bsdf.inputs[EMISSION])
+
+    # introduce displacement
+    scale=InputValue(tree,location=(left-1,-2),name="DisplacementScale",value=0)
+
+    left += 1
+    displace_function = make_function(tree,name="Color2Displacement",
+                functions={
+                    "height":"v_x,v_z,-"
+
+                },inputs=["v"],outputs=["height"],node_group_type='Shader',
+                scalars=["height"],vectors=["v"])
+    links.new(mix.std_out,displace_function.inputs["v"])
+
+    left+=1
+    displace = Displacement(tree,location=(left,-2),height=displace_function.outputs["height"],midlevel=0,scale=0.025)
+    mat.displacement_method="DISPLACEMENT"
+    if displacement:
+        links.new(displace.std_out,material_out.inputs["Displacement"])
+    customize_material(mat, **kwargs)
+    return mat
+
+def cmb_logo_texture(circle_group="Red",ls = [2,3,5],color='drawing', powerspectrum=None,displacement=True, **kwargs):
+    mat = bpy.data.materials.new(name="CMBTexture_"+color)
+    mat.use_nodes = True
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    material_out=nodes.get("Material Output")
+
+    left = -10
+    theta_attr = AttributeNode(tree,attribute_name="Theta"+circle_group,location=(left,0))
+    phi_attr = AttributeNode(tree,attribute_name="Phi"+circle_group,location=(left,-1))
+    left+=1
+
+    if powerspectrum is None:
+        # artificial power_spectrum
+        powerspectrum = [1] * len(ls)
+
+    # prepare the amplitudes
+    # the scaling of the amplitude is motivated as follows
+    # We get the Dell from the spectrum
+    # The Cell are related to the Dell by 1/l/(l+1)
+    # the amplitude is the square root of the Cell
+    # since we only plot one m instead of (2l+1) possible ones, we increase the power again by (2*l+1)
+    amplitudes = [np.sqrt(p/l/(l+1)*(2*l+1)) for (p, l) in zip(powerspectrum, ls)]
+    coefficients = []
+    for i,ampl in enumerate(amplitudes):
+        coefficients.append(InputValue(tree,location=(left,0.25*i),value=ampl,name="a"+str(i)))
+    left+=1
+
+    temperature = CMBNode(tree,ls=ls,powerspectrum=powerspectrum, location=(left, 0),hide=True,**kwargs)
+
+    tree.links.new(theta_attr.std_out,temperature.theta)
+    tree.links.new(phi_attr.std_out,temperature.phi)
+    for i in range(len(amplitudes)):
+        tree.links.new(coefficients[i].std_out,temperature.inputs["a"+str(i)])
+
+    scale = InputValue(tree, location=(left, 1.5), value=0.04)
+    left+=1
+
+    abs_temp = make_function(nodes,name="Extractor", functions={
+        "abs": "temp,abs,s,*",
+        "positive": "temp,0,>"
+    }, inputs=["temp","s"], outputs=["abs", "positive"], scalars=["s","temp", "abs", "positive"],
+                             location=(left, 0), node_group_type='ShaderNodes')
+    links.new(temperature.outputs["Y"], abs_temp.inputs["temp"])
+    links.new(scale.std_out,abs_temp.inputs["s"])
+
+    left += 1
+
+    # positive branch
+    # color ramp for the nice color gradient
+    rgb = ibpy.get_color_from_string(color)
+    hsv = rgb2hsv(*rgb[0:3])
+
+    hue =hsv[0]
+    max = list(hsv2rgb(hue, 1, 1))
+    maxhalf = list(hsv2rgb(hue, 0.75, 1))
+    zero = list(hsv2rgb(hue, 0.5, 1))
+    minhalf = list(hsv2rgb(hue, 0.75, 0.75))
+    min = list(hsv2rgb(hue, 1, 0.5))
+    ramp_pos = ColorRamp(tree, location=(left, 2), factor=abs_temp.outputs["abs"],
+                         values=[0, 0.5, 1],
+                         colors=[zero+[1], maxhalf+[1], max+[1]], hide=False)
+
+    # negative branch
+    ramp_neg = ColorRamp(tree, location=(left, -1), factor=abs_temp.outputs["abs"],
+                         values=[0, 0.5, 1],
+                         colors=[zero+[1], minhalf+[1], min+[1]], hide=False)
+
+    left += 2
+
+    mix = MixRGB(tree, location=(left, 0), factor=abs_temp.outputs["positive"],
+                 color1=ramp_pos.std_out, color2=ramp_neg.std_out)
+
+    bsdf = nodes.get('Principled BSDF')
+    links.new(mix.std_out, bsdf.inputs['Base Color'])
+    links.new(mix.std_out, bsdf.inputs[EMISSION])
+
+    # introduce displacement
+    scale=InputValue(tree,location=(left-1,-2),name="DisplacementScale",value=0)
+
+    left += 1
+    displace_function = make_function(tree,name="Color2Displacement",
+                functions={
+                    "height":"v_x,v_z,-"
+
+                },inputs=["v"],outputs=["height"],node_group_type='Shader',
+                scalars=["height"],vectors=["v"])
+    links.new(mix.std_out,displace_function.inputs["v"])
+
+    left+=1
+    displace = Displacement(tree,location=(left,-2),height=displace_function.outputs["height"],midlevel=0,scale=0.025)
+    mat.displacement_method="DISPLACEMENT"
+    if displacement:
+        links.new(displace.std_out,material_out.inputs["Displacement"])
     customize_material(mat, **kwargs)
     return mat
 

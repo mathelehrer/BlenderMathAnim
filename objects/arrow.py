@@ -6,6 +6,7 @@ from objects.cone import Cone
 from objects.bobject import BObject
 from objects.cylinder import Cylinder
 from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
+from utils.kwargs import get_from_kwargs
 
 
 class Arrow(BObject):
@@ -41,11 +42,7 @@ class Arrow(BObject):
 
     @classmethod
     def from_start_to_end(cls,start =[0,0,0],end=[0,0,1],radius=0.1,**kwargs):
-        if 'name' in kwargs:
-            name=kwargs['name']
-            kwargs.pop('name')
-        else:
-            name='Arrow'
+        name=get_from_kwargs(kwargs,'name','Arrow')
         if isinstance(start,list):
             start=Vector(start)
         if isinstance(end,list):
@@ -79,7 +76,6 @@ class Arrow(BObject):
         """
         ibpy.rescale(self.cyl,re_scale=[1,1,s],begin_frame=begin_time*FRAME_RATE,frame_duration=transition_time*FRAME_RATE)
         ibpy.rescale(self.tip,re_scale=[1,1,s],begin_frame=begin_time*FRAME_RATE,frame_duration=transition_time*FRAME_RATE)
-
 
     def grow(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, modus='from_center',order="stem_first"):
         super().appear(begin_time=begin_time, transition_time=0)

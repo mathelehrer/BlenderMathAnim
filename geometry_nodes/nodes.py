@@ -1078,10 +1078,7 @@ class TransformGeometry(GreenNode):
 class ObjectInfo(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  transform_space='RELATIVE',
-                 object=None,
-                 translation=Vector(),
-                 rotation=Vector(),
-                 scale=Vector([1, 1, 1]), **kwargs
+                 object=None, **kwargs
                  ):
         self.node = tree.nodes.new(type="GeometryNodeObjectInfo")
         super().__init__(tree, location=location, **kwargs)

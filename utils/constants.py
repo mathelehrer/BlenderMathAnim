@@ -132,7 +132,7 @@ SPECIALS = ['screen','scatter_volume','gold','silver','screen','wood','sand','me
 if color_scheme == -1:
     # https://digitalsynopsis.com/design/color-schemes-palettes-combinations/  four seasons
     COLORS = [
-        [10, 10, 10, 1],  # black background
+        [0, 0, 0, 1],  # black background
         [225, 225, 225, 1],  # white for text
         [86, 180, 233, 1],  # sky blue for drawing
         [240, 228, 66, 1],  # yellow for example

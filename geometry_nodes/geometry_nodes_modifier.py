@@ -2621,7 +2621,6 @@ class YlmSurface_200(GeometryNodesModifier):
 
         create_geometry_line(tree, [mesh,transform,set_pos,transform2,wireframe], out=out.inputs[0])
 
-
 class YlmSurfaceReference(GeometryNodesModifier):
     def __init__(self, domain = [[-pi,pi],[0,pi]], l=3,m=2, name="SphericalHarmonicsSurfaceReference",
                   **kwargs):
@@ -2688,7 +2687,77 @@ class YlmSurfaceReference(GeometryNodesModifier):
 
         create_geometry_line(tree, [mesh,transform,set_pos,transform2,material], out=out.inputs[0])
 
+class LogoModifier(GeometryNodesModifier):
+    def __init__(self, name="LogoModifier",
+                  **kwargs):
+        """
 
+        GeometryNodes representation of the NumberCruncher logo. The data is stored in a point cloud (x,y,r)
+        Where (x,y) are the centers of the circles and r is the radius. There are three types of meshes, corresponding to the three different classes of circles
+
+        """
+        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, sphere_colors =["important","joker","drawing"],**kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        circles = ["RedCircles","GreenCircles","BlueCircles"]
+        center_names=["CenterRed","CenterGreen","CenterBlue"]
+        theta_names=["ThetaRed","ThetaGreen","ThetaBlue"]
+        phi_names=["PhiRed","PhiGreen","PhiBlue"]
+        join_geometry = JoinGeometry(tree)
+        segments = [64,32,32]
+        rings = [32,16,16]
+        radii = [1/3,1/9,0.0675]
+        for i,circle in enumerate(circles):
+            object = ibpy.get_obj_from_name(circle)
+            object_info = ObjectInfo(tree, object=object)
+            pos = Position(tree)
+            get_pos_and_scale = make_function(tree,name="PositionAndScale",
+                        functions={"position":["pos_x","0","pos_y"],
+                                   "scale":["pos_z"]*3
+                        },inputs=["pos"],outputs=["position","scale"],
+                        scalars=[],vectors=["pos","position","scale"])
+            links.new(pos.std_out,get_pos_and_scale.inputs["pos"])
+            store_center=StoredNamedAttribute(tree,data_type='FLOAT_VECTOR',name=center_names[i],value=pos.std_out)
+            set_pos = SetPosition(tree,position=get_pos_and_scale.outputs["position"])
+            uv_sphere=UVSphere(tree,segments=segments[i],rings=rings[i],radius=radii[i])
+            iop = InstanceOnPoints(tree,instance=uv_sphere.geometry_out,scale=get_pos_and_scale.outputs["scale"])
+            realize_instance = RealizeInstances(tree)
+
+            center_attr = NamedAttribute(tree,name=center_names[i],data_type="FLOAT_VECTOR")
+            get_loc_on_sphere = make_function(tree,name="LocalSphereCoords",
+                        functions={
+                            "r":"pos,center,sub",
+                            "length":"pos,center,sub,length"
+                        },inputs=["pos","center"],outputs=["r","length"],
+                        scalars=["length"],vectors=["pos","center","r"])
+            links.new(pos.std_out,get_loc_on_sphere.inputs["pos"])
+            links.new(center_attr.std_out,get_loc_on_sphere.inputs["center"])
+
+            get_theta_phi = make_function(tree,name="UVComputation",
+                        functions={
+                        "theta":"r_z,l,/,acos",
+                        "phi":"r_x,r_y,atan2"
+                        },inputs=["r","l"],outputs=["theta","phi"],
+                        scalars=["l","theta","phi"],vectors=["r"])
+            links.new(get_loc_on_sphere.outputs["r"],get_theta_phi.inputs["r"])
+            links.new(get_loc_on_sphere.outputs["length"],get_theta_phi.inputs["l"])
+
+            store_theta=StoredNamedAttribute(tree,name=theta_names[i],value=get_theta_phi.outputs["theta"])
+            store_phi=StoredNamedAttribute(tree,name=phi_names[i],value=get_theta_phi.outputs["phi"])
+
+            mat=get_material(sphere_colors[i],**kwargs)
+            self.materials.append(mat)
+            material_node = SetMaterial(tree,material=mat)
+            create_geometry_line(tree,green_nodes=[object_info,set_pos,store_center,
+                                                   iop,realize_instance,
+                                                   store_theta,store_phi,material_node,join_geometry])
+
+        transform_geometry = TransformGeometry(tree,translation=[0,0,-5.5],rotation=[0,0,pi],scale=[5.5]*3)
+        shade_smooth = SetShadeSmooth(tree)
+        create_geometry_line(tree,[join_geometry,transform_geometry,shade_smooth],out=out.inputs["Geometry"])
 
 ##
 # recreate the essentials to convert a latex expression into a collection of curves
