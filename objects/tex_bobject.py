@@ -518,7 +518,7 @@ class SimpleTexBObject(SVGBObject):
         if transition_time == 0:  # disable writing without transition time
             writing = False
 
-        link(self.ref_obj)  # linking is necessary here, since no super functions are called
+        link(self.ref_obj,recursively=False)  # linking is necessary here, since no super functions are called
         # This can be improved for the fade-in and fade-out part at least
 
         # unlike all other objects, the appearance of text is controlled completely in this
@@ -656,7 +656,7 @@ class SimpleTexBObject(SVGBObject):
                                   transition_time=frames_per_shape / FRAME_RATE,
                                   silent=True)
                 else:
-                    render.appear(alpha=alpha, begin_time=frame / FRAME_RATE, transition_time=0, silent=True)
+                    render.appear(alpha=alpha, begin_time=frame / FRAME_RATE, transition_time=0,children=False, silent=True)
 
             if self.outlined:
                 b_curve3.appear(alpha=alpha, begin_time=frame / FRAME_RATE,

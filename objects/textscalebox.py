@@ -35,5 +35,5 @@ class TextScaleBox(BObject):
                clear_data=False, silent=False,linked=False, nice_alpha=False,**kwargs):
         super().appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,
                        clear_data=clear_data,silent=silent,linked=linked,nice_alpha=nice_alpha,**kwargs)
-        for child in self.children:
+        for child in self.b_children:
             child.appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,clear_data=clear_data,silent=silent,linked=linked,nice_alpha=nice_alpha)

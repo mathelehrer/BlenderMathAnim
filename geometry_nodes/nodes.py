@@ -1462,7 +1462,7 @@ class VectorMath(BlueNode):
 
 
 class Switch(BlueNode):
-    def __init__(self, tree, location=(0, 0), input_type="Geometry",
+    def __init__(self, tree, location=(0, 0), input_type="GEOMETRY",
                  switch=None, false=None, true=None, **kwargs):
 
         self.node = tree.nodes.new(type="GeometryNodeSwitch")

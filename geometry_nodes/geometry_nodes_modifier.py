@@ -304,8 +304,10 @@ class MathematicalSurface(GeometryNodesModifier):
         create_geometry_line(tree, [grid, del_geo, set_pos, smooth, mat], out=out.inputs["Geometry"])
 
 
-class PendulumModifier(GeometryNodesModifier):
-    def __init__(self, name="Pendulum", automatic_layout=False):
+class PendulumModifierSmall(GeometryNodesModifier):
+    def __init__(self, min_frame=0,max_frame=100,name="SmallPendulum", automatic_layout=False):
+        self.min_frame=min_frame
+        self.max_frame=max_frame
         super().__init__(name=name, automatic_layout=automatic_layout)
 
     def create_node(self, tree):
@@ -323,8 +325,8 @@ class PendulumModifier(GeometryNodesModifier):
         point = Points(tree, location=(left, 0), name="PendulumMass")
 
         frame = SceneTime(tree, location=(left, -0.75), std_out="Frame")
-        min_frame = InputValue(tree, location=(left, - 1), name="maxFrame", value=119)
-        max_frame = InputValue(tree, location=(left, - 1.25), name="maxFrame", value=600)
+        min_frame = InputValue(tree, location=(left, - 1), name="minFrame", value=self.min_frame)
+        max_frame = InputValue(tree, location=(left, - 1.25), name="maxFrame", value=self.max_frame)
         t0 = InputValue(tree, location=(left, -0.5), value=-120 / FRAME_RATE)
 
         left += 1
@@ -510,7 +512,7 @@ class PendulumModifier(GeometryNodesModifier):
         graph_iop = InstanceOnPoints(tree, location=(left, y), instance=graph_sphere.geometry_out)
         left += 1
         graph_trafo = TransformGeometry(tree, location=(left, y),
-                                        translation=Vector([-4.5, 0, 0.5]))
+                                        translation=Vector([-24.7, 0,- 0.5]))
         left += 1
 
         graph_mat = SetMaterial(tree, location=(left, y), material_list=self.materials,
@@ -519,6 +521,31 @@ class PendulumModifier(GeometryNodesModifier):
 
         create_geometry_line(tree, [graph, set_graph], out=switch.true)
         create_geometry_line(tree, [simulation2, graph_iop, graph_trafo, graph_mat, join_full])
+
+class PendulumModifierLarge(GeometryNodesModifier):
+    def __init__(self, min_frame=0,max_frame=10,name="Pendulum", automatic_layout=False):
+        self.min_frame=min_frame
+        self.max_frame=max_frame
+        super().__init__(name=name, automatic_layout=automatic_layout)
+
+    def create_node(self, tree):
+        out = tree.nodes.get("Group Output")
+        links = tree.links
+
+        # ##### first pendulum ####
+        first_left = -38
+        left = first_left
+        # theta = InputValue(tree, location=(left, 0.25), name="theta", value=np.pi * 0.95)
+        # b = InputValue(tree, location=(left, 0.5), name="friction",
+        #                value=0.0225)  # damping to compensate accumulating errors
+        # omega = InputValue(tree, location=(left, 0.75), name="omega", value=0)
+        # origin = Points(tree, location=(left, 4), name="Origin")
+        # point = Points(tree, location=(left, 0), name="PendulumMass")
+        #
+        frame = SceneTime(tree, location=(left, -0.75), std_out="Frame")
+        min_frame = InputValue(tree, location=(left, - 1), name="maxFrame", value=self.min_frame)
+        max_frame = InputValue(tree, location=(left, - 1.25), name="maxFrame", value=self.max_frame)
+        t0 = InputValue(tree, location=(left, -0.5), value=-120 / FRAME_RATE)
 
         ##### second pendulum ####
 
@@ -611,8 +638,10 @@ class PendulumModifier(GeometryNodesModifier):
         left += 1
         join2 = JoinGeometry(tree, location=(left, -0.5))
         left += 1
-        trafo = TransformGeometry(tree, location=(left, 0), translation=[-6, 0, 4])
+        trafo = TransformGeometry(tree, location=(left, 0), translation=[-6, 0, 2.5],scale = [1,1,0.8])
         left += 1
+
+        join_full = JoinGeometry(tree, location=(left, 0))
 
         create_geometry_line(tree, [point, simulation, set_pos, join, point2mesh,
                                     convex_hull, wireframe, mat, join2, trafo, join_full], out=out.inputs["Geometry"])
@@ -715,7 +744,7 @@ class PendulumModifier(GeometryNodesModifier):
         graph_iop = InstanceOnPoints(tree, location=(left, y), instance=graph_cube.geometry_out)
         left += 1
         graph_trafo = TransformGeometry(tree, location=(left, y),
-                                        translation=Vector([-4.5, 0, 0.5]))
+                                        translation=Vector([-9, 0, -0.5]))
         left += 1
 
         graph_mat = SetMaterial(tree, location=(left, y), material_list=self.materials,
@@ -723,6 +752,8 @@ class PendulumModifier(GeometryNodesModifier):
                                 emission=0.5)
 
         create_geometry_line(tree, [graph, set_graph], out=switch.true)
+        final_tranformation = TransformGeometry(tree)
+
         create_geometry_line(tree, [simulation2, graph_iop, graph_trafo, graph_mat, join_full])
 
 
@@ -1594,7 +1625,7 @@ class SphericalHarmonicsNode(GeometryNodesModifier):
 
         tree.links.new(position.std_out, cart2polar.inputs["position"])
         # create spherical harmonics terms
-        y_lm = SphericalHarmonicsRekursive(self.l, self.m, "theta", "phi")
+        y_lm = SphericalHarmonics(self.l, self.m, "theta", "phi")
 
         real_part = ExpressionConverter(y_lm.real()).postfix()
         imag_part = ExpressionConverter(y_lm.imag()).postfix()
@@ -2411,75 +2442,6 @@ class AssociatedLegendreP(GeometryNodesModifier):
             count += 1
 
         create_geometry_line(tree, [join], out=out.inputs[0])
-
-class SphericalHarmonicsNode(GeometryNodesModifier):
-    def __init__(self,l_range=range(0,5),m=1, name='SphericalHarmonics', **kwargs):
-        """
-        geometry nodes that turn a set of mesh lines into associated Legendre Polynomials
-        """
-        self.m=m
-        self.l_range=l_range
-        if begin_time :=kwargs.pop("begin_time"):
-            self.begin_time=begin_time
-        else:
-            self.begin_time=0
-        if transition_time :=kwargs.pop("transition_time"):
-            self.transition_time=transition_time
-        else:
-            self.transition_time=0
-        if 'scale' in kwargs:
-            self.scale=kwargs.pop('scale')
-        else:
-            self.scale = [1]*3
-
-        super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
-
-    def create_node(self, tree, **kwargs):
-        out = self.group_outputs
-        links = tree.links
-
-        join = JoinGeometry(tree)
-        time = SceneTime(tree)
-        dt = self.transition_time / len(list(self.l_range))
-
-        colors = ["drawing", "joker", "important", "custom1", "custom2", "custom3", "custom4", "gray_4"]
-        count = 0
-        for l in self.l_range:
-            mesh_line = MeshLine(tree, count=l * 100 + 10, start_location=[-0.999, 0, 0], end_location=[0.999, 0, 0]) # avoid numerical singularity at \pm 1
-            position = Position(tree)
-            y = make_function(tree, name="y",
-                              functions={
-                                  "y": "x,acos,sin"
-                              }, inputs=["x"], outputs=["y"],
-                              scalars=["x", "y"])
-
-            separate = SeparateXYZ(tree, vector=position.std_out)
-            links.new(separate.x, y.inputs["x"])
-            alp = SphericalHarmonicsRekursive(tree, l=l, m=self.m, x=separate.x, y=y.outputs[0])
-
-            appear_function = make_function(tree, name="AppearFunction",
-                                            functions={
-                                                "selection": "t," + str(self.begin_time) + ",-," + str(
-                                                    dt) + ",/," + str(count) + ",<"
-                                            },
-                                            inputs=["t"], outputs=["selection"], scalars=["t", "selection"])
-            links.new(time.std_out, appear_function.inputs["t"])
-            combine = CombineXYZ(tree, x=separate.x, y=0, z=alp.std_out)
-            set_pos = SetPosition(tree, position=combine.std_out)
-            transform = TransformGeometry(tree, scale=self.scale)
-            wireframe = WireFrame(tree, radius=0.02)
-            del_geo = DeleteGeometry(tree, selection=appear_function.outputs["selection"])
-
-            if count < len(colors):
-                color = colors[count]
-            else:
-                color = colors[-1]
-            set_mat = SetMaterial(tree, material=color)
-            create_geometry_line(tree, [mesh_line, set_pos, del_geo, transform,wireframe, set_mat, join])
-            count += 1
-
-        create_geometry_line(tree, [join], out=out.inputs[0])
-
 
 class PlmSurface(GeometryNodesModifier):
     def __init__(self, domain = [[-1,1],[0,1]], l=6,m=3, name='AssociatedLegendrePolynomialSurface',

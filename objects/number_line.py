@@ -103,6 +103,7 @@ class NumberLine(BObject):
         :param kwargs:
         """
 
+        direction = direction.upper()
         self.kwargs = kwargs
         self.label_digit = label_digit
         self.dynamic = self.get_from_kwargs('dynamic',False)
@@ -346,7 +347,7 @@ class NumberLine(BObject):
             label_time = 0
 
         t0 = begin_time
-        super().appear(alpha=alpha, begin_time=t0,silent=silent,**kwargs)
+        super().appear(alpha=alpha, begin_time=t0,silent=silent,children=False,**kwargs) # apearance of children is handled in the remainder
         self.cyl.grow(self.cyl.intrinsic_scale, begin_time=t0, transition_time=cyl_time, modus=self.grow_mode)
         t0 += cyl_time
         self.tip.grow(self.tip.intrinsic_scale, begin_time=t0, transition_time=tip_time)
@@ -354,7 +355,7 @@ class NumberLine(BObject):
             self.axis_label.write(begin_time=t0, transition_time=label_time)
         t0 += tip_time
         if self.bLabels:
-            self.bLabels.appear(alpha=alpha, begin_time=t0, transition_time=tip_time)
+            self.bLabels.appear(alpha=alpha, begin_time=t0, transition_time=tip_time,children=False)
         if self.bTics:
             self.bTics.appear(alpha=alpha, begin_time=t0, transition_time=tip_time)
             for tic, label in zip(self.tics, self.labels):

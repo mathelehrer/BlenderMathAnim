@@ -179,11 +179,11 @@ class CoordinateSystem(BObject):
         if self.dimensions == 2:
             # configure coordinate system for x- and y-axis only (y-axis pointing into z-direction)
             labels = self.get_from_kwargs('labels', ['x', 'y'])
-            directions = ['horizontal', 'vertical']
+            directions = ['HORIZONTAL', 'VERTICAL']
         else:
             # configure coordinate system for x-, y- and z-axis (z-axis pointing into z-direction)
             labels = self.get_from_kwargs('labels', ['x', 'y', 'z'])
-            directions = ['horizontal', 'deep', 'vertical']
+            directions = ['HORIZONTAL', 'DEEP', 'VERTICAL']
 
         self.domains = self.get_from_kwargs('domains', [[-1, 1], [-1, 1], [-1, 1]])
 
@@ -375,7 +375,7 @@ class CoordinateSystem(BObject):
                ):
 
         t0 = begin_time
-        super().appear(alpha=alpha,begin_time=t0, transition_time=transition_time,**kwargs)
+        super().appear(alpha=alpha,begin_time=t0, transition_time=transition_time,children=False,**kwargs) # the appearance of the children is dealt with separately
         if not empty:
             for axis in self.axes:
                 axis.appear(alpha=alpha, begin_time=t0, transition_time=transition_time,**kwargs)

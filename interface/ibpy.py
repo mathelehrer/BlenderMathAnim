@@ -984,7 +984,7 @@ def get_collection_name(obj):
         return obj.name
 
 
-def link(obj, collection=None):
+def link(obj, collection=None,recursively=True):
     obj = get_obj(obj)
     if collection is None:
         collection = 'Scene Collection' # default collection
@@ -1009,8 +1009,9 @@ def link(obj, collection=None):
                 make_new_collection(collection)
             to_collection(collection).objects.link(obj)
             ### if there are children they need to be relinked if there is a custom collection
-            for child in obj.children:
-                link(child, collection=collection)
+            if recursively:
+                for child in obj.children:
+                    link(child, collection=collection)
 
 
 def collection_to_string(collection):
@@ -1076,8 +1077,9 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
     
     """
     scene = get_scene()
-    if engine == BLENDER_EEVEE:
+    if engine == "BLENDER_EEVEE" or engine=="BLENDER_EEVEE_NEXT":
         engine = BLENDER_EEVEE
+
     scene.render.engine = engine
     scene.render.use_compositing = True
 
