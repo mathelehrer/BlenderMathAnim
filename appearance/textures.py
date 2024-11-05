@@ -1177,6 +1177,51 @@ def cmb_texture(ls = [2,3,5], powerspectrum=None,displacement=True, **kwargs):
     customize_material(mat, **kwargs)
     return mat
 
+def cmb_infrared(src, **kwargs):
+    mat = bpy.data.materials.new(name="CMBInfrared")
+    mat.use_nodes = True
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    material_out=nodes.get("Material Output")
+    bsdf = nodes['Principled BSDF']
+
+    left = -10
+
+    coords = TextureCoordinate(tree,location=(left,0),std_out="Generated")
+    left+=1
+    img = ImageTexture(tree,location=(left,0),
+                       image=bpy.data.images.load(os.path.join(IMG_DIR,src)),
+                    vector=coords.std_out)
+    left+=1
+    links.new(img.alpha,bsdf.inputs["Alpha"])
+
+    conversion = make_function(nodes,location=(left,0),functions={
+        "fac":"1,col_x,col_y,-,-"
+    },
+                               node_group_type="Shader",
+                               inputs=["col"],outputs=["fac"],
+                               vectors=["col"],
+                               scalars=["fac"],name="ColorConversion")
+
+    links.new(img.std_out,conversion.inputs["col"])
+    left +=1
+
+    ramp = ColorRamp(tree,location=(left,0),
+                     factor=conversion.outputs["fac"],
+                     values=[0,0.447,0.532,0.640,0.924],
+                     colors=[[0.0, 0.0, 1.0],
+                             [0.0, 0.6549019607843137, 1.0],
+                             [1.0, 0.9215686274509803, 0.8274509803921568],[1.0, 0.49019607843137253, 0.0],[0.39215686274509803, 0.0, 0.0]],
+    )
+    links.new(ramp.std_out,bsdf.inputs["Base Color"])
+    links.new(ramp.std_out,bsdf.inputs[EMISSION])
+
+
+
+    customize_material(mat, **kwargs)
+    return mat
+
 def cmb_logo_texture(circle_group="Red",ls = [2,3,5],color='drawing', powerspectrum=None,displacement=True, **kwargs):
     mat = bpy.data.materials.new(name="CMBTexture_"+color)
     mat.use_nodes = True

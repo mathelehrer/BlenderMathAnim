@@ -162,6 +162,7 @@ class ImageTexture(ShaderNode):
                 self.tree.links.new(vector, self.node.inputs['Vector'])
 
         self.std_out = self.node.outputs[std_out]
+        self.alpha = self.node.outputs["Alpha"]
 
 
 class ColorRamp(ShaderNode):
@@ -177,12 +178,14 @@ class ColorRamp(ShaderNode):
         values = get_from_kwargs(kwargs,"values",[0,1])
         colors = get_from_kwargs(kwargs,"colors",[[0,0,0,1],[1,1,1,1]])
 
-        if len(values)>2:
-            self.node.color_ramp.elements.new(len(values)-2)
+        for i in range(2,len(values)):
+            self.node.color_ramp.elements.new(i)
 
         i = 0
         for value,color in zip(values,colors):
             self.node.color_ramp.elements[i].position=value
+            if len(color)==3:
+                color+=[1] # add default alpha if necessary
             self.node.color_ramp.elements[i].color=color
             i+=1
 
