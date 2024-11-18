@@ -15,8 +15,8 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     TransformGeometry, InputVector, DeleteGeometry, IcoSphere, MeshLine, InstanceOnEdges, CubeMesh, \
     EdgeVertices, BooleanMath, SetShadeSmooth, RayCast, WireFrame, ConvexHull, InsideConvexHull, ExtrudeMesh, \
     ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch, MeshToPoints, \
-    SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh,  InputRotation, InvertRotation, RotateRotation, \
-    Frame, SeparateXYZ
+    SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputRotation, InvertRotation, RotateRotation, \
+    Frame, SeparateXYZ, DualMesh, WireFrameRectangle, SplitEdges, VectorRotate, EvaluateOnDomain, InputNormal
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -2117,7 +2117,7 @@ class NumberLineModifier(GeometryNodesModifier):
         downshift=-5
         in_min = InputValue(tree,location=(left,downshift), name='Minimum', value=domain[0])
         in_max = InputValue(tree,location=(left,downshift+0.25), name='Maximum', value=domain[1])
-        in_length = InputValue(tree,location=(left,downshift+0.5), name='Length', value=max_length)
+        in_length = InputValue(tree,location=(left,downshift+0.5), name='AxisLength', value=max_length)
         in_radius = InputValue(tree,location=(left,downshift+0.75), name='Radius', value=radius)
         in_log = InputValue(tree,location=(left,downshift+1),name='Log',value=0)
         in_label_scale = InputValue(tree,location=(left,downshift+1),name='LabelScale',value=0)
@@ -2175,6 +2175,7 @@ class NumberLineModifier(GeometryNodesModifier):
         label_frame =  Frame(tree,name="LabelFrame")
         # add tic_labels
         count=0
+        shift=InputVector(tree,location=(left-3,downshift+0.5),name="LabelShift",value=tic_label_shift)
         for key, val in tic_labels.items():
             coll_info = CollectionInfo(tree,location=(left-3,downshift-0.5*count), collection_name=str(key), name=str(key))
             value = InputValue(tree,location=(left-3,downshift-0.5*(count+1/2)), name="LabelValue=" + str(val[0]), value=val[0])
@@ -2184,16 +2185,17 @@ class NumberLineModifier(GeometryNodesModifier):
             tic_label_function = make_function(tree,location=(left-1,downshift+0.25*count), name="LabelPositionVisibility" + str(key),
                                                functions={
                                                    "position_tic":["0","0", "val,x0,-,x1,x0,-,/,1,lambda,-,*,val,lg,x0,lg,-,x1,lg,x0,lg,-,/,lambda,*,+," + str(max_length) + ",*"],
-                                                   "position_label":[str(tic_label_shift[0]),str(tic_label_shift[1]), str(tic_label_shift[2])+",val,x0,-,x1,x0,-,/,1,lambda,-,*,val,lg,x0,lg,-,x1,lg,x0,lg,-,/,lambda,*,+," + str(max_length) + ",*,+"],
+                                                   "position_label":["shift_x","shift_y", "shift_z,val,x0,-,x1,x0,-,/,1,lambda,-,*,val,lg,x0,lg,-,x1,lg,x0,lg,-,/,lambda,*,+," + str(max_length) + ",*,+"],
                                                    "invisible": "l,val,x0,-,x1,x0,-,/," + str(max_length) + ",*,<"
-                                               }, inputs=["val", "x0", "x1", "l","lambda"], outputs=["position_tic","position_label", "invisible"],
-                                               scalars=["val", "x0", "x1", "invisible", "l","lambda"], vectors=["position_tic","position_label"])
+                                               }, inputs=["shift","val", "x0", "x1", "l","lambda"], outputs=["position_tic","position_label", "invisible"],
+                                               scalars=["val", "x0", "x1", "invisible", "l","lambda"], vectors=["shift","position_tic","position_label"])
 
             links.new(in_length.std_out, tic_label_function.inputs["l"])
             links.new(in_log.std_out, tic_label_function.inputs["lambda"])
             links.new(in_min.std_out, tic_label_function.inputs["x0"])
             links.new(in_max.std_out, tic_label_function.inputs["x1"])
             links.new(value.std_out, tic_label_function.inputs["val"])
+            links.new(shift.std_out,tic_label_function.inputs["shift"])
             label_frame.add(tic_label_function)
             tic_mesh = CylinderMesh(tree, location=(left, downshift+0.25*count+3), vertices=16, radius=tic_function.outputs["r"],depth=tic_function.outputs['depth'])
             set_tic_pos = TransformGeometry(tree, location=(left + 1,  downshift+0.25*count+3),translation=tic_label_function.outputs["position_tic"])
@@ -2213,13 +2215,14 @@ class NumberLineModifier(GeometryNodesModifier):
             axis_label_location=[2*radius,0,max_length]
 
         if axis_label:
+            label_location=InputVector(tree,location=(left-3,downshift+0.25*count+2),name="LabelLocation",value=axis_label_location)
             label_info = CollectionInfo(tree, location=(left - 3, downshift+0.25*count+3), collection_name=axis_label,
                                        name="AxisLabel")
         else:
             label_info=None
         if label_info:
             label_trafo= TransformGeometry(tree, location=(left - 2, downshift + 0.5 + 0.25 * count),
-                                              rotation=label_rotation.std_out, translation=axis_label_location,scale=in_label_scale.std_out)
+                                              rotation=label_rotation.std_out, translation=label_location.std_out,scale=in_label_scale.std_out)
             create_geometry_line(tree,[label_info,label_trafo,join])
 
         # finalize
@@ -2721,6 +2724,69 @@ class LogoModifier(GeometryNodesModifier):
         shade_smooth = SetShadeSmooth(tree)
         create_geometry_line(tree,[join_geometry,transform_geometry,shade_smooth],out=out.inputs["Geometry"])
 
+
+
+class VoronoiModifier(GeometryNodesModifier):
+    def __init__(self, name="VoronoiModifier",
+                  **kwargs):
+        """
+
+        GeometryNodes to convert a PreVoronoi mesh into a voronoi mesh.
+
+        """
+        super().__init__(name, group_input=True, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, sphere_colors =["important","joker","drawing"],**kwargs):
+        out = self.group_outputs
+        ins = self.group_inputs
+        links = tree.links
+        # show points
+        sphere = IcoSphere(tree,r=0.1)
+        iop = InstanceOnPoints(tree,instance = sphere.geometry_out)
+        join_geometry = JoinGeometry(tree)
+        create_geometry_line(tree, [iop, join_geometry], ins=ins.outputs["Geometry"])
+
+        # create voronoi mesh
+        dual_mesh = DualMesh(tree)
+        split_edges = SplitEdges(tree)
+        wireframe_material = get_material("gold")
+        wireframe=WireFrameRectangle(tree,width=0.1,height=0.1)
+        self.materials.append(wireframe_material)
+        set_material_wireframe=SetMaterial(tree,material=wireframe_material)
+        scale_elements=ScaleElements(tree,scale=0.99)
+
+        # start fractalizing
+
+        # rotate tilings
+        position = Position(tree)
+        normal = InputNormal(tree)
+        angle = InputValue(tree,name="Angle",value=0.1)
+        eval_domain = EvaluateOnDomain(tree,data_type="FLOAT_VECTOR",domain="FACE",value=position.std_out)
+        rotate_vector = VectorRotate(tree, rotation_type="AXIS_ANGLE", center=eval_domain.std_out, axis=normal.std_out,
+                                     vector=position.std_out,angle = angle.std_out)
+
+        repeat= RepeatZone(tree,iteration=5,geometry=scale_elements.geometry_out)
+        repeat_join = JoinGeometry(tree)
+        repeat_scale = ScaleElements(tree,scale=0.9)
+        repeat_set_pos = SetPosition(tree,offset=[0,0,0.05],position=rotate_vector.std_out)
+        repeat.create_geometry_line([repeat_scale,repeat_set_pos,repeat_join])
+        links.new(scale_elements.geometry_out,repeat_join.geometry_in)
+
+
+
+        # after processing
+        extrude_mesh = ExtrudeMesh(tree,mode="FACES",offset_scale=1,offset=[0,0,0.05])
+        tile_material = get_material("plastic_joker")
+        self.materials.append(tile_material)
+        set_material_tiles=SetMaterial(tree,material=tile_material)
+
+        local_join = JoinGeometry(tree)
+        # create_geometry_line(tree,[split_edges,local_join]) # cover extrude of face on the other side
+        create_geometry_line(tree,[dual_mesh,split_edges,scale_elements,repeat],ins=ins.outputs["Geometry"])
+        create_geometry_line(tree,[repeat, extrude_mesh,set_material_tiles,local_join,join_geometry],out=out.inputs["Geometry"])
+        create_geometry_line(tree,[repeat,wireframe,set_material_wireframe,local_join])
+
+
 ##
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
@@ -2973,12 +3039,11 @@ def hashed_tex(expression, typeface):
 def get_figure_curves(imported_svg_data, fig):
     """
         returns the curves
-        this method is overriden by the TexBObject to strip the leading H
         :param fig:
         :return:
         """
 
-    return imported_svg_data[fig]['curves'][1:]
+    return imported_svg_data[fig]['curves']
 
 
 def calc_lengths(imported_svg_data):
@@ -3085,7 +3150,10 @@ def align_figure(fig, imported_svg_data, aligned):
         new_loc = add_lists_by_element(loc, offset, subtract=True)
         curve_list[i].location = new_loc
 
-    return curve_list
+    # sort letters from left to right
+    curve_list.sort(key=lambda x:x.location[0])
+    # remove reference H
+    return curve_list[1:]
 
 
 def add_lists_by_element(list1, list2, subtract=False):

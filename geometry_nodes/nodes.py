@@ -135,6 +135,38 @@ class MeshLine(GreenNode):
 
 
 # mesh operations
+class DualMesh(GreenNode):
+    def __init__(self, tree, location=(0, 0), **kwargs):
+        """
+
+        :param tree:
+        :param location:
+        :param mode: "VERTICES, FACES, EDGES
+        :param mesh:
+        :param selection:
+        :param offset:
+        :param offset_scale:
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="GeometryNodeDualMesh")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs['Dual Mesh']
+        self.geometry_in = self.node.inputs['Mesh']
+
+class SplitEdges(GreenNode):
+    def __init__(self, tree, selection = None,location=(0, 0), **kwargs):
+        """
+        """
+        self.node = tree.nodes.new(type="GeometryNodeSplitEdges")
+        super().__init__(tree, location=location, **kwargs)
+
+        if selection:
+            tree.links.new(selection,self.node.inputs["Selection"])
+
+        self.geometry_out = self.node.outputs['Mesh']
+        self.geometry_in = self.node.inputs['Mesh']
+
 class ExtrudeMesh(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  mode="VERTICES",
@@ -350,6 +382,32 @@ class CurveCircle(GreenNode):
         else:
             self.tree.links.new(resolution, self.node.inputs['Resolution'])
 
+class CurveQuadrilateral(GreenNode):
+    def __init__(self, tree, location=(0, 0),mode="RECTANGLE",
+                 width=0.02,height=0.02, **kwargs):
+        """
+
+        :param tree:
+        :param location:
+        :param mode: 'RECTANGLE', '...'
+        :param resolution:
+        :param radius:
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="GeometryNodeCurvePrimitiveQuadrilateral")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs['Curve']
+        self.node.mode=mode
+
+        if isinstance(width, (int, float)):
+            self.node.inputs['Width'].default_value = width
+        else:
+            self.tree.links.new(width, self.node.inputs['Width'])
+        if isinstance(height, (int,float)):
+            self.node.inputs['Height'].default_value = height
+        else:
+            self.tree.links.new(height, self.node.inputs['Height'])
 
 # curve operations
 class CurveToMesh(GreenNode):
@@ -664,7 +722,7 @@ class SetPosition(GreenNode):
             self.node.inputs['Position'].default_value = position
         else:
             self.tree.links.new(position, self.node.inputs['Position'])
-        if isinstance(offset, Vector):
+        if isinstance(offset, (list,Vector)):
             self.node.inputs['Offset'].default_value = offset
         else:
             self.tree.links.new(offset, self.node.inputs['Offset'])
@@ -1147,6 +1205,32 @@ class SampleIndex(GreenNode):
         self.geometry_in = self.node.inputs['Geometry']
         self.std_out = self.node.outputs['Value']
 
+###################
+## Utility Nodes ##
+###################
+
+class EvaluateOnDomain(BlueNode):
+    def __init__(self, tree, location=(0, 0), value=None,data_type="FLOAT_VECTOR",domain="FACE", **kwargs):
+        """
+
+        :param tree:
+        :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'BOOLEAN'
+        :param domain: "FACE","POINT","EDGE",...
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="GeometryNodeFieldOnDomain")
+        self.node.data_type=data_type
+        self.node.domain=domain
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_in = self.node.inputs["Value"]
+        self.std_out = self.node.outputs["Value"]
+
+        if isinstance(value, (int, float)):
+            self.node.inputs["Value"].default_value = value
+        else:
+            tree.links.new(value, self.node.inputs["Value"])
+
 
 #  red nodes   #
 
@@ -1156,6 +1240,13 @@ class Position(RedNode):
         super().__init__(tree, location=location, **kwargs)
 
         self.std_out = self.node.outputs['Position']
+
+class InputNormal(RedNode):
+    def __init__(self, tree, location=(0, 0), **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeInputNormal")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs['Normal']
 
 
 class Index(RedNode):
@@ -1460,6 +1551,40 @@ class VectorMath(BlueNode):
             else:
                 tree.links.new(float_input, self.node.inputs[3])
 
+class VectorRotate(BlueNode):
+    def __init__(self, tree, location=(0, 0),rotation_type="AXIS_ANGLE", vector= None, center = None, axis = None, angle = 0,
+                 **kwargs):
+        """
+
+        """
+        self.node = tree.nodes.new(type="ShaderNodeVectorRotate")
+        super().__init__(tree, location=location, **kwargs)
+
+
+        self.std_out = self.node.outputs['Vector']
+
+        self.node.rotation_type=rotation_type
+
+        if isinstance(vector, (Vector, list)):
+            self.node.inputs["Vector"].default_value = vector
+        else:
+            tree.links.new(vector, self.node.inputs["Vector"])
+
+        if isinstance(center, (Vector, list)):
+            self.node.inputs["Center"].default_value = center
+        else:
+            tree.links.new(center, self.node.inputs["Center"])
+
+        if angle:
+            if isinstance(angle, (float, int)):
+                self.node.inputs["Angle"].default_value = angle
+            else:
+                tree.links.new(angle, self.node.inputs["Angle"])
+
+        if isinstance(axis, (Vector, list)):
+            self.node.inputs["Axis"].default_value = axis
+        else:
+            tree.links.new(axis, self.node.inputs["Axis"])
 
 class Switch(BlueNode):
     def __init__(self, tree, location=(0, 0), input_type="GEOMETRY",
@@ -1624,6 +1749,61 @@ class WireFrame(GreenNode):
         curve_circle = CurveCircle(tree, location=(1, 1), resolution=group_inputs.outputs['Resolution'],
                                    radius=group_inputs.outputs['Radius'])
         curve2mesh = CurveToMesh(tree, location=(2, 0), profile_curve=curve_circle.geometry_out)
+        create_geometry_line(tree, [mesh2curve, curve2mesh],
+                             ins=group_inputs.outputs['Mesh'], out=group_outputs.inputs['Mesh'])
+        return group
+
+class WireFrameRectangle(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 width=0.02,height=0.02,
+                 geometry=None,
+                 **kwargs
+                 ):
+
+        self.node = self.create_node(tree.nodes)
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs['Mesh']
+        self.geometry_in = self.node.inputs['Mesh']
+
+        if geometry:
+            self.tree.links.new(geometry, self.geometry_in)
+        if isinstance(width, (int, float)):
+            self.node.inputs['Width'].default_value =width
+        else:
+            self.tree.links.new(width, self.node.inputs['Width'])
+        if isinstance(height, (int, float)):
+            self.node.inputs['Height'].default_value =height
+        else:
+            self.tree.links.new(height, self.node.inputs['Height'])
+
+    def create_node(self, nodes, name='WireframeNode'):
+        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
+        group = nodes.new(type='GeometryNodeGroup')
+
+        group.name = name
+        group.node_tree = tree
+
+        # create inputs and outputs
+        tree_nodes = tree.nodes
+        tree_links = tree.links
+
+        group_inputs = tree_nodes.new('NodeGroupInput')
+        group_outputs = tree_nodes.new('NodeGroupOutput')
+
+        make_new_socket(tree, name='Mesh', io='INPUT', type='NodeSocketGeometry')
+        make_new_socket(tree, name='Width', io='INPUT', type='NodeSocketFloat')
+        make_new_socket(tree, name='Height', io='INPUT', type='NodeSocketFloat')
+
+        make_new_socket(tree, name='Mesh', io='OUTPUT', type='NodeSocketGeometry')
+
+        group_inputs.location = (0, 0)
+        group_outputs.location = (600, 0)
+
+        mesh2curve = MeshToCurve(tree, location=(1, 0))
+        rectangle = CurveQuadrilateral(tree, location=(1, 1), width=group_inputs.outputs["Width"],
+                                   height=group_inputs.outputs["Height"])
+        curve2mesh = CurveToMesh(tree, location=(2, 0), profile_curve=rectangle.geometry_out)
         create_geometry_line(tree, [mesh2curve, curve2mesh],
                              ins=group_inputs.outputs['Mesh'], out=group_outputs.inputs['Mesh'])
         return group

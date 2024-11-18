@@ -127,6 +127,7 @@ COLOR_PREFIXES =['plastic','glass','fake_glass']
 # if you want to change single properties of these special materials use the override_material=True flag
 SPECIALS = ['screen','scatter_volume','gold','silver','screen','wood','sand','metal','glass','mirror','silk','fake_glass','plastic']
 
+DATA_TYPES = ['FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'INT8', 'QUATERNION', 'FLOAT4X4']
 
 # Warning: each color scheme has to provide colors for these COLOR_NAMES, otherwise it will yield errors
 if color_scheme == -1:

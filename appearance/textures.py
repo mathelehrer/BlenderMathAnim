@@ -561,7 +561,6 @@ def camera_gradient_rainbow(name="Rainbow", **kwargs):
     links.new(ramp.std_out, bsdf.inputs[EMISSION])
     return mat
 
-
 def image_over_text(name="ImageOverText", **kwargs):
     """
     create an image texture across text
@@ -1428,7 +1427,6 @@ def rgb_color(rgb=[1, 1, 1, 1], **kwargs):
     bsdf.inputs[EMISSION].default_value = color
     return mat
 
-
 def decay_mode_material(**kwargs):
     mat = bpy.data.materials.new(name="DecayModeColor" + str(type))
     mat.use_nodes = True
@@ -1467,6 +1465,28 @@ def decay_mode_material(**kwargs):
     customize_material(mat, **kwargs)
     return mat
 
+def glow_at_appearance(**kwargs):
+    mat = bpy.data.materials.new(name="GlowAtAppearance")
+    mat.use_nodes = True
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+
+    bsdf = nodes['Principled BSDF']
+
+    left = -10
+
+    color = get_from_kwargs(kwargs,"color","drawing")
+    rgb = get_color(color)
+
+    bsdf.inputs["Base Color"].default_value=rgb
+    bsdf.inputs[EMISSION].default_value=rgb
+
+    attr = AttributeNode(tree,attribute_name="Glow",type="INSTANCER")
+    links.new(attr.fac_out,bsdf.inputs["Emission Strength"])
+
+    customize_material(mat, **kwargs)
+    return mat
 
 def star_color(temp=None, type=None, **kwargs):
     mat = bpy.data.materials.new(name="StarColor" + str(type))

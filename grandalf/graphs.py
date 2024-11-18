@@ -562,7 +562,7 @@ class graph_core(object):
             vv = self.sV.get(v)
             if vv is None:
                 str_data = str(list(self.sV.o.values())[0].data)
-                raise Exception("Missing connection for node: "+str_data)
+                raise Exception("Missing connection for node: ",str_data)
             if vv.ind == 0: # if the algorithm breaks at this point, maybe there is a root node without an edge
                 _visit(vv, scs)
         # now possibly unvisited vertices:

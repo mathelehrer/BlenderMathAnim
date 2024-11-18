@@ -39,6 +39,7 @@ class CoordinateSystem2(BObject):
         self.tic_label_shifts =self.get_from_kwargs("tic_label_shifts",[Vector()]*3)
         self.colors = self.get_from_kwargs('colors',['drawing']*3)
         self.axes_labels = self.get_from_kwargs('axes_labels',{'x':"AUTO",'y':"AUTO",'z':"AUTO"})
+        self.include_zeros = self.get_from_kwargs('include_zeros',[True]*3)
         self.data = self.get_from_kwargs('data',None)
         self.name = self.get_from_kwargs('name',str(self.dimension)+"D-CoordinateSystem")
         self.axes = []
@@ -63,6 +64,7 @@ class CoordinateSystem2(BObject):
                                              n_tics = self.n_tics[i],
                                              tic_label_digits=self.tic_label_digits[i],
                                              tic_label_shift= self.tic_label_shifts[i],
+                                             include_zero=self.include_zeros[i],
                                         length=self.lengths[i],
                                  color=self.colors[i],axis_label=axis_label_keys[i],
                                              axis_label_location=self.axes_labels[axis_label_keys[i]],**kwargs))
@@ -85,7 +87,8 @@ class CoordinateSystem2(BObject):
                                              tic_label_digits=self.tic_label_digits[i],
                                              tic_label_shift=self.tic_label_shifts[i],
                                              length=self.lengths[i],
-                                            color=self.colors[i],axis_label=axis_label_keys[i],
+                                             include_zero=self.include_zeros[i],
+                                                color=self.colors[i],axis_label=axis_label_keys[i],
                                              axis_label_location=self.axes_labels[axis_label_keys[i]],**kwargs))
 
         if self.data:

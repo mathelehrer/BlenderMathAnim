@@ -35,7 +35,7 @@ class Circle(Function):
         :param mode:
         :param kwargs:
         """
-        super().__init__(lambda x: [center[0] + radius * np.cos(x), center[1] + radius * np.sin(x)], coordinate_system,
+        super().__init__(lambda x: Vector([center[0] + radius * np.cos(x), center[1] + radius * np.sin(x)]), coordinate_system,
                          [0, 2.1 * np.pi], num_points=num_points, color=color, mode='PARAMETRIC', **kwargs)
 
 
