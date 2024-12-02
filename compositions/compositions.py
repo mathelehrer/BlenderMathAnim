@@ -77,4 +77,3 @@ def create_glow_composition(threshold=1,type='BLOOM',size=4):
     links.new(glare.outputs["Image"],composite.inputs["Image"])
     links.new(layers.outputs["Alpha"],composite.inputs["Alpha"])
     return glare
-

@@ -7,7 +7,7 @@ from interface import ibpy
 from interface.ibpy import add_cylinder
 from objects.geometry.geo_bobject import GeoBObject
 from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
-from utils.utils import get_rotation_quaternion_from_start_and_end, to_vector
+from utils.utils import get_rotation_quaternion_from_start_and_end, to_vector, vec_round
 
 
 class Cylinder(GeoBObject):
@@ -74,6 +74,12 @@ class Cylinder(GeoBObject):
         location = 0.5 * (to_vector(end) + to_vector(start))
         quaternion = get_rotation_quaternion_from_start_and_end(start,end)
         return Cylinder(start=start,end=end,location=location,length=length,rotation_quaternion=quaternion,radius=radius,cyl_radii=cyl_radii,**kwargs)
+
+    def __str__(self):
+        return "BCylinder "+str(vec_round(self.start,1))+"->"+str(vec_round(self.end,1))
+
+    def __repr__(self):
+        return str(self)
 
     def grow(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, modus='from_start',
              initial_scale=0):

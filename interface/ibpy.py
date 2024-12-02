@@ -299,14 +299,15 @@ def camera_zoom(lens=50, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
 
 
 def camera_move(shift, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME, verbose=False):
+    if isinstance(shift,list):
+        shift=Vector(shift)
     cam = get_camera()
     start_frame = begin_time * FRAME_RATE
     location = get_location_at_frame(cam, start_frame)
     cam.location = location
-    cam.keyframe_insert(data_path='location', frame=start_frame)
-    for i, s in enumerate(shift):
-        cam.location[i] += s
-    cam.keyframe_insert(data_path='location', frame=(begin_time + transition_time) * FRAME_RATE)
+    cam.keyframe_insert(data_path='location', frame=int(start_frame))
+    cam.location=cam.location+shift
+    cam.keyframe_insert(data_path='location', frame=int((begin_time + transition_time) * FRAME_RATE))
     if verbose:
         print("Camera move by: " + str(shift) + " at " + str(begin_time))
     return begin_time + transition_time
@@ -2885,7 +2886,6 @@ def change_default_vector(slot, from_value, to_value, begin_time=None, transitio
     insert_keyframe(slot, data_path, begin_frame + transition_frames)
 
     return begin_time + transition_time
-
 
 def change_value(value, from_value, to_value, begin_time=None, transition_time=None, data_path="default_value",
                  begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME * FRAME_RATE):
@@ -7004,3 +7004,42 @@ def append(filename):
 
 def get_image(src):
     return bpy.data.images.load(os.path.join(IMG_DIR, src))
+
+#####################
+## Compositions #####
+#####################
+
+def change_glow_threshold(from_value=1,to_value=0,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    nodes = bpy.context.scene.node_tree.nodes
+    glare = nodes.get("Glare")
+
+    if from_value is not None:
+            glare.threshold = from_value
+            insert_keyframe(glare, "threshold", begin_time*FRAME_RATE)
+    glare.threshold = to_value
+    insert_keyframe(glare, "threshold",(begin_time+transition_time)*FRAME_RATE)
+
+    return begin_time + transition_time
+
+
+'''
+Animation helpers
+'''
+
+
+def make_animations_linear(thing_with_animation_data, data_paths=None, extrapolate=False):
+    if data_paths is None:
+        f_curves = thing_with_animation_data.animation_data.action.fcurves
+    else:
+        f_curves = []
+        for fc in thing_with_animation_data.animation_data.action.fcurves:
+            if fc.data_path in data_paths:
+                f_curves.append(fc)
+    for fc in f_curves:
+        if extrapolate:
+            fc.extrapolation = 'LINEAR'  # Set extrapolation type
+        # Iterate over this fcurve's keyframes and set handles to vector
+        for kp in fc.keyframe_points:
+            kp.handle_left_type = 'VECTOR'
+            kp.handle_right_type = 'VECTOR'
+            kp.interpolation = 'LINEAR'

@@ -1,16 +1,20 @@
 import inspect
 import os
 import time
+from copy import deepcopy
 
 import bpy
 
+from appearance.textures import make_basic_material, make_creature_material, make_translucent_material, \
+    make_fake_glass_material, make_plastic_material, make_checker_material, make_mirror_material, make_sand_material, \
+    make_gold_material, make_silver_material, make_screen_material, make_marble_material, make_metal_materials, \
+    make_wood_material, make_scattering_material, make_silk_material, make_magnet_material, make_sign_material
 from interface import ibpy
 from perform.render import render_with_skips
 from utils.constants import DEFAULT_SCENE_BUFFER, LIGHT_TYPE, CAMERA_LOCATION, CAMERA_ANGLE, FRAME_RATE, COLORS_SCALED, \
     DEFAULT_SCENE_DURATION, SAMPLE_COUNT, LIGHT_SAMPLING_THRESHOLD, RESOLUTION_PERCENTAGE, RENDER_DIR, \
-    BLEND_FRM_RATE_DIR
+    BLEND_FRM_RATE_DIR, COLOR_NAMES, COLORS
 from utils.kwargs import get_from_kwargs
-from utils.utils import define_materials
 
 
 class Scene(object):
@@ -239,3 +243,39 @@ def get_total_duration(scenes):
     for scene in scenes:
         duration += scene[1].duration + DEFAULT_SCENE_BUFFER
     return duration
+
+
+def define_materials():
+    if 'default' not in bpy.data.materials:
+        mat = bpy.data.materials.new(name='default')
+        mat.use_nodes = True
+        nodes = mat.node_tree.nodes
+        nodes['Principled BSDF'].inputs['Base Color'].default_value = (0.8, 1, 1, 1)
+
+    for i, col_name in enumerate(COLOR_NAMES):
+        name = col_name
+        col = COLORS[i]
+        make_basic_material(rgb=deepcopy(col), name=name)
+        name = 'creature_color' + str(i + 1)
+        make_creature_material(rgb=deepcopy(col), name=name)
+        name = 'glass_' + col_name
+        make_translucent_material(rgb=deepcopy(col), name=name)
+        name = 'fake_glass_' + col_name
+        make_fake_glass_material(rgb=deepcopy(col), name=name)
+        name = 'plastic_' + col_name
+        make_plastic_material(rgb=deepcopy(col), name=name)
+
+    # create checker material
+    make_checker_material()
+    make_mirror_material()
+    make_sand_material()
+    make_gold_material()
+    make_silver_material()
+    make_screen_material()
+    make_marble_material()
+    make_metal_materials()
+    make_wood_material()
+    make_scattering_material()
+    make_silk_material()
+    make_magnet_material()
+    make_sign_material()

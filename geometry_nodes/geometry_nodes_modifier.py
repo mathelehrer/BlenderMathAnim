@@ -2727,30 +2727,51 @@ class LogoModifier(GeometryNodesModifier):
 
 
 class VoronoiModifier(GeometryNodesModifier):
-    def __init__(self, name="VoronoiModifier",
+    def __init__(self, name="VoronoiModifier",begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,
                   **kwargs):
         """
 
         GeometryNodes to convert a PreVoronoi mesh into a voronoi mesh.
 
         """
+        self.t0 = begin_time
+        self.dt = transition_time
+
         super().__init__(name, group_input=True, automatic_layout=True, **kwargs)
 
-    def create_node(self, tree, sphere_colors =["important","joker","drawing"],**kwargs):
+    def create_node(self, tree, **kwargs):
         out = self.group_outputs
         ins = self.group_inputs
         links = tree.links
         # show points
-        sphere = IcoSphere(tree,r=0.1)
+
+        sphere = IcoSphere(tree,radius=0.01)
         iop = InstanceOnPoints(tree,instance = sphere.geometry_out)
+        sphere_mat = get_material("plastic_joker")
+        self.materials.append(sphere_mat)
+        set_mat = SetMaterial(tree,material=sphere_mat)
         join_geometry = JoinGeometry(tree)
-        create_geometry_line(tree, [iop, join_geometry], ins=ins.outputs["Geometry"])
+        create_geometry_line(tree, [iop, set_mat, join_geometry], ins=ins.outputs["Geometry"])
 
         # create voronoi mesh
-        dual_mesh = DualMesh(tree)
+        time = SceneTime(tree)
+
+        iterator = make_function(tree,name="IterationTimer",
+                    functions={
+                        "iterations":"t,t0,-,dt,/,25,*,t,t0,>,*"
+                    },inputs=["t","t0","dt"],outputs=["iterations"],
+                    scalars=["t","t0","dt","iterations"])
+
+        links.new(time.std_out,iterator.inputs["t"])
+        iterator.inputs["t0"].default_value=self.t0
+        iterator.inputs["dt"].default_value=self.dt
+
+        index = Index(tree)
+        dual_mesh = DualMesh(tree,keep_boundaries = True)
+        store_index = StoredNamedAttribute(tree,data_type="INT",domain="FACE",name="Index",value=index.std_out)
         split_edges = SplitEdges(tree)
         wireframe_material = get_material("gold")
-        wireframe=WireFrameRectangle(tree,width=0.1,height=0.1)
+        wireframe=WireFrameRectangle(tree,width=0.02,height=0.02)
         self.materials.append(wireframe_material)
         set_material_wireframe=SetMaterial(tree,material=wireframe_material)
         scale_elements=ScaleElements(tree,scale=0.99)
@@ -2759,30 +2780,39 @@ class VoronoiModifier(GeometryNodesModifier):
 
         # rotate tilings
         position = Position(tree)
+        index_attr = NamedAttribute(tree,data_type="INT",name="Index")
         normal = InputNormal(tree)
         angle = InputValue(tree,name="Angle",value=0.1)
+
+        direction = make_function(tree,name="RotationDirection",
+                    functions={
+                        "angle":"-1,idx,**,angle,*"
+                    },inputs=["angle","idx"],outputs=["angle"],
+                    scalars=["angle","idx"],vectors=[])
+        links.new(index_attr.std_out,direction.inputs["idx"])
+        links.new(angle.std_out,direction.inputs["angle"])
+
         eval_domain = EvaluateOnDomain(tree,data_type="FLOAT_VECTOR",domain="FACE",value=position.std_out)
         rotate_vector = VectorRotate(tree, rotation_type="AXIS_ANGLE", center=eval_domain.std_out, axis=normal.std_out,
-                                     vector=position.std_out,angle = angle.std_out)
+                                     vector=position.std_out,angle = direction.outputs["angle"])
 
         repeat= RepeatZone(tree,iteration=5,geometry=scale_elements.geometry_out)
         repeat_join = JoinGeometry(tree)
         repeat_scale = ScaleElements(tree,scale=0.9)
-        repeat_set_pos = SetPosition(tree,offset=[0,0,0.05],position=rotate_vector.std_out)
+        repeat_set_pos = SetPosition(tree,offset=[0,-0.025,0],position=rotate_vector.std_out)
         repeat.create_geometry_line([repeat_scale,repeat_set_pos,repeat_join])
         links.new(scale_elements.geometry_out,repeat_join.geometry_in)
-
-
+        links.new(iterator.outputs["iterations"],repeat.inputs["Iterations"])
 
         # after processing
-        extrude_mesh = ExtrudeMesh(tree,mode="FACES",offset_scale=1,offset=[0,0,0.05])
-        tile_material = get_material("plastic_joker")
+        extrude_mesh = ExtrudeMesh(tree,mode="FACES",offset_scale=1,offset=[0,-0.025,0])
+        tile_material = get_material("text",emission=0.5)
         self.materials.append(tile_material)
         set_material_tiles=SetMaterial(tree,material=tile_material)
 
         local_join = JoinGeometry(tree)
         # create_geometry_line(tree,[split_edges,local_join]) # cover extrude of face on the other side
-        create_geometry_line(tree,[dual_mesh,split_edges,scale_elements,repeat],ins=ins.outputs["Geometry"])
+        create_geometry_line(tree,[dual_mesh,split_edges,store_index,scale_elements,repeat],ins=ins.outputs["Geometry"])
         create_geometry_line(tree,[repeat, extrude_mesh,set_material_tiles,local_join,join_geometry],out=out.inputs["Geometry"])
         create_geometry_line(tree,[repeat,wireframe,set_material_wireframe,local_join])
 

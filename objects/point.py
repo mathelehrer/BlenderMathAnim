@@ -92,3 +92,4 @@ class PointCloud(BObject):
         end_frame_node = ibpy.get_geometry_node_from_modifier(self.modifier,label="EndFrame")
         ibpy.change_default_value(begin_frame_node,from_value=0,to_value=begin_time*FRAME_RATE,begin_time=0,transition_time=0)
         ibpy.change_default_value(end_frame_node,from_value=0,to_value=(begin_time+transition_time)*FRAME_RATE,begin_time=0,transition_time=0)
+        return begin_time+transition_time

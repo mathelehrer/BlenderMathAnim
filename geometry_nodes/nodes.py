@@ -136,7 +136,7 @@ class MeshLine(GreenNode):
 
 # mesh operations
 class DualMesh(GreenNode):
-    def __init__(self, tree, location=(0, 0), **kwargs):
+    def __init__(self, tree, location=(0, 0), keep_boundaries=False, **kwargs):
         """
 
         :param tree:
@@ -149,6 +149,8 @@ class DualMesh(GreenNode):
         :param kwargs:
         """
         self.node = tree.nodes.new(type="GeometryNodeDualMesh")
+        self.node.inputs[1].default_value=keep_boundaries
+
         super().__init__(tree, location=location, **kwargs)
 
         self.geometry_out = self.node.outputs['Dual Mesh']
@@ -919,7 +921,7 @@ class StoredNamedAttribute(GreenNode):
         """
            :param tree:
            :param location:
-           :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'QUATERNION'
+           :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'INT8', 'QUATERNION', 'FLOAT4X4'
            :param domain: 'POINT', 'FACE', 'EDGE', and more
            :param name: name of the attribute
            :param value: value to store
@@ -957,7 +959,7 @@ class NamedAttribute(RedNode):
         """
            :param tree:
            :param location:
-           :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'QUATERNION'
+           :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'INT8', 'QUATERNION', 'FLOAT4X4'
            :param name: name of the attribute
            :param kwargs:
         """
