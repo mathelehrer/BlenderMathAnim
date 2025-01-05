@@ -39,10 +39,10 @@ class Flag(BObject):
         verts = self.cloth.ref_obj.data.vertices
 
         # find top row, to identify vertices that get hooked
-        y_max = -np.Infinity
-        x_min = np.Infinity
-        y_min = np.Infinity
-        x_max = -np.Infinity
+        y_max = -np.inf
+        x_min = np.inf
+        y_min = np.inf
+        x_max = -np.inf
         for v in verts:
             if v.co[1] > y_max:
                 y_max = v.co[1]
@@ -90,11 +90,13 @@ class Flag(BObject):
         super().appear(begin_time=begin_time,transition_time=transition_time,**kwargs)
         for child in self.children:
             child.appear(begin_time=begin_time,transition_time=transition_time,**kwargs)
+        return begin_time+transition_time
 
     def disappear(self,begin_time=0,transition_time=OBJECT_APPEARANCE_TIME,**kwargs):
         super().disappear(begin_time=begin_time,transition_time=transition_time,**kwargs)
         for child in self.children:
             child.disappear(begin_time=begin_time,transition_time=transition_time,**kwargs)
+        return begin_time+transition_time
 
     def add_image_texture(self,image,frame,frame_duration=1):
         ibpy.add_image_texture(self.cloth,image,frame,frame_duration)

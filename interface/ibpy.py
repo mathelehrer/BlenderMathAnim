@@ -2,19 +2,17 @@ import os
 from copy import deepcopy
 from datetime import date, datetime
 
-import bpy
 import bmesh
-
+import bpy
 import mathutils
 import numpy as np
-from mathutils import Vector, Quaternion, Matrix
+from mathutils import Vector
 
-from compositions.compositions import create_composition
+from mathutils import Vector, Quaternion
 from interface.interface_constants import EMISSION, TRANSMISSION, BLENDER_EEVEE, blender_version
-from shader_nodes.shader_nodes import Displacement
-
-from utils.constants import BLEND_DIR, FRAME_RATE, OBJECT_APPEARANCE_TIME, OSL_DIR, COLOR_NAMES, COLORS_SCALED, IMG_DIR, \
-    DEFAULT_ANIMATION_TIME, RES_HDRI_DIR, FINAL_DIR, VID_DIR, COLOR_PREFIXES, SPECIALS, COLORS, APPEND_DIR
+from utils.color_conversion import get_color_from_string, get_color
+from utils.constants import BLEND_DIR, FRAME_RATE, OBJECT_APPEARANCE_TIME, OSL_DIR, COLOR_NAMES, IMG_DIR, \
+    DEFAULT_ANIMATION_TIME, RES_HDRI_DIR, FINAL_DIR, VID_DIR, SPECIALS, COLORS, APPEND_DIR
 from utils.geometry import BoundingBox
 from utils.kwargs import get_from_kwargs
 from utils.mathematics import lin_map
@@ -342,6 +340,15 @@ def set_camera_copy_location(target=None, **kwargs):
         constraint = set_copy_location(cam, target)
         constraint.use_offset = offset
 
+def set_camera_dof(focus_object=None,aperture_fstop=0.1):
+    """
+    set depth of field
+    """
+    cam = get_camera()
+    cam.data.dof.use_dof=True
+    if focus_object:
+        cam.data.dof.focus_object =get_obj(focus_object)
+    cam.data.dof.aperture_fstop=aperture_fstop
 
 def set_camera_view_to(target=None, rotation_euler=[0, 0, 0], targetZ=False, up_axis='UP_Y'):
     '''
@@ -1115,6 +1122,33 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
 
     create_composition(denoising=denoising)
 
+#######################
+# compositions #
+#######################
+
+def create_composition(denoising=None):
+    """
+    create after render image processing
+    :param denoising: toggle denoiser
+    :return:
+    """
+
+    bpy.context.scene.use_nodes = True
+    nodes = bpy.context.scene.node_tree.nodes
+    links = bpy.context.scene.node_tree.links
+
+    composite = nodes["Composite"]
+    composite.use_alpha=False
+    layers = nodes["Render Layers"]
+    if denoising:
+        denoise = nodes.new(type="CompositorNodeDenoise")
+
+        links.new(layers.outputs["Image"], denoise.inputs["Image"])
+        links.new(denoise.outputs["Image"], composite.inputs["Image"])
+
+    alpha_convert = nodes.new(type="CompositorNodePremulKey")
+    links.new(alpha_convert.outputs["Image"], composite.inputs["Alpha"])
+
 
 #######################
 # work with materials #
@@ -1454,32 +1488,6 @@ def dim_background(value=[0, 0, 0, 1], begin_time=0, transition_time=DEFAULT_ANI
     insert_keyframe(mixer.inputs[1], 'default_value', frame=(begin_time + transition_time) * FRAME_RATE)
 
     bpy.data.scenes["Scene"].render.film_transparent = transparent
-
-
-def get_color(color):
-    if isinstance(color, list):
-        if len(list)==4:
-            return color
-        elif len(list)==3:
-            return list+[1]
-        elif len(list)==1:
-            return list*3+[1]
-        else:
-            return [1,1,1,1]
-    else:
-        return get_color_from_string(color)
-
-
-def get_color_from_string(color_str):
-    for prefix in COLOR_PREFIXES:
-        if prefix in color_str:
-            color_str = color_str[len(prefix) + 1:]
-    color_index = COLOR_NAMES.index(color_str)
-    if color_index > -1:
-        return COLORS_SCALED[color_index]
-    else:
-        return [1, 1, 1, 1]
-
 
 def get_new_material(name="new_material"):
     return bpy.data.materials.new(name=name)
@@ -2853,8 +2861,15 @@ def change_default_value(slot, from_value, to_value, begin_time=None, transition
 
     return begin_time + transition_time
 
+def set_default_boolean(slot,value,begin_time=None,begin_frame=0):
+    if begin_time:
+        begin_frame = begin_time * FRAME_RATE
 
-def change_default_boolean(slot, from_value, to_value, begin_time=None, transition_time=None, data_path="boolean",
+    slot.boolean = value
+    insert_keyframe(slot,"boolean",begin_frame)
+    return begin_frame/FRAME_RATE
+
+def change_default_boolean(slot, from_value, to_value, begin_time=None, data_path="boolean",
                            begin_frame=0):
     if begin_time:
         begin_frame = begin_time * FRAME_RATE

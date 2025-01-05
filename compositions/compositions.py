@@ -1,5 +1,6 @@
 import bpy
 
+from appearance.textures import get_color
 from utils.constants import DEFAULT_ANIMATION_TIME
 from utils.kwargs import get_from_kwargs
 
@@ -8,28 +9,38 @@ from utils.kwargs import get_from_kwargs
 # composition #
 ###############
 
-def create_composition(denoising=None):
-    """
-    create after render image processing
-    :param denoising: toggle denoiser
-    :return:
-    """
-
+def create_alpha_over_composition(color="background"):
     bpy.context.scene.use_nodes = True
     nodes = bpy.context.scene.node_tree.nodes
     links = bpy.context.scene.node_tree.links
 
     composite = nodes["Composite"]
-    composite.use_alpha=False
     layers = nodes["Render Layers"]
-    if denoising:
-        denoise = nodes.new(type="CompositorNodeDenoise")
 
-        links.new(layers.outputs["Image"], denoise.inputs["Image"])
-        links.new(denoise.outputs["Image"], composite.inputs["Image"])
+    box_mask = nodes.new(type="CompositorNodeBoxMask")
+    box_mask.x=0.5
+    box_mask.y=0.65
+    box_mask.mask_width=0.9
+    box_mask.mask_height=0.6
 
-    alpha_convert = nodes.new(type="CompositorNodePremulKey")
-    links.new(alpha_convert.outputs["Image"], composite.inputs["Alpha"])
+    blur = nodes.new(type="CompositorNodeBlur")
+    blur.size_x=1000
+    blur.size_y=1000
+    links.new(box_mask.outputs['Mask'],blur.inputs['Image'])
+
+    mix = nodes.new(type="CompositorNodeMixRGB")
+    mix.inputs[1].default_value=get_color("background")
+    mix.inputs[2].default_value=get_color("gray_1")
+    links.new(blur.outputs["Image"],mix.inputs[0])
+
+    alpha_over = nodes.new(type="CompositorNodeAlphaOver")
+    links.new(mix.outputs["Image"],alpha_over.inputs[1])
+    links.new(layers.outputs["Image"],alpha_over.inputs[2])
+    links.new(alpha_over.outputs["Image"],composite.inputs[0])
+
+
+    viewer = nodes.new(type="CompositorNodeViewer")
+    links.new(alpha_over.outputs["Image"], viewer.inputs[0])
 
 def create_star_glow_composition():
     """

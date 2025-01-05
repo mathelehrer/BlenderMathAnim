@@ -174,9 +174,15 @@ def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_
     # will be wrong, because the gamma correction is still applied when the color
     # is defined, but setting view_transform to 'Raw' undoes the correction in
     # render.
-    scn.view_settings.view_transform = 'Raw'
+
+    # scn.view_settings.view_transform = 'Raw'
+    # scn.view_settings.gamma = 1.2
+
+    # since rubik's cube there is a different choice
+    scn.view_settings.view_transform = 'Filmic'
+    scn.view_settings.look = 'High Contrast'
+
     scn.gravity = (0, 0, -9.81)
-    scn.view_settings.gamma = 1.2
 
     bpy.ops.world.new()
     world = bpy.data.worlds[-1]

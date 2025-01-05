@@ -11,15 +11,15 @@ from extended_math_nodes.generic_nodes import SphericalHarmonics200, SphericalHa
 from geometry_nodes.nodes import make_function
 from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
-    Vector, set_material, get_color_from_string, create_iterator_group, get_obj, get_color, animate_sky_background
+    Vector, set_material, create_iterator_group, get_obj, animate_sky_background
 from interface.interface_constants import TRANSMISSION, SPECULAR, EMISSION
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics, AssociatedLegendre
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import TextureCoordinate, Mapping, ColorRamp, AttributeNode, HueSaturationValueNode, \
     MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ, Displacement
-from utils.color_conversion import rgb2hsv, hsv2rgb
-from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR
+from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
+from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, COLOR_PREFIXES
 from utils.kwargs import get_from_kwargs
 
 

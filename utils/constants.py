@@ -111,6 +111,11 @@ COLOR_NAMES = [
     'x34_color',
     'x35_color',
     'x45_color',
+    'green',
+    'red',
+    'blue',
+    'orange',
+    'yellow',
     'gray_1',
     'gray_2',
     'gray_3',
@@ -164,6 +169,11 @@ if color_scheme == -1:
         [254,224,139,1],# X34
         [253,174,97,1],#x35
         [102,194,165,1],#x45
+        [0,255,0,1],#green
+        [255,0,0,1],# red
+        [0,0,255,1],# blue
+        [255,50,0,1],# orange
+        [255,255,0,1],# yellow
     ]
 
 elif color_scheme == 0:

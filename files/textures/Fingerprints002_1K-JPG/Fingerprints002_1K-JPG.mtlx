@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<materialx version="1.38" fileprefix="./">
+  <standard_surface ypos="-1.879310" name="Fingerprints002_1K_JPG_StandardSurface" type="surfaceshader" xpos="6.159420">
+    <input value="0" name="specular" type="float" />
+    <input value="1" name="coat" type="float" />
+    <input value="1, 1, 1" name="coat_color" type="color3" />
+    <input value="1" name="base" type="float" />
+    <input name="base_color" type="color3" nodename="Fingerprints002_1K_JPG_Color" />
+    <input name="normal" type="vector3" nodename="normalmap" />
+    <input name="coat_normal" type="vector3" nodename="normalmap" />
+    <input name="opacity" type="color3" nodename="Fingerprints002_1K_JPG_Opacity" />
+    <input name="specular_roughness" type="float" nodename="Fingerprints002_1K_JPG_Roughness" />
+    <input name="coat_roughness" type="float" nodename="Fingerprints002_1K_JPG_Roughness" />
+  </standard_surface>
+  <surfacematerial ypos="0.000000" name="Fingerprints002_1K_JPG" type="material" xpos="8.695652">
+    <input name="surfaceshader" type="surfaceshader" nodename="Fingerprints002_1K_JPG_StandardSurface" />
+  </surfacematerial>
+  <tiledimage ypos="-3.103448" name="Fingerprints002_1K_JPG_Color" type="color3" xpos="3.623188">
+    <input value="Fingerprints002_1K-JPG_Color.jpg" colorspace="srgb_texture" name="file" type="filename" />
+    <input value="1.0, 1.0" name="uvtiling" type="vector2" />
+  </tiledimage>
+  <tiledimage ypos="0.879310" name="Fingerprints002_1K_JPG_NormalGL" type="vector3" xpos="1.086957">
+    <input value="Fingerprints002_1K-JPG_NormalGL.jpg" name="file" type="filename" />
+    <input value="1.0, 1.0" name="uvtiling" type="vector2" />
+  </tiledimage>
+  <normalmap ypos="3.586207" name="normalmap" type="vector3" xpos="3.623188">
+    <input name="in" type="vector3" nodename="Fingerprints002_1K_JPG_NormalGL" />
+    <input value="1.0" name="scale" type="float" />
+  </normalmap>
+  <tiledimage ypos="2.250000" name="Fingerprints002_1K_JPG_Opacity" type="color3" xpos="3.623188">
+    <input value="Fingerprints002_1K-JPG_Opacity.jpg" name="file" type="filename" />
+    <input value="1.0, 1.0" name="uvtiling" type="vector2" />
+  </tiledimage>
+  <tiledimage ypos="-0.413793" name="Fingerprints002_1K_JPG_Roughness" type="float" xpos="3.623188">
+    <input value="Fingerprints002_1K-JPG_Roughness.jpg" name="file" type="filename" />
+    <input value="1.0, 1.0" name="uvtiling" type="vector2" />
+  </tiledimage>
+</materialx>

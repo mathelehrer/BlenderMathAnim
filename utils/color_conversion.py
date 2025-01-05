@@ -5,6 +5,7 @@ Blender: 237
 Group: 'Mesh'
 Tooltip: '1 Selected: New mesh XYZ &gt; HSV,  2 Selected: write colour cube to original mesh.'
 """
+from utils.constants import COLOR_PREFIXES, COLOR_NAMES, COLORS_SCALED
 
 '''
 RGB to HSV & HSV to RGB
@@ -21,6 +22,34 @@ Brightness V also ranges from 0 to 1, where 0 is the black.
 
 There is no transformation matrix for RGB/HSV conversion, but the algorithm follows:
 '''
+
+
+#### deal with colors ####
+
+def get_color(color):
+    if isinstance(color, list):
+        if len(list)==4:
+            return color
+        elif len(list)==3:
+            return list+[1]
+        elif len(list)==1:
+            return list*3+[1]
+        else:
+            return [1,1,1,1]
+    else:
+        return get_color_from_string(color)
+
+
+def get_color_from_string(color_str):
+    for prefix in COLOR_PREFIXES:
+        if prefix in color_str:
+            color_str = color_str[len(prefix) + 1:]
+    color_index = COLOR_NAMES.index(color_str)
+    if color_index > -1:
+        return COLORS_SCALED[color_index]
+    else:
+        return [1, 1, 1, 1]
+
 
 
 # r,g,b values are from 0 to 1

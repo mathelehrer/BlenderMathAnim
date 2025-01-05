@@ -277,7 +277,10 @@ class BObject(object):
 
             bobs = []
             for i, obj in enumerate(objs):
-                if i < len(cols):
+                if len(cols)==0:
+                    # no colors presented
+                    col="background"
+                elif i < len(cols):
                     col = cols[i]
                 else:
                     col = cols[-1]
@@ -286,7 +289,8 @@ class BObject(object):
                 # converted to
                 obj_name=name+'_'+obj.name
                 if i==0:
-                    bobs.append(BObject(obj=obj, color=col, name=obj_name,emission=emission))
+                    # added kwargs on 2024-12-08 to treet all cubies of the rubik's cube equivalently
+                    bobs.append(BObject(obj=obj, color=col, name=obj_name,emission=emission,**kwargs))
                 else:
                     bobs.append(BObject(obj=obj, color=col, name=obj_name, **kwargs))
                 IMPORTED_OBJECTS.append(obj_name)
