@@ -331,11 +331,11 @@ class SubdivideMesh(GreenNode):
 
 class Quadrilateral(GreenNode):
     def  __init__(self, tree, location=(0, 0),
-                mode="RECTANGLE",
-                 width=1,
-                 height=1,
-                 **kwargs
-                 ):
+                  mode="RECTANGLE",
+                  width=1,
+                  height=1,
+                  **kwargs
+                  ):
         self.node = tree.nodes.new(type="GeometryNodeCurvePrimitiveQuadrilateral")
         super().__init__(tree, location=location, **kwargs)
         self.node.mode = mode
@@ -1526,6 +1526,34 @@ class AlignRotationToVector(RedNode):
         else:
             tree.links.new(factor,self.node.inputs["Factor"])
 
+class QuaternionToRotation(BlueNode):
+    def __init__(self, tree, location=(0, 0), w=1,x=0,y=0,z=0, **kwargs):
+
+        self.node = tree.nodes.new(type="FunctionNodeQuaternionToRotation")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Rotation"]
+
+        if isinstance(w,(int,float)):
+            self.node.inputs["W"].default_value=w
+        else:
+            tree.links.new(w,self.node.inputs["W"])
+
+        if isinstance(x,(int,float)):
+            self.node.inputs["X"].default_value=x
+        else:
+            tree.links.new(x,self.node.inputs["X"])
+
+        if isinstance(y,(int,float)):
+            self.node.inputs["Y"].default_value=y
+        else:
+            tree.links.new(y,self.node.inputs["Y"])
+
+        if isinstance(z,(int,float)):
+            self.node.inputs["Z"].default_value=z
+        else:
+            tree.links.new(z,self.node.inputs["Z"])
+
 # blue nodes
 class RandomValue(BlueNode):
     def __init__(self, tree, data_type='FLOAT_VECTOR', location=(0, 0), min=-1 * Vector([1, 1, 1]),
@@ -2001,7 +2029,7 @@ class WireFrameRectangle(GreenNode):
 
         mesh2curve = MeshToCurve(tree, location=(1, 0))
         rectangle = CurveQuadrilateral(tree, location=(1, 1), width=group_inputs.outputs["Width"],
-                                   height=group_inputs.outputs["Height"])
+                                       height=group_inputs.outputs["Height"])
         curve2mesh = CurveToMesh(tree, location=(2, 0), profile_curve=rectangle.geometry_out)
         create_geometry_line(tree, [mesh2curve, curve2mesh],
                              ins=group_inputs.outputs['Mesh'], out=group_outputs.inputs['Mesh'])

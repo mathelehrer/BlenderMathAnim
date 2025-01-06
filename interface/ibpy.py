@@ -2883,6 +2883,24 @@ def change_default_boolean(slot, from_value, to_value, begin_time=None, data_pat
 
     return (begin_frame + 1) / FRAME_RATE
 
+def change_default_quaternion(slot,from_value,to_value,begin_time=None,transition_time=DEFAULT_ANIMATION_TIME,
+                              begin_frame=0):
+    if begin_time:
+        begin_frame = begin_time * FRAME_RATE
+    else:
+        begin_time = begin_frame / FRAME_RATE
+
+    if from_value is not None:
+        for i in range(4):
+            slot.inputs[i].default_value = from_value[i]
+            insert_keyframe(slot.inputs[i],"default_value",begin_frame)
+
+    for i in range(4):
+        slot.inputs[i].default_value = to_value[i]
+        insert_keyframe(slot.inputs[i],"default_value",begin_frame+transition_time*FRAME_RATE)
+
+    return begin_time+transition_time
+
 
 def change_default_vector(slot, from_value, to_value, begin_time=None, transition_time=None, data_path="vector",
                           begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME * FRAME_RATE):
@@ -5608,6 +5626,14 @@ def set_linear_fcurves(bob):
     obj = get_obj(bob)
     fcurves = obj.animation_data.action.fcurves
     for fcurve in fcurves:
+        for kp in fcurve.keyframe_points:
+            kp.interpolation = 'LINEAR'
+
+
+def set_linear_action_modifier(bob):
+    obj = get_obj(bob)
+    action = bpy.data.actions[obj.modifiers[0].node_group.name+'Action']
+    for fcurve in action.fcurves:
         for kp in fcurve.keyframe_points:
             kp.interpolation = 'LINEAR'
 

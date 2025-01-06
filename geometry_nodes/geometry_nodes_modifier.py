@@ -18,7 +18,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputRotation, InvertRotation, RotateRotation, \
     Frame, SeparateXYZ, DualMesh, WireFrameRectangle, SplitEdges, VectorRotate, EvaluateOnDomain, InputNormal, \
     SubdivisionSurface, FaceArea, Quadrilateral, FilletCurve, FillCurve, SeparateGeometry, SortElements, \
-    AlignRotationToVector, InputBoolean, IndexSwitch
+    AlignRotationToVector, InputBoolean, IndexSwitch, QuaternionToRotation
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -2775,9 +2775,16 @@ class RubiksCubeModifier(GeometryNodesModifier):
         iop = InstanceOnPoints(tree,instance=grid.geometry_out,scale=separation.std_out,hide=False,location=self.loc(-1,2,3,0))
         realize_instance = RealizeInstances(tree,location=self.loc(-1,2,4,0),hide =False)
         index = Index(tree,location=self.loc(-1,2,4,-1.5),hide=False)
+        # increase index by one, since index 0 cannot be selected (bug, probably)
+        inc = make_function(tree,name="Function",
+                    functions={
+                        "idx":"idx,1,+"
+                    },inputs=["idx"],outputs=["idx"],
+                    scalars=["idx"])
+        links.new(index.std_out,inc.inputs["idx"])
         pos=Position(tree,location=self.loc(-1,2,5,-2),hide=False)
         cubie_index = StoredNamedAttribute(tree,domain='POINT',data_type='INT',
-                                           name="CubieIndex",value=index.std_out,hide=False,location=self.loc(-1,2,5,0))
+                                           name="CubieIndex",value=inc.outputs["idx"],hide=False,location=self.loc(-1,2,5,0))
         cubie_pos = StoredNamedAttribute(tree,domain='POINT',data_type='FLOAT_VECTOR',
                                          name="CubiePosition",value=pos.std_out,hide=False,location=self.loc(-1,2,6,0))
         create_geometry_line(tree, [mesh_line,iop,realize_instance,cubie_index,cubie_pos])
@@ -2966,73 +2973,39 @@ class RubiksCubeModifier(GeometryNodesModifier):
         block_y = 2
         block_x = 1.1
         join = JoinGeometry(tree, location=self.loc(block_x, block_y, 0, 0), hide=False)
-        attr_cubie_index2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 1, 0), name="CubieIndex",
+        create_geometry_line(tree, [material_white,join])
+        create_geometry_line(tree, [shade_smooth,join])
+        attr_cubie_index2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 0, -1), name="CubieIndex",
                                            hide=False, data_type="INT")
-        attr_face_index2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 1, 0),
+        attr_face_index2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 0, -2),
                                           name="CubieIndexAtFace", data_type="INT", hide=False)
 
         # now we need to separate each cubie and prepare its own transformation panel.
 
-        for i in range(27):
-            cubie_selection = make_function(tree,name="CubieSelection"+str(i),
-                                            location = self.loc(block_x,block_y,1,-i),hide=True,
+        join2 = JoinGeometry(tree, location=self.loc(block_x, block_y, 4, 0), hide=False)
+
+        # the index for the cubies had to be artificially ranged from 1 to 27, since index 0 caused trouble
+        # in the geometry selection process. For the rest of the python interface the labels are ranging from 0 to 26 again
+        for i in range(1,28):
+            cubie_selection = make_function(tree,name="CubieSelection"+str(i-1),
+                                            location = self.loc(block_x,block_y,1,-i+1),hide=True,
                         functions={
                             "select":"idx1,"+str(i)+",=,idx2,"+str(i)+",=,or"
                         },inputs=["idx1","idx2"],outputs=["select"],
                         scalars=["idx1","idx2","select"])
-            links.new(attr_cubie_index.std_out,cubie_selection.inputs["idx1"])
-            links.new(attr_face_index.std_out,cubie_selection.inputs["idx2"])
+            links.new(attr_cubie_index2.std_out,cubie_selection.inputs["idx1"])
+            links.new(attr_face_index2.std_out,cubie_selection.inputs["idx2"])
 
-            sep_geo = SeparateGeometry(tree,location=self.loc(block_x,block_y,2,-i),domain='FACE',
-                                       hide=True,selection=cubie_selection.outputs["select"])
+            sep_geo = SeparateGeometry(tree,location=self.loc(block_x,block_y,2,-i+1),domain='FACE',
+                                       hide=True,selection=cubie_selection.outputs["select"],geometry_out="Selection")
 
-            rotation = InputVector(tree, name="CubieRotation_"+str(i), value=Vector(),
-                                   location=self.loc(block_x, block_y, 4, -4), hide=False)
-            transform = TransformGeometry(tree, location=self.loc(block_x, block_y, 5, -2), rotation=rotation.std_out,
-                                          hide=False)
+            rotation = QuaternionToRotation(tree, name="CubieRotation_"+str(i-1),
+                                   location=self.loc(block_x, block_y, 2, -i), hide=False)
 
-        cubie_selectors = []
-        for i in range(27):
-            cubie_selectors.append(InputBoolean(tree,name="cubie_"+str(i),location=self.loc(block_x,block_y,0,-0.5*i),value=False,hide=True))
-
-        attr_cubie_index2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 0, 1.5), name="CubieIndex",
-                                           hide=False,data_type="INT")
-        cubie_switch = IndexSwitch(tree,location=self.loc(block_x,block_y,1,0),hide=False,data_type="INT",
-                                     name="CubieIndex",index=attr_cubie_index2.std_out)
-
-        attr_face_index2 = NamedAttribute(tree, location=self.loc(block_x,block_y,1,1.5),
-                                          name="CubieIndexAtFace",data_type="INT",hide=False)
-
-        face_switch = IndexSwitch(tree,location=self.loc(block_x,block_y,2,0),hide=False,
-                                  data_type="INT",name="FaceIndex",index=attr_face_index2.std_out)
-
-        for i in range(27):
-            if i>1:
-                cubie_switch.new_item()
-                face_switch.new_item()
-            links.new(cubie_selectors[i].std_out,cubie_switch.slots[i+1])
-            links.new(cubie_selectors[i].std_out,face_switch.slots[i+1])
-
-        # separate selected geometry
-       separate_cubies = SeparateGeometry(tree,location=self.loc(block_x,block_y,3,1),name="SeparateCubies",
-                                           selection=cubie_switch.std_out,domain="FACE",geometry_out="Inverted",hide=False)
-        separate_faces = SeparateGeometry(tree,location=self.loc(block_x,block_y,3,-4),name="SeparateFaces",
-                                          selection=face_switch.std_out,domain="FACE",hide=False,geometry_out="Inverted")
-
-        create_geometry_line(tree,[shade_smooth,separate_cubies,join])
-        create_geometry_line(tree,[material_white,separate_faces,join],out=out.inputs[0])
-
-        transform_join = JoinGeometry(tree,location=self.loc(block_x,block_y,4,-2),hide=False)
-        rotation = InputVector(tree,name="RotationState",value=Vector(),location=self.loc(block_x, block_y,4,-4),hide=False)
-
-        transform = TransformGeometry(tree,location=self.loc(block_x,block_y,5,-2),rotation=rotation.std_out,hide=False)
-
-        create_geometry_line(tree,[transform_join,transform,join])
-        links.new(separate_faces.selection,transform_join.geometry_in)
-        links.new(separate_cubies.selection,transform_join.geometry_in)
-
-
-
+            transform = TransformGeometry(tree, location=self.loc(block_x, block_y, 3, -i),
+                                          rotation=rotation.std_out,
+                                          hide=True)
+            create_geometry_line(tree,[join,sep_geo,transform,join2],out=out.inputs[0])
 
 
 
