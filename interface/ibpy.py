@@ -17,6 +17,7 @@ from utils.geometry import BoundingBox
 from utils.kwargs import get_from_kwargs
 from utils.mathematics import lin_map
 from utils.string_utils import remove_digits
+from utils.utils_pure import to_vector
 
 """
 This interface encodes most of the blender functionality.
@@ -431,7 +432,7 @@ def change_follow_influence(bob, target, initial, final, begin_time=0, transitio
     insert_keyframe(c, 'influence', begin_time * FRAME_RATE)
     c.influence = final
     insert_keyframe(c, 'influence', begin_time * FRAME_RATE + np.maximum(1, int(transition_time * FRAME_RATE)))
-
+    return begin_time + transition_time
 
 def set_copy_location(bob, target=None):
     obj = get_obj(bob)
@@ -5252,29 +5253,40 @@ def separate_pieces(data):
     average = sum(gaps) / l
 
     # split gaps that are larger than 5*average
+    if len(gaps)>0 and gaps[0]>0:
+        pieces = []
+        part = [data[0]]
+        for i in range(1, len(data)):
+            if (data[i] - data[i - 1]).length < 5 * average:
+                part.append(data[i])
+            else:
+                pieces.append(part)
+                part = [data[i]]
+        pieces.append(part)
+        return pieces
+    else:
+        return [data]
 
-    pieces = []
-    part = [data[0]]
-    for i in range(1, len(data)):
-        if (data[i] - data[i - 1]).length < 5 * average:
-            part.append(data[i])
-        else:
-            pieces.append(part)
-            part = [data[i]]
-    pieces.append(part)
-    return pieces
+def get_new_curve(name, num_points, data=None,**kwargs):
+    make_pieces = get_from_kwargs(kwargs,'make_pieces', True)
 
-
-def get_new_curve(name, num_points, data=None):
     curve = bpy.data.curves.new(name, type='CURVE')
     curve.dimensions = '3D'
     curve.resolution_u = 10
+
+    for i in range(len(data)):
+        data[i]=to_vector(data[i])
+
     if data is None:
         add_bezier_spline(curve.splines, num_points, data=data, cyclic=False)
     else:
-        data_pieces = separate_pieces(data)
+        if make_pieces:
+            data_pieces = separate_pieces(data)
+        else:
+            # only one piece
+            data_pieces = [data]
         for data in data_pieces:
-            # add first and last again
+            # add last again
             data.append(data[-1])
             add_bezier_spline(curve.splines, len(data) - 1, data=data, cyclic=False)
     return curve
@@ -5298,7 +5310,7 @@ def add_bezier_spline(splines, num_points=2, data=None, cyclic=True):
     new_spline.use_cyclic_u = cyclic
     if data:
         for bezier, point in zip(new_spline.bezier_points, data):
-            bezier.co = Vector([point[0], point[1], 0])
+            bezier.co = Vector([point[0], point[1], point[2]])
     return new_spline
 
 

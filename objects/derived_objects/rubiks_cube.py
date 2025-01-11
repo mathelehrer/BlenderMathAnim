@@ -2,6 +2,7 @@ import numpy as np
 from mathutils import Vector, Quaternion
 
 from interface import ibpy
+from interface.ibpy import FOLLOW_PATH_DICTIONARY
 from objects.bobject import BObject
 from utils.constants import OBJECT_APPEARANCE_TIME, FRAME_RATE, DEFAULT_ANIMATION_TIME
 from utils.utils import flatten
@@ -373,3 +374,112 @@ class BRubiksCube(BObject):
                                       transition_time=transition_time)
             self.state[target_key] = (idx, rotation)
         return begin_time + transition_time
+
+
+class BRubiksCubeLocalCenters(BObject):
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        location = self.get_from_kwargs('location', [0, 0, 0])
+        rotation = self.get_from_kwargs('rotation_euler', [0, 0, 0])
+        colors = self.get_from_kwargs('colors', []) #["text","red","green","blue","orange","yellow"]
+        name = self.get_from_kwargs('name', "RubiksCube3x3")
+
+        cubies =["Cube0"+str(i) for i in range(1,10)]+["Cube"+str(i) for i in range(10,28)]
+        bobs = BObject.from_file("RubiksCube3x3LocalCenters", objects=cubies,
+                                 colors=colors, name=name,smooth=3)
+        self.children = []
+        self.keys = []
+        self.key_labels = {}
+
+        self.state = {}
+
+        # the cubies are labelled from the back to the front and from top to bottom
+        # top level
+        # 1 2 3
+        # 4 5 6
+        # 7 8 9
+        # middle level
+        # 10 11 12
+        # 13 14 15
+        # 16 17 18
+        # bottom level
+        # 19 20 21
+        # 22 23 24
+        # 25 26 27
+
+        # the cube 1 is corner of the top, left and back face
+        # the cube 27 is corner of the bottom, front and right face
+
+        for i in range(27):
+            self.state[i+1]=(i,Quaternion([1,0,0,0]))
+        if len(bobs) > 0:
+           self.children = bobs
+
+        self.locs = [
+            [0,0,4],[0,2,4],[0,4,4],[2,0,4],[2,2,4],[2,4,4],[4,0,4],[4,2,4],[4,4,4],
+            [0,0,2],[0,2,2],[0,4,2],[2,0,2],[2,2,2],[2,4,2],[4,0,2],[4,2,2],[4,4,2],
+            [0,0,0],[0,2,0],[0,4,0],[2,0,0],[2,2,0],[2,4,0],[4,0,0],[4,2,0],[4,4,0]
+        ]
+
+        for i,(child,loc) in enumerate(zip(self.children,self.locs)):
+            child.ref_obj.location=loc
+            if i<9:
+                child.ref_obj.name="cubie0"+str(i+1)
+            else:
+                child.ref_obj.name="cubie"+str(i+1)
+
+        super().__init__(children=self.children, name=name, rotation_euler=rotation, location=location)
+
+    def appear(self,
+               begin_time=0,
+               transition_time=OBJECT_APPEARANCE_TIME,
+               **kwargs):
+
+        dt = 0.75*transition_time
+        shift = 0.25*transition_time/9
+
+        t0 = begin_time
+        for i,child in enumerate(self.children):
+            child.scale(initial_scale=0,final_scale=1,begin_time=begin_time+shift*i,transition_time=dt)
+        return super().appear(begin_time=begin_time, transition_time=transition_time,children=False)
+
+    def get_cubie_location(self,idx):
+        return self.locs[idx-1]
+
+    def align_cubie_with_curve_and_rotate(self, idx, curve,rotation,reverse=False, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        self.children[idx-1].ref_obj.location = Vector()
+        if not (self.children[idx-1],curve) in FOLLOW_PATH_DICTIONARY.keys():
+            ibpy.set_follow(self.children[idx-1], curve,use_curve_follow=False)
+        if reverse:
+            ibpy.follow(self.children[idx-1], curve,initial_value=1,final_value=0, begin_time=begin_time, transition_time=transition_time)
+        else:
+            ibpy.follow(self.children[idx-1], curve,initial_value=0,final_value=1, begin_time=begin_time, transition_time=transition_time)
+        if reverse:
+            self.children[idx-1].rotate(rotation_euler=rotation,begin_time=begin_time,transition_time=transition_time)
+        else:
+            self.children[idx-1].rotate(rotation_euler=[0,0,0],begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def swap_position_and_rotate(self, idx, curves, rotations, begin_time, transition_time):
+        """The first curve is the original curve that the cubie was assigned to"""
+        dt=0.75* transition_time/(len(curves)-1)
+        if len(curves)>2:
+            pause = 0.25 * transition_time / (len(curves) - 2)
+        else:
+            pause = 0
+        for curve in curves:
+            if not (self.children[idx - 1], curve) in FOLLOW_PATH_DICTIONARY.keys():
+                ibpy.set_follow(self.children[idx - 1], curve, use_curve_follow=False)
+                ibpy.set_follow_influence(self.children[idx - 1], curve, 0,begin_time=0)
+
+        t0 =begin_time
+        for i in range(len(curves)-1):
+            if i>0: # assume a dissasembled cube, therefore the firs time the cube does not to be moved
+                ibpy.follow(self.children[idx - 1], curves[i], initial_value=1, final_value=0, begin_time=t0, transition_time=dt)
+            ibpy.follow(self.children[idx - 1], curves[i+1], initial_value=0, final_value=1, begin_time=t0, transition_time=dt)
+            ibpy.change_follow_influence(self.children[idx - 1], curves[i], 1,0, begin_time=t0,transition_time=dt)
+            ibpy.change_follow_influence(self.children[idx-1],curves[i+1],0,1,begin_time=t0,transition_time=dt)
+            t0 = pause + self.children[idx - 1].rotate(rotation_euler=rotations[i],begin_time=t0,transition_time=dt)
+
+        return begin_time+transition_time
+
