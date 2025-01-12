@@ -289,7 +289,7 @@ class BObject(object):
                 # converted to
                 obj_name=name+'_'+obj.name
                 if i==0:
-                    # added kwargs on 2024-12-08 to treet all cubies of the rubik's cube equivalently
+                    # added kwargs on 2024-12-08 to treat all cubies of the rubik's cube equivalently
                     bobs.append(BObject(obj=obj, color=col, name=obj_name,emission=emission,**kwargs))
                 else:
                     bobs.append(BObject(obj=obj, color=col, name=obj_name, **kwargs))

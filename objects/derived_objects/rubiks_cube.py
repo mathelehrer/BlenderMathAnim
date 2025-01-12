@@ -1,11 +1,12 @@
 import numpy as np
-from mathutils import Vector, Quaternion
+from mathutils import Vector, Quaternion, Euler
 
 from interface import ibpy
 from interface.ibpy import FOLLOW_PATH_DICTIONARY
 from objects.bobject import BObject
-from utils.constants import OBJECT_APPEARANCE_TIME, FRAME_RATE, DEFAULT_ANIMATION_TIME
-from utils.utils import flatten
+from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME
+from utils.string_utils import remove_digits, remove_punctuation
+from utils.utils import flatten, to_vector
 
 r2 = np.sqrt(2)
 class BRubiksCube(BObject):
@@ -381,12 +382,32 @@ class BRubiksCubeLocalCenters(BObject):
         self.kwargs = kwargs
         location = self.get_from_kwargs('location', [0, 0, 0])
         rotation = self.get_from_kwargs('rotation_euler', [0, 0, 0])
+        # necessary to load default colors
         colors = self.get_from_kwargs('colors', []) #["text","red","green","blue","orange","yellow"]
         name = self.get_from_kwargs('name', "RubiksCube3x3")
-
+        emission = self.get_from_kwargs('emission', 0.1)
         cubies =["Cube0"+str(i) for i in range(1,10)]+["Cube"+str(i) for i in range(10,28)]
-        bobs = BObject.from_file("RubiksCube3x3LocalCenters", objects=cubies,
-                                 colors=colors, name=name,smooth=3)
+        # load cube with default colors
+        bobs = BObject.from_file("RubiksCube3x3LocalCenters", objects=cubies,colors=[],
+                                 name=name,smooth=3)
+
+        #override default colors
+        if colors:
+            materials =[]
+            for color,emission in zip(colors,emission):
+                materials.append(ibpy.get_material("plastic_"+color,emission=emission))
+
+            color_dict={"Black":materials[0],"White":materials[1],"Blue":materials[2],
+                        "Red":materials[3],"Green":materials[-3],"Orange":materials[-2],
+                        "Yellow":materials[-1]}
+
+            for bob in bobs:
+                slots = bob.ref_obj.material_slots
+                for slot in slots:
+                    mat_name=remove_punctuation(remove_digits(slot.material.name))
+                    if  mat_name in color_dict:
+                        slot.material = color_dict[mat_name]
+
         self.children = []
         self.keys = []
         self.key_labels = {}
@@ -428,7 +449,16 @@ class BRubiksCubeLocalCenters(BObject):
             else:
                 child.ref_obj.name="cubie"+str(i+1)
 
-        super().__init__(children=self.children, name=name, rotation_euler=rotation, location=location)
+        super().__init__(children=self.children, name=name, rotation_quaternion=Euler(rotation).to_quaternion(), location=location)
+
+    def get_permutation(self):
+        """
+        returns the permutation of the cube. Since the cube can be disassembled it might not be an element of the Rubik's cube group.
+        """
+
+
+
+
 
     def appear(self,
                begin_time=0,
@@ -438,13 +468,15 @@ class BRubiksCubeLocalCenters(BObject):
         dt = 0.75*transition_time
         shift = 0.25*transition_time/9
 
-        t0 = begin_time
         for i,child in enumerate(self.children):
             child.scale(initial_scale=0,final_scale=1,begin_time=begin_time+shift*i,transition_time=dt)
         return super().appear(begin_time=begin_time, transition_time=transition_time,children=False)
 
     def get_cubie_location(self,idx):
-        return self.locs[idx-1]
+        return to_vector(self.locs[idx-1])
+
+    def get_center(self):
+        return to_vector(self.locs[13])
 
     def align_cubie_with_curve_and_rotate(self, idx, curve,rotation,reverse=False, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         self.children[idx-1].ref_obj.location = Vector()
@@ -455,9 +487,9 @@ class BRubiksCubeLocalCenters(BObject):
         else:
             ibpy.follow(self.children[idx-1], curve,initial_value=0,final_value=1, begin_time=begin_time, transition_time=transition_time)
         if reverse:
-            self.children[idx-1].rotate(rotation_euler=rotation,begin_time=begin_time,transition_time=transition_time)
+            self.children[idx-1].rotate(rotation_quaternion=Euler(rotation).to_quaternion(),begin_time=begin_time,transition_time=transition_time)
         else:
-            self.children[idx-1].rotate(rotation_euler=[0,0,0],begin_time=begin_time,transition_time=transition_time)
+            self.children[idx-1].rotate(rotation_quaternions=Quaternion(),begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
 
     def swap_position_and_rotate(self, idx, curves, rotations, begin_time, transition_time):
@@ -479,7 +511,8 @@ class BRubiksCubeLocalCenters(BObject):
             ibpy.follow(self.children[idx - 1], curves[i+1], initial_value=0, final_value=1, begin_time=t0, transition_time=dt)
             ibpy.change_follow_influence(self.children[idx - 1], curves[i], 1,0, begin_time=t0,transition_time=dt)
             ibpy.change_follow_influence(self.children[idx-1],curves[i+1],0,1,begin_time=t0,transition_time=dt)
-            t0 = pause + self.children[idx - 1].rotate(rotation_euler=rotations[i],begin_time=t0,transition_time=dt)
+            t0 = pause + self.children[idx - 1].rotate(rotation_quaternion=Euler(rotations[i]).to_quaternion(),begin_time=t0,transition_time=dt)
 
         return begin_time+transition_time
+
 

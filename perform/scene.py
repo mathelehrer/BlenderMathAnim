@@ -147,6 +147,9 @@ def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_
     area = next(area for area in bpy.context.screen.areas if area.type == 'VIEW_3D')
     space = next(space for space in area.spaces if space.type == 'VIEW_3D')
     space.shading.type = 'MATERIAL'  # set the viewport shading
+    # set view to rendered view
+    space.shading.type = 'RENDERED'  # set the viewport shading
+    space.shading.use_compositor='ALWAYS'
 
     bpy.data.scenes["Scene"].render.filepath = RENDER_DIR
 
