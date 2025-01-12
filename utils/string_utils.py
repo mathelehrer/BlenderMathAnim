@@ -17,6 +17,9 @@ def remove_digits(name):
 
     print(new_string)
 
+def remove_punctuation(name):
+    pattern = r'[.!?]'
+    return re.sub(pattern, '', name)
 
 if __name__ == '__main__':
     print(list(find_all('spam spam spam spam', 'spam')))
