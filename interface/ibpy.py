@@ -4,11 +4,9 @@ from datetime import date, datetime
 
 import bmesh
 import bpy
-import mathutils
 import numpy as np
-from mathutils import Vector
 
-from mathutils import Vector, Quaternion
+from mathutils import Vector, Quaternion, Euler
 from interface.interface_constants import EMISSION, TRANSMISSION, BLENDER_EEVEE, blender_version
 from utils.color_conversion import get_color_from_string, get_color
 from utils.constants import BLEND_DIR, FRAME_RATE, OBJECT_APPEARANCE_TIME, OSL_DIR, COLOR_NAMES, IMG_DIR, \
@@ -17,7 +15,6 @@ from utils.geometry import BoundingBox
 from utils.kwargs import get_from_kwargs
 from utils.mathematics import lin_map
 from utils.string_utils import remove_digits
-from utils.utils_pure import to_vector
 
 """
 This interface encodes most of the blender functionality.
@@ -1097,13 +1094,16 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
 
     if engine == BLENDER_EEVEE:
         scene.eevee.use_gtao = True
-        scene.eevee.use_bloom = True
+
+        if blender_version() < (4, 3):
+            scene.eevee.use_bloom = True0
+            scene.eevee.use_ssr = True  # (space reflections)
+            scene.eevee.use_ssr_halfres = False  # (space reflections)
+            scene.eevee.use_ssr_refraction = True  # (space reflections)
+            scene.eevee.ssr_quality = 1  # (space reflections)
+            scene.eevee.ssr_max_roughness = 0  # (space reflections)
+
         scene.render.use_motion_blur = motion_blur
-        scene.eevee.use_ssr = True  # (space reflections)
-        scene.eevee.use_ssr_halfres = False  # (space reflections)
-        scene.eevee.use_ssr_refraction = True  # (space reflections)
-        scene.eevee.ssr_quality = 1  # (space reflections)
-        scene.eevee.ssr_max_roughness = 0  # (space reflections)
         scene.frame_start = frame_start
         set_taa_render_samples(taa_render_samples, begin_frame=0)
 
@@ -1637,7 +1637,8 @@ def customize_material(material, **kwargs):
 
     # for nice alpha transitions in EEVEE
     material.blend_method = 'HASHED'
-    material.shadow_method = 'HASHED'
+    if blender_version()<(4,3):
+        material.shadow_method = 'HASHED'
 
     override_material = get_from_kwargs(kwargs, 'override_material', True)
 
@@ -7096,3 +7097,26 @@ def make_animations_linear(thing_with_animation_data, data_paths=None, extrapola
             kp.handle_left_type = 'VECTOR'
             kp.handle_right_type = 'VECTOR'
             kp.interpolation = 'LINEAR'
+
+
+"""
+Auxiliary functions 
+"""
+
+
+def to_vector(z):
+    """
+    Convert a list into a Vector
+    >>> to_vector([1,2,3])
+    Vector((1.0, 2.0, 3.0))
+
+    :param z:
+    :return:
+    """
+
+    if z is None:
+        return z
+    if not isinstance(z, Vector):
+        return Vector(z)
+    else:
+        return z

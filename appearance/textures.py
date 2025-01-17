@@ -12,7 +12,7 @@ from geometry_nodes.nodes import make_function
 from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
     Vector, set_material, create_iterator_group, get_obj, animate_sky_background
-from interface.interface_constants import TRANSMISSION, SPECULAR, EMISSION
+from interface.interface_constants import TRANSMISSION, SPECULAR, EMISSION, blender_version
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics, AssociatedLegendre
 from physics.constants import temp2rgb, type2temp
@@ -110,7 +110,8 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
     # settings for eevee
     for slot in obj.material_slots:
         slot.material.blend_method = 'HASHED'
-        slot.material.shadow_method = 'HASHED'
+        if blender_version()<(4,3):
+            slot.material.shadow_method = 'HASHED'
 
     if 'uv_alpha_frame' in kwargs:
         uv_alpha_frame = kwargs.pop('uv_alpha_frame')
