@@ -6,6 +6,7 @@ activate your virtual environment (you should most conveniently use the python d
 source venv/bin/activate.fish  (sorry, I use fish terminals)<br>
 <br>
 Then you can just run<br>
+pip install python-dev-tools
 pip install bpy<br>
 pip install mathutils<br>
 <br>
