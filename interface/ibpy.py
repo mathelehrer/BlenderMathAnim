@@ -1096,7 +1096,7 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
         scene.eevee.use_gtao = True
 
         if blender_version() < (4, 3):
-            scene.eevee.use_bloom = True0
+            scene.eevee.use_bloom = True
             scene.eevee.use_ssr = True  # (space reflections)
             scene.eevee.use_ssr_halfres = False  # (space reflections)
             scene.eevee.use_ssr_refraction = True  # (space reflections)
