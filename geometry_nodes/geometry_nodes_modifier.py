@@ -2914,13 +2914,13 @@ class RubiksCubeModifier(GeometryNodesModifier):
 
         red_selector = make_function(tree, name="RedSelector", location=self.loc(block_x, block_y, 1, -1.5),
                                      functions={
-                                         "select": "face_index,-1,>,face_index,9,<,and"
+                                         "select": "face_index,44,>,face_index,54,<,and"
                                      }, inputs=["face_index"], outputs=["select"],
                                      scalars=["face_index", "select"], hide=False)
 
         blue_selector = make_function(tree, name="BlueSelector", location=self.loc(block_x, block_y, 2, -1.5),
                                      functions={
-                                         "select": "face_index,8,>,face_index,18,<,and"
+                                         "select": "face_index,35,>,face_index,45,<,and"
                                      }, inputs=["face_index"], outputs=["select"],
                                      scalars=["face_index", "select"], hide=False)
 
@@ -2932,13 +2932,13 @@ class RubiksCubeModifier(GeometryNodesModifier):
 
         orange_selector = make_function(tree, name="OrangeSelector", location=self.loc(block_x, block_y, 4, -1.5),
                                         functions={
-                                         "select": "face_index,44,>,face_index,54,<,and"
+                                            "select": "face_index,-1,>,face_index,9,<,and"
                                         },inputs=["face_index"],outputs=["select"],
                                         scalars=["face_index","select"],hide=False)
 
         green_selector = make_function(tree, name="GreenSelector", location=self.loc(block_x, block_y, 5, -1.5),
                                        functions={
-                                           "select": "face_index,35,>,face_index,45,<,and"
+                                           "select": "face_index,8,>,face_index,18,<,and"
                                        }, inputs=["face_index"], outputs=["select"],
                                        scalars=["face_index", "select"], hide=False)
 

@@ -10,13 +10,6 @@ from objects.cube import Cube
 from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
 
 
-def toggle(letter):
-    if letter.islower():
-        return letter.upper()
-    else:
-        return letter.lower()
-
-
 class GeoRubiksCube(BObject):
     def __init__(self,**kwargs):
         """
@@ -96,12 +89,11 @@ class GeoRubiksCube(BObject):
         dt = transition_time/len(word)
         t0 = begin_time
         for letter in word:
-            letter=toggle(letter)
             angle,positions = self.cubie_rotation_angle_map[letter]
             transformation = self.transformation_maps[letter]
             # transform relevant cubies
             active_cubies = [self.cube_state[position] for position in positions]
-            print("rotation: "+letter+" active cubies for: ",[a+1 for a in active_cubies])
+            print(word+": "+letter+" active cubies for: ",[a+1 for a in active_cubies])
             for idx in active_cubies:
                 from_angle = self.cubie_rotation_states[idx]
                 to_angle =angle@ from_angle

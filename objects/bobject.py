@@ -662,7 +662,7 @@ class BObject(object):
         ibpy.move(self, direction, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
         return begin_time + transition_time
 
-    def move_to(self, target_location, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, global_system=False):
+    def move_to(self, target_location, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, global_system=False,verbose=True):
         """
         move an object. !!! Make sure that the object has appeared before using this function otherwise there will be
         issues with visiblity
@@ -674,7 +674,7 @@ class BObject(object):
         """
 
         ibpy.move_to(self, target_location, begin_time * FRAME_RATE, transition_time * FRAME_RATE,
-                     global_system=global_system)
+                     global_system=global_system,verbose=verbose)
         return begin_time + transition_time
 
     def move_copy(self, direction=[0, 0, 0], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
@@ -825,8 +825,8 @@ class BObject(object):
     def un_hide(self, begin_time=0):
         ibpy.unhide(self, begin_time=begin_time)
 
-    def change_emission(self, from_value=0, to_value=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        change_emission(self, from_value=from_value, to_value=to_value, begin_frame=begin_time * FRAME_RATE,
+    def change_emission(self, from_value=0, to_value=1, slot=0,slots=None,begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.change_emission(self, from_value=from_value, to_value=to_value, slot=slot,slots=slots,begin_frame=begin_time * FRAME_RATE,
                         frame_duration=transition_time * FRAME_RATE)
         return begin_time + transition_time
 

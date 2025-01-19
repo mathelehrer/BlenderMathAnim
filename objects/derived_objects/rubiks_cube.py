@@ -10,380 +10,394 @@ from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME, FRAM
 from utils.string_utils import remove_digits, remove_punctuation
 from utils.utils import flatten, to_vector, pi
 
+# useful constants
 r2 = np.sqrt(2)
+ex=Vector([1,0,0])
+ey=Vector([0,1,0])
+ez=Vector([0,0,1])
+
 class BRubiksCube(BObject):
     def __init__(self, **kwargs):
+        """
+        This version of the cube contains all the transformations
+        the cubies are labelled from the back to the front and from top to bottom
+        top level
+        1 2 3
+        4 5 6
+        7 8 9
+        middle level
+        10 11 12
+        13 14 15
+        16 17 18
+        bottom level
+        19 20 21
+        22 23 24
+        25 26 27
+
+        the cube 1 is corner of the top, left and back face
+        the cube 27 is corner of the bottom, front and right face
+        """
         self.kwargs = kwargs
         location = self.get_from_kwargs('location', [0, 0, 0])
         rotation = self.get_from_kwargs('rotation_euler', [0, 0, 0])
         colors = self.get_from_kwargs('colors', []) #["text","red","green","blue","orange","yellow"]
         name = self.get_from_kwargs('name', "RubiksCube3x3")
+        emission = self.get_from_kwargs('emission', 0.1)
 
         cubies =["Cube0"+str(i) for i in range(1,10)]+["Cube"+str(i) for i in range(10,28)]
         bobs = BObject.from_file("RubiksCube3x3", objects=cubies,
-                                 colors=colors, name=name,smooth=3)
+                                 colors=[], name=name,smooth=3)
+
+        # override default colors
+        if colors:
+            materials = []
+            for color, emission in zip(colors, emission):
+                materials.append(ibpy.get_material("plastic_" + color, emission=emission))
+
+            color_dict = {"Black": materials[0], "White": materials[1], "Blue": materials[2],
+                          "Red": materials[3], "Green": materials[-3], "Orange": materials[-2],
+                          "Yellow": materials[-1]}
+
+            for bob in bobs:
+                slots = bob.ref_obj.material_slots
+                for slot in slots:
+                    mat_name = remove_punctuation(remove_digits(slot.material.name))
+                    if mat_name in color_dict:
+                        slot.material = color_dict[mat_name].copy() # here you can decide, whether every face gets its own color or whether all red faces have the same color
+
         self.children = []
-        self.keys = []
-        self.key_labels = {}
 
-        self.state = {}
+        self.facelets = {
+            1: {"parent": 3, "orientation": ez, "color": "white"},
+            2: {"parent": 6, "orientation": ez, "color": "white"},
+            3: {"parent": 9, "orientation": ez, "color": "white"},
+            4: {"parent": 2, "orientation": ez, "color": "white"},
+            5: {"parent": 1, "orientation": ez, "color": "white"},
+            6: {"parent": 8, "orientation": ez, "color": "white"},
+            7: {"parent": 7, "orientation": ez, "color": "white"},
+            8: {"parent": 4, "orientation": ez, "color": "white"},
+            9: {"parent": 3, "orientation": -ex, "color": "orange"},
+            10: {"parent": 2, "orientation": -ex, "color": "orange"},
+            11: {"parent": 1, "orientation": -ex, "color": "orange"},
+            12: {"parent": 12, "orientation": -ex, "color": "orange"},
+            13: {"parent": 21, "orientation": -ex, "color": "orange"},
+            14: {"parent": 10, "orientation": -ex, "color": "orange"},
+            15: {"parent": 19, "orientation": -ex, "color": "orange"},
+            16: {"parent": 20, "orientation": -ex, "color": "orange"},
+            17: {"parent": 1, "orientation": -ey, "color": "green"},
+            18: {"parent": 4, "orientation": -ey, "color": "green"},
+            19: {"parent": 7, "orientation": -ey, "color": "green"},
+            20: {"parent": 10, "orientation": -ey, "color": "green"},
+            21: {"parent": 19, "orientation": -ey, "color": "green"},
+            22: {"parent": 16, "orientation": -ey, "color": "green"},
+            23: {"parent": 25, "orientation": -ey, "color": "green"},
+            24: {"parent": 22, "orientation": -ey, "color": "green"},
+            25: {"parent": 7, "orientation": ex, "color": "red"},
+            26: {"parent": 8, "orientation": ex, "color": "red"},
+            27: {"parent": 9, "orientation": ex, "color": "red"},
+            28: {"parent": 16, "orientation": ex, "color": "red"},
+            29: {"parent": 25, "orientation": ex, "color": "red"},
+            30: {"parent": 18, "orientation": ex, "color": "red"},
+            31: {"parent": 27, "orientation": ex, "color": "red"},
+            32: {"parent": 26, "orientation": ex, "color": "red"},
+            33: {"parent": 9, "orientation": ey, "color": "blue"},
+            34: {"parent": 6, "orientation": ey, "color": "blue"},
+            35: {"parent": 3, "orientation": ey, "color": "blue"},
+            36: {"parent": 18, "orientation": ey, "color": "blue"},
+            37: {"parent": 27, "orientation": ey, "color": "blue"},
+            38: {"parent": 12, "orientation": ey, "color": "blue"},
+            39: {"parent": 21, "orientation": ey, "color": "blue"},
+            40: {"parent": 24, "orientation": ey, "color": "blue"},
+            41: {"parent": 19, "orientation": -ez, "color": "yellow"},
+            42: {"parent": 22, "orientation": -ez, "color": "yellow"},
+            43: {"parent": 25, "orientation": -ez, "color": "yellow"},
+            44: {"parent": 20, "orientation": -ez, "color": "yellow"},
+            45: {"parent": 21, "orientation": -ez, "color": "yellow"},
+            46: {"parent": 26, "orientation": -ez, "color": "yellow"},
+            47: {"parent": 27, "orientation": -ez, "color": "yellow"},
+            48: {"parent": 24, "orientation": -ez, "color": "yellow"},
+        }
 
-        # the cubies are labelled from the back to the front and from top to bottom
-        # top level
-        # 1 2 3
-        # 4 5 6
-        # 7 8 9
-        # middle level
-        # 10 11 12
-        # 13 14 15
-        # 16 17 18
-        # bottom level
-        # 19 20 21
-        # 22 23 24
-        # 25 26 27
+        # which facelet belongs to which cubie
+        self.cubie_face_map = {}
+        for idx in range(1, 28):
+            self.cubie_face_map[idx] = []
+
+        for face_id, dict in self.facelets.items():
+            self.cubie_face_map[dict["parent"]].append(face_id)
+
+        # center of the cube is at (0,0,0)
+        self.physical_locs = {
+            1: Vector([-2, -2, 2]),
+            2: Vector([-2, 0, 2]),
+            3: Vector([-2, 2, 2]),
+            4: Vector([0, -2, 2]),
+            5: Vector([0, 0, 2]),
+            6: Vector([0, 2, 2]),
+            7: Vector( [2, -2, 2]),
+            8: Vector( [2, 0, 2]),
+            9: Vector( [2, 2, 2]),
+            10: Vector([-2, -2, 0]),
+            11: Vector([-2, 0, 0]),
+            12: Vector([-2, 2, 0]),
+            13: Vector([0, -2, 0]),
+            14: Vector([0, 0, 0]),
+            15: Vector([0, 2, 0]),
+            16: Vector( [2, -2, 0]),
+            17: Vector( [2, 0, 0]),
+            18: Vector( [2, 2, 0]),
+            19: Vector([-2, -2, -2]),
+            20: Vector([-2, 0, -2]),
+            21: Vector([-2, 2, -2]),
+            22: Vector([0, -2, -2]),
+            23: Vector([0, 0, -2]),
+            24: Vector([0, 2, -2]),
+            25: Vector( [2, -2, -2]),
+            26: Vector( [2, 0, -2]),
+            27: Vector( [2, 2, -2])
+        }
 
         # the cube 1 is corner of the top, left and back face
         # the cube 27 is corner of the bottom, front and right face
+        self.corners = [3, 1, 21, 19, 25, 27, 7, 9]
+        self.edges = [12, 2, 20, 10, 4, 22, 24, 6, 16, 26, 8, 18]
+        self.cubie_states={}
 
         for i in range(27):
-            self.state[i+1]=(i,Quaternion([1,0,0,0]))
+            # initially, each cubie is at its default position in its default rotation
+            self.cubie_states[i + 1] = (i + 1, Quaternion())
+
+        for i,child in enumerate(self.children):
+            if i<9:
+                child.ref_obj.name="cubie0"+str(i+1)
+            else:
+                child.ref_obj.name="cubie"+str(i+1)
+
         if len(bobs) > 0:
            self.children = bobs
+
+        self.empty_arrows = self.create_empty_arrows()
         super().__init__(children=self.children, name=name, rotation_euler=rotation, location=location)
+        # make parenting
+        for arrow, (idx, val) in zip(self.empty_arrows, self.facelets.items()):
+            ibpy.set_parent(arrow, self.children[val["parent"] - 1])
+            self.children[val["parent"] - 1].b_children.append(arrow)
+
+        for child,name in zip(self.children,cubies):
+            child.ref_obj.name=name
+
+    # extended construction
+    def create_empty_arrows(self):
+        """
+        create 48 empty arrows to track the rotation states of the cubie facelets
+        """
+        arrows = []
+        for idx, val in self.facelets.items():
+            if val["orientation"].dot(ez) > 0:
+                rotation = [0, 0, 0]
+            elif val["orientation"].dot(ez) < 0:
+                rotation = [pi, 0, 0]
+            elif val["orientation"].dot(ey) > 0:
+                rotation = [-pi / 2, 0, 0]
+            elif val["orientation"].dot(ey) < 0:
+                rotation = [pi / 2, 0, 0]
+            elif val["orientation"].dot(ex) > 0:
+                rotation = [0, pi / 2, 0]
+            elif val["orientation"].dot(ex) < 0:
+                rotation = [0, -pi / 2, 0]
+            arrows.append(EmptyArrow(name="face" + str(idx).zfill(2) + val["color"], rotation_euler=rotation,
+                                     location=self.physical_locs[val["parent"]]+val["orientation"]))
+        return arrows
+
+    # Getter functions
+
+    def get_cubie_at_position(self, src_pos):
+        # find cubie
+        idx = -1
+        for i, val in self.cubie_states.items():
+            if val[0] == src_pos:
+                idx = i
+                break
+        return idx
+
+    def get_permutation(self,time=0):
+        """
+        returns the permutation of the cube.
+        Since the cube can be disassembled it might not be an element of the Rubik's cube group.
+
+        This function always returns the state of the cube at the state of the animation,
+        when the function is called. Therefore, the time parameter should match the call position in the animation
+        creation thread.
+        """
+        current_face_map={}
+        for i in range(1,49):
+            current_face_map[i]=i # identity map
+
+        # default orientation
+        default_orientations = {}
+        for pos in range(1,28):
+            default_orientations[pos]={}
+            for face_id in self.cubie_face_map[pos]:
+                default_orientations[pos][face_id]=self.facelets[face_id]["orientation"]
+
+        # find the new facelet for each default facelet
+        frame = time*FRAME_RATE
+        old_frame=ibpy.get_frame()
+        ibpy.set_frame(frame)
+        for pos in range(1,28):
+            idx = self.get_cubie_at_position(pos)
+            arrows = self.children[idx-1].b_children
+            for arrow in arrows:
+                # convert arrow in face information
+                rot=ibpy.get_world_matrix(arrow).to_3x3()
+                arrow_orientation = rot@Vector([0,0,1]) # default construction of the arrow is upwards
+                face_id = int(arrow.ref_obj.name[4:6])
+                # match with default information
+                for default_face_id,default_orientation in default_orientations[pos].items():
+                    if arrow_orientation.dot(default_orientation)>0.9:
+                        current_face_map[default_face_id]=face_id
+
+        # convert the current_face_map into a permutation
+        map_copy = current_face_map.copy()
+
+        permutation = ""
+        while len(map_copy)>0:
+            permutation += "("
+            key =next(iter(map_copy))
+            permutation+=str(key)
+            next_key = map_copy[key]
+            if next_key!=key:
+                permutation+=" "
+                permutation+=str(next_key)
+            map_copy.pop(key)
+            while next_key!=key:
+                val = map_copy[next_key]
+                if val!=key:
+                    permutation+=" "
+                    permutation+=str(val)
+                map_copy.pop(next_key)
+                next_key=val
+            permutation+=")"
+
+        ibpy.set_frame(old_frame)
+        return permutation
+
+    # transformation functions
 
     def appear(self,
                begin_time=0,
                transition_time=OBJECT_APPEARANCE_TIME,
                **kwargs):
+
+        for arrow in self.empty_arrows:
+            arrow.appear(begin_time=0,transition_time=0)
+
         return super().appear(begin_time=begin_time, transition_time=transition_time,children=True)
 
-    def lp(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the left face
-        the following permutations are performed
-        1->19
-        10->22
-        19->25
-        22->16
-        25->7
-        16->4
-        7->1
-        4->10
-        """
-        source_state_keys = [1,10,19,22,25,16,7,4,13]
-        target_state_keys = [19,22,25,16,7,4,1,10,13]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0],self.state[key][1].copy()])
-        for source,target_key in zip(sources,target_state_keys):
-            rotation = Quaternion([1/r2,0,-1/r2,0])@source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation,begin_time=begin_time,transition_time=transition_time)
-            self.state[target_key]=(idx,rotation)
+    def transform(self,word, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        dt = transition_time/len(word)
+        t0 = begin_time
+        for letter in word[::-1]: # apply word from right to left!!!
+            if letter=='f':
+                # rotation of the front face clockwise
+                target_state_pos = [1, 10, 19, 22, 25, 16, 7, 4, 13]
+                source_state_pos = [19, 22, 25, 16, 7, 4, 1, 10, 13]
+                rot = Quaternion(-ey,-pi/2)
+            elif letter=='F':
+                # rotation of the front face counterclockwise
+                source_state_pos = [1, 10, 19, 22, 25, 16, 7, 4, 13]
+                target_state_pos = [19, 22, 25, 16, 7, 4, 1, 10, 13]
+                rot = Quaternion(-ey,pi/2)
+            elif letter == 'r':
+                # rotation of the right face clockwise
+                source_state_pos = [25, 26, 27, 18, 9, 8, 7, 16, 17]
+                target_state_pos = [7, 16, 25, 26, 27, 18, 9, 8, 17]
+                rot = Quaternion(ex, -pi / 2)
+            elif letter == 'R':
+                # rotation of the right face counterclockwise
+                target_state_pos = [25, 26, 27, 18, 9, 8, 7, 16, 17]
+                source_state_pos = [7, 16, 25, 26, 27, 18, 9, 8, 17]
+                rot = Quaternion(ex, pi / 2)
+            elif letter == 'l':
+                # rotation of the left face clockwise
+                target_state_pos = [3, 12, 21, 20, 19, 10, 1, 2, 11]
+                source_state_pos = [21, 20, 19, 10, 1, 2, 3, 12, 11]
+                rot = Quaternion(-ex, -pi / 2)
+            elif letter == 'L':
+                # rotation of the left face counterclockwise
+                source_state_pos = [3, 12, 21, 20, 19, 10, 1, 2, 11]
+                target_state_pos = [21, 20, 19, 10, 1, 2, 3, 12, 11]
+                rot = Quaternion(-ex, pi / 2)
+            elif letter == 'b':
+                # rotation of the back face clockwise
+                target_state_pos = [9, 18, 27, 24, 21, 12, 3, 6, 15]
+                source_state_pos = [27, 24, 21, 12, 3, 6, 9, 18, 15]
+                rot = Quaternion(ey, -pi / 2)
+            elif letter == 'B':
+                # rotation of the back face counterclockwise
+                source_state_pos = [9, 18, 27, 24, 21, 12, 3, 6, 15]
+                target_state_pos = [27, 24, 21, 12, 3, 6, 9, 18, 15]
+                rot = Quaternion(ey, pi / 2)
+            elif letter == 'd':
+                # rotation of the down face clockwise
+                target_state_pos = [25, 22, 19, 20, 21, 24, 27, 26, 23]
+                source_state_pos = [19, 20, 21, 24, 27, 26, 25, 22, 23]
+                rot = Quaternion(-ez, -pi / 2)
+            elif letter == 'D':
+                # rotation of the down face counterclockwise
+                source_state_pos = [25, 22, 19, 20, 21, 24, 27, 26, 23]
+                target_state_pos = [19, 20, 21, 24, 27, 26, 25, 22, 23]
+                rot = Quaternion(-ez, pi / 2)
+            elif letter == 't':
+                # rotation of the down face clockwise
+                target_state_pos = [1, 4, 7, 8, 9, 6, 3, 2, 5]
+                source_state_pos = [7, 8, 9, 6, 3, 2, 1, 4, 5]
+                rot = Quaternion(ez, -pi / 2)
+            elif letter == 'T':
+                # rotation of the down face counterclockwise
+                source_state_pos = [1, 4, 7, 8, 9, 6, 3, 2, 5]
+                target_state_pos = [7, 8, 9, 6, 3, 2, 1, 4, 5]
+                rot = Quaternion(ez, pi / 2)
+
+            # we need to grap the indices before the transformation, since the map will change during the transformation
+            indices = [self.get_cubie_at_position(src) for src in source_state_pos]
+            [self.children[idx-1].change_emission(from_value=0,to_value=10,slots=list(range(1,7)),begin_time=t0,transition_time=0) for idx in indices]
+            rotations = [self.cubie_states[idx][1] for idx in indices]
+            for idx,old_rotation,target in zip(indices,rotations,target_state_pos):
+                new_rotation = rot@old_rotation
+                self.children[idx-1].rotate(rotation_quaternion=new_rotation,begin_time=t0,transition_time=dt)
+                self.cubie_states[idx]=(target,new_rotation)
+            t0  = t0+dt
+            [self.children[idx - 1].change_emission(from_value=10, to_value=0,slots=list(range(1,7)), begin_time=t0-dt/2, transition_time=dt/2) for idx
+             in indices]
+
+        # make action curves linear to avoid distortions
+        for child in self.children:
+            ibpy.set_linear_fcurves(child)
+
         return begin_time+transition_time
 
-    def lm(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the left face
-        the following permutations are performed
-        19->11
-        22->10
-        25->19
-        16->22
-        7->25
-        4->16
-        1->7
-        10->4
-        """
-        target_state_keys = [1, 10, 19, 22, 25, 16, 7, 4, 13]
-        source_state_keys = [19, 22, 25, 16, 7, 4, 1, 10, 13]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0],self.state[key][1].copy()])
-        for source,target_key in zip(sources,target_state_keys):
-            rotation = Quaternion([1/r2,0,1/r2,0])@source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation,begin_time=begin_time,transition_time=transition_time)
-            self.state[target_key]=(idx,rotation)
-        return begin_time+transition_time
-
-    def fp(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the front face
-        7->25
-        16->26
-        25->27
-        26->18
-        27->9
-        18->8
-        9->7
-        8->16
-        17->17
-
-        """
-        source_state_keys = [7,16,25,26,27,18,9,8,17]
-        target_state_keys = [25,26,27,18,9,8,7,16,17]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0], self.state[key][1].copy()])
-        for source, target_key in zip(sources, target_state_keys):
-            rotation = Quaternion([1 / r2,  1 / r2,0, 0]) @ source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation, begin_time=begin_time,
-                                      transition_time=transition_time)
-            self.state[target_key] = (idx, rotation)
-        return begin_time + transition_time
-
-    def fm(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the front face
-        7<-25
-        16<-26
-        25<-27
-        26<-18
-        27<-9
-        18<-8
-        9<-7
-        8<-16
-        17<-17
-
-        """
-        source_state_keys = [25, 26, 27, 18, 9, 8, 7, 16, 17]
-        target_state_keys = [7, 16, 25, 26, 27, 18, 9, 8, 17]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0], self.state[key][1].copy()])
-        for source, target_key in zip(sources, target_state_keys):
-            rotation = Quaternion([1 / r2, -1 / r2, 0, 0]) @ source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation, begin_time=begin_time,
-                                      transition_time=transition_time)
-            self.state[target_key] = (idx, rotation)
-        return begin_time + transition_time
-
-    def rp(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the right face
-        the following permutations are performed
-        9->27
-        18->24
-        27->21
-        24->12
-        21->3
-        12->6
-        3->9
-        6->18
-        15->15
-        """
-        source_state_keys = [9,18,27,24,21,12,3,6,15]
-        target_state_keys = [27,24,21,12,3,6,9,18,15]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0], self.state[key][1].copy()])
-        for source, target_key in zip(sources, target_state_keys):
-            rotation = Quaternion([1 / r2, 0, 1 / r2, 0]) @ source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation, begin_time=begin_time,
-                                      transition_time=transition_time)
-            self.state[target_key] = (idx, rotation)
-        return begin_time + transition_time
-
-    def rm(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the right face
-        the following permutations are performed
-        9<-27
-        18<-24
-        27<-21
-        24<-12
-        21<-3
-        12<-6
-        3<-9
-        6<-18
-        15<-15
-        """
-        target_state_keys = [9,18,27,24,21,12,3,6,15]
-        source_state_keys = [27,24,21,12,3,6,9,18,15]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0], self.state[key][1].copy()])
-        for source, target_key in zip(sources, target_state_keys):
-            rotation = Quaternion([1 / r2, 0, -1 / r2, 0]) @ source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation, begin_time=begin_time,
-                                      transition_time=transition_time)
-            self.state[target_key] = (idx, rotation)
-        return begin_time + transition_time
 
 
-    def tp(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the top face
-        the following permutations are performed
-        1->7
-        4->8
-        7->9
-        8->6
-        9->3
-        6->2
-        3->1
-        2->4
-        5->5
-        """
-        source_state_keys = [1,4,7,8,9,6,3,2,5]
-        target_state_keys = [7,8,9,6,3,2,1,4,5]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0], self.state[key][1].copy()])
-        for source, target_key in zip(sources, target_state_keys):
-            rotation = Quaternion([1 / r2, 0, 0,1 / r2]) @ source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation, begin_time=begin_time,
-                                      transition_time=transition_time)
-            self.state[target_key] = (idx, rotation)
-        return begin_time + transition_time
-
-    def tm(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the top face
-        the following permutations are performed
-        1<-7
-        4<-8
-        7<-9
-        8<-6
-        9<-3
-        6<-2
-        3<-1
-        2<-4
-        5<-5
-        """
-        target_state_keys = [1,4,7,8,9,6,3,2,5]
-        source_state_keys = [7,8,9,6,3,2,1,4,5]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0], self.state[key][1].copy()])
-        for source, target_key in zip(sources, target_state_keys):
-            rotation = Quaternion([1 / r2, 0, 0,-1 / r2]) @ source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation, begin_time=begin_time,
-                                      transition_time=transition_time)
-            self.state[target_key] = (idx, rotation)
-        return begin_time + transition_time
-
-    def dp(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the bottom face
-        the following permutations are performed
-        25->19
-        22->20
-        19->21
-        20->24
-        21->27
-        24->26
-        27->25
-        26->22
-        23->23
-        """
-        source_state_keys = [25,22,19,20,21,24,27,26,23]
-        target_state_keys = [19,20,21,24,27,26,25,22,23]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0], self.state[key][1].copy()])
-        for source, target_key in zip(sources, target_state_keys):
-            rotation = Quaternion([1 / r2, 0, 0, -1 / r2]) @ source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation, begin_time=begin_time,
-                                      transition_time=transition_time)
-            self.state[target_key] = (idx, rotation)
-        return begin_time + transition_time
-
-    def dm(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the bottom face
-        the following permutations are performed
-        25<-19
-        22<-20
-        19<-21
-        20<-24
-        21<-27
-        24<-26
-        27<-25
-        26<-22
-        23<-23
-        """
-        target_state_keys = [25,22,19,20,21,24,27,26,23]
-        source_state_keys = [19,20,21,24,27,26,25,22,23]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0], self.state[key][1].copy()])
-        for source, target_key in zip(sources, target_state_keys):
-            rotation = Quaternion([1 / r2, 0, 0, 1 / r2]) @ source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation, begin_time=begin_time,
-                                      transition_time=transition_time)
-            self.state[target_key] = (idx, rotation)
-        return begin_time + transition_time
-
-    def bp(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the back face
-        3->21
-        12->20
-        21->19
-        20->10
-        19->1
-        10->2
-        1->3
-        2->12
-        11->11
-
-        """
-        source_state_keys = [3,12,21,20,19,10,1,2,11]
-        target_state_keys = [21,20,19,10,1,2,3,12,11]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0], self.state[key][1].copy()])
-        for source, target_key in zip(sources, target_state_keys):
-            rotation = Quaternion([1 / r2, -1 / r2, 0, 0]) @ source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation, begin_time=begin_time,
-                                      transition_time=transition_time)
-            self.state[target_key] = (idx, rotation)
-        return begin_time + transition_time
-
-    def bm(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        """
-        rotation of the back face
-        3<-21
-        12<-20
-        21<-19
-        20<-10
-        19<-1
-        10<-2
-        1<-3
-        2<-12
-        11<-11
-
-        """
-        target_state_keys = [3,12,21,20,19,10,1,2,11]
-        source_state_keys = [21,20,19,10,1,2,3,12,11]
-        sources = []
-        for key in source_state_keys:
-            sources.append([self.state[key][0], self.state[key][1].copy()])
-        for source, target_key in zip(sources, target_state_keys):
-            rotation = Quaternion([1 / r2, 1 / r2, 0, 0]) @ source[1]
-            idx = source[0]
-            self.children[idx].rotate(rotation_quaternion=rotation, begin_time=begin_time,
-                                      transition_time=transition_time)
-            self.state[target_key] = (idx, rotation)
-        return begin_time + transition_time
-
-ex=Vector([1,0,0])
-ey=Vector([0,1,0])
-ez=Vector([0,0,1])
 
 class BRubiksCubeLocalCenters(BObject):
     def __init__(self, **kwargs):
+        """
+        This cube allows the decomposition into cubies
+        the cubies are labelled from the back to the front and from top to bottom
+        top level
+        1 2 3
+        4 5 6
+        7 8 9
+        middle level
+        10 11 12
+        13 14 15
+        16 17 18
+        bottom level
+        19 20 21
+        22 23 24
+        25 26 27
+        """
         self.kwargs = kwargs
         location = self.get_from_kwargs('location', [0, 0, 0])
         rotation = self.get_from_kwargs('rotation_euler', [0, 0, 0])
@@ -411,29 +425,12 @@ class BRubiksCubeLocalCenters(BObject):
                 for slot in slots:
                     mat_name=remove_punctuation(remove_digits(slot.material.name))
                     if  mat_name in color_dict:
-                        slot.material = color_dict[mat_name]
+                        slot.material = color_dict[mat_name].copy()
 
         self.children = []
-        self.keys = []
-        self.key_labels = {}
 
         # capture the rotation state of each cubie
         self.cubie_states = {}
-        # capture the location of each cubie
-        self.location = {}
-        # the cubies are labelled from the back to the front and from top to bottom
-        # top level
-        # 1 2 3
-        # 4 5 6
-        # 7 8 9
-        # middle level
-        # 10 11 12
-        # 13 14 15
-        # 16 17 18
-        # bottom level
-        # 19 20 21
-        # 22 23 24
-        # 25 26 27
 
         # the cube 1 is corner of the top, left and back face
         # the cube 27 is corner of the bottom, front and right face
@@ -442,8 +439,7 @@ class BRubiksCubeLocalCenters(BObject):
 
         for i in range(27):
             # initially, each cubie is at its default position in its default rotation
-            self.cubie_states[i + 1]=(i+1, None)
-            self.location[i+1]=i+1
+            self.cubie_states[i + 1]=(i+1, Quaternion())
 
         if len(bobs) > 0:
            self.children = bobs
@@ -500,6 +496,7 @@ class BRubiksCubeLocalCenters(BObject):
             48: {"parent": 24, "orientation": -ez, "color": "yellow"},
         }
 
+        # which facelet belongs to which cubie
         self.cubie_face_map = {}
         for idx in range(1, 28):
             self.cubie_face_map[idx] = []
@@ -507,6 +504,7 @@ class BRubiksCubeLocalCenters(BObject):
         for face_id,dict  in self.facelets.items():
             self.cubie_face_map[dict["parent"]].append(face_id)
 
+        # center of the cube is at (2,2,2)
         self.physical_locs ={
             1:Vector([0,0,4]),
             2:Vector([0,2,4]),
@@ -733,8 +731,9 @@ class BRubiksCubeLocalCenters(BObject):
             key =next(iter(map_copy))
             permutation+=str(key)
             next_key = map_copy[key]
-            permutation+=" "
-            permutation+=str(next_key)
+            if next_key!=key:
+                permutation+=" "
+                permutation+=str(next_key)
             map_copy.pop(key)
             while next_key!=key:
                 val = map_copy[next_key]
@@ -936,3 +935,131 @@ class BRubiksCubeLocalCenters(BObject):
                         transition_time=dt)
             return begin_time + transition_time
         return begin_time
+
+    def transform(self,word, begin_time=0,steps=1, transition_time=DEFAULT_ANIMATION_TIME):
+        dt = transition_time/len(word)
+        t0 = begin_time
+        for letter in word[::-1]: # apply word from right to left!!!
+            if letter=='f':
+                # rotation of the front face clockwise
+                target_state_pos = [1, 10, 19, 22, 25, 16, 7, 4, 13]
+                source_state_pos = [19, 22, 25, 16, 7, 4, 1, 10, 13]
+                pivot = self.physical_locs[13]
+                rot = Quaternion(-ey,-pi/2/steps)
+                rot_matrix = rot.to_matrix().to_3x3()
+            elif letter=='F':
+                # rotation of the front face counterclockwise
+                source_state_pos = [1, 10, 19, 22, 25, 16, 7, 4, 13]
+                target_state_pos = [19, 22, 25, 16, 7, 4, 1, 10, 13]
+                rot = Quaternion(-ey,pi/2/steps)
+                pivot = self.physical_locs[13]
+                rot_matrix = rot.to_matrix().to_3x3()
+            elif letter == 'r':
+                # rotation of the right face clockwise
+                source_state_pos = [25, 26, 27, 18, 9, 8, 7, 16, 17]
+                target_state_pos = [7, 16, 25, 26, 27, 18, 9, 8, 17]
+                rot = Quaternion(ex, -pi / 2/steps)
+                pivot = self.physical_locs[17]
+                rot_matrix = rot.to_matrix().to_3x3()
+            elif letter == 'R':
+                # rotation of the right face counterclockwise
+                target_state_pos = [25, 26, 27, 18, 9, 8, 7, 16, 17]
+                source_state_pos = [7, 16, 25, 26, 27, 18, 9, 8, 17]
+                rot = Quaternion(ex, pi / 2/steps)
+                pivot = self.physical_locs[17]
+                rot_matrix = rot.to_matrix().to_3x3()
+            elif letter == 'l':
+                # rotation of the left face clockwise
+                target_state_pos = [3, 12, 21, 20, 19, 10, 1, 2, 11]
+                source_state_pos = [21, 20, 19, 10, 1, 2, 3, 12, 11]
+                rot = Quaternion(-ex, -pi / 2/steps)
+                pivot = self.physical_locs[11]
+                rot_matrix = rot.to_matrix().to_3x3()
+            elif letter == 'L':
+                # rotation of the left face counterclockwise
+                source_state_pos = [3, 12, 21, 20, 19, 10, 1, 2, 11]
+                target_state_pos = [21, 20, 19, 10, 1, 2, 3, 12, 11]
+                rot = Quaternion(-ex, pi / 2/steps)
+                pivot = self.physical_locs[11]
+                rot_matrix = rot.to_matrix().to_3x3()
+            elif letter == 'b':
+                # rotation of the back face clockwise
+                target_state_pos = [9, 18, 27, 24, 21, 12, 3, 6, 15]
+                source_state_pos = [27, 24, 21, 12, 3, 6, 9, 18, 15]
+                rot = Quaternion(ey, -pi / 2/steps)
+                pivot = self.physical_locs[15]
+                rot_matrix = rot.to_matrix().to_3x3()
+            elif letter == 'B':
+                # rotation of the back face counterclockwise
+                source_state_pos = [9, 18, 27, 24, 21, 12, 3, 6, 15]
+                target_state_pos = [27, 24, 21, 12, 3, 6, 9, 18, 15]
+                rot = Quaternion(ey, pi / 2/steps)
+                pivot = self.physical_locs[15]
+                rot_matrix = rot.to_matrix().to_3x3()
+            elif letter == 'd':
+                # rotation of the down face clockwise
+                target_state_pos = [25, 22, 19, 20, 21, 24, 27, 26, 23]
+                source_state_pos = [19, 20, 21, 24, 27, 26, 25, 22, 23]
+                rot = Quaternion(-ez, -pi / 2/steps)
+                pivot = self.physical_locs[23]
+                rot_matrix = rot.to_matrix().to_3x3()
+            elif letter == 'D':
+                # rotation of the down face counterclockwise
+                source_state_pos = [25, 22, 19, 20, 21, 24, 27, 26, 23]
+                target_state_pos = [19, 20, 21, 24, 27, 26, 25, 22, 23]
+                rot = Quaternion(-ez, pi / 2/steps)
+                pivot = self.physical_locs[23]
+                rot_matrix = rot.to_matrix().to_3x3()
+            elif letter == 't':
+                # rotation of the down face clockwise
+                target_state_pos = [1, 4, 7, 8, 9, 6, 3, 2, 5]
+                source_state_pos = [7, 8, 9, 6, 3, 2, 1, 4, 5]
+                rot = Quaternion(ez, -pi / 2/steps)
+                pivot = self.physical_locs[5]
+                rot_matrix = rot.to_matrix().to_3x3()
+            elif letter == 'T':
+                # rotation of the down face counterclockwise
+                source_state_pos = [1, 4, 7, 8, 9, 6, 3, 2, 5]
+                target_state_pos = [7, 8, 9, 6, 3, 2, 1, 4, 5]
+                rot = Quaternion(ez, pi / 2/steps)
+                pivot = self.physical_locs[5]
+                rot_matrix = rot.to_matrix().to_3x3()
+
+            # we need to grap the indices before the transformation, since the map will change during the transformation
+            indices = [self.get_cubie_at_position(src) for src in source_state_pos]
+            [self.children[idx-1].change_emission(from_value=0,to_value=5,slots=list(range(1,7)),begin_time=t0,transition_time=0) for idx in indices]
+            rotations = [self.cubie_states[idx][1] for idx in indices]
+            ddt = dt/steps
+            for idx,old_rotation,target in zip(indices,rotations,target_state_pos):
+                position  = self.physical_locs[self.cubie_states[idx][0]].copy()
+                # the transformation has to be broken up into pieces, since the rotation and shift do not transform equally across a quarter turn
+                for i in range(steps):
+                    new_rotation = rot@old_rotation
+                    # make a 10 percent pause between to subsequent animations
+                    self.children[idx-1].rotate(rotation_quaternion=new_rotation,begin_time=t0+i*ddt,transition_time=0.9*ddt)
+                    shift=position-pivot
+                    direction = -(shift - rot_matrix @ shift)
+                    if i<steps-1:
+                        self.children[idx-1].move(direction =direction, begin_time=t0+i*ddt, transition_time=0.9*ddt)
+                    else:
+                        # enforce into the correct position
+                        self.children[idx-1].move_to(target_location = self.physical_locs[target],begin_time=t0+i*ddt,transition_time=ddt,verbose=False)
+                    old_rotation = new_rotation
+                    position += direction
+                self.cubie_states[idx]=(target,new_rotation)
+                # print(idx," arrival: ",position," at target ",target," pos: ",self.physical_locs[target])
+            t0  = t0+dt
+            [self.children[idx - 1].change_emission(from_value=5, to_value=0,slots=list(range(1,7)), begin_time=t0-dt/2, transition_time=dt/2) for idx
+             in indices]
+
+        # make action curves linear to avoid distortions
+        for child in self.children:
+            ibpy.set_linear_fcurves(child)
+        return begin_time+transition_time
+
+
+    def invert(self, word, steps = 1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        self.transform(word.swapcase()[::-1],steps=steps,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+

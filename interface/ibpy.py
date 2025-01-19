@@ -1247,19 +1247,35 @@ def set_emission_color(bob, color):
         bsdf.inputs['Emission Strength'].default_value = 0
 
 
-def change_emission(bob, from_value=0, to_value=1, begin_frame=0, frame_duration=1):
+def change_emission(bob, from_value=0, to_value=1, slot=0,slots=None, begin_frame=0, frame_duration=1):
+    frame_duration = max(frame_duration, 1)
     obj = get_obj(bob)
-    if obj.data and obj.data.materials:
-        material = obj.data.materials[0]
-        nodes = material.node_tree.nodes
-        if 'Principled BSDF' in nodes:
-            bsdf = nodes['Principled BSDF']
-            if bsdf.inputs[EMISSION].default_value[0:3] == (0, 0, 0):
-                bsdf.inputs[EMISSION].default_value = bsdf.inputs['Base Color'].default_value
-            bsdf.inputs['Emission Strength'].default_value = from_value
-            insert_keyframe(bsdf.inputs['Emission Strength'], 'default_value', frame=begin_frame)
-            bsdf.inputs['Emission Strength'].default_value = to_value
-            insert_keyframe(bsdf.inputs['Emission Strength'], 'default_value', frame=begin_frame + frame_duration)
+    if slots:
+        for s in slots:
+            if obj.material_slots and len(obj.material_slots) > s:
+                material = obj.material_slots[s].material
+                nodes = material.node_tree.nodes
+                if 'Principled BSDF' in nodes:
+                    bsdf = nodes['Principled BSDF']
+                    if bsdf.inputs[EMISSION].default_value[0:3] == (0, 0, 0):
+                        bsdf.inputs[EMISSION].default_value = bsdf.inputs['Base Color'].default_value
+                    bsdf.inputs['Emission Strength'].default_value = from_value
+                    insert_keyframe(bsdf.inputs['Emission Strength'], 'default_value', frame=begin_frame)
+                    bsdf.inputs['Emission Strength'].default_value = to_value
+                    insert_keyframe(bsdf.inputs['Emission Strength'], 'default_value',
+                                    frame=begin_frame + frame_duration)
+    else:
+        if obj.material_slots and len(obj.material_slots)>slot:
+            material = obj.material_slots[slot].material
+            nodes = material.node_tree.nodes
+            if 'Principled BSDF' in nodes:
+                bsdf = nodes['Principled BSDF']
+                if bsdf.inputs[EMISSION].default_value[0:3] == (0, 0, 0):
+                    bsdf.inputs[EMISSION].default_value = bsdf.inputs['Base Color'].default_value
+                bsdf.inputs['Emission Strength'].default_value = from_value
+                insert_keyframe(bsdf.inputs['Emission Strength'], 'default_value', frame=begin_frame)
+                bsdf.inputs['Emission Strength'].default_value = to_value
+                insert_keyframe(bsdf.inputs['Emission Strength'], 'default_value', frame=begin_frame + frame_duration)
 
 
 def change_emission_by_name(name_part, from_value, to_value, begin_frame, frame_duration):
@@ -5640,7 +5656,8 @@ def set_linear_fcurves(bob):
     fcurves = obj.animation_data.action.fcurves
     for fcurve in fcurves:
         for kp in fcurve.keyframe_points:
-            kp.interpolation = 'LINEAR'
+            if kp.interpolation=='BEZIER':
+                kp.interpolation = 'LINEAR'
 
 
 def set_linear_action_modifier(bob):
@@ -6166,7 +6183,7 @@ def move_fast_from_to(b_obj, start=Vector(), end=Vector(), begin_frame=0,
     insert_keyframe(obj, "location", begin_frame + frame_duration)
 
 
-def move_to(b_obj, target, begin_frame, frame_duration, global_system=False):
+def move_to(b_obj, target, begin_frame, frame_duration, global_system=False,verbose=True):
     location = get_location_at_frame(b_obj, begin_frame - 1)
     obj = get_obj(b_obj)
     obj.location = location
@@ -6175,7 +6192,8 @@ def move_to(b_obj, target, begin_frame, frame_duration, global_system=False):
         target = obj.parent.matrix_world.inverted() @ target
     obj.location = target
     insert_keyframe(obj, "location", begin_frame + frame_duration)
-    print(
+    if verbose:
+        print(
         "MoveTo " + obj.name + " at time " + str(begin_frame / FRAME_RATE) + " for " + str(
             frame_duration / FRAME_RATE) + " seconds.")
 
