@@ -186,6 +186,14 @@ class BRubiksCube(BObject):
         for child,name in zip(self.children,cubies):
             child.ref_obj.name=name
 
+    @classmethod
+    def from_state(cls, state, **kwargs):
+        rubiks_cube = BRubiksCube(**kwargs)
+        for idx, (position, rotation) in state.items():
+            rubiks_cube.children[idx - 1].rotate(rotation_quaternion=rotation,begin_time=0,transition_time=0)
+        rubiks_cube.cubie_states=state
+        return rubiks_cube
+
     # extended construction
     def create_empty_arrows(self):
         """
@@ -293,6 +301,10 @@ class BRubiksCube(BObject):
             arrow.appear(begin_time=0,transition_time=0)
 
         return super().appear(begin_time=begin_time, transition_time=transition_time,children=True)
+
+    def invert(self, word, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        self.transform(word.swapcase()[::-1],begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
 
     def transform(self,word, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         dt = transition_time/len(word)
