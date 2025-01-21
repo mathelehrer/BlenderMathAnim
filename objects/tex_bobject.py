@@ -21,7 +21,6 @@ from utils.constants import FRAME_RATE, TEMPLATE_TEX_FILE, TEX_DIR, TEX_TEXT_TO_
 from utils.kwargs import get_from_kwargs
 from utils.utils import to_vector
 
-
 class TexBObject(BObject):
     """
         This class combines many expressions into a single blender object

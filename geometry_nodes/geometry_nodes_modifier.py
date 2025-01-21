@@ -2054,7 +2054,6 @@ class SliderModifier(GeometryNodesModifier):
         create_geometry_line(tree, [geometry, inside_transformation, material_node, join])
         create_geometry_line(tree, [geometry, transformation, wireframe, grid_material, sub_div, join, del_geo], out=out.inputs[0])
 
-
 class NumberLineModifier(GeometryNodesModifier):
     def __init__(self, name='NumberLineModifier', **kwargs):
         """
@@ -2493,7 +2492,6 @@ class PlmSurface(GeometryNodesModifier):
 
         create_geometry_line(tree, [mesh,transform,set_pos,transform2,wireframe], out=out.inputs[0])
 
-
 class YlmSurface(GeometryNodesModifier):
     def __init__(self, domain = [[-pi,pi],[0,pi]], l=3,m=2, name="SphericalHarmonicsSurface",
                   **kwargs):
@@ -2725,7 +2723,6 @@ class LogoModifier(GeometryNodesModifier):
         transform_geometry = TransformGeometry(tree,translation=[0,0,-5.5],rotation=[0,0,pi],scale=[5.5]*3)
         shade_smooth = SetShadeSmooth(tree)
         create_geometry_line(tree,[join_geometry,transform_geometry,shade_smooth],out=out.inputs["Geometry"])
-
 
 class RubiksCubeModifier(GeometryNodesModifier):
     def __init__(self, name="RubiksCubeModifier",**kwargs):
@@ -3007,8 +3004,6 @@ class RubiksCubeModifier(GeometryNodesModifier):
                                           hide=True)
             create_geometry_line(tree,[join,sep_geo,transform,join2],out=out.inputs[0])
 
-
-
 class VoronoiModifier(GeometryNodesModifier):
     def __init__(self, name="VoronoiModifier",begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,
                   **kwargs):
@@ -3099,7 +3094,6 @@ class VoronoiModifier(GeometryNodesModifier):
         create_geometry_line(tree,[repeat, extrude_mesh,set_material_tiles,local_join,join_geometry],out=out.inputs["Geometry"])
         create_geometry_line(tree,[repeat,wireframe,set_material_wireframe,local_join])
 
-
 ##
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
@@ -3152,7 +3146,6 @@ def generate_labels(tic_labels,axis_label, **kwargs):
         label=None
 
     return tic_labels, label
-
 
 def import_svg_data(imported_svg_data,path,kwargs):
     default_color = get_from_kwargs(kwargs, 'color', 'text')
@@ -3242,11 +3235,9 @@ def get_file_path(expression, text_only=False, typeface="default"):
 
     return tex_to_svg_file(expression, template, typeface, text_only)
 
-
 def tex_to_svg_file(expression, template_tex_file, typeface, text_only):
     path = os.path.join(
         SVG_DIR,
-        # tex_title(expression, typeface)
         hashed_tex(expression, typeface)
     ) + ".svg"
     if os.path.exists(path):
@@ -3255,7 +3246,6 @@ def tex_to_svg_file(expression, template_tex_file, typeface, text_only):
     tex_file = generate_tex_file(expression, template_tex_file, typeface, text_only)
     dvi_file = tex_to_dvi(tex_file)
     return dvi_to_svg(dvi_file)
-
 
 def generate_tex_file(expression, template_tex_file, typeface, text_only):
     result = os.path.join(
@@ -3285,7 +3275,6 @@ def generate_tex_file(expression, template_tex_file, typeface, text_only):
             outfile.write(body)
     return result
 
-
 def tex_to_dvi(tex_file):
     result = tex_file.replace(".tex", ".dvi")
     if not os.path.exists(result):
@@ -3309,7 +3298,6 @@ def tex_to_dvi(tex_file):
                 "Latex error converting to dvi. "
                 "See log output above or the log file: %s" % log_file)
     return result
-
 
 def dvi_to_svg(dvi_file):
     """
@@ -3340,12 +3328,10 @@ def dvi_to_svg(dvi_file):
         os.system(" ".join(commands))
     return result
 
-
 def hashed_tex(expression, typeface):
     string = expression + typeface
     hasher = hashlib.sha256(string.encode())
     return hasher.hexdigest()[:16]
-
 
 #### Alignment functions
 
@@ -3357,7 +3343,6 @@ def get_figure_curves(imported_svg_data, fig):
         """
 
     return imported_svg_data[fig]['curves']
-
 
 def calc_lengths(imported_svg_data):
     """
@@ -3418,13 +3403,11 @@ def calc_lengths(imported_svg_data):
         imported_svg_data[expr]['curves'] = curves
     return imported_svg_data
 
-
 def align_figures(imported_svg_data, aligned):
     imported_svg_data = calc_lengths(imported_svg_data)
     for fig in imported_svg_data:
         imported_svg_data[fig] = align_figure(fig, imported_svg_data, aligned)
     return imported_svg_data
-
 
 def align_figure(fig, imported_svg_data, aligned):
     data = imported_svg_data
@@ -3467,7 +3450,6 @@ def align_figure(fig, imported_svg_data, aligned):
     curve_list.sort(key=lambda x:x.location[0])
     # remove reference H
     return curve_list[1:]
-
 
 def add_lists_by_element(list1, list2, subtract=False):
     if len(list1) != len(list2):

@@ -23,7 +23,6 @@ class NumberLine2(BObject):
            : Keyword Arguments:
                * *extra* (length=1,radius=0.05,domain=[0,1],location=[0,0,0],n_tics=10,
                label='x',
-               direction='VERTICAL',
                origin=0,
                tic_labels='AUTO',
                tic_label_digits=0,
@@ -34,8 +33,8 @@ class NumberLine2(BObject):
                label_closeness=1,
                tip_length=0.2,
                auto_smooth=True,
-               axis_label=['x'],
-               direction="HORIZONAL|VERTICAL|DEEP|NONE"
+               axis_label='x',
+               direction="HORIZONTAL|VERTICAL|DEEP|NONE"
                )--
            """
 
