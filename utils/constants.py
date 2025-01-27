@@ -116,6 +116,8 @@ COLOR_NAMES = [
     'blue',
     'orange',
     'yellow',
+    'magenta',
+    'cyan',
     'gray_1',
     'gray_2',
     'gray_3',
@@ -174,6 +176,8 @@ if color_scheme == -1:
         [0,0,255,1],# blue
         [255,20,8,1],# orange
         [200,200,0,1],# yellow
+        [255,0,255,1],# magenta
+        [0,255,255,1], # cyan
     ]
 
 elif color_scheme == 0:
@@ -295,6 +299,7 @@ LOC_FILE_DIR = os.getcwd()
 ###
 THIS_DIR = os.path.join(LOC_FILE_DIR,"..")
 RES_DIR = os.path.join(THIS_DIR, "files")
+RES_XML = os.path.join(RES_DIR, "xml")
 RES_SVG_DIR = os.path.join(RES_DIR, "svg")
 RES_HDRI_DIR = os.path.join(RES_DIR, 'hdri')
 MEDIA_DIR = os.path.join(LOC_FILE_DIR, "media")

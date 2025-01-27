@@ -4,6 +4,7 @@ from mathutils import Vector, Quaternion
 
 from geometry_nodes.geometry_nodes_modifier import RubiksCubeModifier
 from interface import ibpy
+from interface.ibpy import get_geometry_node_from_modifier, change_default_boolean, change_default_value
 from mathematics.mathematica.mathematica import tuples
 from objects.bobject import BObject
 from objects.cube import Cube
@@ -23,7 +24,7 @@ class GeoRubiksCube(BObject):
 
         """
         cube = Cube()
-        rc_geometry = RubiksCubeModifier(name="RubiksCubeModifier",**kwargs)
+        self.rc_geometry = RubiksCubeModifier(name="RubiksCubeModifier",**kwargs)
 
         self.cube_state = {}
         coords = tuples([0,1,2],3)
@@ -42,8 +43,8 @@ class GeoRubiksCube(BObject):
                          "L":{(0, 2, 0):(0, 2, 2),(0, 1, 0):(0, 2, 1),(0,0,0): (0, 2, 0),(0, 0, 1): (0, 1, 0),(0, 0, 2): (0,0,0),(0, 1, 2):(0, 0, 1),(0, 2, 2):(0, 0, 2),(0, 2, 1):(0, 1, 2),(0, 1, 1):(0, 1, 1)},
                          "r":{(2, 0, 0):(2, 2, 0),(2, 0, 1):(2, 1, 0),(2, 0, 2):(2, 0, 0),(2, 1, 2):(2, 0, 1),(2, 2, 2):(2, 0, 2),(2, 2, 1):(2, 1, 2),(2, 2, 0):(2, 2, 2),(2, 1, 0):(2, 2, 1),(2, 1, 1):(2, 1, 1)},
                          "R":{(2, 0, 0):(2, 0, 2),(2, 1, 0):(2, 0, 1),(2, 2, 0):(2, 0, 0),(2, 2, 1):(2, 1, 0),(2, 2, 2):(2, 2, 0),(2, 1, 2):(2, 2, 1),(2, 0, 2):(2, 2, 2),(2, 0, 1):(2, 1, 2),(2, 1, 1):(2, 1, 1)},
-                         "t":{(0, 0, 2):(2, 0, 2),(0, 1, 2):(1, 0, 2),(0, 2, 2):(0, 0, 2),(1, 2, 2):(0, 1, 2),(2, 2, 2):(0, 2, 2),(2, 1, 2):(1, 2, 2),(2, 0, 2):(2, 2, 2),(1, 0, 2):(2, 1, 2),(1, 1, 2):(1, 1, 2)},
-                         "T":{(0, 0, 2):(0, 2, 2),(1, 0, 2):(0, 1, 2),(2, 0, 2):(0, 0, 2),(2, 1, 2):(1, 0, 2),(2, 2, 2):(2, 0, 2),(1, 2, 2):(2, 1, 2),(0, 2, 2):(2, 2, 2),(0, 1, 2):(1, 2, 2),(1, 1, 2):(1, 1, 2)},
+                         "u":{(0, 0, 2):(2, 0, 2),(0, 1, 2):(1, 0, 2),(0, 2, 2):(0, 0, 2),(1, 2, 2):(0, 1, 2),(2, 2, 2):(0, 2, 2),(2, 1, 2):(1, 2, 2),(2, 0, 2):(2, 2, 2),(1, 0, 2):(2, 1, 2),(1, 1, 2):(1, 1, 2)},
+                         "U":{(0, 0, 2):(0, 2, 2),(1, 0, 2):(0, 1, 2),(2, 0, 2):(0, 0, 2),(2, 1, 2):(1, 0, 2),(2, 2, 2):(2, 0, 2),(1, 2, 2):(2, 1, 2),(0, 2, 2):(2, 2, 2),(0, 1, 2):(1, 2, 2),(1, 1, 2):(1, 1, 2)},
                          "d":{(0, 2, 0):(2, 2, 0),(0, 1, 0):(1, 2, 0),(0,0,0): (0, 2, 0),(1, 0, 0): (0, 1, 0),(2, 0, 0): (0,0,0),(2, 1, 0):(1, 0, 0),(2, 2, 0):(2, 0, 0),(1, 2, 0):(2, 1, 0),(1,1,0):(1,1,0)},
                          "D":{(0, 2, 0): (0,0,0),(1, 2, 0): (0, 1, 0),(2, 2, 0): (0, 2, 0),(2, 1, 0):(1, 2, 0),(2, 0, 0):(2, 2, 0),(1, 0, 0):(2, 1, 0),(0,0,0):(2, 0, 0),(0, 1, 0):(1, 0, 0),(1,1,0):(1,1,0)},
                                   "b":{(2, 2, 0): (0, 2, 0),(2, 2, 1):(1, 2, 0),(2, 2, 2):(2, 2, 0),(1, 2, 2):(2, 2, 1),(0, 2, 2):(2, 2, 2),(0, 2, 1):(1, 2, 2),(0, 2, 0):(0, 2, 2),(1, 2, 0):(0, 2, 1),(1, 2, 1):(1, 2, 1)},
@@ -70,20 +71,26 @@ class GeoRubiksCube(BObject):
             "L":[Quaternion(Vector([1,0,0]),-pi/2),[(0,2,0),(0,2,1),(0,2,2),(0,1,2),(0,0,2),(0,0,1),(0,0,0),(0,1,0),(0,1,1)]],
             "r":[Quaternion(Vector([1,0,0]),-pi/2),[(2,0,0),(2,1,0),(2,2,0),(2,2,1),(2,2,2),(2,1,2),(2,0,2),(2,0,1),(2,1,1)]],
             "R":[Quaternion(Vector([1,0,0]),pi/2),[(2,0,0),(2,1,0),(2,2,0),(2,2,1),(2,2,2),(2,1,2),(2,0,2),(2,0,1),(2,1,1)]],
-            "t":[Quaternion(Vector([0,0,1]),-pi/2),[(0,0,2),(0,1,2),(0,2,2),(1,2,2),(2,2,2),(2,1,2),(2,0,2),(1,0,2),(1,1,2)]],
-            "T":[Quaternion(Vector([0,0,1]),pi/2),[(0,0,2),(0,1,2),(0,2,2),(1,2,2),(2,2,2),(2,1,2),(2,0,2),(1,0,2),(1,1,2)]],
+            "u":[Quaternion(Vector([0,0,1]),-pi/2),[(0,0,2),(0,1,2),(0,2,2),(1,2,2),(2,2,2),(2,1,2),(2,0,2),(1,0,2),(1,1,2)]],
+            "U":[Quaternion(Vector([0,0,1]),pi/2),[(0,0,2),(0,1,2),(0,2,2),(1,2,2),(2,2,2),(2,1,2),(2,0,2),(1,0,2),(1,1,2)]],
             "d":[Quaternion(Vector([0,0,1]),pi/2),[(0,0,0),(0,1,0),(0,2,0),(1,2,0),(2,2,0),(2,1,0),(2,0,0),(1,0,0),(1,1,0)]],
             "D":[Quaternion(Vector([0,0,1]),-pi/2),[(0,0,0),(0,1,0),(0,2,0),(1,2,0),(2,2,0),(2,1,0),(2,0,0),(1,0,0),(1,1,0)]],
             "b":[Quaternion(Vector([0,1,0]),-pi/2),[(0,2,0),(0,2,1),(0,2,2),(1,2,2),(2,2,2),(2,2,1),(2,2,0),(1,2,0),(1,2,1)]],
             "B":[Quaternion(Vector([0,1,0]),pi/2),[(0,2,0),(0,2,1),(0,2,2),(1,2,2),(2,2,2),(2,2,1),(2,2,0),(1,2,0),(1,2,1)]]
         }
 
-        cube.add_mesh_modifier(type="NODES", node_modifier=rc_geometry)
+        cube.add_mesh_modifier(type="NODES", node_modifier=self.rc_geometry)
 
         # get input quaternion nodes for the cubies
-        self.cubie_rotation_nodes = [ibpy.get_geometry_node_from_modifier(rc_geometry,label="CubieRotation_"+str(i)) for i in range(27)]
+        self.cubie_rotation_nodes = [ibpy.get_geometry_node_from_modifier(self.rc_geometry,label="CubieRotation_"+str(i)) for i in range(27)]
 
         super().__init__(obj = cube.ref_obj,name="Rubik'sCube",**kwargs)
+
+    def grow(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        size= get_geometry_node_from_modifier(self.rc_geometry,label="Cube Size")
+        change_default_value(size,from_value=0,to_value=0.890,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
 
     def transform(self,word,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
         dt = transition_time/len(word)
@@ -110,3 +117,19 @@ class GeoRubiksCube(BObject):
                 self.cube_state[key] = val
 
         return t0
+
+    def edge_parity_transition(self, begin_time, transition_time):
+        """
+        here the texture of the edge faces is changed into a two-color mode with edge labels -1 and 1
+        """
+
+        switch_labels = ["RedSelector","GreenSelector","BlueSelector","YellowSelector","WhiteSelector","OrangeSelector","Edge","EdgeSelector"]
+        switches = [get_geometry_node_from_modifier(self.rc_geometry,label=label+"Switch") for label in switch_labels]
+
+        for i in range(6):
+            change_default_boolean(switches[i],from_value=True,to_value=False,begin_time=begin_time)
+        change_default_boolean(switches[6],from_value=False,to_value=True,begin_time=begin_time+transition_time/2)
+        change_default_boolean(switches[7],from_value=False,to_value=True,begin_time=begin_time+transition_time)
+
+        return begin_time+transition_time
+

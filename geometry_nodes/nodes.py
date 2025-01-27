@@ -1,12 +1,20 @@
+import os
+from _ast import Compare
+from multiprocessing import Value
+from operator import truediv
+
 import bpy
 import numpy as np
 from mathutils import Vector
+from sympy import false
 
 from grandalf.graphs import Vertex, Edge, Graph
 from grandalf.layouts import SugiyamaLayout, DigcoLayout
 from interface import ibpy
-from interface.ibpy import get_material, make_new_socket, OPERATORS, get_collection
+from interface.ibpy import get_material, make_new_socket, OPERATORS
+from interface.interface_constants import blender_version
 from mathematics.groups.e8 import E8Lattice
+from utils.constants import RES_XML
 
 pi = np.pi
 
@@ -20,19 +28,11 @@ def maybe_flatten(list_of_lists):
             result.append(part)
     return result
 
-
-class Frame:
-    def __init__(self,tree,name="Frame"):
-        self.frame = tree.nodes.new(type='NodeFrame')
-        self.frame.name=name
-        self.frame.label=name
-
-    def add(self,node):
-        if isinstance(node,list):
-            for n in node:
-                n.parent=self.frame
-        else:
-            node.parent=self.frame
+def parse_location(location):
+    location = location.replace("(", "")
+    location = location.replace(")", "")
+    coords = location.split(",")
+    return (float(coords[0]), float(coords[1]))
 
 class Node:
     def __init__(self, tree, location=(0, 0), width=200, height=100, **kwargs):
@@ -41,20 +41,200 @@ class Node:
         self.l, self.m = location
         self.node.location = (self.l * width, self.m * height)
         self.links = tree.links
-        self.node.hide = True
 
-        if 'hide' in kwargs:
-            hide = kwargs.pop('hide')
+        if "hide" in kwargs:
+            hide = kwargs.pop("hide")
             self.node.hide = hide
-        if 'name' in kwargs:
-            self.name = kwargs.pop('name')
+        if "name" in kwargs:
+            self.name = kwargs.pop("name")
             self.node.label = self.name
             self.node.name = self.name
         else:
             self.name = "DefaultGeometryNode"
-        if 'label' in kwargs:
-            label = kwargs.pop('label')
+        if "label" in kwargs:
+            label = kwargs.pop("label")
             self.node.label = label
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+    @classmethod
+    def from_attributes(cls,tree,attributes):
+        location = parse_location(attributes["location"])
+        name = attributes["name"]
+        label = attributes["label"]
+        if attributes["hide"]=="False":
+            hide=False
+        else:
+            hide=True
+
+        if attributes["mute"]=="False":
+            mute=False
+        else:
+            mute=True
+
+        type = attributes["type"]
+
+        # input nodes
+        if type=="VALUE":
+            return InputValue(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="INPUT_INT":
+            integer = int(attributes["integer"])
+            return InputInteger(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,integer=integer)
+        # read nodes
+        if type =="INDEX":
+            return Index(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type =="POSITION":
+            return Position(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+
+        if type=="COLLECTION_INFO":
+            transform_space=attributes["transform_space"]
+            return CollectionInfo(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,transform_space=transform_space)
+
+        # geometry nodes
+        if type=="MESH_LINE":
+            return MeshLine(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="MESH_TO_CURVE":
+            return MeshToCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="MESH_TO_POINTS":
+            return MeshToPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="SUBDIVISION_SURFACE":
+            return SubdivisionSurface(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="REALIZE_INSTANCES":
+            return RealizeInstances(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="SET_POSITION":
+            return SetPosition(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="POINTS_TO_CURVES":
+            return PointsToCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="SEPARATE_GEOMETRY":
+            domain=attributes["domain"]
+            return SeparateGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain)
+        if type=="SORT_ELEMENTS":
+            domain=attributes["domain"]
+            return SortElements(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain)
+        if type=="DELETE_GEOMETRY":
+            domain=attributes["domain"]
+            mode=attributes["mode"]
+            return DeleteGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain,mode=mode)
+        if type=="JOIN_GEOMETRY":
+            return JoinGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="SET_MATERIAL":
+            return SetMaterial(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        # attribute nodes
+        if type=="STORE_NAMED_ATTRIBUTE":
+            data_type = attributes["data_type"]
+            domain = attributes["domain"]
+            return StoredNamedAttribute(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,domain=domain)
+        if type=="INPUT_ATTRIBUTE":
+            data_type = attributes["data_type"]
+            return NamedAttribute(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type)
+        if type=="ATTRIBUTE_DOMAIN_SIZE":
+            component = attributes["component"]
+            return DomainSize(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,component=component)
+
+        # points
+        if type=="POINTS":
+            return Points(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+
+        # mesh
+        if type == "EXTRUDE_MESH":
+            mode = attributes["mode"]
+            return ExtrudeMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,mode=mode)
+
+        # curves
+        if type=="CURVE_PRIMITIVE_CIRCLE":
+            mode=attributes["mode"]
+            return CurveCircle(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,mode=mode)
+
+        # if type=="CURVE_TO_POINTS":
+        #     mode = attributes["mode"]
+        #     return CurveToPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,mode=mode)
+        if type=="CURVE_TO_MESH":
+            return CurveToMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="RESAMPLE_CURVE":
+            mode =attributes["mode"]
+            return ResampleCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,mode=mode)
+        if type=="FILLET_CURVE":
+            mode = attributes["mode"]
+            return FilletCurve(tree, location=location, name=name, label=label, hide=hide, mute=mute,height=200,mode=mode)
+        if type=="FILL_CURVE":
+            mode = attributes["mode"]
+            return FillCurve(tree, location=location, name=name, label=label, hide=hide, mute=mute,height=200,mode=mode)
+        if type=="SAMPLE_CURVE":
+            data_type = attributes["data_type"]
+            mode = attributes["mode"]
+            return SampleCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,mode=mode)
+
+        # auxiliaries
+        if type == "MATH":
+            operation = attributes["operation"]
+            return MathNode(tree, location=location, name=name, label=label, hide=hide, operation=operation, mute=mute,height=200)
+        if type=="SEPXYZ":
+            return SeparateXYZ(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="COMPARE":
+            operation=attributes["operation"]
+            data_type=attributes["data_type"]
+            return CompareNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,operation=operation,data_type=data_type)
+
+        # don't know the category yet
+        if type=="FIELD_ON_DOMAIN":
+            data_type=attributes["data_type"]
+            domain=attributes["domain"]
+            return EvaluateOnDomain(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,domain=domain)
+        if type=="REROUTE":
+            location = parse_location(attributes["location"])
+            return ReRoute(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="FRAME":
+            location=parse_location(attributes["location"])
+            return Frame(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+
+        # existing nodes
+        if type=="GROUP_OUTPUT":
+            location = parse_location(attributes["location"])
+            out =  tree.nodes.get("Group Output")
+            out.location =(location[0]*200,location[1]*200)
+            return out
+
+        # For Each
+        if type=="FOREACH_GEOMETRY_ELEMENT_INPUT":
+            return ForEachInput(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+
+        if type=="FOREACH_GEOMETRY_ELEMENT_OUTPUT":
+            domain = attributes["domain"]
+            return ForEachOutput(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain)
+
+    def set_parent(self,parent):
+        self.node.parent=parent.node
+
+class ReRoute(Node):
+    """
+    ReRoute nodes are created, when the links are split and re-routed.
+    Don't use it, when you create the xml file data.
+    They are buggy.
+    """
+    def __init__(self, tree, location=(0, 0), hide=False, mute=False, **kwargs):
+        self.node = tree.nodes.new("NodeReroute")
+        self.node.hide=hide
+        self.node.mute=mute
+
+        self.std_out=self.node.outputs[0]
+        self.std_in=self.node.inputs[0]
+
+        super().__init__(tree,location,**kwargs)
+
+class Frame(Node):
+    def __init__(self,tree,location=(0,0),hide=False,mute=False,**kwargs):
+        self.node = tree.nodes.new(type="NodeFrame")
+        self.node.hide=hide
+        self.node.mute=mute
+        super().__init__(tree,location,**kwargs)
+
+    def add(self,node):
+        if isinstance(node,list):
+            for n in node:
+                n.parent=self.node
+        else:
+            node.parent=self.node
 
 
 class GreenNode(Node):
@@ -84,7 +264,6 @@ class RedNode(Node):
 
         self.outputs = self.node.outputs
 
-
 class BlueNode(Node):
     """
     this is the super class for a general blue node
@@ -98,7 +277,6 @@ class BlueNode(Node):
 
         # changed from self.std_out=self.outputs["Value"] to accomodate Vector outputs
         self.std_out = self.outputs[0]
-
 
 #################
 #  green nodes  #
@@ -117,28 +295,28 @@ class MeshLine(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeMeshLine")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
+        self.geometry_out = self.node.outputs["Mesh"]
         self.node.mode = mode
         self.node.count_mode = count_mode
 
         if isinstance(count, int):
-            self.node.inputs['Count'].default_value = count
+            self.node.inputs["Count"].default_value = count
         else:
-            self.tree.links.new(count, self.node.inputs['Count'])
+            self.tree.links.new(count, self.node.inputs["Count"])
         if isinstance(start_location, (list,Vector)):
-            self.node.inputs['Start Location'].default_value = start_location
+            self.node.inputs["Start Location"].default_value = start_location
         else:
-            self.tree.links.new(start_location, self.node.inputs['Start Location'])
+            self.tree.links.new(start_location, self.node.inputs["Start Location"])
         if end_location:
             # kept for compatability
             if isinstance(end_location,(list,Vector)):
-                self.node.inputs['Offset'].default_value = end_location
+                self.node.inputs["Offset"].default_value = end_location
             else:
-                self.tree.links.new(end_location, self.node.inputs['Offset'])
+                self.tree.links.new(end_location, self.node.inputs["Offset"])
         if isinstance(offset,(list,Vector)):
-            self.node.inputs['Offset'].default_value = offset
+            self.node.inputs["Offset"].default_value = offset
         else:
-            self.tree.links.new(offset, self.node.inputs['Offset'])
+            self.tree.links.new(offset, self.node.inputs["Offset"])
 
 
 # mesh operations
@@ -160,8 +338,8 @@ class DualMesh(GreenNode):
 
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Dual Mesh']
-        self.geometry_in = self.node.inputs['Mesh']
+        self.geometry_out = self.node.outputs["Dual Mesh"]
+        self.geometry_in = self.node.inputs["Mesh"]
 
 class SplitEdges(GreenNode):
     def __init__(self, tree, selection = None,location=(0, 0), **kwargs):
@@ -173,8 +351,8 @@ class SplitEdges(GreenNode):
         if selection:
             tree.links.new(selection,self.node.inputs["Selection"])
 
-        self.geometry_out = self.node.outputs['Mesh']
-        self.geometry_in = self.node.inputs['Mesh']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Mesh"]
 
 class ExtrudeMesh(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -197,25 +375,25 @@ class ExtrudeMesh(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeExtrudeMesh")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
-        self.geometry_in = self.node.inputs['Mesh']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Mesh"]
         self.node.mode = mode
 
         if isinstance(offset_scale, (int, float)):
-            self.node.inputs['Offset Scale'].default_value = offset_scale
+            self.node.inputs["Offset Scale"].default_value = offset_scale
         else:
-            self.tree.links.new(offset_scale, self.node.inputs['Offset Scale'])
+            self.tree.links.new(offset_scale, self.node.inputs["Offset Scale"])
 
         if offset:
             if isinstance(offset, (Vector, list)):
                 vector = InputVector(tree, location=(self.location[0] - 1, self.location[1] - 1), value=offset)
-                self.tree.links.new(vector.std_out, self.node.inputs['Offset'])
+                self.tree.links.new(vector.std_out, self.node.inputs["Offset"])
             else:
-                self.tree.links.new(offset, self.node.inputs['Offset'])
+                self.tree.links.new(offset, self.node.inputs["Offset"])
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
         if mesh:
-            self.tree.links.new(mesh, self.node.inputs['Mesh'])
+            self.tree.links.new(mesh, self.node.inputs["Mesh"])
 
 
 class MeshToCurve(GreenNode):
@@ -233,13 +411,13 @@ class MeshToCurve(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeMeshToCurve")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Curve']
-        self.geometry_in = self.node.inputs['Mesh']
+        self.geometry_out = self.node.outputs["Curve"]
+        self.geometry_in = self.node.inputs["Mesh"]
 
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
         if mesh:
-            self.tree.links.new(mesh, self.node.inputs['Mesh'])
+            self.tree.links.new(mesh, self.node.inputs["Mesh"])
 
 
 class MeshToPoints(GreenNode):
@@ -259,22 +437,22 @@ class MeshToPoints(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeMeshToPoints")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Points']
-        self.geometry_in = self.node.inputs['Mesh']
+        self.geometry_out = self.node.outputs["Points"]
+        self.geometry_in = self.node.inputs["Mesh"]
 
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
         if mesh:
-            self.tree.links.new(mesh, self.node.inputs['Mesh'])
+            self.tree.links.new(mesh, self.node.inputs["Mesh"])
         if position:
             if isinstance(position, (Vector, list)):
-                self.node.inputs['Position'].default_value = position
+                self.node.inputs["Position"].default_value = position
             else:
-                self.tree.links.new(position, self.node.inputs['Position'])
+                self.tree.links.new(position, self.node.inputs["Position"])
 
 class SubdivisionSurface(GreenNode):
     def __init__(self, tree, location=(0, 0),
-                 mesh=None,uv_smooth='PRESERVE_BOUNDARIES',boundary_smooth='ALL',
+                 mesh=None,uv_smooth="PRESERVE_BOUNDARIES",boundary_smooth="ALL",
                  level=1,
                  **kwargs):
         """
@@ -288,16 +466,16 @@ class SubdivisionSurface(GreenNode):
 
         self.node.uv_smooth=uv_smooth
         self.node.boundary_smooth=boundary_smooth
-        self.geometry_out = self.node.outputs['Mesh']
-        self.geometry_in = self.node.inputs['Mesh']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Mesh"]
 
         if mesh:
-            self.tree.links.new(mesh, self.node.inputs['Mesh'])
+            self.tree.links.new(mesh, self.node.inputs["Mesh"])
         if level:
             if isinstance(level, int):
-                self.node.inputs['Level'].default_value = level
+                self.node.inputs["Level"].default_value = level
             else:
-                self.tree.links.new(level, self.node.inputs['Level'])
+                self.tree.links.new(level, self.node.inputs["Level"])
 
 
 
@@ -315,16 +493,16 @@ class SubdivideMesh(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeSubdivideMesh")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
-        self.geometry_in = self.node.inputs['Mesh']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Mesh"]
 
         if mesh:
-            self.tree.links.new(mesh, self.node.inputs['Mesh'])
+            self.tree.links.new(mesh, self.node.inputs["Mesh"])
         if level:
             if isinstance(level, int):
-                self.node.inputs['Level'].default_value = level
+                self.node.inputs["Level"].default_value = level
             else:
-                self.tree.links.new(level, self.node.inputs['Level'])
+                self.tree.links.new(level, self.node.inputs["Level"])
 
 # curves
 
@@ -339,62 +517,115 @@ class Quadrilateral(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeCurvePrimitiveQuadrilateral")
         super().__init__(tree, location=location, **kwargs)
         self.node.mode = mode
-        self.geometry_out = self.node.outputs['Curve']
+        self.geometry_out = self.node.outputs["Curve"]
 
         if isinstance(width, (int, float)):
-            self.node.inputs['Width'].default_value = width
+            self.node.inputs["Width"].default_value = width
         else:
-            self.tree.links.new(width, self.node.inputs['Width'])
+            self.tree.links.new(width, self.node.inputs["Width"])
         if isinstance(height, (int, float)):
-            self.node.inputs['Height'].default_value = height
+            self.node.inputs["Height"].default_value = height
         else:
-            self.tree.links.new(height, self.node.inputs['Height'])
+            self.tree.links.new(height, self.node.inputs["Height"])
+
+class ResampleCurve(GreenNode):
+    def __init__(self, tree, location=(0, 0),mode="COUNT",curve=None,
+                 selection = None,
+                 count=1,
+                 limit_radius="False",**kwargs):
+        self.node=tree.nodes.new(type="GeometryNodeResampleCurve")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.node.mode=mode
+        self.geometry_out=self.node.outputs["Curve"]
+        self.geometry_in=self.node.inputs["Curve"]
+
+        if curve:
+            self.tree.links.new(curve,self.node.inputs["Curve"])
+
+        if selection:
+            self.tree.links.new(curve,self.node.inputs["Selection"])
+
+        if isinstance(count, int):
+            self.node.inputs["Count"].default_value = count
+        else:
+            self.tree.links.new(count, self.node.inputs["Count"])
+
 
 
 class FilletCurve(GreenNode):
-    def __init__(self, tree, location=(0, 0),mode='POLY',radius=1,curve=None,
+    def __init__(self, tree, location=(0, 0),mode="POLY",radius=1,curve=None,
                  count=1,
                  limit_radius="False",**kwargs):
         self.node=tree.nodes.new(type="GeometryNodeFilletCurve")
         super().__init__(tree,location=location,**kwargs)
 
         self.node.mode=mode
-        self.geometry_out=self.node.outputs['Curve']
-        self.geometry_in=self.node.inputs['Curve']
+        self.geometry_out=self.node.outputs["Curve"]
+        self.geometry_in=self.node.inputs["Curve"]
 
         if curve:
-            self.tree.links.new(curve,self.node.inputs['Curve'])
+            self.tree.links.new(curve,self.node.inputs["Curve"])
 
         if isinstance(limit_radius,bool):
-            self.node.inputs['Limit Radius'].default_value=limit_radius
+            self.node.inputs["Limit Radius"].default_value=limit_radius
 
         if isinstance(radius, (int, float)):
-            self.node.inputs['Radius'].default_value=radius
+            self.node.inputs["Radius"].default_value=radius
         else:
-            self.tree.links.new(radius,self.node.inputs['Radius'])
+            self.tree.links.new(radius,self.node.inputs["Radius"])
 
         if isinstance(count, int):
-            self.node.inputs['Count'].default_value = count
+            self.node.inputs["Count"].default_value = count
         else:
-            self.tree.links.new(count, self.node.inputs['Count'])
+            self.tree.links.new(count, self.node.inputs["Count"])
 
 
 class FillCurve(GreenNode):
-    def __init__(self,tree,location=(0,0),mode='NGONS',curve=None,group_id=None,**kwargs):
+    def __init__(self,tree,location=(0,0),mode="NGONS",curve=None,group_id=None,**kwargs):
         self.node=tree.nodes.new(type="GeometryNodeFillCurve")
         super().__init__(tree,location=location,**kwargs)
 
         self.node.mode=mode
-        self.geometry_out=self.node.outputs['Mesh']
-        self.geometry_in=self.node.inputs['Curve']
+        self.geometry_out=self.node.outputs["Mesh"]
+        self.geometry_in=self.node.inputs["Curve"]
 
         if curve:
-            self.tree.links.new(curve,self.node.inputs['Curve'])
+            self.tree.links.new(curve,self.node.inputs["Curve"])
         if group_id:
             if isinstance(group_id,int):
-                self.node.inputs['Group ID'].default_value=group_id
+                self.node.inputs["Group ID"].default_value=group_id
             else:
-                self.tree.links.new(group_id,self.node.inputs['Group ID'])
+                self.tree.links.new(group_id,self.node.inputs["Group ID"])
+
+
+
+class SampleCurve(GreenNode):
+    def __init__(self,tree,location=(0,0),mode="FACTOR",data_type="FLOAT",all_curves=True,curves=None,value=None,factor=0,**kwargs):
+        self.node=tree.nodes.new(type="GeometryNodeSampleCurve")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.node.mode=mode
+        self.node.data_type=data_type
+        self.node.use_all_curves=all_curves
+        self.geometry_in=self.node.inputs["Curves"]
+        self.value_out=self.node.outputs["Value"]
+        self.position_out=self.node.outputs["Position"]
+        self.tangent_out=self.node.outputs["Tangent"]
+        self.normal_out=self.node.outputs["Normal"]
+
+        if curves:
+            self.tree.links.new(curves,self.node.inputs["Curve"])
+        if value:
+            if isinstance(value, (int, float)):
+                self.node.inputs["Value"].default_value=value
+            else:
+                tree.links.new(value,self.node.inputs["Value"])
+        if factor:
+            if  isinstance(factor, (int, float)):
+                self.node.inputs["Factor"].default_value=factor
+            else:
+                tree.links.new(factor,self.node.inputs["Factor"])
 
 
 # point operations
@@ -407,20 +638,20 @@ class Points(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodePoints")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
 
         if isinstance(count, int):
-            self.node.inputs['Count'].default_value = count
+            self.node.inputs["Count"].default_value = count
         else:
-            self.tree.links.new(count, self.node.inputs['Count'])
+            self.tree.links.new(count, self.node.inputs["Count"])
         if isinstance(position, Vector):
-            self.node.inputs['Position'].default_value = position
+            self.node.inputs["Position"].default_value = position
         else:
-            self.tree.links.new(position, self.node.inputs['Position'])
+            self.tree.links.new(position, self.node.inputs["Position"])
         if isinstance(radius, (int, float)):
-            self.node.inputs['Radius'].default_value = radius
+            self.node.inputs["Radius"].default_value = radius
         else:
-            self.tree.links.new(radius, self.node.inputs['Radius'])
+            self.tree.links.new(radius, self.node.inputs["Radius"])
 
 
 class PointsToVertices(GreenNode):
@@ -431,12 +662,12 @@ class PointsToVertices(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodePointsToVertices")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
-        self.geometry_in = self.node.inputs['Points']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Points"]
         if points:
-            self.tree.links.new(points, self.node.inputs['Points'])
+            self.tree.links.new(points, self.node.inputs["Points"])
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
 
 
 class PointsToCurve(GreenNode):
@@ -454,8 +685,8 @@ class PointsToCurve(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodePointsToCurves")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Curves']
-        self.geometry_in = self.node.inputs['Points']
+        self.geometry_out = self.node.outputs["Curves"]
+        self.geometry_in = self.node.inputs["Points"]
 
 
 # curve primitives
@@ -469,7 +700,7 @@ class CurveCircle(GreenNode):
 
         :param tree:
         :param location:
-        :param mode: 'RADIUS', 'POINTS'
+        :param mode: "RADIUS", "POINTS"
         :param resolution:
         :param radius:
         :param kwargs:
@@ -477,18 +708,18 @@ class CurveCircle(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeCurvePrimitiveCircle")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Curve']
+        self.geometry_out = self.node.outputs["Curve"]
 
         self.node.mode = mode
 
         if isinstance(radius, (int, float)):
-            self.node.inputs['Radius'].default_value = radius
+            self.node.inputs["Radius"].default_value = radius
         else:
-            self.tree.links.new(radius, self.node.inputs['Radius'])
+            self.tree.links.new(radius, self.node.inputs["Radius"])
         if isinstance(resolution, int):
-            self.node.inputs['Resolution'].default_value = resolution
+            self.node.inputs["Resolution"].default_value = resolution
         else:
-            self.tree.links.new(resolution, self.node.inputs['Resolution'])
+            self.tree.links.new(resolution, self.node.inputs["Resolution"])
 
 class CurveQuadrilateral(GreenNode):
     def __init__(self, tree, location=(0, 0),mode="RECTANGLE",
@@ -497,7 +728,7 @@ class CurveQuadrilateral(GreenNode):
 
         :param tree:
         :param location:
-        :param mode: 'RECTANGLE', '...'
+        :param mode: "RECTANGLE", "..."
         :param resolution:
         :param radius:
         :param kwargs:
@@ -505,17 +736,69 @@ class CurveQuadrilateral(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeCurvePrimitiveQuadrilateral")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Curve']
+        self.geometry_out = self.node.outputs["Curve"]
         self.node.mode=mode
 
         if isinstance(width, (int, float)):
-            self.node.inputs['Width'].default_value = width
+            self.node.inputs["Width"].default_value = width
         else:
-            self.tree.links.new(width, self.node.inputs['Width'])
+            self.tree.links.new(width, self.node.inputs["Width"])
         if isinstance(height, (int,float)):
-            self.node.inputs['Height'].default_value = height
+            self.node.inputs["Height"].default_value = height
         else:
-            self.tree.links.new(height, self.node.inputs['Height'])
+            self.tree.links.new(height, self.node.inputs["Height"])
+
+class StringToCurves(GreenNode):
+    def __init__(self, tree, location=(0, 0),overflow='OVERFLOW',align_x="CENTER",align_y="MIDDLE",pivot_mode="MIDPOINT",
+                 string="0",size=1,character_spacing=1,word_spacing=1,line_spacing=1,textbox_width=0, **kwargs):
+        """
+        """
+        self.node = tree.nodes.new(type="GeometryNodeStringToCurves")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs["Curve Instances"]
+        self.line=self.node.outputs["Line"]
+        self.pivot_point=self.node.outputs["Pivot Point"]
+
+        self.node.overflow=overflow
+        self.node.align_x=align_x
+        self.node.align_y=align_y
+        self.node.pivot_mode=pivot_mode
+
+        if isinstance(string, str):
+            self.node.inputs["String"].default_value = string
+        else:
+            tree.links.new(string, self.node.inputs["String"])
+
+        if isinstance(size, (int,float)):
+            self.node.inputs["Size"].default_value = size
+        else:
+            tree.links.new(size, self.node.inputs["Size"])
+
+        if isinstance(character_spacing, (int,float)):
+            self.node.inputs["Character Spacing"].default_value = character_spacing
+        else:
+            tree.links.new(character_spacing, self.node.inputs["Character Spacing"])
+
+        if isinstance(word_spacing, (int,float)):
+            self.node.inputs["Word Spacing"].default_value = word_spacing
+        else:
+            tree.links.new(word_spacing, self.node.inputs["Word Spacing"])
+
+        if isinstance(line_spacing, (int,float)):
+            self.node.inputs["Line Spacing"].default_value = line_spacing
+        else:
+            tree.links.new(line_spacing, self.node.inputs["Line Spacing"])
+
+        if isinstance(character_spacing, (int,float)):
+            self.node.inputs["Character Spacing"].default_value = character_spacing
+        else:
+            tree.links.new(character_spacing, self.node.inputs["Character Spacing"])
+
+        if isinstance(textbox_width, (int,float)):
+            self.node.inputs["Text Box Width"].default_value = textbox_width
+        else:
+            self.tree.links.new(textbox_width, self.node.inputs["Text Box Width"])
 
 # curve operations
 class CurveToMesh(GreenNode):
@@ -534,13 +817,13 @@ class CurveToMesh(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeCurveToMesh")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
-        self.geometry_in = self.node.inputs['Curve']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Curve"]
 
         if curve:
-            self.tree.links.new(curve, self.node.inputs['Curve'])
+            self.tree.links.new(curve, self.node.inputs["Curve"])
         if profile_curve:
-            self.tree.links.new(profile_curve, self.node.inputs['Profile Curve'])
+            self.tree.links.new(profile_curve, self.node.inputs["Profile Curve"])
 
 
 # default meshes
@@ -556,25 +839,25 @@ class Grid(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeMeshGrid")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
+        self.geometry_out = self.node.outputs["Mesh"]
 
         if isinstance(size_x, (int, float)):
-            self.node.inputs['Size X'].default_value = size_x
+            self.node.inputs["Size X"].default_value = size_x
         else:
-            self.tree.links.new(size_x, self.node.inputs['Size X'])
+            self.tree.links.new(size_x, self.node.inputs["Size X"])
         if isinstance(size_y, (int, float)):
-            self.node.inputs['Size Y'].default_value = size_y
+            self.node.inputs["Size Y"].default_value = size_y
         else:
-            self.tree.links.new(size_y, self.node.inputs['Size Y'])
+            self.tree.links.new(size_y, self.node.inputs["Size Y"])
 
         if isinstance(vertices_x, int):
-            self.node.inputs['Vertices X'].default_value = vertices_x
+            self.node.inputs["Vertices X"].default_value = vertices_x
         else:
-            self.tree.links.new(vertices_x, self.node.inputs['Vertices X'])
+            self.tree.links.new(vertices_x, self.node.inputs["Vertices X"])
         if isinstance(vertices_y, int):
-            self.node.inputs['Vertices Y'].default_value = vertices_y
+            self.node.inputs["Vertices Y"].default_value = vertices_y
         else:
-            self.tree.links.new(vertices_y, self.node.inputs['Vertices Y'])
+            self.tree.links.new(vertices_y, self.node.inputs["Vertices Y"])
 
 
 class UVSphere(GreenNode):
@@ -586,22 +869,22 @@ class UVSphere(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeMeshUVSphere")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
+        self.geometry_out = self.node.outputs["Mesh"]
 
         if isinstance(radius, (int, float)):
-            self.node.inputs['Radius'].default_value = radius
+            self.node.inputs["Radius"].default_value = radius
         else:
-            self.tree.links.new(radius, self.node.inputs['Radius'])
+            self.tree.links.new(radius, self.node.inputs["Radius"])
 
         if isinstance(segments, int):
-            self.node.inputs['Segments'].default_value = segments
+            self.node.inputs["Segments"].default_value = segments
         else:
-            self.tree.links.new(segments, self.node.inputs['Segments'])
+            self.tree.links.new(segments, self.node.inputs["Segments"])
 
         if isinstance(rings, int):
-            self.node.inputs['Rings'].default_value = rings
+            self.node.inputs["Rings"].default_value = rings
         else:
-            self.tree.links.new(rings, self.node.inputs['Rings'])
+            self.tree.links.new(rings, self.node.inputs["Rings"])
 
 class IcoSphere(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -612,16 +895,16 @@ class IcoSphere(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeMeshIcoSphere")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
+        self.geometry_out = self.node.outputs["Mesh"]
 
         if isinstance(radius, (int, float)):
-            self.node.inputs['Radius'].default_value = radius
+            self.node.inputs["Radius"].default_value = radius
         else:
-            self.tree.links.new(radius, self.node.inputs['Radius'])
+            self.tree.links.new(radius, self.node.inputs["Radius"])
         if isinstance(subdivisions, int):
-            self.node.inputs['Subdivisions'].default_value = subdivisions
+            self.node.inputs["Subdivisions"].default_value = subdivisions
         else:
-            self.tree.links.new(subdivisions, self.node.inputs['Subdivisions'])
+            self.tree.links.new(subdivisions, self.node.inputs["Subdivisions"])
 
 class CubeMesh(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -631,27 +914,27 @@ class CubeMesh(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeMeshCube")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
-        self.uv_out = self.node.outputs['UV Map']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.uv_out = self.node.outputs["UV Map"]
 
         if isinstance(vertices_x, int):
-            self.node.inputs['Vertices X'].default_value = vertices_x
+            self.node.inputs["Vertices X"].default_value = vertices_x
         else:
-            self.node.inputs['Vertices X'] = vertices_x
+            self.node.inputs["Vertices X"] = vertices_x
         if isinstance(vertices_y, int):
-            self.node.inputs['Vertices Y'].default_value = vertices_y
+            self.node.inputs["Vertices Y"].default_value = vertices_y
         else:
-            self.node.inputs['Vertices Y'] = vertices_y
+            self.node.inputs["Vertices Y"] = vertices_y
         if isinstance(vertices_z, int):
-            self.node.inputs['Vertices Z'].default_value = vertices_z
+            self.node.inputs["Vertices Z"].default_value = vertices_z
         else:
-            self.node.inputs['Vertices Z'] = vertices_z
+            self.node.inputs["Vertices Z"] = vertices_z
         if isinstance(size, (int, float)):
-            self.node.inputs['Size'].default_value = [size] * 3
+            self.node.inputs["Size"].default_value = [size] * 3
         elif isinstance(size, (list, Vector)):
-            self.node.inputs['Size'].default_value = size
+            self.node.inputs["Size"].default_value = size
         else:
-            self.tree.links.new(size, self.node.inputs['Size'])
+            self.tree.links.new(size, self.node.inputs["Size"])
 
 class CylinderMesh(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -660,95 +943,95 @@ class CylinderMesh(GreenNode):
                  radius=1, depth=2, **kwargs
                  ):
         """
-        :param fill_type: ('NONE', 'NGON', 'TRIANGLE_FAN')
+        :param fill_type: ("NONE", "NGON", "TRIANGLE_FAN")
 
         """
 
         self.node = tree.nodes.new(type="GeometryNodeMeshCylinder")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
-        self.top_out = self.node.outputs['Top']
-        self.side_out = self.node.outputs['Side']
-        self.bottom_out = self.node.outputs['Bottom']
-        self.uv_out = self.node.outputs['UV Map']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.top_out = self.node.outputs["Top"]
+        self.side_out = self.node.outputs["Side"]
+        self.bottom_out = self.node.outputs["Bottom"]
+        self.uv_out = self.node.outputs["UV Map"]
 
         self.node.fill_type = fill_type
 
         if isinstance(vertices, int):
-            self.node.inputs['Vertices'].default_value = vertices
+            self.node.inputs["Vertices"].default_value = vertices
         else:
-            self.links.new(vertices,self.node.inputs['Vertices'])
+            self.links.new(vertices,self.node.inputs["Vertices"])
 
         if isinstance(side_segments, int):
-            self.node.inputs['Side Segments'].default_value = side_segments
+            self.node.inputs["Side Segments"].default_value = side_segments
         else:
-            self.links.new(side_segments,self.node.inputs['Side Segments'])
+            self.links.new(side_segments,self.node.inputs["Side Segments"])
 
         if isinstance(fill_segments, int):
-            self.node.inputs['Fill Segments'].default_value = fill_segments
+            self.node.inputs["Fill Segments"].default_value = fill_segments
         else:
-            self.links.new(fill_segments,self.node.inputs['Fill Segments'])
+            self.links.new(fill_segments,self.node.inputs["Fill Segments"])
 
         if isinstance(radius, (int, float)):
-            self.node.inputs['Radius'].default_value = radius
+            self.node.inputs["Radius"].default_value = radius
         else:
-            self.links.new(radius,self.node.inputs['Radius'])
+            self.links.new(radius,self.node.inputs["Radius"])
 
         if isinstance(depth, (int, float)):
-            self.node.inputs['Depth'].default_value = depth
+            self.node.inputs["Depth"].default_value = depth
         else:
-            self.links.new(depth,self.node.inputs['Depth'])
+            self.links.new(depth,self.node.inputs["Depth"])
 
 class ConeMesh(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  fill_type="TRIANGLE_FAN", vertices=32, side_segments=1, fill_segments=1,
                  radius_top=0,radius_bottom=1, depth=2, **kwargs):
         """
-        :param fill_type: ('NONE', 'NGON', 'TRIANGLE_FAN')
+        :param fill_type: ("NONE", "NGON", "TRIANGLE_FAN")
 
         """
 
         self.node = tree.nodes.new(type="GeometryNodeMeshCone")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
-        self.top_out = self.node.outputs['Top']
-        self.side_out = self.node.outputs['Side']
-        self.bottom_out = self.node.outputs['Bottom']
-        self.uv_out = self.node.outputs['UV Map']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.top_out = self.node.outputs["Top"]
+        self.side_out = self.node.outputs["Side"]
+        self.bottom_out = self.node.outputs["Bottom"]
+        self.uv_out = self.node.outputs["UV Map"]
 
         self.node.fill_type = fill_type
 
         if isinstance(vertices, int):
-            self.node.inputs['Vertices'].default_value = vertices
+            self.node.inputs["Vertices"].default_value = vertices
         else:
-            self.links.new(vertices, self.node.inputs['Vertices'])
+            self.links.new(vertices, self.node.inputs["Vertices"])
 
         if isinstance(side_segments, int):
-            self.node.inputs['Side Segments'].default_value = side_segments
+            self.node.inputs["Side Segments"].default_value = side_segments
         else:
-            self.links.new(side_segments, self.node.inputs['Side Segments'])
+            self.links.new(side_segments, self.node.inputs["Side Segments"])
 
         if isinstance(fill_segments, int):
-            self.node.inputs['Fill Segments'].default_value = fill_segments
+            self.node.inputs["Fill Segments"].default_value = fill_segments
         else:
-            self.links.new(fill_segments, self.node.inputs['Fill Segments'])
+            self.links.new(fill_segments, self.node.inputs["Fill Segments"])
 
         if isinstance(radius_top, (int, float)):
-            self.node.inputs['Radius Top'].default_value = radius_top
+            self.node.inputs["Radius Top"].default_value = radius_top
         else:
-            self.links.new(radius_top, self.node.inputs['Radius Top'])
+            self.links.new(radius_top, self.node.inputs["Radius Top"])
 
         if isinstance(radius_bottom, (int, float)):
-            self.node.inputs['Radius Bottom'].default_value = radius_bottom
+            self.node.inputs["Radius Bottom"].default_value = radius_bottom
         else:
-            self.links.new(radius_bottom, self.node.inputs['Radius Bottom'])
+            self.links.new(radius_bottom, self.node.inputs["Radius Bottom"])
 
         if isinstance(depth, (int, float)):
-            self.node.inputs['Depth'].default_value = depth
+            self.node.inputs["Depth"].default_value = depth
         else:
-            self.links.new(depth, self.node.inputs['Depth'])
+            self.links.new(depth, self.node.inputs["Depth"])
 
 
 
@@ -765,26 +1048,26 @@ class InstanceOnPoints(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeInstanceOnPoints")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Instances']
-        self.geometry_in = self.node.inputs['Points']
+        self.geometry_out = self.node.outputs["Instances"]
+        self.geometry_in = self.node.inputs["Points"]
 
         if isinstance(rotation, Vector):
-            self.node.inputs['Rotation'].default_value = rotation
+            self.node.inputs["Rotation"].default_value = rotation
         else:
-            self.tree.links.new(rotation, self.node.inputs['Rotation'])
+            self.tree.links.new(rotation, self.node.inputs["Rotation"])
         if isinstance(scale, Vector):
-            self.node.inputs['Scale'].default_value = scale
+            self.node.inputs["Scale"].default_value = scale
         else:
-            self.tree.links.new(scale, self.node.inputs['Scale'])
+            self.tree.links.new(scale, self.node.inputs["Scale"])
 
         if points:
-            self.tree.links.new(points, self.node.inputs['Points'])
+            self.tree.links.new(points, self.node.inputs["Points"])
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
         if instance:
-            self.tree.links.new(instance, self.node.inputs['Instance'])
+            self.tree.links.new(instance, self.node.inputs["Instance"])
         if instance_index:
-            self.tree.links.new(instance_index, self.node.inputs['Instance Index'])
+            self.tree.links.new(instance_index, self.node.inputs["Instance Index"])
 
 
 class InstanceOnEdges(GreenNode):
@@ -799,8 +1082,8 @@ class InstanceOnEdges(GreenNode):
         self.node = curve2mesh
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
-        self.geometry_in = mesh2curve.inputs['Mesh']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = mesh2curve.inputs["Mesh"]
 
 
 class SetPosition(GreenNode):
@@ -824,29 +1107,29 @@ class SetPosition(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeSetPosition")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Geometry']
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
+        self.geometry_in = self.node.inputs["Geometry"]
 
         if isinstance(position, (Vector,list)):
-            self.node.inputs['Position'].default_value = position
+            self.node.inputs["Position"].default_value = position
         else:
-            self.tree.links.new(position, self.node.inputs['Position'])
+            self.tree.links.new(position, self.node.inputs["Position"])
         if isinstance(offset, (list,Vector)):
-            self.node.inputs['Offset'].default_value = offset
+            self.node.inputs["Offset"].default_value = offset
         else:
-            self.tree.links.new(offset, self.node.inputs['Offset'])
+            self.tree.links.new(offset, self.node.inputs["Offset"])
 
         if geometry:
-            self.tree.links.new(geometry, self.node.inputs['Geometry'])
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
 
 
 class ScaleElements(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  geometry=None,
-                 domain='FACE',
-                 scale_mode='UNIFORM',
+                 domain="FACE",
+                 scale_mode="UNIFORM",
                  selection=None,
                  scale=1,
                  center=None, **kwargs
@@ -869,24 +1152,24 @@ class ScaleElements(GreenNode):
 
         self.node.domain = domain
         self.node.scale_mode = scale_mode
-        self.geometry_out = self.node.outputs['Geometry']
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
+        self.geometry_in = self.node.inputs["Geometry"]
 
         if isinstance(scale, (int, float)):
-            self.node.inputs['Scale'].default_value = scale
+            self.node.inputs["Scale"].default_value = scale
         else:
-            self.tree.links.new(scale, self.node.inputs['Scale'])
+            self.tree.links.new(scale, self.node.inputs["Scale"])
 
         if center:
             if isinstance(center, (list, Vector)):
-                self.node.inputs['Center'].default_value = center
+                self.node.inputs["Center"].default_value = center
             else:
-                self.tree.links.new(center, self.node.inputs['Center'])
+                self.tree.links.new(center, self.node.inputs["Center"])
 
         if geometry:
-            self.tree.links.new(geometry, self.node.inputs['Geometry'])
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
 
 
 class RealizeInstances(GreenNode):
@@ -896,11 +1179,11 @@ class RealizeInstances(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeRealizeInstances")
         super().__init__(tree, location=location,**kwargs)
 
-        self.geometry_out = self.node.outputs['Geometry']
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
+        self.geometry_in = self.node.inputs["Geometry"]
 
         if geometry:
-            self.tree.links.new(geometry, self.node.inputs['Geometry'])
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
 
 
 class JoinGeometry(GreenNode):
@@ -910,35 +1193,35 @@ class JoinGeometry(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeJoinGeometry")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Geometry']
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
+        self.geometry_in = self.node.inputs["Geometry"]
 
         if isinstance(geometry, list):
             for geo in geometry:
-                self.tree.links.new(geo, self.node.inputs['Geometry'])
+                self.tree.links.new(geo, self.node.inputs["Geometry"])
         elif geometry:
-            self.tree.links.new(geometry, self.node.inputs['Geometry'])
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
 
 class SeparateGeometry(GreenNode):
     def __init__(self,tree,location=(0,0),
-                 domain='POINT',geometry=None,selection=None,geometry_out='Selection',**kwargs):
+                 domain="POINT",geometry=None,selection=None,geometry_out="Selection",**kwargs):
         self.node = tree.nodes.new(type="GeometryNodeSeparateGeometry")
         self.node.domain = domain
 
         super().__init__(tree, location=location, **kwargs)
 
         self.geometry_out = self.node.outputs[geometry_out]
-        self.geometry_in = self.node.inputs['Geometry']
-        self.selection = self.node.outputs['Selection']
-        self.inverse = self.node.outputs['Inverted']
+        self.geometry_in = self.node.inputs["Geometry"]
+        self.selection = self.node.outputs["Selection"]
+        self.inverse = self.node.outputs["Inverted"]
 
         if selection:
-            self.tree.links.new(selection,self.node.inputs['Selection'])
+            self.tree.links.new(selection,self.node.inputs["Selection"])
 
 class DeleteGeometry(GreenNode):
     def __init__(self, tree, location=(0, 0),
-                 domain='POINT',
-                 mode='ALL',
+                 domain="POINT",
+                 mode="ALL",
                  geometry=None,
                  selection=None,
                  **kwargs
@@ -949,17 +1232,17 @@ class DeleteGeometry(GreenNode):
         self.node.mode = mode
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_in = self.node.inputs['Geometry']
-        self.geometry_out = self.node.outputs['Geometry']
+        self.geometry_in = self.node.inputs["Geometry"]
+        self.geometry_out = self.node.outputs["Geometry"]
 
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
         if geometry:
-            self.tree.links.new(geometry, self.node.inputs['Geometry'])
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
 
 class SortElements(GreenNode):
     def __init__(self, tree, location=(0, 0),
-                 domain='FACE',
+                 domain="FACE",
                  geometry=None,
                  selection=None,
                  group_id=None,
@@ -970,26 +1253,27 @@ class SortElements(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeSortElements")
         self.node.domain = domain
 
-        self.geometry_in = self.node.inputs['Geometry']
-        self.geometry_out = self.node.outputs['Geometry']
+        self.geometry_in = self.node.inputs["Geometry"]
+        self.geometry_out = self.node.outputs["Geometry"]
 
         super().__init__(tree,location=location,**kwargs)
 
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
         if group_id:
-            self.node.inputs['Group ID'].default_value = group_id
+            self.node.inputs["Group ID"].default_value = group_id
         if geometry:
-            self.tree.links.new(geometry, self.node.inputs['Geometry'])
-        if isinstance(sort_weight,(int,float)):
-            self.node.inputs['Sort Weight'].default_value = sort_weight
-        else:
-            self.tree.links.new(sort_weight,self.node.inputs['Sort Weight'])
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
+        if sort_weight:
+            if isinstance(sort_weight,(int,float)):
+                self.node.inputs["Sort Weight"].default_value = sort_weight
+            else:
+                self.tree.links.new(sort_weight,self.node.inputs["Sort Weight"])
 
 class RayCast(GreenNode):
     def __init__(self, tree, location=(0, 0),
-                 data_type='FLOAT',
-                 mapping='INTERPOLATED',
+                 data_type="FLOAT",
+                 mapping="INTERPOLATED",
                  target_geometry=None,
                  attribute=None,
                  source_position=None,
@@ -1000,8 +1284,8 @@ class RayCast(GreenNode):
 
         :param tree:
         :param location:
-        :param data_type:'FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'QUATERNION'
-        :param mapping:'INTERPOLATED','NEAREST'
+        :param data_type:"FLOAT", "INT", "FLOAT_VECTOR", "FLOAT_COLOR", "BYTE_COLOR", "BOOLEAN", "FLOAT2", "QUATERNION"
+        :param mapping:"INTERPOLATED","NEAREST"
         :param target_geometry:
         :param attribute:
         :param source_position:
@@ -1014,22 +1298,22 @@ class RayCast(GreenNode):
         self.node.mapping = mapping
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_in = self.node.inputs['Target Geometry']
+        self.geometry_in = self.node.inputs["Target Geometry"]
 
         if target_geometry:
-            self.tree.links.new(target_geometry, self.node.inputs['Target Geometry'])
+            self.tree.links.new(target_geometry, self.node.inputs["Target Geometry"])
         if attribute:
-            self.tree.links.new(attribute, self.node.inputs['Attribute'])
+            self.tree.links.new(attribute, self.node.inputs["Attribute"])
         if source_position:
-            self.tree.links.new(source_position, self.node.inputs['Source Position'])
+            self.tree.links.new(source_position, self.node.inputs["Source Position"])
         if isinstance(ray_direction, (Vector, list)):
-            self.node.inputs['Ray Direction'].default_value = ray_direction
+            self.node.inputs["Ray Direction"].default_value = ray_direction
         else:
-            self.tree.links.new(ray_direction, self.node.inputs['Ray Direction'])
+            self.tree.links.new(ray_direction, self.node.inputs["Ray Direction"])
         if isinstance(ray_length, (int, float)):
-            self.node.inputs['Ray Length'].default_value = ray_length
+            self.node.inputs["Ray Length"].default_value = ray_length
         else:
-            self.tree.links.new(ray_length, self.node.inputs['Ray Length'])
+            self.tree.links.new(ray_length, self.node.inputs["Ray Length"])
 
 
 class ConvexHull(GreenNode):
@@ -1039,11 +1323,11 @@ class ConvexHull(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeConvexHull")
         super().__init__(tree, location=location,**kwargs)
 
-        self.geometry_out = self.node.outputs['Convex Hull']
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_out = self.node.outputs["Convex Hull"]
+        self.geometry_in = self.node.inputs["Geometry"]
 
         if geometry:
-            self.tree.links.new(geometry, self.node.inputs['Geometry'])
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
 
 
 class BoundingBox(GreenNode):
@@ -1053,26 +1337,26 @@ class BoundingBox(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeBoundBox")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Bounding Box']
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_out = self.node.outputs["Bounding Box"]
+        self.geometry_in = self.node.inputs["Geometry"]
 
         if geometry:
-            self.tree.links.new(geometry, self.node.inputs['Geometry'])
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
 
 
 class StoredNamedAttribute(GreenNode):
     def __init__(self, tree, location=(0, 0),
-                 data_type='FLOAT',
-                 domain='POINT',
+                 data_type="FLOAT",
+                 domain="POINT",
                  selection=None,
-                 name='attribute',
+                 name="attribute",
                  value=None, **kwargs
                  ):
         """
            :param tree:
            :param location:
-           :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'INT8', 'QUATERNION', 'FLOAT4X4'
-           :param domain: 'POINT', 'FACE', 'EDGE', and more
+           :param data_type: "FLOAT", "INT", "FLOAT_VECTOR", "FLOAT_COLOR", "BYTE_COLOR", "BOOLEAN", "FLOAT2", "INT8", "QUATERNION", "FLOAT4X4"
+           :param domain: "POINT", "FACE", "EDGE", and more
            :param name: name of the attribute
            :param value: value to store
            :param kwargs:
@@ -1080,36 +1364,36 @@ class StoredNamedAttribute(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeStoreNamedAttribute")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Geometry']
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
+        self.geometry_in = self.node.inputs["Geometry"]
 
         self.node.domain = domain
         self.node.data_type = data_type
 
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
 
         if isinstance(name, str):
-            self.node.inputs['Name'].default_value = name
+            self.node.inputs["Name"].default_value = name
         else:
-            self.tree.links.new(name, self.node.inputs['Name'])
+            self.tree.links.new(name, self.node.inputs["Name"])
 
         if value is not None:
             if isinstance(value, (int, float, Vector, list)):
-                self.node.inputs['Value'].default_value = value
+                self.node.inputs["Value"].default_value = value
             else:
-                self.tree.links.new(value, self.node.inputs['Value'])
+                self.tree.links.new(value, self.node.inputs["Value"])
 
 
 class NamedAttribute(RedNode):
     def __init__(self, tree, location=(0, 0),
-                 data_type='FLOAT',
-                 name='attribute', **kwargs
+                 data_type="FLOAT",
+                 name="attribute", **kwargs
                  ):
         """
            :param tree:
            :param location:
-           :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'INT8', 'QUATERNION', 'FLOAT4X4'
+           :param data_type: "FLOAT", "INT", "FLOAT_VECTOR", "FLOAT_COLOR", "BYTE_COLOR", "BOOLEAN", "FLOAT2", "INT8", "QUATERNION", "FLOAT4X4"
            :param name: name of the attribute
            :param kwargs:
         """
@@ -1118,17 +1402,17 @@ class NamedAttribute(RedNode):
 
         # the order of the following lines matters, since the output depends on the data_type
         self.node.data_type = data_type
-        self.std_out = self.node.outputs['Attribute']
+        self.std_out = self.node.outputs["Attribute"]
 
         if isinstance(name, str):
-            self.node.inputs['Name'].default_value = name
+            self.node.inputs["Name"].default_value = name
         else:
-            self.tree.links.new(name, self.node.inputs['Name'])
+            self.tree.links.new(name, self.node.inputs["Name"])
 
 
 class CollectionInfo(RedNode):
     def __init__(self, tree, location=(0, 0),
-                 transform_space='ORIGINAL',
+                 transform_space="ORIGINAL",
                  collection_name="Collection",
                  separate_children=False,
                  reset_children=False, **kwargs
@@ -1136,14 +1420,14 @@ class CollectionInfo(RedNode):
         """
            :param tree:
            :param location:
-           :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'QUATERNION'
+           :param data_type: "FLOAT", "INT", "FLOAT_VECTOR", "FLOAT_COLOR", "BYTE_COLOR", "BOOLEAN", "FLOAT2", "QUATERNION"
            :param name: name of the attribute
            :param kwargs:
         """
         self.node = tree.nodes.new(type="GeometryNodeCollectionInfo")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Instances']
+        self.geometry_out = self.node.outputs["Instances"]
         self.node.transform_space = transform_space
         self.node.inputs[0].default_value = ibpy.get_collection(collection_name)
         if isinstance(separate_children, bool):
@@ -1160,38 +1444,38 @@ class SetMaterial(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  geometry=None,
                  selection=None,
-                 material='drawing', **kwargs
+                 material="drawing", **kwargs
                  ):
 
         self.node = tree.nodes.new(type="GeometryNodeSetMaterial")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Geometry']
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
+        self.geometry_in = self.node.inputs["Geometry"]
 
         if geometry:
-            self.tree.links.new(geometry, self.node.inputs['Geometry'])
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
         if callable(material):  # call passed function
             if "attribute_names" in kwargs:
                 material = material(attribute_names=kwargs.pop("attribute_names"), **kwargs)
             else:
                 material = material(**kwargs)
-            self.inputs['Material'].default_value = material
+            self.inputs["Material"].default_value = material
         elif isinstance(material, str):  # create material from passed string
             material = get_material(material, **kwargs)
-            self.inputs['Material'].default_value = material
+            self.inputs["Material"].default_value = material
         elif isinstance(material, bpy.types.Material):
-            self.inputs['Material'].default_value = material
+            self.inputs["Material"].default_value = material
         else:  # link socket
-            self.tree.links.new(material, self.inputs['Material'])
+            self.tree.links.new(material, self.inputs["Material"])
 
 
 class MergeByDistance(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  geometry=None,
-                 mode='ALL',
+                 mode="ALL",
                  selection=None,
                  distance=0.001,
                  **kwargs
@@ -1200,19 +1484,19 @@ class MergeByDistance(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeMergeByDistance")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Geometry']
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
+        self.geometry_in = self.node.inputs["Geometry"]
 
         self.node.mode = mode
 
         if geometry:
-            self.tree.links.new(geometry, self.node.inputs['Geometry'])
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
         if isinstance(distance, (int, float)):
-            self.node.inputs['Distance'].default_value = distance
+            self.node.inputs["Distance"].default_value = distance
         elif distance:
-            self.tree.links.new(distance, self.node.inputs['Distance'])
+            self.tree.links.new(distance, self.node.inputs["Distance"])
 
 
 class SetShadeSmooth(GreenNode):
@@ -1225,17 +1509,17 @@ class SetShadeSmooth(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeSetShadeSmooth")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Geometry']
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
+        self.geometry_in = self.node.inputs["Geometry"]
 
         if geometry:
-            self.tree.links.new(geometry, self.node.inputs['Geometry'])
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
         if selection:
-            self.tree.links.new(selection, self.node.inputs['Selection'])
+            self.tree.links.new(selection, self.node.inputs["Selection"])
         if isinstance(shade_smooth, bool):
-            self.inputs['Shade Smooth'].default_value = shade_smooth
+            self.inputs["Shade Smooth"].default_value = shade_smooth
         else:
-            self.tree.links.new(shade_smooth, self.inputs['Shade Smooth'])
+            self.tree.links.new(shade_smooth, self.inputs["Shade Smooth"])
 
 
 class TransformGeometry(GreenNode):
@@ -1257,8 +1541,8 @@ class TransformGeometry(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeTransform")
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Geometry']
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
+        self.geometry_in = self.node.inputs["Geometry"]
 
         if translation_z is not None or translation_y is not None or translation_x is not None:
             if translation_z is None:
@@ -1269,34 +1553,34 @@ class TransformGeometry(GreenNode):
                 translation_x =0
             sep = CombineXYZ(tree,location=(location[0]-1,location[1]),
                              x=translation_x,y=translation_y,z=translation_z)
-            tree.links.new(sep.std_out,self.inputs['Translation'])
+            tree.links.new(sep.std_out,self.inputs["Translation"])
         elif isinstance(translation, (list, Vector)):
-            self.inputs['Translation'].default_value = translation
+            self.inputs["Translation"].default_value = translation
         else:
-            self.tree.links.new(translation, self.inputs['Translation'])
+            self.tree.links.new(translation, self.inputs["Translation"])
 
         if isinstance(rotation, (list, Vector)):
-            self.inputs['Rotation'].default_value = rotation
+            self.inputs["Rotation"].default_value = rotation
         else:
-            self.tree.links.new(rotation, self.inputs['Rotation'])
+            self.tree.links.new(rotation, self.inputs["Rotation"])
 
         if isinstance(scale, (list, Vector)):
-            self.inputs['Scale'].default_value = scale
+            self.inputs["Scale"].default_value = scale
         else:
-            self.tree.links.new(scale, self.inputs['Scale'])
+            self.tree.links.new(scale, self.inputs["Scale"])
 
 class ObjectInfo(GreenNode):
     def __init__(self, tree, location=(0, 0),
-                 transform_space='RELATIVE',
+                 transform_space="RELATIVE",
                  object=None, **kwargs
                  ):
         self.node = tree.nodes.new(type="GeometryNodeObjectInfo")
         super().__init__(tree, location=location, **kwargs)
         self.node.transform_space = transform_space
         if object is not None:
-            self.node.inputs['Object'].default_value = object
+            self.node.inputs["Object"].default_value = object
 
-        self.geometry_out = self.node.outputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
 
 class DomainSize(GreenNode):
     """
@@ -1312,16 +1596,16 @@ class DomainSize(GreenNode):
 
     def __init__(self, tree, location=(0, 0),
                  geometry=None,
-                 component='MESH', **kwargs
+                 component="MESH", **kwargs
                  ):
         self.node = tree.nodes.new(type="GeometryNodeAttributeDomainSize")
         super().__init__(tree, location=location, **kwargs)
 
         self.node.component = component
         if geometry is not None:
-            tree.links.new(geometry, self.node.inputs['Geometry'])
+            tree.links.new(geometry, self.node.inputs["Geometry"])
 
-        self.geometry_in = self.node.inputs['Geometry']
+        self.geometry_in = self.node.inputs["Geometry"]
 
 class SampleIndex(GreenNode):
     """
@@ -1330,8 +1614,8 @@ class SampleIndex(GreenNode):
     """
 
     def __init__(self, tree, location=(0, 0),
-                 data_type='FLOAT_VECTOR',
-                 domain='POINT',
+                 data_type="FLOAT_VECTOR",
+                 domain="POINT",
                  geometry=None,
                  value=None,
                  index=None, **kwargs
@@ -1344,18 +1628,18 @@ class SampleIndex(GreenNode):
         self.node.domain = domain
 
         if geometry is not None:
-            tree.links.new(geometry, self.node.inputs['Geometry'])
+            tree.links.new(geometry, self.node.inputs["Geometry"])
 
         if value is not None:
-            tree.links.new(value, self.node.inputs['Value'])
+            tree.links.new(value, self.node.inputs["Value"])
 
         if isinstance(index, int):
-            self.node.inputs['Index'].default_value = index
+            self.node.inputs["Index"].default_value = index
         elif index is not None:
-            tree.links.new(index, self.node.inputs['Index'])
+            tree.links.new(index, self.node.inputs["Index"])
 
-        self.geometry_in = self.node.inputs['Geometry']
-        self.std_out = self.node.outputs['Value']
+        self.geometry_in = self.node.inputs["Geometry"]
+        self.std_out = self.node.outputs["Value"]
 
 ###################
 ## Utility Nodes ##
@@ -1366,7 +1650,7 @@ class EvaluateOnDomain(BlueNode):
         """
 
         :param tree:
-        :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'BOOLEAN'
+        :param data_type: "FLOAT", "INT", "FLOAT_VECTOR", "BOOLEAN"
         :param domain: "FACE","POINT","EDGE",...
         :param kwargs:
         """
@@ -1378,10 +1662,11 @@ class EvaluateOnDomain(BlueNode):
         self.std_in = self.node.inputs["Value"]
         self.std_out = self.node.outputs["Value"]
 
-        if isinstance(value, (int, float)):
-            self.node.inputs["Value"].default_value = value
-        else:
-            tree.links.new(value, self.node.inputs["Value"])
+        if value is not None:
+            if isinstance(value, (int, float)):
+                self.node.inputs["Value"].default_value = value
+            else:
+                tree.links.new(value, self.node.inputs["Value"])
 
 
 #  red nodes   #
@@ -1391,28 +1676,28 @@ class Position(RedNode):
         self.node = tree.nodes.new(type="GeometryNodeInputPosition")
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_out = self.node.outputs['Position']
+        self.std_out = self.node.outputs["Position"]
 
 class FaceArea(RedNode):
     def __init__(self, tree, location=(0, 0), **kwargs):
         self.node = tree.nodes.new(type="GeometryNodeInputMeshFaceArea")
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_out = self.node.outputs['Area']
+        self.std_out = self.node.outputs["Area"]
 
 class InputNormal(RedNode):
     def __init__(self, tree, location=(0, 0), **kwargs):
         self.node = tree.nodes.new(type="GeometryNodeInputNormal")
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_out = self.node.outputs['Normal']
+        self.std_out = self.node.outputs["Normal"]
 
 
 class Index(RedNode):
     def __init__(self, tree, location=(0, 0), **kwargs):
         self.node = tree.nodes.new(type="GeometryNodeInputIndex")
         super().__init__(tree, location=location, **kwargs)
-        self.std_out = self.node.outputs['Index']
+        self.std_out = self.node.outputs["Index"]
 
 
 class EdgeVertices(RedNode):
@@ -1420,7 +1705,7 @@ class EdgeVertices(RedNode):
         self.node = tree.nodes.new(type="GeometryNodeInputMeshEdgeVertices")
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_out = self.node.outputs['Vertex Index 1']
+        self.std_out = self.node.outputs["Vertex Index 1"]
 
 
 class InputValue(RedNode):
@@ -1428,8 +1713,16 @@ class InputValue(RedNode):
         self.node = tree.nodes.new(type="ShaderNodeValue")
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_out = self.node.outputs['Value']
-        self.outputs['Value'].default_value = value
+        self.std_out = self.node.outputs["Value"]
+        self.outputs["Value"].default_value = value
+
+class InputInteger(RedNode):
+    def __init__(self, tree, location=(0, 0), integer=0, **kwargs):
+        self.node = tree.nodes.new(type="FunctionNodeInputInt")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Integer"]
+        self.node.integer = integer
 
 
 class SceneTime(RedNode):
@@ -1446,7 +1739,7 @@ class InputBoolean(RedNode):
         self.node = tree.nodes.new(type="FunctionNodeInputBool")
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_out = self.node.outputs['Boolean']
+        self.std_out = self.node.outputs["Boolean"]
         self.node.boolean = value
 
 
@@ -1503,7 +1796,7 @@ class RotateRotation(RedNode):
 
 
 class AlignRotationToVector(RedNode):
-    def __init__(self, tree, location=(0, 0), pivot='AUTO',axis='Z',rotation=None,factor=1,vector=Vector(), **kwargs):
+    def __init__(self, tree, location=(0, 0), pivot="AUTO",axis="Z",rotation=None,factor=1,vector=Vector(), **kwargs):
 
         self.node = tree.nodes.new(type="FunctionNodeAlignRotationToVector")
         super().__init__(tree, location=location, **kwargs)
@@ -1556,12 +1849,12 @@ class QuaternionToRotation(BlueNode):
 
 # blue nodes
 class RandomValue(BlueNode):
-    def __init__(self, tree, data_type='FLOAT_VECTOR', location=(0, 0), min=-1 * Vector([1, 1, 1]),
+    def __init__(self, tree, data_type="FLOAT_VECTOR", location=(0, 0), min=-1 * Vector([1, 1, 1]),
                  max=Vector([1, 1, 1]), seed=0, **kwargs):
         """
 
         :param tree:
-        :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'BOOLEAN'
+        :param data_type: "FLOAT", "INT", "FLOAT_VECTOR", "BOOLEAN"
         :param location:
         :param min:
         :param max:
@@ -1573,25 +1866,25 @@ class RandomValue(BlueNode):
 
         self.node.data_type = data_type
 
-        if data_type == 'FLOAT_VECTOR':
+        if data_type == "FLOAT_VECTOR":
             self.std_out = self.node.outputs[0]
         else:
             self.std_out == self.node.outputs[1]
 
         if isinstance(min, (int, float, list, Vector)):
-            self.node.inputs['Min'].default_value = min
+            self.node.inputs["Min"].default_value = min
         else:
-            self.node.inputs['Min'] = min
+            self.node.inputs["Min"] = min
 
         if isinstance(max, (int, float, list, Vector)):
-            self.node.inputs['Max'].default_value = max
+            self.node.inputs["Max"].default_value = max
         else:
-            self.node.inputs['Max'] = max
+            self.node.inputs["Max"] = max
 
         if isinstance(seed, (int, float)):
-            self.node.inputs['Seed'].default_value = seed
+            self.node.inputs["Seed"].default_value = seed
         else:
-            self.node.inputs['Seed'] = seed
+            self.node.inputs["Seed"] = seed
 
 
 class SeparateXYZ(BlueNode):
@@ -1599,7 +1892,7 @@ class SeparateXYZ(BlueNode):
         """
 
         :param tree:
-        :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'BOOLEAN'
+        :param data_type: "FLOAT", "INT", "FLOAT_VECTOR", "BOOLEAN"
         :param location:
         :param min:
         :param max:
@@ -1609,10 +1902,10 @@ class SeparateXYZ(BlueNode):
         self.node = tree.nodes.new(type="ShaderNodeSeparateXYZ")
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_in = self.node.inputs['Vector']
-        self.x = self.node.outputs['X']
-        self.y = self.node.outputs['Y']
-        self.z = self.node.outputs['Z']
+        self.std_in = self.node.inputs["Vector"]
+        self.x = self.node.outputs["X"]
+        self.y = self.node.outputs["Y"]
+        self.z = self.node.outputs["Z"]
 
         if isinstance(vector, (int, float, list, Vector)):
             self.std_in.default_value = vector
@@ -1625,7 +1918,7 @@ class CombineXYZ(BlueNode):
         """
 
         :param tree:
-        :param data_type: 'FLOAT', 'INT', 'FLOAT_VECTOR', 'BOOLEAN'
+        :param data_type: "FLOAT", "INT", "FLOAT_VECTOR", "BOOLEAN"
         :param location:
         :param min:
         :param max:
@@ -1636,37 +1929,37 @@ class CombineXYZ(BlueNode):
         super().__init__(tree, location=location, **kwargs)
 
         self.std_in = self.node.inputs
-        self.std_out = self.node.outputs['Vector']
+        self.std_out = self.node.outputs["Vector"]
 
         if isinstance(x, (int, float)):
-            self.node.inputs['X'].default_value = x
+            self.node.inputs["X"].default_value = x
         else:
             if not isinstance(x, bpy.types.NodeSocketFloat):
                 x = x.std_out
-            tree.links.new(x, self.node.inputs['X'])
+            tree.links.new(x, self.node.inputs["X"])
 
         if isinstance(y, (int, float)):
-            self.node.inputs['Y'].default_value = y
+            self.node.inputs["Y"].default_value = y
         else:
             if not isinstance(y, bpy.types.NodeSocketFloat):
                 y = y.std_out
-            tree.links.new(y, self.node.inputs['Y'])
+            tree.links.new(y, self.node.inputs["Y"])
 
         if isinstance(z, (int, float)):
-            self.node.inputs['Z'].default_value = z
+            self.node.inputs["Z"].default_value = z
         else:
             if not isinstance(z,bpy.types.NodeSocketFloat):
                 z = z.std_out
-            tree.links.new(z, self.node.inputs['Z'])
+            tree.links.new(z, self.node.inputs["Z"])
 
 
 class MathNode(BlueNode):
-    def __init__(self, tree, location=(0, 0), operation='ADD', inputs0=None,
+    def __init__(self, tree, location=(0, 0), operation="ADD", inputs0=None,
                  inputs1=None, inputs2=None, **kwargs):
         """
         :param tree:
         :param location:
-        :param operation: 'ADD','SUBTRACT',...
+        :param operation: "ADD","SUBTRACT",...
         :param inputs0:
         :param inputs1:
         :param inputs2:
@@ -1695,13 +1988,49 @@ class MathNode(BlueNode):
             else:
                 tree.links.new(inputs2, self.node.inputs[2])
 
+class CompareNode(BlueNode):
+    def __init__(self, tree, location=(0, 0), operation="EQUAL",
+                 data_type="FLOAT",
+                 inputs0=None,
+                 inputs1=None,
+                 inputs2=None, **kwargs):
+        """
+
+        """
+        self.node = tree.nodes.new(type="FunctionNodeCompare")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Result"]
+        self.node.data_type = data_type
+        self.node.operation = operation
+
+
+        if inputs0:
+            if isinstance(inputs0, (bool, int, float)):
+                self.node.inputs[0].default_value = inputs0
+            else:
+                tree.links.new(inputs0, self.node.inputs[0])
+        if inputs1:
+            if isinstance(inputs1, (bool, int, float)):
+                self.node.inputs[1].default_value = inputs1
+            else:
+                tree.links.new(inputs1, self.node.inputs[1])
+
+        # needed for float comparison
+        if inputs2:
+            if isinstance(inputs2, (bool, int, float)):
+                self.node.inputs[2].default_value = inputs2
+            else:
+                tree.links.new(inputs2, self.node.inputs[2])
+
+
 
 class BooleanMath(BlueNode):
-    def __init__(self, tree, location=(0, 0), operation='AND', inputs0=True, inputs1=True, **kwargs):
+    def __init__(self, tree, location=(0, 0), operation="AND", inputs0=True, inputs1=True, **kwargs):
         """
         :param tree:
         :param location:
-        :param operation: 'AND','OR',...
+        :param operation: "AND","OR",...
         :param inputs0:
         :param inputs1:
         :param kwargs:
@@ -1709,7 +2038,7 @@ class BooleanMath(BlueNode):
         self.node = tree.nodes.new(type="FunctionNodeBooleanMath")
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_out = self.node.outputs['Boolean']
+        self.std_out = self.node.outputs["Boolean"]
 
         if operation:
             self.node.operation = operation
@@ -1724,12 +2053,12 @@ class BooleanMath(BlueNode):
 
 
 class VectorMath(BlueNode):
-    def __init__(self, tree, location=(0, 0), operation='ADD', inputs0=Vector(), inputs1=Vector(), float_input=None,
+    def __init__(self, tree, location=(0, 0), operation="ADD", inputs0=Vector(), inputs1=Vector(), float_input=None,
                  **kwargs):
         """
         :param tree:
         :param location:
-        :param operation: 'AND','OR',...
+        :param operation: "AND","OR",...
         :param inputs0:
         :param inputs1:
         :param kwargs:
@@ -1740,7 +2069,7 @@ class VectorMath(BlueNode):
         if operation in ("DOT", "LENGTH"):
             self.std_out = self.node.outputs[1]
         else:
-            self.std_out = self.node.outputs['Vector']
+            self.std_out = self.node.outputs["Vector"]
 
         if operation:
             self.node.operation = operation
@@ -1768,7 +2097,7 @@ class VectorRotate(BlueNode):
         super().__init__(tree, location=location, **kwargs)
 
 
-        self.std_out = self.node.outputs['Vector']
+        self.std_out = self.node.outputs["Vector"]
 
         self.node.rotation_type=rotation_type
 
@@ -1801,10 +2130,10 @@ class Switch(BlueNode):
         self.node.input_type=input_type
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_out = self.node.outputs['Output']
-        self.switch = self.node.inputs['Switch']
-        self.true = self.node.inputs['True']
-        self.false = self.node.inputs['False']
+        self.std_out = self.node.outputs["Output"]
+        self.switch = self.node.inputs["Switch"]
+        self.true = self.node.inputs["True"]
+        self.false = self.node.inputs["False"]
 
         if switch:
             tree.links.new(switch, self.switch)
@@ -1823,13 +2152,13 @@ class IndexSwitch(BlueNode):
         self.node.data_type=data_type
         super().__init__(tree, location=location, **kwargs)
 
-        self.std_out = self.node.outputs['Output']
-        self.index = self.node.inputs['Index']
+        self.std_out = self.node.outputs["Output"]
+        self.index = self.node.inputs["Index"]
         self.slots = self.node.inputs
 
         if index:
             if isinstance(index, (int, float)):
-                self.node.inputs['Index'].default_value = index
+                self.node.inputs["Index"].default_value = index
             else:
                 tree.links.new(index, self.index)
 
@@ -1846,22 +2175,22 @@ class RepeatZone(GreenNode):
         self.repeat_output.location = (location[0] * 200 + width * 200, location[1] * 200)
         self.repeat_input.pair_with_output(self.repeat_output)
         self.node = self.repeat_input
-        self.geometry_in = self.repeat_input.inputs['Geometry']
-        self.geometry_out = self.repeat_output.outputs['Geometry']
-        tree.links.new(self.repeat_input.outputs['Geometry'], self.repeat_output.inputs['Geometry'])
+        self.geometry_in = self.repeat_input.inputs["Geometry"]
+        self.geometry_out = self.repeat_output.outputs["Geometry"]
+        tree.links.new(self.repeat_input.outputs["Geometry"], self.repeat_output.inputs["Geometry"])
         super().__init__(tree, location=location, **kwargs)
 
         if isinstance(iterations, int):
-            self.repeat_input.inputs['Iterations'].default_value = iterations
+            self.repeat_input.inputs["Iterations"].default_value = iterations
         else:
-            self.repeat_input.inputs['Iteration'] = iterations
+            self.repeat_input.inputs["Iteration"] = iterations
 
         if geometry is not None:
-            tree.links.new(geometry, self.repeat_input.inputs['Geometry'])
+            tree.links.new(geometry, self.repeat_input.inputs["Geometry"])
 
-    def add_socket(self, socket_type='GEOMETRY', name="socket"):
+    def add_socket(self, socket_type="GEOMETRY", name="socket"):
         """
-        :param socket_type: 'FLOAT', 'INT', 'BOOLEAN', 'VECTOR', 'ROTATION', 'STRING', 'RGBA', 'OBJECT', 'IMAGE', 'GEOMETRY', 'COLLECTION', 'TEXTURE', 'MATERIAL'
+        :param socket_type: "FLOAT", "INT", "BOOLEAN", "VECTOR", "ROTATION", "STRING", "RGBA", "OBJECT", "IMAGE", "GEOMETRY", "COLLECTION", "TEXTURE", "MATERIAL"
         :param name:
         :return:
         """
@@ -1874,12 +2203,12 @@ class RepeatZone(GreenNode):
 
     def create_geometry_line(self, nodes):
         last = nodes.pop()
-        self.tree.links.new(last.geometry_out, self.repeat_output.inputs['Geometry'])
+        self.tree.links.new(last.geometry_out, self.repeat_output.inputs["Geometry"])
         while len(nodes) > 0:
             current = nodes.pop()
             self.tree.links.new(current.geometry_out, last.geometry_in)
             last = current
-        self.tree.links.new(self.repeat_input.outputs['Geometry'], last.geometry_in)
+        self.tree.links.new(self.repeat_input.outputs["Geometry"], last.geometry_in)
 
 
 class Simulation(GreenNode):
@@ -1890,17 +2219,17 @@ class Simulation(GreenNode):
         self.simulation_output.location = (location[0] * 200 + width * 200, location[1] * 100)
         self.simulation_input.pair_with_output(self.simulation_output)
         self.node = self.simulation_input
-        self.geometry_in = self.simulation_input.inputs['Geometry']
-        self.geometry_out = self.simulation_output.outputs['Geometry']
-        tree.links.new(self.simulation_input.outputs['Geometry'], self.simulation_output.inputs['Geometry'])
+        self.geometry_in = self.simulation_input.inputs["Geometry"]
+        self.geometry_out = self.simulation_output.outputs["Geometry"]
+        tree.links.new(self.simulation_input.outputs["Geometry"], self.simulation_output.inputs["Geometry"])
         super().__init__(tree, location=location, **kwargs)
 
         if geometry is not None:
-            tree.links.new(geometry, self.simulation_input.inputs['Geometry'])
+            tree.links.new(geometry, self.simulation_input.inputs["Geometry"])
 
-    def add_socket(self, socket_type='GEOMETRY', name="socket", value=0):
+    def add_socket(self, socket_type="GEOMETRY", name="socket", value=0):
         """
-        :param socket_type: 'FLOAT', 'INT', 'BOOLEAN', 'VECTOR', 'ROTATION', 'STRING', 'RGBA', 'OBJECT', 'IMAGE', 'GEOMETRY', 'COLLECTION', 'TEXTURE', 'MATERIAL'
+        :param socket_type: "FLOAT", "INT", "BOOLEAN", "VECTOR", "ROTATION", "STRING", "RGBA", "OBJECT", "IMAGE", "GEOMETRY", "COLLECTION", "TEXTURE", "MATERIAL"
         :param name:
         :return:
         """
@@ -1914,12 +2243,52 @@ class Simulation(GreenNode):
 
     def create_geometry_line(self, nodes):
         last = nodes.pop()
-        self.tree.links.new(last.geometry_out, self.simulation_output.inputs['Geometry'])
+        self.tree.links.new(last.geometry_out, self.simulation_output.inputs["Geometry"])
         while len(nodes) > 0:
             current = nodes.pop()
             self.tree.links.new(current.geometry_out, last.geometry_in)
             last = current
-        self.tree.links.new(self.simulation_input.outputs['Geometry'], last.geometry_in)
+        self.tree.links.new(self.simulation_input.outputs["Geometry"], last.geometry_in)
+
+class ForEachInput(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 geometry=None,selection=None, **kwargs):
+
+        # I collected the name convention from the blender github repository directly
+        # it can be found under blender/source/blender/nodes/geometry/node_geo_foreach_geometry_element.cc
+        # praise open source !!!
+        if blender_version()<(4,3):
+            raise "No for each element node in versions below (4,3)"
+        self.node = tree.nodes.new("GeometryNodeForeachGeometryElementInput")
+        super().__init__(tree,location,**kwargs)
+
+
+        self.geometry_in = self.node.inputs["Geometry"]
+        self.geometry_out = self.node.outputs[0]
+
+        if geometry:
+            tree.links.new(geometry,self.node.inputs["Geometry"])
+        if selection:
+            tree.links.new(selection,self.node.inputs["Selection"])
+
+    def pair_with_output(self,output):
+        if isinstance(output,Node):
+            output = output.node
+        self.node.pair_with_output(output)
+
+class ForEachOutput(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 geometry=None, domain = "POINT",**kwargs):
+
+        self.node = tree.nodes.new("GeometryNodeForeachGeometryElementOutput")
+        self.node.domain = domain
+        super().__init__(tree,location,**kwargs)
+
+        self.geometry_in = self.node.inputs["Geometry"]
+        self.geometry_out = self.node.outputs["Geometry"]
+
+        if geometry:
+            tree.links.new(geometry,self.node.inputs["Geometry"])
 
 
 # custom composite nodes
@@ -1935,23 +2304,23 @@ class WireFrame(GreenNode):
         self.node = self.create_node(tree.nodes)
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
-        self.geometry_in = self.node.inputs['Mesh']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Mesh"]
 
         if geometry:
             self.tree.links.new(geometry, self.geometry_in)
         if isinstance(radius, (int, float)):
-            self.node.inputs['Radius'].default_value = radius
+            self.node.inputs["Radius"].default_value = radius
         else:
-            self.tree.links.new(radius, self.node.inputs['Radius'])
+            self.tree.links.new(radius, self.node.inputs["Radius"])
         if isinstance(resolution, int):
-            self.node.inputs['Resolution'].default_value = resolution
+            self.node.inputs["Resolution"].default_value = resolution
         else:
-            self.tree.links.new(resolution, self.node.inputs['Resolution'])
+            self.tree.links.new(resolution, self.node.inputs["Resolution"])
 
-    def create_node(self, nodes, name='WireframeNode'):
-        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-        group = nodes.new(type='GeometryNodeGroup')
+    def create_node(self, nodes, name="WireframeNode"):
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
 
         group.name = name
         group.node_tree = tree
@@ -1960,24 +2329,24 @@ class WireFrame(GreenNode):
         tree_nodes = tree.nodes
         tree_links = tree.links
 
-        group_inputs = tree_nodes.new('NodeGroupInput')
-        group_outputs = tree_nodes.new('NodeGroupOutput')
+        group_inputs = tree_nodes.new("NodeGroupInput")
+        group_outputs = tree_nodes.new("NodeGroupOutput")
 
-        make_new_socket(tree, name='Mesh', io='INPUT', type='NodeSocketGeometry')
-        make_new_socket(tree, name='Radius', io='INPUT', type='NodeSocketFloat')
-        make_new_socket(tree, name='Resolution', io='INPUT', type='NodeSocketInt')
+        make_new_socket(tree, name="Mesh", io="INPUT", type="NodeSocketGeometry")
+        make_new_socket(tree, name="Radius", io="INPUT", type="NodeSocketFloat")
+        make_new_socket(tree, name="Resolution", io="INPUT", type="NodeSocketInt")
 
-        make_new_socket(tree, name='Mesh', io='OUTPUT', type='NodeSocketGeometry')
+        make_new_socket(tree, name="Mesh", io="OUTPUT", type="NodeSocketGeometry")
 
         group_inputs.location = (0, 0)
         group_outputs.location = (600, 0)
 
         mesh2curve = MeshToCurve(tree, location=(1, 0))
-        curve_circle = CurveCircle(tree, location=(1, 1), resolution=group_inputs.outputs['Resolution'],
-                                   radius=group_inputs.outputs['Radius'])
+        curve_circle = CurveCircle(tree, location=(1, 1), resolution=group_inputs.outputs["Resolution"],
+                                   radius=group_inputs.outputs["Radius"])
         curve2mesh = CurveToMesh(tree, location=(2, 0), profile_curve=curve_circle.geometry_out)
         create_geometry_line(tree, [mesh2curve, curve2mesh],
-                             ins=group_inputs.outputs['Mesh'], out=group_outputs.inputs['Mesh'])
+                             ins=group_inputs.outputs["Mesh"], out=group_outputs.inputs["Mesh"])
         return group
 
 class WireFrameRectangle(GreenNode):
@@ -1990,23 +2359,23 @@ class WireFrameRectangle(GreenNode):
         self.node = self.create_node(tree.nodes)
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Mesh']
-        self.geometry_in = self.node.inputs['Mesh']
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Mesh"]
 
         if geometry:
             self.tree.links.new(geometry, self.geometry_in)
         if isinstance(width, (int, float)):
-            self.node.inputs['Width'].default_value =width
+            self.node.inputs["Width"].default_value =width
         else:
-            self.tree.links.new(width, self.node.inputs['Width'])
+            self.tree.links.new(width, self.node.inputs["Width"])
         if isinstance(height, (int, float)):
-            self.node.inputs['Height'].default_value =height
+            self.node.inputs["Height"].default_value =height
         else:
-            self.tree.links.new(height, self.node.inputs['Height'])
+            self.tree.links.new(height, self.node.inputs["Height"])
 
-    def create_node(self, nodes, name='WireframeNode'):
-        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-        group = nodes.new(type='GeometryNodeGroup')
+    def create_node(self, nodes, name="WireframeNode"):
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
 
         group.name = name
         group.node_tree = tree
@@ -2015,14 +2384,14 @@ class WireFrameRectangle(GreenNode):
         tree_nodes = tree.nodes
         tree_links = tree.links
 
-        group_inputs = tree_nodes.new('NodeGroupInput')
-        group_outputs = tree_nodes.new('NodeGroupOutput')
+        group_inputs = tree_nodes.new("NodeGroupInput")
+        group_outputs = tree_nodes.new("NodeGroupOutput")
 
-        make_new_socket(tree, name='Mesh', io='INPUT', type='NodeSocketGeometry')
-        make_new_socket(tree, name='Width', io='INPUT', type='NodeSocketFloat')
-        make_new_socket(tree, name='Height', io='INPUT', type='NodeSocketFloat')
+        make_new_socket(tree, name="Mesh", io="INPUT", type="NodeSocketGeometry")
+        make_new_socket(tree, name="Width", io="INPUT", type="NodeSocketFloat")
+        make_new_socket(tree, name="Height", io="INPUT", type="NodeSocketFloat")
 
-        make_new_socket(tree, name='Mesh', io='OUTPUT', type='NodeSocketGeometry')
+        make_new_socket(tree, name="Mesh", io="OUTPUT", type="NodeSocketGeometry")
 
         group_inputs.location = (0, 0)
         group_outputs.location = (600, 0)
@@ -2032,7 +2401,7 @@ class WireFrameRectangle(GreenNode):
                                        height=group_inputs.outputs["Height"])
         curve2mesh = CurveToMesh(tree, location=(2, 0), profile_curve=rectangle.geometry_out)
         create_geometry_line(tree, [mesh2curve, curve2mesh],
-                             ins=group_inputs.outputs['Mesh'], out=group_outputs.inputs['Mesh'])
+                             ins=group_inputs.outputs["Mesh"], out=group_outputs.inputs["Mesh"])
         return group
 
 
@@ -2055,23 +2424,23 @@ class InsideConvexHull(GreenNode):
         self.node = self.create_node(tree.nodes)
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_in = self.node.inputs['Target Geometry']
-        self.std_out = self.node.outputs['Is Inside']
+        self.geometry_in = self.node.inputs["Target Geometry"]
+        self.std_out = self.node.outputs["Is Inside"]
 
         if target_geometry:
-            self.tree.links.new(target_geometry, self.node.inputs['Target Geometry'])
+            self.tree.links.new(target_geometry, self.node.inputs["Target Geometry"])
         if isinstance(source_position, (Vector, list)):
-            self.node.inputs['Source Position'].default_value = source_position
+            self.node.inputs["Source Position"].default_value = source_position
         else:
-            self.tree.links.new(source_position, self.node.inputs['Source Position'])
+            self.tree.links.new(source_position, self.node.inputs["Source Position"])
         if isinstance(self.ray_direction, (Vector, list)):
-            self.node.inputs['Ray Direction'].default_value = self.ray_direction
+            self.node.inputs["Ray Direction"].default_value = self.ray_direction
         else:
-            self.tree.links.new(ray_direction, self.node.inputs['Ray Direction'])
+            self.tree.links.new(ray_direction, self.node.inputs["Ray Direction"])
 
-    def create_node(self, nodes, name='InsideConvexHullTest'):
-        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-        group = nodes.new(type='GeometryNodeGroup')
+    def create_node(self, nodes, name="InsideConvexHullTest"):
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
 
         group.name = name
         group.node_tree = tree
@@ -2080,46 +2449,46 @@ class InsideConvexHull(GreenNode):
         tree_nodes = tree.nodes
         tree_links = tree.links
 
-        group_inputs = tree_nodes.new('NodeGroupInput')
-        group_outputs = tree_nodes.new('NodeGroupOutput')
+        group_inputs = tree_nodes.new("NodeGroupInput")
+        group_outputs = tree_nodes.new("NodeGroupOutput")
 
-        make_new_socket(tree, name='Target Geometry', io='INPUT', type='NodeSocketGeometry')
-        make_new_socket(tree, name='Source Position', io='INPUT', type='NodeSocketVector')
-        make_new_socket(tree, name='Ray Direction', io='INPUT', type='NodeSocketVector')
+        make_new_socket(tree, name="Target Geometry", io="INPUT", type="NodeSocketGeometry")
+        make_new_socket(tree, name="Source Position", io="INPUT", type="NodeSocketVector")
+        make_new_socket(tree, name="Ray Direction", io="INPUT", type="NodeSocketVector")
 
-        make_new_socket(tree, name='Is Inside', io='OUTPUT', type='NodeSocketBool')
-        make_new_socket(tree, name='Is Outside', io='OUTPUT', type='NodeSocketBool')
+        make_new_socket(tree, name="Is Inside", io="OUTPUT", type="NodeSocketBool")
+        make_new_socket(tree, name="Is Outside", io="OUTPUT", type="NodeSocketBool")
 
         group_inputs.location = (0, 0)
         group_outputs.location = (400, 0)
 
         ray_cast_up = RayCast(tree, location=(2, 2),
-                              target_geometry=group_inputs.outputs['Target Geometry'],
-                              source_position=group_inputs.outputs['Source Position'],
-                              ray_direction=group_inputs.outputs['Ray Direction'], label="RayUp")
+                              target_geometry=group_inputs.outputs["Target Geometry"],
+                              source_position=group_inputs.outputs["Source Position"],
+                              ray_direction=group_inputs.outputs["Ray Direction"], label="RayUp")
 
-        scale = VectorMath(tree, location=(1, -2), label="Negative", operation='SCALE',
-                           inputs0=group_inputs.outputs['Ray Direction'], float_input=-1, hide=True)
+        scale = VectorMath(tree, location=(1, -2), label="Negative", operation="SCALE",
+                           inputs0=group_inputs.outputs["Ray Direction"], float_input=-1, hide=True)
         ray_direction = scale.std_out
         ray_cast_down = RayCast(tree, location=(2, -2),
-                                target_geometry=group_inputs.outputs['Target Geometry'],
-                                source_position=group_inputs.outputs['Source Position'],
+                                target_geometry=group_inputs.outputs["Target Geometry"],
+                                source_position=group_inputs.outputs["Source Position"],
                                 ray_direction=scale.std_out, label="RayDown")
 
-        andMath = BooleanMath(tree, location=(3, 0.5), label="And", operation='AND',
-                              inputs0=ray_cast_up.outputs['Is Hit'],
-                              inputs1=ray_cast_down.outputs['Is Hit'],
+        andMath = BooleanMath(tree, location=(3, 0.5), label="And", operation="AND",
+                              inputs0=ray_cast_up.outputs["Is Hit"],
+                              inputs1=ray_cast_down.outputs["Is Hit"],
                               hide=True
                               )
 
-        notAndMath = BooleanMath(tree, location=(3, -0.5), label="NotAnd", operation='NAND',
-                                 inputs0=ray_cast_up.outputs['Is Hit'],
-                                 inputs1=ray_cast_down.outputs['Is Hit'],
+        notAndMath = BooleanMath(tree, location=(3, -0.5), label="NotAnd", operation="NAND",
+                                 inputs0=ray_cast_up.outputs["Is Hit"],
+                                 inputs1=ray_cast_down.outputs["Is Hit"],
                                  hide=True
                                  )
 
-        tree_links.new(andMath.std_out, group_outputs.inputs['Is Inside'])
-        tree_links.new(notAndMath.std_out, group_outputs.inputs['Is Outside'])
+        tree_links.new(andMath.std_out, group_outputs.inputs["Is Inside"])
+        tree_links.new(notAndMath.std_out, group_outputs.inputs["Is Outside"])
         return group
 
 
@@ -2140,19 +2509,19 @@ class InsideConvexHull3D(GreenNode):
         self.node = self.create_node(tree.nodes)
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_in = self.node.inputs['Target Geometry']
-        self.std_out = self.node.outputs['Is Inside']
+        self.geometry_in = self.node.inputs["Target Geometry"]
+        self.std_out = self.node.outputs["Is Inside"]
 
         if target_geometry:
-            self.tree.links.new(target_geometry, self.node.inputs['Target Geometry'])
+            self.tree.links.new(target_geometry, self.node.inputs["Target Geometry"])
         if isinstance(source_position, (Vector, list)):
-            self.node.inputs['Source Position'].default_value = source_position
+            self.node.inputs["Source Position"].default_value = source_position
         else:
-            self.tree.links.new(source_position, self.node.inputs['Source Position'])
+            self.tree.links.new(source_position, self.node.inputs["Source Position"])
 
-    def create_node(self, nodes, name='InsideConvexHullTest'):
-        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-        group = nodes.new(type='GeometryNodeGroup')
+    def create_node(self, nodes, name="InsideConvexHullTest"):
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
 
         group.name = name
         group.node_tree = tree
@@ -2161,32 +2530,32 @@ class InsideConvexHull3D(GreenNode):
         tree_nodes = tree.nodes
         tree_links = tree.links
 
-        group_inputs = tree_nodes.new('NodeGroupInput')
-        group_outputs = tree_nodes.new('NodeGroupOutput')
+        group_inputs = tree_nodes.new("NodeGroupInput")
+        group_outputs = tree_nodes.new("NodeGroupOutput")
 
-        make_new_socket(tree, name='Target Geometry', io='INPUT', type='NodeSocketGeometry')
-        make_new_socket(tree, name='Source Position', io='INPUT', type='NodeSocketVector')
+        make_new_socket(tree, name="Target Geometry", io="INPUT", type="NodeSocketGeometry")
+        make_new_socket(tree, name="Source Position", io="INPUT", type="NodeSocketVector")
 
-        make_new_socket(tree, name='Is Inside', io='OUTPUT', type='NodeSocketBool')
-        make_new_socket(tree, name='Is Outside', io='OUTPUT', type='NodeSocketBool')
+        make_new_socket(tree, name="Is Inside", io="OUTPUT", type="NodeSocketBool")
+        make_new_socket(tree, name="Is Outside", io="OUTPUT", type="NodeSocketBool")
 
         group_inputs.location = (0, 0)
         group_outputs.location = (400, 0)
 
         boundary_box = BoundingBox(tree, location=(2, -2),
-                                   geometry=group_inputs.outputs['Target Geometry'], label="BBox")
+                                   geometry=group_inputs.outputs["Target Geometry"], label="BBox")
 
         comparison = make_function(tree, functions={
-            "in": ['src_z,maxx_z,>,not,src_z,minn_z,>,*'],
-            "out": ['src_z,maxx_z,>,src_z,minn_z,>,not,+']
-        }, inputs=['src', 'maxx', 'minn'], outputs=['in', 'out'], scalars=['in', 'out'],
-                                   vectors=['src', 'minn', 'maxx'], name="Comparsion")
+            "in": ["src_z,maxx_z,>,not,src_z,minn_z,>,*"],
+            "out": ["src_z,maxx_z,>,src_z,minn_z,>,not,+"]
+        }, inputs=["src", "maxx", "minn"], outputs=["in", "out"], scalars=["in", "out"],
+                                   vectors=["src", "minn", "maxx"], name="Comparsion")
         tree.links.new(group_inputs.outputs["Source Position"], comparison.inputs["src"])
         tree.links.new(boundary_box.outputs["Min"], comparison.inputs["minn"])
         tree.links.new(boundary_box.outputs["Max"], comparison.inputs["maxx"])
 
-        tree_links.new(comparison.outputs["in"], group_outputs.inputs['Is Inside'])
-        tree_links.new(comparison.outputs["out"], group_outputs.inputs['Is Outside'])
+        tree_links.new(comparison.outputs["in"], group_outputs.inputs["Is Inside"])
+        tree_links.new(comparison.outputs["out"], group_outputs.inputs["Is Outside"])
         return group
 
 
@@ -2204,11 +2573,11 @@ class E8Node(GreenNode):
         self.node = self.create_node(tree.nodes)
         super().__init__(tree, location=location, **kwargs)
 
-        self.geometry_out = self.node.outputs['Geometry']
+        self.geometry_out = self.node.outputs["Geometry"]
 
-    def create_node(self, nodes, name='E8Geometry'):
-        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-        group = nodes.new(type='GeometryNodeGroup')
+    def create_node(self, nodes, name="E8Geometry"):
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
 
         group.name = name
         group.node_tree = tree
@@ -2217,26 +2586,26 @@ class E8Node(GreenNode):
         tree_nodes = tree.nodes
         tree_links = tree.links
 
-        group_outputs = tree_nodes.new('NodeGroupOutput')
-        make_new_socket(tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
+        group_outputs = tree_nodes.new("NodeGroupOutput")
+        make_new_socket(tree, name="Geometry", io="OUTPUT", type="NodeSocketGeometry")
 
         group_outputs.location = (400, 0)
 
         join = JoinGeometry(tree)
-        tree_links.new(join.outputs["Geometry"], group_outputs.inputs['Geometry'])
+        tree_links.new(join.outputs["Geometry"], group_outputs.inputs["Geometry"])
 
         # the 240 eight-dimensional coordinates are hard-coded into the node
         # create a point and a set of attributes for each root of the E8 lattice
-        print("Hard-coded entry of roots ...", end='')
+        print("Hard-coded entry of roots ...", end="")
         for root in E8Lattice().roots:
             point = Points(tree)
-            attr1 = StoredNamedAttribute(tree, data_type='FLOAT_VECTOR', name="comp123", value=list(root[0:3]))
-            attr2 = StoredNamedAttribute(tree, data_type='FLOAT_VECTOR', name="comp456", value=list(root[3:6]))
-            attr3 = StoredNamedAttribute(tree, data_type='FLOAT_VECTOR', name="comp78", value=list(root[6:8]) + [0])
+            attr1 = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", name="comp123", value=list(root[0:3]))
+            attr2 = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", name="comp456", value=list(root[3:6]))
+            attr3 = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", name="comp78", value=list(root[6:8]) + [0])
 
             create_geometry_line(tree, [point, attr1, attr2, attr3, join])
         print("done")
-        print("Layout of the node ...", end='')
+        print("Layout of the node ...", end="")
         layout(tree)
         print("done")
         return group
@@ -2267,28 +2636,28 @@ class Rotation(GreenNode):
         super().__init__(tree, location=location, **kwargs)
 
         if isinstance(dimension, int):
-            self.node.inputs['Dimension'].default_value = dimension
+            self.node.inputs["Dimension"].default_value = dimension
         else:
-            self.tree.links.new(dimension, self.node.inputs['Dimension'])
+            self.tree.links.new(dimension, self.node.inputs["Dimension"])
 
         if isinstance(angle, (int, float)):
-            self.node.inputs['Angle'].default_value = angle
+            self.node.inputs["Angle"].default_value = angle
         else:
-            self.tree.links.new(angle, self.node.inputs['Angle'])
+            self.tree.links.new(angle, self.node.inputs["Angle"])
 
         if isinstance(u, int):
-            self.node.inputs['U'].default_value = u
+            self.node.inputs["U"].default_value = u
         else:
-            self.tree.links.new(u, self.node.inputs['U'])
+            self.tree.links.new(u, self.node.inputs["U"])
         if isinstance(v, int):
-            self.node.inputs['V'].default_value = v
+            self.node.inputs["V"].default_value = v
         else:
-            self.tree.links.new(v, self.node.inputs['V'])
+            self.tree.links.new(v, self.node.inputs["V"])
 
-    def create_node(self, nodes, dimension, u, v, name='RotationMatrix'):
+    def create_node(self, nodes, dimension, u, v, name="RotationMatrix"):
         d = dimension
-        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-        group = nodes.new(type='GeometryNodeGroup')
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
 
         group.name = name
         group.node_tree = tree
@@ -2297,20 +2666,20 @@ class Rotation(GreenNode):
         tree_nodes = tree.nodes
         tree_links = tree.links
 
-        group_inputs = tree_nodes.new('NodeGroupInput')
-        group_outputs = tree_nodes.new('NodeGroupOutput')
+        group_inputs = tree_nodes.new("NodeGroupInput")
+        group_outputs = tree_nodes.new("NodeGroupOutput")
 
-        make_new_socket(tree, name='Dimension', io='INPUT', type='NodeSocketInt')
-        make_new_socket(tree, name='U', io='INPUT', type='NodeSocketInt')
-        make_new_socket(tree, name='V', io='INPUT', type='NodeSocketInt')
-        make_new_socket(tree, name='Angle', io='INPUT', type='NodeSocketFloat')
+        make_new_socket(tree, name="Dimension", io="INPUT", type="NodeSocketInt")
+        make_new_socket(tree, name="U", io="INPUT", type="NodeSocketInt")
+        make_new_socket(tree, name="V", io="INPUT", type="NodeSocketInt")
+        make_new_socket(tree, name="Angle", io="INPUT", type="NodeSocketFloat")
 
         # create the required number of vectors for each column
         outputs = []
         for i in range(d):
             for j in range(0, int(np.ceil(d / 3))):
                 name = "row_" + str(i) + "_" + str(j)
-                make_new_socket(tree, name=name, io='OUTPUT', type='NodeSocketVector')
+                make_new_socket(tree, name=name, io="OUTPUT", type="NodeSocketVector")
                 outputs.append(name)
 
         group_inputs.location = (0, 0)
@@ -2320,28 +2689,28 @@ class Rotation(GreenNode):
         func_dict = {}
         for row in range(d):
             # treat diagonal entries, equal to 1, if u and v are different then the column index
-            comps = ['0'] * int(np.ceil(d / 3) * 3)
+            comps = ["0"] * int(np.ceil(d / 3) * 3)
             for col in range(d):
                 if col == row:
-                    comps[row] = '1,u,' + str(row) + ',-,abs,0,>,v,' + str(row) + ',-,abs,0,>,*,*,u,' + str(
-                        row) + ',=,v,' + str(row) + ',=,+,theta,cos,*,+'
+                    comps[row] = "1,u," + str(row) + ",-,abs,0,>,v," + str(row) + ",-,abs,0,>,*,*,u," + str(
+                        row) + ",=,v," + str(row) + ",=,+,theta,cos,*,+"
                 else:
                     if self.orientation == 1:
-                        comps[col] = 'u,' + str(row) + ',=,v,' + str(col) + ',=,*,theta,sin,*,-1,*,u,' + str(
+                        comps[col] = "u," + str(row) + ",=,v," + str(col) + ",=,*,theta,sin,*,-1,*,u," + str(
                             col) + ",=,v," + str(row) + ",=,*,theta,sin,*,+"
                     else:
-                        comps[col] = 'u,' + str(row) + ',=,v,' + str(col) + ',=,*,theta,sin,*,u,' + str(
+                        comps[col] = "u," + str(row) + ",=,v," + str(col) + ",=,*,theta,sin,*,u," + str(
                             col) + ",=,v," + str(row) + ",=,*,theta,sin,*,-1,*,+"
             for n, p in enumerate(range(0, d, 3)):
                 part = comps[p:p + 3]
                 func_dict["row_" + str(row) + "_" + str(n)] = part
 
-        rot_mat = make_function(tree_nodes, functions=func_dict, name="RotationMatrix", inputs=['u', 'v', 'theta'],
-                                outputs=outputs, scalars=['u', 'v', 'theta'], vectors=outputs)
+        rot_mat = make_function(tree_nodes, functions=func_dict, name="RotationMatrix", inputs=["u", "v", "theta"],
+                                outputs=outputs, scalars=["u", "v", "theta"], vectors=outputs)
         rot_mat.location = (200, 0)
-        tree_links.new(group_inputs.outputs['U'], rot_mat.inputs['u'])
-        tree_links.new(group_inputs.outputs['V'], rot_mat.inputs['v'])
-        tree_links.new(group_inputs.outputs['Angle'], rot_mat.inputs['theta'])
+        tree_links.new(group_inputs.outputs["U"], rot_mat.inputs["u"])
+        tree_links.new(group_inputs.outputs["V"], rot_mat.inputs["v"])
+        tree_links.new(group_inputs.outputs["Angle"], rot_mat.inputs["theta"])
 
         for o in outputs:
             tree_links.new(rot_mat.outputs[o], group_outputs.inputs[o])
@@ -2359,8 +2728,8 @@ class Matrix(GreenNode):
         super().__init__(tree, location=location, **kwargs)
 
     def create_node(self, nodes, rows, cols, entries, name="Matrix"):
-        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-        group = nodes.new(type='GeometryNodeGroup')
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
 
         group.name = name
         group.node_tree = tree
@@ -2369,14 +2738,14 @@ class Matrix(GreenNode):
         tree_nodes = tree.nodes
         tree_links = tree.links
 
-        group_outputs = tree_nodes.new('NodeGroupOutput')
+        group_outputs = tree_nodes.new("NodeGroupOutput")
 
         # create the required number of vectors for each column
         outputs = []
         for i in range(rows):
             for j in range(0, int(np.ceil(cols / 3))):
                 name = "row_" + str(i) + "_" + str(j)
-                make_new_socket(tree, name=name, io='OUTPUT', type='NodeSocketVector')
+                make_new_socket(tree, name=name, io="OUTPUT", type="NodeSocketVector")
                 outputs.append(name)
 
         group_outputs.location = (600, 0)
@@ -2414,14 +2783,14 @@ class Transpose(GreenNode):
         super().__init__(tree, location=location, **kwargs)
 
         if isinstance(dimension, int):
-            self.node.inputs['Dimension'].default_value = dimension
+            self.node.inputs["Dimension"].default_value = dimension
         else:
-            self.tree.links.new(dimension, self.node.inputs['Dimension'])
+            self.tree.links.new(dimension, self.node.inputs["Dimension"])
 
-    def create_node(self, nodes, dimension, name='TransposeMatrix'):
+    def create_node(self, nodes, dimension, name="TransposeMatrix"):
         d = dimension
-        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-        group = nodes.new(type='GeometryNodeGroup')
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
 
         group.name = name
         group.node_tree = tree
@@ -2430,32 +2799,32 @@ class Transpose(GreenNode):
         tree_nodes = tree.nodes
         tree_links = tree.links
 
-        group_inputs = tree_nodes.new('NodeGroupInput')
-        group_outputs = tree_nodes.new('NodeGroupOutput')
+        group_inputs = tree_nodes.new("NodeGroupInput")
+        group_outputs = tree_nodes.new("NodeGroupOutput")
 
-        make_new_socket(tree, name='Dimension', io='INPUT', type='NodeSocketInt')
+        make_new_socket(tree, name="Dimension", io="INPUT", type="NodeSocketInt")
 
         # create the required number of vectors for each column
         outputs = []
         for i in range(d):
             for j in range(0, int(np.ceil(d / 3))):
                 name = "row_" + str(i) + "_" + str(j)
-                make_new_socket(tree, name=name, io='INPUT', type='NodeSocketVector')
-                make_new_socket(tree, name=name, io='OUTPUT', type='NodeSocketVector')
+                make_new_socket(tree, name=name, io="INPUT", type="NodeSocketVector")
+                make_new_socket(tree, name=name, io="OUTPUT", type="NodeSocketVector")
                 outputs.append(name)
 
         group_inputs.location = (0, 0)
         group_outputs.location = (600, 0)
-        dict = {0: 'x', 1: 'y', 2: 'z'}
+        dict = {0: "x", 1: "y", 2: "z"}
         # create function dictionary
         func_dict = {}
         for row in range(d):
             # treat diagonal entries, equal to 1, if u and v are different then the column index
-            comps = ['0'] * int(np.ceil(d / 3) * 3)
+            comps = ["0"] * int(np.ceil(d / 3) * 3)
             for col in range(d):
                 part = row // 3
                 comp = dict[row % 3]
-                comps[col] = 'row_' + str(col) + '_' + str(part) + '_' + comp
+                comps[col] = "row_" + str(col) + "_" + str(part) + "_" + comp
             for n, p in enumerate(range(0, d, 3)):
                 part = comps[p:p + 3]
                 func_dict["row_" + str(row) + "_" + str(n)] = part
@@ -2488,14 +2857,14 @@ class LinearMap(GreenNode):
         super().__init__(tree, location=location, **kwargs)
 
         if isinstance(dimension, int):
-            self.node.inputs['Dimension'].default_value = dimension
+            self.node.inputs["Dimension"].default_value = dimension
         else:
-            self.tree.links.new(dimension, self.node.inputs['Dimension'])
+            self.tree.links.new(dimension, self.node.inputs["Dimension"])
 
-    def create_node(self, nodes, dimension, name='LinearMap'):
+    def create_node(self, nodes, dimension, name="LinearMap"):
         d = dimension
-        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-        group = nodes.new(type='GeometryNodeGroup')
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
 
         group.name = name
         group.node_tree = tree
@@ -2504,38 +2873,38 @@ class LinearMap(GreenNode):
         tree_nodes = tree.nodes
         tree_links = tree.links
 
-        group_inputs = tree_nodes.new('NodeGroupInput')
-        group_outputs = tree_nodes.new('NodeGroupOutput')
+        group_inputs = tree_nodes.new("NodeGroupInput")
+        group_outputs = tree_nodes.new("NodeGroupOutput")
 
-        make_new_socket(tree, name='Dimension', io='INPUT', type='NodeSocketInt')
+        make_new_socket(tree, name="Dimension", io="INPUT", type="NodeSocketInt")
 
         # create the required number of vectors for each column
         mat_inputs = []
         for i in range(d):
             for j in range(0, int(np.ceil(d / 3))):
                 name = "row_" + str(i) + "_" + str(j)
-                make_new_socket(tree, name=name, io='INPUT', type='NodeSocketVector')
+                make_new_socket(tree, name=name, io="INPUT", type="NodeSocketVector")
                 mat_inputs.append(name)
         vec_inputs = []
         for i in range(int(np.ceil(d / 3))):
             name = "v_" + str(i)
-            make_new_socket(tree, name=name, io='INPUT', type='NodeSocketVector')
+            make_new_socket(tree, name=name, io="INPUT", type="NodeSocketVector")
             vec_inputs.append(name)
 
         for i in range(int(np.ceil(d / 3))):
-            make_new_socket(tree, name="v_" + str(i), io='OUTPUT', type='NodeSocketVector')
+            make_new_socket(tree, name="v_" + str(i), io="OUTPUT", type="NodeSocketVector")
 
-        components = ['0'] * int(np.ceil(d / 3) * 3)
-        comp_dict = {0: '_x', 1: '_y', 2: '_z'}
+        components = ["0"] * int(np.ceil(d / 3) * 3)
+        comp_dict = {0: "_x", 1: "_y", 2: "_z"}
         for c in range(dimension):
             prod = ""
             first = True
             for i, v in enumerate(vec_inputs):
                 if first:
-                    prod = 'row_' + str(c) + '_' + str(i) + ',v_' + str(i) + ',dot'
+                    prod = "row_" + str(c) + "_" + str(i) + ",v_" + str(i) + ",dot"
                     first = False
                 else:
-                    prod += ',row_' + str(c) + '_' + str(i) + ',v_' + str(i) + ',dot'
+                    prod += ",row_" + str(c) + "_" + str(i) + ",v_" + str(i) + ",dot"
                     prod += ",+"
 
             components[c] = prod
@@ -2580,11 +2949,11 @@ class ProjectionMap(GreenNode):
         self.node = self.create_node(tree.nodes, in_dimension, out_dimension)
         super().__init__(tree, location=location, **kwargs)
 
-    def create_node(self, nodes, in_dimension, out_dimension, name='ProjectionMap'):
+    def create_node(self, nodes, in_dimension, out_dimension, name="ProjectionMap"):
         idim = in_dimension
         odim = out_dimension
-        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-        group = nodes.new(type='GeometryNodeGroup')
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
 
         group.name = name
         group.node_tree = tree
@@ -2593,38 +2962,38 @@ class ProjectionMap(GreenNode):
         tree_nodes = tree.nodes
         tree_links = tree.links
 
-        group_inputs = tree_nodes.new('NodeGroupInput')
-        group_outputs = tree_nodes.new('NodeGroupOutput')
+        group_inputs = tree_nodes.new("NodeGroupInput")
+        group_outputs = tree_nodes.new("NodeGroupOutput")
 
         # create the required number of vectors for each column
         mat_inputs = []
         for i in range(odim):
             for j in range(0, int(np.ceil(idim / 3))):
                 name = "row_" + str(i) + "_" + str(j)
-                make_new_socket(tree, name=name, io='INPUT', type='NodeSocketVector')
+                make_new_socket(tree, name=name, io="INPUT", type="NodeSocketVector")
                 mat_inputs.append(name)
         vec_inputs = []
         for i in range(int(np.ceil(idim / 3))):
             name = "vi_" + str(i)
-            make_new_socket(tree, name=name, io='INPUT', type='NodeSocketVector')
+            make_new_socket(tree, name=name, io="INPUT", type="NodeSocketVector")
             vec_inputs.append(name)
 
         vec_outputs = []
         for i in range(int(np.ceil(odim / 3))):
             name = "vo_" + str(i)
-            make_new_socket(tree, name=name, io='OUTPUT', type='NodeSocketVector')
+            make_new_socket(tree, name=name, io="OUTPUT", type="NodeSocketVector")
             vec_outputs.append(name)
 
-        components = ['0'] * int(np.ceil(idim / 3) * 3)
+        components = ["0"] * int(np.ceil(idim / 3) * 3)
         for c in range(odim):
             prod = ""
             first = True
             for i, v in enumerate(vec_inputs):
                 if first:
-                    prod = 'row_' + str(c) + '_' + str(i) + ',vi_' + str(i) + ',dot'
+                    prod = "row_" + str(c) + "_" + str(i) + ",vi_" + str(i) + ",dot"
                     first = False
                 else:
-                    prod += ',row_' + str(c) + '_' + str(i) + ',vi_' + str(i) + ',dot'
+                    prod += ",row_" + str(c) + "_" + str(i) + ",vi_" + str(i) + ",dot"
                     prod += ",+"
 
             components[c] = prod
@@ -2653,6 +3022,177 @@ class ProjectionMap(GreenNode):
 
 # aux functions #
 
+def get_attributes(line):
+    tag_label_ended=false
+    leftside = True
+    keys = []
+    values = []
+    key=""
+    val=""
+    for letter in line:
+        if letter=='<':
+            pass
+        elif letter=='>':
+            break # ignore anything after the end
+        elif letter==' ':
+            if not tag_label_ended:
+                tag_label_ended=True
+        else:
+            if not tag_label_ended:
+                pass # part of the tag label, can be ignored
+            else:
+                if letter=='=':
+                    leftside=False
+                    value_started=False
+                else:
+                    if leftside:
+                        key+=letter
+                    else:
+                        if letter=="'":
+                            if value_started:
+                                value_started=False
+                                keys.append(key)
+                                values.append(val)
+                                key=""
+                                val=""
+                                leftside=True
+                            else:
+                                value_started=True
+                        else:
+                            val+=letter
+    attributes={}
+    for key,val in zip(keys,values):
+        attributes[key]=val
+    return attributes
+
+
+def parse_vector(param):
+    """
+    unfortunately, we have capture some invalid data
+    math nodes like Compare have VECTOR sockets that are not used but are filled with <bpy_float[3]...> stuff that cannot be parsed
+    """
+    if param.startswith("<bpy_"):
+        return Vector([0,0,0])
+    elif param.startswith("<Vector "):
+        param.replace("<Vector ", "")
+        param.replace("(", "")
+        param.replace(")>")
+        parts = param.split(",")
+        comps = [float(part) for part in parts]
+        return Vector(comps)
+
+
+def get_default_value_for_socket(attributes):
+    socket_type = attributes['type']
+    if socket_type == 'INT':
+        return int(attributes['default_value'])
+    elif socket_type == 'BOOLEAN':
+        attr = attributes['default_value']
+        if attr == 'True':
+            attr = True
+        else:
+            attr = False
+        return attr
+    elif socket_type == 'VALUE':
+        return float(attributes['default_value'])
+    elif socket_type == 'VECTOR':
+        return parse_vector(attributes['default_value'])
+    elif socket_type == 'STRING':
+        return str(attributes['default_value'])
+
+
+def create_from_xml(tree,filename=None,**kwargs):
+    """
+    create a node group from an xml file
+    Warning: don't use ReRoute nodes. They are buggy
+
+    """
+    socket_dir={}
+    node_dir={}
+    parent_dir={}
+
+    socket_count =0
+    if filename:
+        path = os.path.join(RES_XML,filename+".xml")
+        with open(path) as f:
+            xml_string = f.read()
+            nodes_range=[]
+            links_range=[]
+            xml_text = xml_string.splitlines()
+            for i,line in enumerate(xml_text):
+                line=line.strip()
+                if line.startswith("<NODES>"):
+                    nodes_range.append(i+1)
+                if line.startswith("</NODES>"):
+                    nodes_range.append(i)
+                if line.startswith("<LINKS>"):
+                    links_range.append(i+1)
+                if line.startswith("</LINKS>"):
+                    links_range.append(i)
+
+            # parse node data
+            for i in range(*nodes_range):
+                line = xml_text[i].strip()
+                if line.startswith("<NODE"):
+                    attributes = get_attributes(line)
+                    node = Node.from_attributes(tree,attributes)
+                    input_count=0
+                    output_count=0
+                    if node is None:
+                        raise "The node "+line+" could not be created"
+                    node_dir[node.name]=node
+                    if attributes["parent"]!="None":
+                        parent_dir[node]=attributes["parent"]
+
+                    while True:
+                        i=i+1
+                        line = xml_text[i].strip()
+                        if line.startswith("</NODE>"):
+                            break
+                        elif line.startswith("<INPUTS>"):
+                            pass
+                        elif line.startswith("<OUTPUTS>"):
+                            pass
+                        elif line.startswith("</INPUTS>"):
+                            pass
+                        elif line.startswith("</OUTPUTS>"):
+                            pass
+                        elif line.startswith("<INPUT "):
+                            attributes = get_attributes(line)
+                            if len(node.inputs)>input_count:
+                                socket_dir[socket_count]=node.inputs[input_count]
+                                if 'default_value' in attributes:
+                                    node.inputs[input_count].default_value = get_default_value_for_socket(attributes)
+                                input_count+=1
+                                socket_count+=1
+                        elif line.startswith("<OUTPUT "):
+                            attributes = get_attributes(line)
+                            if len(node.outputs)>output_count:
+                                socket_dir[socket_count]=node.outputs[output_count]
+                                if 'default_value' in attributes:
+                                    node.outputs[output_count].default_value = get_default_value_for_socket(attributes)
+                                output_count+=1
+                                socket_count+=1
+            # parse link data
+            for i in range(*links_range):
+                attributes = get_attributes(xml_text[i])
+                input = int(attributes["from_socket"])
+                output= int(attributes["to_socket"])
+                tree.links.new(socket_dir[input],socket_dir[output])
+
+        # establish parent relations
+        for key,val in parent_dir.items():
+            if node_dir[key.name] is not None:
+                node_dir[key.name].set_parent(node_dir[val])
+
+        # check for zone pairing
+        for key,val in node_dir.items():
+            if "ForEachGeometryElementInput" in key:
+                # find the corresponding output node from name
+                out_key = key.replace("Input","Output")
+                node_dir[key].pair_with_output(node_dir[out_key])
+
+
 def create_geometry_line(tree, green_nodes, out=None, ins=None):
     first = True
     if len(green_nodes)==0:
@@ -2670,10 +3210,8 @@ def create_geometry_line(tree, green_nodes, out=None, ins=None):
         if out:
             tree.links.new(last_gn.geometry_out, out)
 
-
 def add_locations(loc1, loc2):
     return tuple(map(sum, zip(loc1, loc2)))
-
 
 class Structure:
     def __init__(self):
@@ -2683,8 +3221,8 @@ class Structure:
 
 
 def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[], scalars=[],
-                  node_group_type='GeometryNodes',
-                  name='FunctionNode', hide=True, location=(0, 0)):
+                  node_group_type="GeometryNodes",
+                  name="FunctionNode", hide=True, location=(0, 0)):
     """
     this will be the optimized prototype for a flexible function generator
     functions: a dictionary that contains a key for every output. If the key is in vectors,
@@ -2692,18 +3230,18 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
     :return:
     """
     location = (location[0] * 200, location[1] * 100)
-    if hasattr(nodes_or_tree, 'nodes'):
+    if hasattr(nodes_or_tree, "nodes"):
         tree = nodes_or_tree
         nodes = tree.nodes
     else:
         nodes = nodes_or_tree
 
-    if 'Shader' in node_group_type:
-        tree = bpy.data.node_groups.new(type='ShaderNodeTree', name=name)
-        group = nodes.new(type='ShaderNodeGroup')
+    if "Shader" in node_group_type:
+        tree = bpy.data.node_groups.new(type="ShaderNodeTree", name=name)
+        group = nodes.new(type="ShaderNodeGroup")
     else:
-        tree = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-        group = nodes.new(type='GeometryNodeGroup')
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
 
     group.name = name
     group.node_tree = tree
@@ -2712,20 +3250,20 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
     tree_links = tree.links
 
     # create inputs and outputs
-    group_inputs = tree_nodes.new('NodeGroupInput')
-    group_outputs = tree_nodes.new('NodeGroupOutput')
+    group_inputs = tree_nodes.new("NodeGroupInput")
+    group_outputs = tree_nodes.new("NodeGroupOutput")
 
     for ins in inputs:
         if ins in vectors:
-            make_new_socket(tree, name=ins, io='INPUT', type='NodeSocketVector')
+            make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketVector")
         if ins in scalars:
-            make_new_socket(tree, name=ins, io='INPUT', type='NodeSocketFloat')
+            make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketFloat")
 
     for outs in outputs:
         if outs in vectors:
-            make_new_socket(tree, name=outs, io='OUTPUT', type='NodeSocketVector')
+            make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketVector")
         if outs in scalars:
-            make_new_socket(tree, name=outs, io='OUTPUT', type='NodeSocketFloat')
+            make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketFloat")
 
     # create stack structure from function structure
     stacks = {}
@@ -2733,9 +3271,9 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
         if isinstance(value, list):
             stacks[key] = []
             for v in value:
-                stacks[key].append(v.split(','))
+                stacks[key].append(v.split(","))
         else:
-            stacks[key] = value.split(',')
+            stacks[key] = value.split(",")
 
     all_stacks = []
     all_terms = []
@@ -2776,15 +3314,15 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
             out_channels[key] = group_outputs.inputs[key]
         elif key in vectors:
             if isinstance(functions[key], list):
-                comb = tree_nodes.new(type='ShaderNodeCombineXYZ')
+                comb = tree_nodes.new(type="ShaderNodeCombineXYZ")
                 comb.name = key + "Merge"
                 comb.label = key + "Merge"
                 comb.location = (right, combine_counter * width / 2)
                 comb.hide = True
                 combine_counter += 1
-                out_channels[key + '_x'] = comb.inputs[0]
-                out_channels[key + '_y'] = comb.inputs[1]
-                out_channels[key + '_z'] = comb.inputs[2]
+                out_channels[key + "_x"] = comb.inputs[0]
+                out_channels[key + "_y"] = comb.inputs[1]
+                out_channels[key + "_z"] = comb.inputs[2]
                 tree_links.new(comb.outputs[0], group_outputs.inputs[key])
             else:
                 out_channels[key] = group_outputs.inputs[key]
@@ -2800,21 +3338,21 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
             in_channels[ins] = group_inputs.outputs[ins]
         if ins in vectors:
             in_channels[ins] = group_inputs.outputs[ins]
-            if ins + '_x' in all_terms or ins + '_y' in all_terms or ins + '_z' in all_terms:
-                sep = tree_nodes.new(type='ShaderNodeSeparateXYZ')
+            if ins + "_x" in all_terms or ins + "_y" in all_terms or ins + "_z" in all_terms:
+                sep = tree_nodes.new(type="ShaderNodeSeparateXYZ")
                 sep.name = ins + "Split"
                 sep.label = ins + "Split"
-                tree_links.new(group_inputs.outputs[ins], sep.inputs['Vector'])
+                tree_links.new(group_inputs.outputs[ins], sep.inputs["Vector"])
                 sep.location = (left + width, separate_counter * width / 2)
                 sep.hide = True
-                in_channels[ins + '_x'] = sep.outputs[0]
-                in_channels[ins + '_y'] = sep.outputs[1]
-                in_channels[ins + '_z'] = sep.outputs[2]
+                in_channels[ins + "_x"] = sep.outputs[0]
+                in_channels[ins + "_y"] = sep.outputs[1]
+                in_channels[ins + "_z"] = sep.outputs[2]
                 separate_counter += 1
 
     # now the functions are constructed
     fcn_count = 0  # function index to get a separation in the node editor
-    comps = ['x', 'y', 'z']
+    comps = ["x", "y", "z"]
     for key, value in functions.items():
         if isinstance(value, list):
             if len(value) == 1:
@@ -2824,7 +3362,7 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
             else:
                 for i, part in enumerate(value):
                     build_function(tree, stacks[key][i], scalars=scalars, vectors=vectors, in_channels=in_channels,
-                                   out=out_channels[key + '_' + comps[i]], fcn_count=fcn_count)
+                                   out=out_channels[key + "_" + comps[i]], fcn_count=fcn_count)
                     fcn_count += 1
         else:
             build_function(tree, stacks[key], scalars=scalars, vectors=vectors, in_channels=in_channels,
@@ -2847,9 +3385,9 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
     recursive build of a node-group function
 
     there is a subtlety with VectorMath nodes, they always carry two outputs.
-    The first one is 'Vector' and the second one is 'Value'
+    The first one is "Vector" and the second one is "Value"
     there is more work to be done, to do this correctly,
-    so far there is only a workaround to incorporate the 'LENGTH' operation, which yields a scalar output
+    so far there is only a workaround to incorporate the "LENGTH" operation, which yields a scalar output
 
     :param tree: the container for the function
     :param stack: contains the computation in reverse polish notation
@@ -2868,7 +3406,6 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
     """
 
     # recursively build a group_tree structure with left and right sub-group_tree. For unary operators only the left group_tree is used
-
     fcn_spacing = 500
 
     left_empty = True
@@ -2886,339 +3423,339 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
             # warning not all possible operators have been implemented yet
             # always implement them on the fly when needed
             unary = False  # default case, unary operators explicitly overwrite this variable
-            if next_element == '*':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'MULTIPLY'
-                new_node_math.label = '*'
+            if next_element == "*":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "MULTIPLY"
+                new_node_math.label = "*"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == 'mul':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorMath')
-                new_node_math.operation = 'MULTIPLY'
-                new_node_math.label = '*'
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == "mul":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
+                new_node_math.operation = "MULTIPLY"
+                new_node_math.label = "*"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Vector']
-            elif next_element == '%':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'MODULO'
-                new_node_math.label = '%'
+                new_node_structure.out = new_node_math.outputs["Vector"]
+            elif next_element == "%":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "MODULO"
+                new_node_math.label = "%"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == 'mod':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorMath')
-                new_node_math.operation = 'MODULO'
-                new_node_math.label = '%'
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == "mod":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
+                new_node_math.operation = "MODULO"
+                new_node_math.label = "%"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Vector']
-            elif next_element == '/':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'DIVIDE'
-                new_node_math.label = '/'
+                new_node_structure.out = new_node_math.outputs["Vector"]
+            elif next_element == "/":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "DIVIDE"
+                new_node_math.label = "/"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == 'div':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorMath')
-                new_node_math.operation = 'DIVIDE'
-                new_node_math.label = '/'
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == "div":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
+                new_node_math.operation = "DIVIDE"
+                new_node_math.label = "/"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Vector']
-            elif next_element == '+':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'ADD'
-                new_node_math.label = '+'
+                new_node_structure.out = new_node_math.outputs["Vector"]
+            elif next_element == "+":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "ADD"
+                new_node_math.label = "+"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == 'add':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorMath')
-                new_node_math.operation = 'ADD'
-                new_node_math.label = '+'
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == "add":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
+                new_node_math.operation = "ADD"
+                new_node_math.label = "+"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Vector']
-            elif next_element == 'sub':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorMath')
-                new_node_math.operation = 'SUBTRACT'
-                new_node_math.label = '-'
+                new_node_structure.out = new_node_math.outputs["Vector"]
+            elif next_element == "sub":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
+                new_node_math.operation = "SUBTRACT"
+                new_node_math.label = "-"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Vector']
-            elif next_element == '-':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'SUBTRACT'
-                new_node_math.label = '-'
+                new_node_structure.out = new_node_math.outputs["Vector"]
+            elif next_element == "-":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "SUBTRACT"
+                new_node_math.label = "-"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == '**':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'POWER'
-                new_node_math.label = '**'
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == "**":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "POWER"
+                new_node_math.label = "**"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == '<':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'LESS_THAN'
-                new_node_math.label = '<'
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == "<":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "LESS_THAN"
+                new_node_math.label = "<"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == '>':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'GREATER_THAN'
-                new_node_math.label = '>'
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == ">":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "GREATER_THAN"
+                new_node_math.label = ">"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == '=':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'COMPARE'
-                new_node_math.label = '=='
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == "=":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "COMPARE"
+                new_node_math.label = "=="
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
                 new_node_math.inputs[2].default_value = 0
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == 'min':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'MINIMUM'
-                new_node_math.label = 'min'
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == "min":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "MINIMUM"
+                new_node_math.label = "min"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == 'max':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'MAXIMUM'
-                new_node_math.label = 'max'
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == "max":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "MAXIMUM"
+                new_node_math.label = "max"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == 'sin':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'SINE'
-                new_node_math.label = 'sin'
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == "sin":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "SINE"
+                new_node_math.label = "sin"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'lg':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'LOGARITHM'
-                new_node_math.label = 'lg'
+            elif next_element == "lg":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "LOGARITHM"
+                new_node_math.label = "lg"
                 new_node_math.inputs[1].default_value = 10
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'asin':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'ARCSINE'
-                new_node_math.label = 'asin'
+            elif next_element == "asin":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "ARCSINE"
+                new_node_math.label = "asin"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'cos':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'COSINE'
-                new_node_math.label = 'cos'
+            elif next_element == "cos":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "COSINE"
+                new_node_math.label = "cos"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'acos':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'ARCCOSINE'
-                new_node_math.label = 'acos'
+            elif next_element == "acos":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "ARCCOSINE"
+                new_node_math.label = "acos"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'tan':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'TANGENT'
-                new_node_math.label = 'tan'
+            elif next_element == "tan":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "TANGENT"
+                new_node_math.label = "tan"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'atan2':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'ARCTAN2'
-                new_node_math.label = 'atan2'
+            elif next_element == "atan2":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "ARCTAN2"
+                new_node_math.label = "atan2"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = False
-            elif next_element == 'abs':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'ABSOLUTE'
-                new_node_math.label = 'abs'
+            elif next_element == "abs":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "ABSOLUTE"
+                new_node_math.label = "abs"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'sgn':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'SIGN'
-                new_node_math.label = 'sgn'
+            elif next_element == "sgn":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "SIGN"
+                new_node_math.label = "sgn"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'round':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'ROUND'
+            elif next_element == "round":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "ROUND"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'floor':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'FLOOR'
-                new_node_math.label = 'floor'
+            elif next_element == "floor":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "FLOOR"
+                new_node_math.label = "floor"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'vfloor':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorMath')
-                new_node_math.operation = 'FLOOR'
-                new_node_math.label = 'floor'
+            elif next_element == "vfloor":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
+                new_node_math.operation = "FLOOR"
+                new_node_math.label = "floor"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Vector']
+                new_node_structure.out = new_node_math.outputs["Vector"]
                 unary = True
-            elif next_element == 'ceil':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'CEIL'
-                new_node_math.label = 'ceil'
+            elif next_element == "ceil":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "CEIL"
+                new_node_math.label = "ceil"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'length':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorMath')
-                new_node_math.operation = 'LENGTH'
-                new_node_math.label = 'len'
+            elif next_element == "length":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
+                new_node_math.operation = "LENGTH"
+                new_node_math.label = "len"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'sqrt':
-                new_node_math = tree.nodes.new(type='ShaderNodeMath')
-                new_node_math.operation = 'SQRT'
-                new_node_math.label = 'sqrt'
+            elif next_element == "sqrt":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "SQRT"
+                new_node_math.label = "sqrt"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Value']
+                new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
-            elif next_element == 'scale':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorMath')
-                new_node_math.operation = 'SCALE'
-                new_node_math.label = 'scale'
+            elif next_element == "scale":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
+                new_node_math.operation = "SCALE"
+                new_node_math.label = "scale"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs['Scale']
-                new_node_structure.out = new_node_math.outputs['Vector']
-            elif next_element == 'cross':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorMath')
-                new_node_math.operation = 'CROSS_PRODUCT'
-                new_node_math.label = 'x'
+                new_node_structure.right = new_node_math.inputs["Scale"]
+                new_node_structure.out = new_node_math.outputs["Vector"]
+            elif next_element == "cross":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
+                new_node_math.operation = "CROSS_PRODUCT"
+                new_node_math.label = "x"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Vector']
-            elif next_element == 'dot':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorMath')
-                new_node_math.operation = 'DOT_PRODUCT'
-                new_node_math.label = '*'
+                new_node_structure.out = new_node_math.outputs["Vector"]
+            elif next_element == "dot":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
+                new_node_math.operation = "DOT_PRODUCT"
+                new_node_math.label = "*"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Value']
-            elif next_element == 'normalize':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorMath')
-                new_node_math.operation = 'NORMALIZE'
-                new_node_math.label = 'norm'
+                new_node_structure.out = new_node_math.outputs["Value"]
+            elif next_element == "normalize":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
+                new_node_math.operation = "NORMALIZE"
+                new_node_math.label = "norm"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Vector']
+                new_node_structure.out = new_node_math.outputs["Vector"]
                 unary = True
-            elif next_element == 'rot':
-                new_node_math = tree.nodes.new(type='ShaderNodeVectorRotate')
-                new_node_math.rotation_type = 'EULER_XYZ'
+            elif next_element == "rot":
+                new_node_math = tree.nodes.new(type="ShaderNodeVectorRotate")
+                new_node_math.rotation_type = "EULER_XYZ"
                 new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs['Vector']
-                new_node_structure.right = new_node_math.inputs['Rotation']
-                new_node_structure.out = new_node_math.outputs['Vector']
-            elif next_element == 'axis_rot':
-                new_node_math = tree.nodes.new(type='FunctionNodeAxisAngleToRotation')
+                new_node_structure.left = new_node_math.inputs["Vector"]
+                new_node_structure.right = new_node_math.inputs["Rotation"]
+                new_node_structure.out = new_node_math.outputs["Vector"]
+            elif next_element == "axis_rot":
+                new_node_math = tree.nodes.new(type="FunctionNodeAxisAngleToRotation")
                 new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs['Axis']
-                new_node_structure.right = new_node_math.inputs['Angle']
-                new_node_structure.out = new_node_math.outputs['Rotation']
-            elif next_element == 'rot2euler':
-                new_node_math = tree.nodes.new(type='FunctionNodeRotationToEuler')
+                new_node_structure.left = new_node_math.inputs["Axis"]
+                new_node_structure.right = new_node_math.inputs["Angle"]
+                new_node_structure.out = new_node_math.outputs["Rotation"]
+            elif next_element == "rot2euler":
+                new_node_math = tree.nodes.new(type="FunctionNodeRotationToEuler")
                 new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs['Rotation']
-                new_node_structure.out = new_node_math.outputs['Euler']
+                new_node_structure.left = new_node_math.inputs["Rotation"]
+                new_node_structure.out = new_node_math.outputs["Euler"]
                 unary = True
-            elif next_element == 'axis_angle_euler':
+            elif next_element == "axis_angle_euler":
                 """ convenient combination of axis_rot and rot2euler"""
-                new_node_math = tree.nodes.new(type='FunctionNodeRotateEuler')
-                new_node_math.type = 'AXIS_ANGLE'
+                new_node_math = tree.nodes.new(type="FunctionNodeRotateEuler")
+                new_node_math.type = "AXIS_ANGLE"
                 new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs['Axis']
-                new_node_structure.right = new_node_math.inputs['Angle']
-                new_node_structure.out = new_node_math.outputs['Rotation']
-            elif next_element == 'not':
-                new_node_math = tree.nodes.new(type='FunctionNodeBooleanMath')
-                new_node_math.operation = 'NOT'
-                new_node_math.label = 'NOT'
+                new_node_structure.left = new_node_math.inputs["Axis"]
+                new_node_structure.right = new_node_math.inputs["Angle"]
+                new_node_structure.out = new_node_math.outputs["Rotation"]
+            elif next_element == "not":
+                new_node_math = tree.nodes.new(type="FunctionNodeBooleanMath")
+                new_node_math.operation = "NOT"
+                new_node_math.label = "NOT"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs['Boolean']
+                new_node_structure.out = new_node_math.outputs["Boolean"]
                 unary = True
-            elif next_element == 'and':
-                new_node_math = tree.nodes.new(type='FunctionNodeBooleanMath')
-                new_node_math.operation = 'AND'
-                new_node_math.label = 'AND'
+            elif next_element == "and":
+                new_node_math = tree.nodes.new(type="FunctionNodeBooleanMath")
+                new_node_math.operation = "AND"
+                new_node_math.label = "AND"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Boolean']
-            elif next_element == 'or':
-                new_node_math = tree.nodes.new(type='FunctionNodeBooleanMath')
-                new_node_math.operation = 'OR'
-                new_node_math.label = 'OR'
+                new_node_structure.out = new_node_math.outputs["Boolean"]
+            elif next_element == "or":
+                new_node_math = tree.nodes.new(type="FunctionNodeBooleanMath")
+                new_node_math.operation = "OR"
+                new_node_math.label = "OR"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs['Boolean']
+                new_node_structure.out = new_node_math.outputs["Boolean"]
 
             # positioning is a non-trivial task, matter of improvement
             if unary:
@@ -3240,7 +3777,7 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
                 # link first operator to the output
                 tree.links.new(new_node_structure.out, out)
             elif right_empty:
-                # make sure that the type fits, e.g. the operator 'LENGTH' first has an output of type 'VECTOR'
+                # make sure that the type fits, e.g. the operator "LENGTH" first has an output of type "VECTOR"
                 tree.links.new(new_node_structure.out, last_structure.right)
                 # success = False
                 # for o in new_node_math.outputs:
@@ -3256,7 +3793,7 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
                 #             break
                 right_empty = False
             elif left_empty:
-                # make sure that the type fits, e.g. the operator 'LENGTH' first has an output of type 'VECTOR'
+                # make sure that the type fits, e.g. the operator "LENGTH" first has an output of type "VECTOR"
                 tree.links.new(new_node_structure.out, last_structure.left)
                 # success = False
                 # for o in new_node_math.outputs:
@@ -3294,22 +3831,22 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
                 left_empty = False
         # check for simple numbers and unit vectors
         else:
-            if next_element == 'pi':
+            if next_element == "pi":
                 number = np.pi
-            elif next_element == 'e_x':
+            elif next_element == "e_x":
                 number = Vector([1, 0, 0])
-            elif next_element == 'e_y':
+            elif next_element == "e_y":
                 number = Vector([0, 1, 0])
-            elif next_element == 'e_z':
+            elif next_element == "e_z":
                 number = Vector([0, 0, 1])
-            elif next_element[0] == '(':
+            elif next_element[0] == "(":
                 next_element = next_element[1:-1]
-                numbers = next_element.split(' ')
+                numbers = next_element.split(" ")
                 vals = []
                 for i in range(len(numbers)):
-                    if numbers[i] == 'pi':
+                    if numbers[i] == "pi":
                         vals.append(np.pi)
-                    elif number[i] == '-pi':
+                    elif number[i] == "-pi":
                         vals.append(-np.pi)
                     else:
                         vals.append(float(numbers[i]))
@@ -3321,9 +3858,9 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
             elif right_empty:
                 last_structure.right.default_value = number
                 last_operator.label = last_operator.label + next_element
-                # find the first 'VALUE' input
+                # find the first "VALUE" input
                 # for i in range(1, 3):
-                #     if last_operator.inputs[i].type == 'VALUE':
+                #     if last_operator.inputs[i].type == "VALUE":
                 #         last_operator.inputs[i].default_value = number
                 #         break
                 right_empty = False
@@ -3344,7 +3881,7 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
             new_node_math = None
 
 
-def layout(tree, mode='Sugiyama'):
+def layout(tree, mode="Sugiyama"):
     """
     automatic layout of the nodes
     :param tree:
@@ -3388,11 +3925,11 @@ def layout(tree, mode='Sugiyama'):
 
     roots_nodes = out_set - out_set.intersection(in_set)
     root_vertices = [v for v in vertices if v.data in roots_nodes]
-    if mode == 'Sugiyama':
+    if mode == "Sugiyama":
         layout = SugiyamaLayout(graph.C[0])
         layout.init_all(roots=root_vertices)
         layout.draw(10)
-    elif mode == 'Digco':
+    elif mode == "Digco":
         layout = DigcoLayout(graph.C[0])
         layout.init_all()
         layout.draw()

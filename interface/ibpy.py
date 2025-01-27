@@ -2,11 +2,11 @@ import os
 from copy import deepcopy
 from datetime import date, datetime
 
-import bmesh
+# import bmesh
 import bpy
 import numpy as np
 
-from mathutils import Vector, Quaternion, Euler
+from mathutils import Vector, Matrix, Quaternion, Euler
 from interface.interface_constants import EMISSION, TRANSMISSION, BLENDER_EEVEE, blender_version
 from utils.color_conversion import get_color_from_string, get_color
 from utils.constants import BLEND_DIR, FRAME_RATE, OBJECT_APPEARANCE_TIME, OSL_DIR, COLOR_NAMES, IMG_DIR, \
@@ -5755,7 +5755,7 @@ def set_pivot(obj, origin):
     elif isinstance(origin, tuple):
         origin = Vector(origin)
     if obj.parent:  # for the cursor we need the world coordinate of the object, somehow the matrix_world method doesn't work as expected, there nested generation of the matrix_world
-        matrix = mathutils.Matrix()
+        matrix = Matrix()
         parent = obj.parent
         while parent:
             matrix = parent.matrix_basis @ matrix
@@ -6201,7 +6201,7 @@ def move_to(b_obj, target, begin_frame, frame_duration, global_system=False,verb
 def rotate_by(b_obj, rotation_euler):
     obj = get_obj(b_obj)
     old_euler = obj.rotation_euler.copy()
-    new_euler = (mathutils.Euler(rotation_euler).to_matrix() @ mathutils.Euler(old_euler).to_matrix()).to_euler()
+    new_euler = (Euler(rotation_euler).to_matrix() @ Euler(old_euler).to_matrix()).to_euler()
     obj.rotation_euler = new_euler
 
 

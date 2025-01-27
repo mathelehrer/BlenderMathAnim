@@ -18,7 +18,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputRotation, InvertRotation, RotateRotation, \
     Frame, SeparateXYZ, DualMesh, WireFrameRectangle, SplitEdges, VectorRotate, EvaluateOnDomain, InputNormal, \
     SubdivisionSurface, FaceArea, Quadrilateral, FilletCurve, FillCurve, SeparateGeometry, SortElements, \
-    AlignRotationToVector, InputBoolean, IndexSwitch, QuaternionToRotation
+    AlignRotationToVector, InputBoolean, IndexSwitch, QuaternionToRotation, StringToCurves
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -2724,6 +2724,7 @@ class LogoModifier(GeometryNodesModifier):
         shade_smooth = SetShadeSmooth(tree)
         create_geometry_line(tree,[join_geometry,transform_geometry,shade_smooth],out=out.inputs["Geometry"])
 
+
 class RubiksCubeModifier(GeometryNodesModifier):
     def __init__(self, name="RubiksCubeModifier",**kwargs):
         super().__init__(name,automatic_layout=False,**kwargs)
@@ -2906,50 +2907,87 @@ class RubiksCubeModifier(GeometryNodesModifier):
 
         # face coloring
         block_y=-0.25
-        block_x=0
+        block_x=-0.25
         attr_face_index = NamedAttribute(tree,location=self.loc(block_x,block_y,0,-3),name="FaceIndex",hide=False)
+
 
         red_selector = make_function(tree, name="RedSelector", location=self.loc(block_x, block_y, 1, -1.5),
                                      functions={
-                                         "select": "face_index,44,>,face_index,54,<,and"
-                                     }, inputs=["face_index"], outputs=["select"],
-                                     scalars=["face_index", "select"], hide=False)
+                                         "select": "face_index,44,>,face_index,54,<,and,switch,and"
+                                     }, inputs=["switch","face_index"], outputs=["select"],
+                                     scalars=["switch","face_index", "select"], hide=False)
+        red_selector_switch = InputBoolean(tree, name="RedSelectorSwitch", value=True,
+                                             location=self.loc(block_x, block_y, 1, -2.5), hide=False)
 
         blue_selector = make_function(tree, name="BlueSelector", location=self.loc(block_x, block_y, 2, -1.5),
                                      functions={
-                                         "select": "face_index,35,>,face_index,45,<,and"
-                                     }, inputs=["face_index"], outputs=["select"],
-                                     scalars=["face_index", "select"], hide=False)
+                                         "select": "face_index,35,>,face_index,45,<,and,switch,and"
+                                     }, inputs=["switch","face_index"], outputs=["select"],
+                                     scalars=["switch","face_index", "select"], hide=False)
+        blue_selector_switch = InputBoolean(tree, name="BlueSelectorSwitch", value=True,
+                                           location=self.loc(block_x, block_y, 2, -2.5), hide=False)
 
         yellow_selector = make_function(tree, name="YellowSelector", location=self.loc(block_x, block_y, 3, -1.5),
                                         functions={
-                                         "select": "face_index,17,>,face_index,27,<,and"
-                                        },inputs=["face_index"],outputs=["select"],
-                                        scalars=["face_index","select"],hide=False)
+                                         "select": "face_index,17,>,face_index,27,<,and,switch,and"
+                                        },inputs=["switch","face_index"],outputs=["select"],
+                                        scalars=["switch","face_index","select"],hide=False)
+        yellow_selector_switch = InputBoolean(tree, name="YellowSelectorSwitch", value=True,
+                                            location=self.loc(block_x, block_y, 3, -2.5), hide=False)
 
         orange_selector = make_function(tree, name="OrangeSelector", location=self.loc(block_x, block_y, 4, -1.5),
                                         functions={
-                                            "select": "face_index,-1,>,face_index,9,<,and"
-                                        },inputs=["face_index"],outputs=["select"],
-                                        scalars=["face_index","select"],hide=False)
+                                            "select": "face_index,-1,>,face_index,9,<,and,switch,and"
+                                        },inputs=["switch","face_index"],outputs=["select"],
+                                        scalars=["switch","face_index","select"],hide=False)
+        orange_selector_switch = InputBoolean(tree, name="OrangeSelectorSwitch", value=True,
+                                              location=self.loc(block_x, block_y, 4, -2.5), hide=False)
+
 
         green_selector = make_function(tree, name="GreenSelector", location=self.loc(block_x, block_y, 5, -1.5),
                                        functions={
-                                           "select": "face_index,8,>,face_index,18,<,and"
-                                       }, inputs=["face_index"], outputs=["select"],
-                                       scalars=["face_index", "select"], hide=False)
+                                           "select": "face_index,8,>,face_index,18,<,and,switch,and"
+                                       }, inputs=["switch","face_index"], outputs=["select"],
+                                       scalars=["switch","face_index", "select"], hide=False)
+        green_selector_switch = InputBoolean(tree, name="GreenSelectorSwitch", value=True,
+                                              location=self.loc(block_x, block_y, 5, -2.5), hide=False)
 
         white_selector = make_function(tree, name="WhiteSelector", location=self.loc(block_x, block_y, 6, -1.5),
                                        functions={
-                                           "select": "face_index,26,>,face_index,36,<,and"
-                                       }, inputs=["face_index"], outputs=["select"],
-                                       scalars=["face_index", "select"], hide=False)
+                                           "select": "face_index,26,>,face_index,36,<,and,switch,and"
+                                       }, inputs=["switch","face_index"], outputs=["select"],
+                                       scalars=["switch","face_index", "select"], hide=False)
+        white_selector_switch = InputBoolean(tree, name="WhiteSelectorSwitch", value=True,
+                                              location=self.loc(block_x, block_y, 6, -2.5), hide=False)
+
+        edge_selector = make_function(tree, name="EdgeSelector", location=self.loc(block_x, block_y, 7, -1.5),
+                                       functions={
+                                           "select": "idx,19,=,idx,21,=,or,idx,23,=,or,"
+                                                     "idx,25,=,or,idx,34,=,or,idx,28,=,or,idx,39,=,or,"
+                                                     "idx,41,=,or,idx,12,=,or,idx,14,=,or,idx,30,=,or,idx,32,=,or,switch,and"
+                                       }, inputs=["switch","idx"], outputs=["select"],
+                                       scalars=["switch","idx", "select"], hide=False)
+
+        edge_selector_switch = InputBoolean(tree, name="EdgeSelectorSwitch", value=False,
+                                             location=self.loc(block_x, block_y, 7, -2.5), hide=False)
+
+
         links.new(attr_face_index.std_out,red_selector.inputs["face_index"])
         links.new(attr_face_index.std_out,blue_selector.inputs["face_index"])
         links.new(attr_face_index.std_out,yellow_selector.inputs["face_index"])
         links.new(attr_face_index.std_out,orange_selector.inputs["face_index"])
         links.new(attr_face_index.std_out,green_selector.inputs["face_index"])
         links.new(attr_face_index.std_out,white_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out,edge_selector.inputs["idx"])
+        links.new(red_selector_switch.std_out,red_selector.inputs["switch"])
+        links.new(white_selector_switch.std_out,white_selector.inputs["switch"])
+        links.new(green_selector_switch.std_out,green_selector.inputs["switch"])
+        links.new(blue_selector_switch.std_out,blue_selector.inputs["switch"])
+        links.new(orange_selector_switch.std_out,orange_selector.inputs["switch"])
+        links.new(yellow_selector_switch.std_out,yellow_selector.inputs["switch"])
+        links.new(edge_selector_switch.std_out,edge_selector.inputs["switch"])
+
+        material_black = SetMaterial(tree,location=self.loc(block_x,block_y,0,0),material="plastic_background")
 
         material_red = SetMaterial(tree, location=self.loc(block_x, block_y, 1, 0),selection=red_selector.outputs["select"], material="plastic_red",
                                    hide=False)
@@ -2964,13 +3002,18 @@ class RubiksCubeModifier(GeometryNodesModifier):
         material_white = SetMaterial(tree, location=self.loc(block_x, block_y, 6, 0),selection=white_selector.outputs["select"], material="plastic_text",
                                      hide=False)
 
-        create_geometry_line(tree,[realize_faces,material_red,material_blue,material_yellow,material_orange,material_green,material_white])
+        material_edge = SetMaterial(tree, location=self.loc(block_x, block_y, 7, 0),
+                                     selection=edge_selector.outputs["select"], material="plastic_joker",
+                                     hide=False)
+
+        last_material = material_edge
+        create_geometry_line(tree,[realize_faces,material_black,material_red,material_blue,material_yellow,material_orange,material_green,material_white,material_edge])
 
         # selection block
         block_y = 2
         block_x = 1.1
         join = JoinGeometry(tree, location=self.loc(block_x, block_y, 0, 0), hide=False)
-        create_geometry_line(tree, [material_white,join])
+        create_geometry_line(tree, [last_material,join])
         create_geometry_line(tree, [shade_smooth,join])
         attr_cubie_index2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 0, -1), name="CubieIndex",
                                            hide=False, data_type="INT")
@@ -3003,6 +3046,62 @@ class RubiksCubeModifier(GeometryNodesModifier):
                                           rotation=rotation.std_out,
                                           hide=True)
             create_geometry_line(tree,[join,sep_geo,transform,join2],out=out.inputs[0])
+
+
+        # the labels for the orientation
+        block_y = 4
+        block_x = 0
+
+        size_function = make_function(tree,name="SizeFunction",location=self.loc(block_x,block_y,-1,0),hide=True,
+                                      functions={"size":"3,size,*"},
+                                      inputs=["size"],outputs=["size"],scalars=["size"])
+
+        links.new(separation.std_out,size_function.inputs["size"])
+
+        edge_centers = CubeMesh(tree,location=self.loc(block_x, block_y,0,0),
+                        vertices_x=4,vertices_y=4,vertices_z=4,size=size_function.outputs["size"])
+        normal2 = InputNormal(tree,location=self.loc(block_x, block_y,1,-1))
+        store_face_normal2 = StoredNamedAttribute(tree,location=self.loc(block_x, block_y, 1, 0),
+                                                  name="FaceNormal2",value=normal2.std_out,domain='FACE',
+                                                  data_type="FLOAT_VECTOR",hide=False)
+        dual_mesh = DualMesh(tree,location=self.loc(block_x, block_y,2,0),)
+        mesh_to_points = MeshToPoints(tree,location=self.loc(block_x, block_y,3,0),hide=True)
+
+        # create the selection function, depending on the index of the face
+        idx = Index(tree, location=self.loc(block_x, block_y, 1, 1), hide=True)
+        edges = InputBoolean(tree,name = "EdgeSwitch", location=self.loc(block_x, block_y, 1, 1.5),value=False, hide=True)
+        corners = InputBoolean(tree, name="CornerSwitch", location=self.loc(block_x, block_y, 1, 2),value=False, hide=True)
+        index_function = make_function(tree, name="index_function",
+                                       functions={
+                                           "zero": "idx,19,=,idx,25,=,or,idx,21,=,or,idx,23,=,or,idx,1,=,or,idx,3,=,or,"
+                                                   "idx,5,=,or,idx,7,=,or,idx,12,=,or,idx,14,=,or,idx,30,=,or,idx,32,=,or,edges,and",
+                                           "one": "idx,46,=,idx,48,=,or,idx,50,=,or,idx,52,=,or,idx,37,=,or,idx,39,=,or,idx,41,=,or,idx,43,=,or,"
+                                                  "idx,10,=,or,idx,16,=,or,idx,28,=,or,idx,34,=,or,edges,and",
+                                           "two": "idx,42,=,idx,17,=,or,idx,9,=,or,idx,45,=,or,idx,53,=,or,idx,33,=,or,idx,29,=,or,idx,38,=,or,corners,and"
+                                       }, inputs=["idx","edges","corners"], outputs=["zero", "one", "two"],
+                                       scalars=["idx", "zero", "one", "two","edges","corners"],
+                                       vectors=[], location=self.loc(block_x, block_y, 2, 1), hide=True)
+        links.new(idx.std_out, index_function.inputs["idx"])
+        links.new(edges.std_out, index_function.inputs["edges"])
+        links.new(corners.std_out, index_function.inputs["corners"])
+
+        # align font to face normal
+        attr_face_normal2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 2, -1), name="FaceNormal2",
+                                           data_type="FLOAT_VECTOR", hide=False)
+        align_rotation2 = AlignRotationToVector(tree, location=self.loc(block_x, block_y, 3, -1),
+                                                vector=attr_face_normal2.std_out, hide=False)
+
+
+        # create three geometry lines for the numbers 0, 1, 2
+        create_geometry_line(tree, [edge_centers, store_face_normal2, dual_mesh, mesh_to_points])
+        for i in range(3):
+            text = StringToCurves(tree, location=self.loc(block_x, block_y, 2, 4-i), string=str(i), hide=True)
+            iop = InstanceOnPoints(tree,location=self.loc(block_x, block_y,4,4-i),hide=True,
+                                instance=text.geometry_out,rotation=align_rotation2.std_out,selection=index_function.outputs[i])
+            fill_curve = FillCurve(tree,location=self.loc(block_x, block_y,5,4-i),hide=True)
+            extrude = ExtrudeMesh(tree,location=self.loc(block_x, block_y,6,4-i),mode='FACES',offset=None,hide=True,offset_scale=0.03)
+            create_geometry_line(tree,[mesh_to_points,iop,fill_curve,extrude,join2])
+
 
 class VoronoiModifier(GeometryNodesModifier):
     def __init__(self, name="VoronoiModifier",begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,

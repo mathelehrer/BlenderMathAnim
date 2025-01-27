@@ -390,8 +390,6 @@ class BRubiksCube(BObject):
         return begin_time+transition_time
 
 
-
-
 class BRubiksCubeLocalCenters(BObject):
     def __init__(self, **kwargs):
         """

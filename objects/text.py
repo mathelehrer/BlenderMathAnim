@@ -4,12 +4,13 @@ import os
 from copy import deepcopy
 
 from geometry_nodes.geometry_nodes_modifier import  GeometryNodesModifier
-from geometry_nodes.nodes import InputVector, CollectionInfo, SetMaterial, create_geometry_line, TransformGeometry
+from geometry_nodes.nodes import InputVector, CollectionInfo, SetMaterial, create_geometry_line, TransformGeometry, \
+    create_from_xml
 from interface import ibpy
-from interface.ibpy import Vector, get_material
+from interface.ibpy import Vector, get_material, get_collection, get_geometry_node_from_modifier
 from objects.bobject import BObject
 from utils.constants import TEX_LOCAL_SCALE_UP, TEMPLATE_TEXT_FILE, TEMPLATE_TEX_FILE, SVG_DIR, TEX_DIR, \
-    TEX_TEXT_TO_REPLACE
+    TEX_TEXT_TO_REPLACE, DEFAULT_ANIMATION_TIME
 from utils.kwargs import get_from_kwargs
 
 
@@ -18,6 +19,14 @@ class Text(BObject):
     A new class for a text object based on geometry nodes
     """
     def __init__(self,expression, **kwargs):
+        """
+        example:
+        text = Text("Hallo Welt",color="drawing",outline_color="example",aligned="center",
+        emission=0.5,outline_emission=2)
+        text.write(begin_time=1,transition_time=1)
+
+
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name',"TextObject")
         self.rotation = self.get_from_kwargs('rotation', Vector((math.pi / 2, 0, 0)))
@@ -25,37 +34,67 @@ class Text(BObject):
         self.modifier = TextModifier(expression,rotation=self.rotation,**kwargs)
         cube = ibpy.add_cube()
         self.kwargs = kwargs
+
+        #apply colors
+        color = get_from_kwargs(kwargs,'color',"text")
+        outline_color = get_from_kwargs(kwargs,'outline_color',color)
+
+        mat = get_material(color,**kwargs)
+        get_from_kwargs(kwargs,'emission',0) # just remove it from kwargs
+        outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        mat_outline = get_material(outline_color,emission=outline_emission,**kwargs)
+
+        material_node = get_geometry_node_from_modifier(self.modifier,label="FontMaterial")
+        outline_material_node = get_geometry_node_from_modifier(self.modifier,label="OutlineMaterial")
+
+        material_node.inputs['Material'].default_value= mat
+        outline_material_node.inputs['Material'].default_value = mat_outline
+
         super().__init__(obj=cube, name=self.name, no_material=True, **kwargs)
         super().add_mesh_modifier('NODES', node_modifier=self.modifier)
 
+    def write(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        write_control = get_geometry_node_from_modifier(self.modifier,"WriteControl")
+        ibpy.change_default_value(write_control,from_value=0,to_value=self.modifier.number_of_letters,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
 
 class TextModifier(GeometryNodesModifier):
     def __init__(self,expression,**kwargs):
         self.expression = expression
+        self.number_of_letters =0
         super().__init__(get_from_kwargs(kwargs,'name',"GeoText"),
-                         group_input=False,automatic_layout=True,**kwargs)
+                         group_input=False,automatic_layout=False,**kwargs)
 
     def create_node(self,tree,**kwargs):
-        out = self.group_outputs
-        links = tree.links
 
-        generate_expression(self.expression,**kwargs)
-        expr_location = InputVector(tree, name="ExprLocation",
-                                     value=get_from_kwargs(kwargs,'location',Vector()))
-        expr_rotation = InputVector(tree, name="ExprRotation",value=get_from_kwargs(kwargs,'rotation',Vector()))
-        expr_info = CollectionInfo(tree, collection_name=self.expression,
-                                    name="TextData")
-        material = get_material(get_from_kwargs(kwargs,'material',"drawing"))
-        self.materials.append(material)
-        material_node =SetMaterial(tree,material=material)
-        transform_geometry = TransformGeometry(tree,name="ExprTransform",translation=expr_location.std_out,
-                                               rotation=expr_rotation.std_out)
-        create_geometry_line(tree,[expr_info,transform_geometry,material_node],out=out.inputs[0])
+        self.number_of_letters = generate_expression(self.expression, **kwargs)
+        create_from_xml(tree,"geo_fonts",**kwargs)
+
+        collection_info = tree.nodes.get("TextData")
+        # collection_info.inputs["Separate Children"].default_value = True
+        collection_info.inputs["Collection"].default_value = get_collection(self.expression)
+
+        # out = self.group_outputs
+        # links = tree.links
+        #
+        #
+        # expr_location = InputVector(tree, name="ExprLocation",
+        #                              value=get_from_kwargs(kwargs,'location',Vector()))
+        # expr_rotation = InputVector(tree, name="ExprRotation",value=get_from_kwargs(kwargs,'rotation',Vector()))
+        # expr_info = CollectionInfo(tree, collection_name=self.expression,
+        #                             name="TextData")
+        # material = get_material(get_from_kwargs(kwargs,'material',"drawing"))
+        # self.materials.append(material)
+        # material_node =SetMaterial(tree,material=material)
+        # transform_geometry = TransformGeometry(tree,name="ExprTransform",translation=expr_location.std_out,
+        #                                        rotation=expr_rotation.std_out)
+        # create_geometry_line(tree,[expr_info,transform_geometry,material_node],out=out.inputs[0])
 
 
 ##
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
+# returns the number of letters
 ##
 def generate_expression(expression, **kwargs):
     aligned = get_from_kwargs(kwargs, 'aligned', 'left')
@@ -67,7 +106,10 @@ def generate_expression(expression, **kwargs):
         imported_svg_data = import_svg_data(imported_svg_data,path,kwargs)
         imported_svg_data = align_figures(imported_svg_data, aligned)
         collection = ibpy.make_new_collection(expression,hide_render=True,hide_viewport=True)
-        for curve in imported_svg_data[list(imported_svg_data.keys())[-1]]:
+        curves = imported_svg_data[list(imported_svg_data.keys())[-1]]
+        for curve in curves:
+            # make curve dimension 3D to preserve spline property
+            curve.data.dimensions = '3D'
             ibpy.link(curve,collection)
 
         # replace default import collection with a more appropriately named collection
@@ -77,9 +119,7 @@ def generate_expression(expression, **kwargs):
             ibpy.un_link(obj, old_collection.name)
         ibpy.remove_collection(old_collection)
         label = collection.name
-    else:
-        label=None
-    return label
+    return len(curves)
 
 def import_svg_data(imported_svg_data,path,kwargs):
     default_color = get_from_kwargs(kwargs, 'color', 'text')
