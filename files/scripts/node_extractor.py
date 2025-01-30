@@ -38,15 +38,27 @@ for node in geo_nodes:
         
     if hasattr(node,"mode"):
         print(" mode='"+str(node.mode),end="'")
+        
+    if hasattr(node,"scale_mode"):
+        print(" scale_mode='"+str(node.scale_mode),end="'")
     
     if hasattr(node,"data_type"):
         print(" data_type='"+str(node.data_type),end="'")
+        
+    if hasattr(node,"interpolation_type"):
+        print(" interpolation_type='"+str(node.interpolation_type),end="'")
+        
+    if hasattr(node,"factor_mode"):
+        print(" factor_mode='"+str(node.factor_mode),end="'")
         
     if hasattr(node,"operation"):
         print(" operation='"+str(node.operation),end="'")
         
     if hasattr(node,"use_clamp"):
         print(" use_clamp='"+str(node.use_clamp),end="'")
+        
+    if hasattr(node,"clamp_factor"):
+        print(" clamp_factor'="+str(node.clamp_factor),end="'")
         
     if hasattr(node,"integer"):
         print(" integer='"+str(node.integer),end="'")

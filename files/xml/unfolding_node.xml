@@ -123,7 +123,7 @@
 				 <OUTPUT id='32' name='Vector' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
 			 </OUTPUTS>
 		 </NODE>
-		<NODE id='15' type='MAP_RANGE' name='Map Range' label='' location='(6.1,-0.6)' hide='True' mute='False' data_type='FLOAT' parent='Frame.007'>
+		<NODE id='15' type='MAP_RANGE' name='Map Range' label='' location='(6.1,-0.6)' hide='True' mute='False' data_type='FLOAT' interpolation_type='SMOOTHSTEP' parent='Frame.007'>
 			<INPUTS>
 				 <INPUT id='33' name='Value' type='VALUE' is_linked='True'/>
 				 <INPUT id='34' name='From Min' type='VALUE' is_linked='False' default_value='0.0'/>
@@ -158,7 +158,7 @@
 				 <OUTPUT id='49' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
 			 </OUTPUTS>
 		 </NODE>
-		<NODE id='18' type='MIX' name='Mix' label='' location='(-4.5,0.0)' hide='True' mute='False' data_type='VECTOR' parent='None'>
+		<NODE id='18' type='MIX' name='Mix' label='' location='(-4.5,0.0)' hide='True' mute='False' data_type='VECTOR' factor_mode='NON_UNIFORM' clamp_factor='True' parent='None'>
 			<INPUTS>
 				 <INPUT id='50' name='Factor' type='VALUE' is_linked='True'/>
 				 <INPUT id='51' name='Factor' type='VECTOR' is_linked='True'/>
@@ -282,7 +282,7 @@
 			 <OUTPUTS>
 			 </OUTPUTS>
 		 </NODE>
-		<NODE id='30' type='SCALE_ELEMENTS' name='Scale Elements' label='' location='(2.9,0.6)' hide='False' mute='False' domain='FACE' parent='Frame.003'>
+		<NODE id='30' type='SCALE_ELEMENTS' name='Scale Elements' label='' location='(2.9,0.6)' hide='False' mute='False' scale_mode='UNIFORM' domain='FACE' parent='Frame.003'>
 			<INPUTS>
 				 <INPUT id='102' name='Geometry' type='GEOMETRY' is_linked='True'/>
 				 <INPUT id='103' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>

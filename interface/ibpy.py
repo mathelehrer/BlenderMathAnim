@@ -42,10 +42,10 @@ DATA_TYPES = ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOL
 OPERATORS = ['*', 'mul', '%', 'mod', '/', 'div', '+', 'add', '-', 'sub', '**', 'sin', 'cos', 'tan', '^', 'lg',
              'sqrt', 'exp', 'abs', 'min', 'max', '<', '>', 'sgn', 'round', 'floor', 'vfloor', 'ceil',
              'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'length', 'scale', 'sqrt', '=', 'dot',
-             'cross', 'rot', 'axis_rot', 'rot2euler', 'axis_angle_euler', 'not', 'normalize', 'and', 'or']
+             'cross', 'rot', 'axis_rot', 'rot2euler', 'axis_angle_euler', 'not', 'normalize', 'and', 'or',"rot_vec","inv_rot"]
 # operators that return data of type VECTOR
 VECTOR_OPERATORS = ['mul', 'mod', 'div', 'add', 'sub', 'scale', 'vfloor', 'cross', 'rot', 'axis_rot', 'rot2euler',
-                    'axis_angle_euler', 'normalize']
+                    'axis_angle_euler', 'normalize',"rot_vec","inv_rot"]
 
 
 def get_context():

@@ -18,7 +18,8 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputRotation, InvertRotation, RotateRotation, \
     Frame, SeparateXYZ, DualMesh, WireFrameRectangle, SplitEdges, VectorRotate, EvaluateOnDomain, InputNormal, \
     SubdivisionSurface, FaceArea, Quadrilateral, FilletCurve, FillCurve, SeparateGeometry, SortElements, \
-    AlignRotationToVector, InputBoolean, IndexSwitch, QuaternionToRotation, StringToCurves, TransformPositionNode
+    AlignRotationToVector, InputBoolean, IndexSwitch, QuaternionToRotation, StringToCurves, TransformPositionNode, \
+    create_from_xml
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -3188,7 +3189,7 @@ class UnfoldModifier(GeometryNodesModifier):
         out = self.group_outputs
         links = tree.links
 
-        transform_position = TransformPositionNode(tree)
+        create_from_xml(tree,"unfolding_node",**kwargs)
 
 
 ##

@@ -35,6 +35,7 @@ def parse_location(location):
     coords = location.split(",")
     return (float(coords[0]), float(coords[1]))
 
+
 class Node:
     def __init__(self, tree, location=(0, 0), width=200, height=100, **kwargs):
         self.tree = tree
@@ -76,6 +77,13 @@ class Node:
 
         type = attributes["type"]
 
+        # io nodes
+
+        if type=="GROUP_INPUT":
+            return GroupInput(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="GROUP_OUTPUT":
+            return GroupOutput(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+
         # input nodes
         if type=="VALUE":
             return InputValue(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
@@ -101,6 +109,8 @@ class Node:
             return MeshToPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
         if type=="SUBDIVISION_SURFACE":
             return SubdivisionSurface(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="SPLIT_EDGES":
+            return SplitEdges(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
         if type=="REALIZE_INSTANCES":
             return RealizeInstances(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
         if type=="SET_POSITION":
@@ -121,6 +131,12 @@ class Node:
             return JoinGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
         if type=="SET_MATERIAL":
             return SetMaterial(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="SCALE_ELEMENTS":
+            domain=attributes["domain"]
+            scale_mode=attributes["scale_mode"]
+            return ScaleElements(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain,scale_mode=scale_mode)
+
+
         # attribute nodes
         if type=="STORE_NAMED_ATTRIBUTE":
             data_type = attributes["data_type"]
@@ -172,16 +188,38 @@ class Node:
             return MathNode(tree, location=location, name=name, label=label, hide=hide, operation=operation, mute=mute,height=200)
         if type=="SEPXYZ":
             return SeparateXYZ(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+        if type=="COMBXYZ":
+            return CombineXYZ(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
         if type=="COMPARE":
             operation=attributes["operation"]
             data_type=attributes["data_type"]
             return CompareNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,operation=operation,data_type=data_type)
+        if type=="MAP_RANGE":
+            data_type=attributes["data_type"]
+            interpolation_type=attributes["interpolation_type"]
+            return MapRange(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,interpolation_type=interpolation_type)
+        if type=="MIX":
+            data_type=attributes["data_type"]
+            factor_mode=attributes["factor_mode"]
+            cf = attributes["clamp_factor"]
+            if cf =='True':
+                clamp_factor=True
+            else:
+                clamp_factor=False
+            return MixNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,factor_mode=factor_mode,clamp_factor=clamp_factor)
+
 
         # don't know the category yet
         if type=="FIELD_ON_DOMAIN":
             data_type=attributes["data_type"]
             domain=attributes["domain"]
             return EvaluateOnDomain(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,domain=domain)
+
+        if type=="FIELD_AT_INDEX":
+            data_type=attributes["data_type"]
+            domain = attributes["domain"]
+            return EvaluateAtIndex(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,domain=domain)
+
         if type=="REROUTE":
             location = parse_location(attributes["location"])
             return ReRoute(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
@@ -204,8 +242,28 @@ class Node:
             domain = attributes["domain"]
             return ForEachOutput(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain)
 
+        # Custom Nodes
+        if type=="GROUP":
+            if "PositionTransform" in name:
+                return TransformPositionNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=400)
+
     def set_parent(self,parent):
         self.node.parent=parent.node
+
+class GroupInput(Node):
+    def __init__(self,tree,location=(0,0),hide=False,mute=False,**kwargs):
+        self.node = tree.nodes.new("NodeGroupInput")
+        self.node.hide=hide
+        self.node.mute=mute
+        super().__init__(tree,location,**kwargs)
+
+class GroupOutput(Node):
+    def __init__(self,tree,location=(0,0),hide=False,mute=False,**kwargs):
+        self.node = tree.nodes.new("NodeGroupOutput")
+        self.node.hide=hide
+        self.node.mute=mute
+        super().__init__(tree,location,**kwargs)
+
 
 class ReRoute(Node):
     """
@@ -1669,6 +1727,34 @@ class EvaluateOnDomain(BlueNode):
             else:
                 tree.links.new(value, self.node.inputs["Value"])
 
+class EvaluateAtIndex(BlueNode):
+    def __init__(self, tree, location=(0, 0), value=None,data_type="FLOAT_VECTOR",
+                 domain="FACE",index=None, **kwargs):
+        """
+
+        :param tree:
+        :param data_type: "FLOAT", "INT", "FLOAT_VECTOR", "BOOLEAN"
+        :param domain: "FACE","POINT","EDGE",...
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="GeometryNodeFieldAtIndex")
+        self.node.data_type=data_type
+        self.node.domain=domain
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_in = self.node.inputs["Value"]
+        self.std_out = self.node.outputs["Value"]
+
+        if value is not None:
+            if isinstance(value, (int, float)):
+                self.node.inputs["Value"].default_value = value
+            else:
+                tree.links.new(value, self.node.inputs["Value"])
+        if index is not None:
+            if isinstance(index, int):
+                self.index.default_value = index
+            else:
+                tree.links.new(index, self.node.inputs["Index"])
 
 #  red nodes   #
 
@@ -1887,7 +1973,6 @@ class RandomValue(BlueNode):
         else:
             self.node.inputs["Seed"] = seed
 
-
 class SeparateXYZ(BlueNode):
     def __init__(self, tree, location=(0, 0), vector=Vector(), **kwargs):
         """
@@ -1912,7 +1997,6 @@ class SeparateXYZ(BlueNode):
             self.std_in.default_value = vector
         else:
             tree.links.new(vector, self.std_in)
-
 
 class CombineXYZ(BlueNode):
     def __init__(self, tree, location=(0, 0), x=0, y=0, z=0, **kwargs):
@@ -1953,6 +2037,64 @@ class CombineXYZ(BlueNode):
                 z = z.std_out
             tree.links.new(z, self.node.inputs["Z"])
 
+class MapRange(BlueNode):
+    def __init__(self,tree, location=(0,0),data_type="FLOAT",interpolation_type="LINEAR",
+                 from_min=0,from_max=1,to_min=0,to_max=1,value=None, **kwargs):
+
+        self.node = tree.nodes.new(type="ShaderNodeMapRange")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.std_out = self.node.outputs["Result"]
+        self.node.data_type = data_type
+        self.node.interpolation_type = interpolation_type
+
+        if isinstance(from_min,(int,float)):
+            self.node.inputs["From Min"].default_value = from_min
+        else:
+            tree.links.new(from_min,self.node.inputs["From Min"])
+        if isinstance(from_max,(int,float)):
+            self.node.inputs["From Max"].default_value = from_max
+        else:
+            tree.links.new(from_max,self.node.inputs["From Max"])
+        if isinstance(to_min,(int,float)):
+            self.node.inputs["To Min"].default_value = to_min
+        else:
+            tree.links.new(to_min,self.node.inputs["To Min"])
+        if isinstance(to_max,(int,float)):
+            self.node.inputs["To Max"].default_value = to_max
+        else:
+            tree.links.new(to_max,self.node.inputs["To Max"])
+        if value is not None:
+            if isinstance(value,(int,float)):
+                self.node.inputs["Value"].default_value = value
+            else:
+                tree.links.new(value,self.node.inputs["Value"])
+
+class MixNode(BlueNode):
+    def __init__(self, tree, location=(0, 0), data_type="VECTOR",factor_mode="UNIFORM",clamp_factor=False,factor = None,input_a=None,input_b=None,**kwargs):
+        self.node=tree.nodes.new("ShaderNodeMix")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.node.data_type=data_type
+        self.node.factor_mode=factor_mode
+        self.node.clamp_factor=clamp_factor
+        self.std_out=self.node.outputs["Result"]
+
+        if factor is not None:
+            if isinstance(factor,(int,float)):
+                self.node.inputs["Factor"].default_value=factor
+            else:
+                tree.links.new(factor,self.node.inputs["Factor"])
+        if input_a is not None:
+            if isinstance(input_a,(int,float)):
+                self.node.inputs["A"].default_value=input_a
+            else:
+                tree.links.new(input_a,self.node.inputs["A"])
+        if input_b is not None:
+            if isinstance(input_b,(int,float)):
+                self.node.inputs["B"].default_value=input_b
+            else:
+                tree.links.new(input_b,self.node.inputs["B"])
 
 class MathNode(BlueNode):
     def __init__(self, tree, location=(0, 0), operation="ADD", inputs0=None,
@@ -2051,7 +2193,6 @@ class BooleanMath(BlueNode):
             self.node.inputs[1].default_value = inputs1
         else:
             tree.links.new(inputs1, self.node.inputs[1])
-
 
 class VectorMath(BlueNode):
     def __init__(self, tree, location=(0, 0), operation="ADD", inputs0=Vector(), inputs1=Vector(), float_input=None,
@@ -2619,20 +2760,28 @@ class NodeGroup:
         outputs = get_from_kwargs(kwargs,"outputs",{"Geometry":"GEOMETRY"})
         self.create_node_group(tree,inputs,outputs,**kwargs)
 
+        # filled by subclass
+        self.fill_group_with_node(self.group_tree,**kwargs)
+
+        auto_layout = get_from_kwargs(kwargs,"auto_layout",True)
+        if auto_layout:
+            layout(self.group_tree)
+
     def create_node_group(self,tree,inputs,outputs,**kwargs):
 
+        # new group and inputs and outputs
         nodes = tree.nodes
         name=get_from_kwargs(kwargs,"name","DefaultNodeGroup")
         group = nodes.new(type='GeometryNodeGroup')
         node_tree = bpy.data.node_groups.new(name, type='GeometryNodeTree')
         group.node_tree = node_tree
+        self.group_tree=node_tree
         nodes = node_tree.nodes
-
         group.name = name
-
-        group_inputs = nodes.new('NodeGroupInput')
-        group_inputs.location = (0, 0)
-        group_outputs = nodes.new('NodeGroupOutput')
+        self.group_inputs = nodes.new('NodeGroupInput')
+        self.group_inputs.location = (-200, 0)
+        self.group_outputs = nodes.new('NodeGroupOutput')
+        self.group_outputs.location = (200, 0)
 
         socket_types = {"STRING":'NodeSocketString',"BOOLEAN": 'NodeSocketBool',"MATERIAL": 'NodeSocketMaterial',
                         "VECTOR":'NodeSocketVector',"INT":'NodeSocketInt', "MENU":'NodeSocketMenu',"COLLECTION":'NodeSocketCollection',
@@ -2641,15 +2790,53 @@ class NodeGroup:
                         "MATRIX": 'NodeSocketMatrix',"IMAGE": 'NodeSocketImage'}
 
         for name,type in inputs.items():
-                make_new_socket(tree,name=name,io="INPUT",type=socket_types[type])
+                make_new_socket(node_tree,name=name,io="INPUT",type=socket_types[type])
         for name,type in outputs.items():
-                make_new_socket(tree,name=name,io="OUTPUT",type=socket_types[type])
+                make_new_socket(node_tree,name=name,io="OUTPUT",type=socket_types[type])
+
+    def fill_group_with_node(self,group_tree,**kwargs):
+        """ filled by sub classes """
+        pass
 
 
 class TransformPositionNode(NodeGroup):
     def __init__(self,tree,**kwargs):
+        self.name = get_from_kwargs(kwargs,"name","TransformPositionNode")
+
         super().__init__(tree,inputs={"Position":"VECTOR","Location":"VECTOR","Rotation":"ROTATION","Scale":"VECTOR","Undo Transformation":"BOOLEAN"},
-                         outputs={"Position":"VECTOR"},**kwargs)
+                         outputs={"Position":"VECTOR"},name=self.name,**kwargs)
+
+        self.inputs = self.group_inputs.outputs
+        self.outputs = self.group_outputs.inputs
+
+    def fill_group_with_node(self,tree,**kwargs):
+        do_transform = make_function(tree, name="Do Transform",
+                                     functions={
+                                         "result": "position,scl,mul,rotation,rot_vec,location,add"
+                                     }, inputs=["position", "scl", "rotation", "location"], outputs=["result"],
+                                     vectors=["position", "scl", "rotation", "location", "result"],hide=False)
+
+        tree.links.new(self.group_inputs.outputs["Position"], do_transform.inputs["position"])
+        tree.links.new(self.group_inputs.outputs["Scale"], do_transform.inputs["scl"])
+        tree.links.new(self.group_inputs.outputs["Rotation"], do_transform.inputs["rotation"])
+        tree.links.new(self.group_inputs.outputs["Location"], do_transform.inputs["location"])
+
+        undo_transform = make_function(tree, name="Undo Transform",
+                                     functions={
+                                         "result": "position,location,sub,rotation,inv_rot,rot_vec,scl,div"
+                                     }, inputs=["position", "scl", "rotation", "location"], outputs=["result"],
+                                     vectors=["position", "scl", "rotation", "location", "result"],hide=False)
+
+        tree.links.new(self.group_inputs.outputs["Position"], undo_transform.inputs["position"])
+        tree.links.new(self.group_inputs.outputs["Scale"], undo_transform.inputs["scl"])
+        tree.links.new(self.group_inputs.outputs["Rotation"], undo_transform.inputs["rotation"])
+        tree.links.new(self.group_inputs.outputs["Location"], undo_transform.inputs["location"])
+
+        switch = Switch(tree,input_type="VECTOR",switch=self.group_inputs.outputs["Undo Transformation"],
+                        false=do_transform.outputs["result"],true=undo_transform.outputs["result"])
+        tree.links.new(switch.outputs["Output"],self.group_outputs.inputs["Position"])
+
+
 
 # custom Matrix operations #
 class Rotation(GreenNode):
@@ -3796,6 +3983,18 @@ def build_function(tree, stack, scalars=[], vectors=[], in_channels={}, fcn_coun
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.right = new_node_math.inputs[1]
                 new_node_structure.out = new_node_math.outputs["Boolean"]
+            elif next_element == "rot_vec":
+                new_node_math = tree.nodes.new(type="FunctionNodeRotateVector")
+                new_node_structure = Structure()
+                new_node_structure.left = new_node_math.inputs["Vector"]
+                new_node_structure.right = new_node_math.inputs["Rotation"]
+                new_node_structure.out = new_node_math.outputs["Vector"]
+            elif next_element == "inv_rot":
+                new_node_math = tree.nodes.new(type="FunctionNodeInvertRotation")
+                new_node_structure = Structure()
+                new_node_structure.left = new_node_math.inputs["Rotation"]
+                new_node_structure.out = new_node_math.outputs["Rotation"]
+                unary = True
 
             # positioning is a non-trivial task, matter of improvement
             if unary:
