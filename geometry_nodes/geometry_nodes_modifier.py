@@ -18,7 +18,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputRotation, InvertRotation, RotateRotation, \
     Frame, SeparateXYZ, DualMesh, WireFrameRectangle, SplitEdges, VectorRotate, EvaluateOnDomain, InputNormal, \
     SubdivisionSurface, FaceArea, Quadrilateral, FilletCurve, FillCurve, SeparateGeometry, SortElements, \
-    AlignRotationToVector, InputBoolean, IndexSwitch, QuaternionToRotation, StringToCurves
+    AlignRotationToVector, InputBoolean, IndexSwitch, QuaternionToRotation, StringToCurves, TransformPositionNode
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -236,7 +236,6 @@ class SpherePreImage(GeometryNodesModifier):
                              [line, mesh2points, points2verts, attr, extrude_mesh, sub_div, set_pos, wireframe, mat,
                               join, trafo1, trafo2, trafo3], out=out.inputs["Geometry"])
 
-
 class MathematicalSurface(GeometryNodesModifier):
     """
     geometry node setup to display a mathematical surface in explicit form
@@ -304,7 +303,6 @@ class MathematicalSurface(GeometryNodesModifier):
 
         # connect all geometry nodes
         create_geometry_line(tree, [grid, del_geo, set_pos, smooth, mat], out=out.inputs["Geometry"])
-
 
 class PendulumModifierSmall(GeometryNodesModifier):
     def __init__(self, min_frame=0,max_frame=100,name="SmallPendulum", automatic_layout=False):
@@ -758,7 +756,6 @@ class PendulumModifierLarge(GeometryNodesModifier):
 
         create_geometry_line(tree, [simulation2, graph_iop, graph_trafo, graph_mat, join_full])
 
-
 class VectorLogo(GeometryNodesModifier):
     def __init__(self, name='VectorLogo', n=10, colors=['important', 'example', 'drawing']):
         self.n = n
@@ -875,7 +872,6 @@ class VectorLogo(GeometryNodesModifier):
     def get_arrow_object(self):
         return self.arrow
 
-
 class LorentzAttractorNode(GeometryNodesModifier):
     def __init__(self, name='LorentzAttractor', iterations=15000, a=0.4):
         self.iterations = iterations
@@ -924,7 +920,6 @@ class LorentzAttractorNode(GeometryNodesModifier):
 
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
-
 
 class Penrose2DIntro(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
@@ -1003,7 +998,6 @@ class Penrose2DIntro(GeometryNodesModifier):
 
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
-
 
 class Penrose2DVoronoi(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
@@ -1232,7 +1226,6 @@ class Penrose2DVoronoi(GeometryNodesModifier):
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
 
-
 class Penrose2D(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
         super().__init__(name)
@@ -1399,7 +1392,6 @@ class Penrose2D(GeometryNodesModifier):
 
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
-
 
 class ConvexHull2D(GeometryNodesModifier):
     def __init__(self, name='ConvexHull2D', size=10):
@@ -1593,7 +1585,6 @@ class ConvexHull2D(GeometryNodesModifier):
         create_geometry_line(tree, [realize_instances, instance_on_grid_points, selected_material, join2])
         # voronoi zone
         create_geometry_line(tree, [projection_line, product_geometry, realize, hull_hull, zone_mat, join2])
-
 
 class SphericalHarmonicsNode(GeometryNodesModifier):
     def __init__(self, l=0, m=0, name='SphericalHarmonics', resolution=5, **kwargs):
@@ -1911,7 +1902,6 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
                              out=self.group_outputs.inputs[0])
         create_geometry_line(tree, [join, join_full])
 
-
 class NodeFromCollection(GeometryNodesModifier):
     def __init__(self, name='NodeFromCollection', collection="Collection", translation=Vector(), rotation=Vector(),
                  scale=Vector([1, 1, 1]), **kwargs):
@@ -1940,7 +1930,6 @@ class NodeFromCollection(GeometryNodesModifier):
         create_geometry_line(tree, [collectionInfo,
                                     trafo
                                     ], out=self.group_outputs.inputs[0])
-
 
 class SliderModifier(GeometryNodesModifier):
     def __init__(self, name='SliderModifier', **kwargs):
@@ -2724,7 +2713,6 @@ class LogoModifier(GeometryNodesModifier):
         shade_smooth = SetShadeSmooth(tree)
         create_geometry_line(tree,[join_geometry,transform_geometry,shade_smooth],out=out.inputs["Geometry"])
 
-
 class RubiksCubeModifier(GeometryNodesModifier):
     def __init__(self, name="RubiksCubeModifier",**kwargs):
         super().__init__(name,automatic_layout=False,**kwargs)
@@ -3102,7 +3090,6 @@ class RubiksCubeModifier(GeometryNodesModifier):
             extrude = ExtrudeMesh(tree,location=self.loc(block_x, block_y,6,4-i),mode='FACES',offset=None,hide=True,offset_scale=0.03)
             create_geometry_line(tree,[mesh_to_points,iop,fill_curve,extrude,join2])
 
-
 class VoronoiModifier(GeometryNodesModifier):
     def __init__(self, name="VoronoiModifier",begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,
                   **kwargs):
@@ -3192,6 +3179,17 @@ class VoronoiModifier(GeometryNodesModifier):
         create_geometry_line(tree,[dual_mesh,split_edges,store_index,scale_elements,repeat],ins=ins.outputs["Geometry"])
         create_geometry_line(tree,[repeat, extrude_mesh,set_material_tiles,local_join,join_geometry],out=out.inputs["Geometry"])
         create_geometry_line(tree,[repeat,wireframe,set_material_wireframe,local_join])
+
+class UnfoldModifier(GeometryNodesModifier):
+    def __init__(self, name="UnfoldModifier",**kwargs):
+        super().__init__(name, automatic_layout=False, **kwargs)
+
+    def create_node(self,tree,**kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        transform_position = TransformPositionNode(tree)
+
 
 ##
 # recreate the essentials to convert a latex expression into a collection of curves

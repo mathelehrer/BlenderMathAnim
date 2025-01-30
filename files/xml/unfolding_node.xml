@@ -1,0 +1,1359 @@
+<NODE_XML>
+	 <NODES>
+		<NODE id='0' type='GROUP_INPUT' name='Group Input' label='' location='(-28.9,4.5)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='0' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <OUTPUT id='1' name='Progression' type='VALUE' is_linked='False' default_value='0.5'/>
+				 <OUTPUT id='2' name='Range' type='VALUE' is_linked='False' default_value='0.5'/>
+				 <OUTPUT id='3' name='RootIndex' type='INT' is_linked='True' default_value='15'/>
+				 <OUTPUT id='4' name='' type='CUSTOM' is_linked='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='1' type='GROUP_OUTPUT' name='Group Output' label='' location='(4.5,3.3)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+				 <INPUT id='5' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='6' name='' type='CUSTOM' is_linked='False'/>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='2' type='FRAME' name='Frame.001' label='Parent Face Corner' location='(-20.7,0.0)' hide='False' mute='False' parent='Frame.015'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='3' type='FRAME' name='Frame.002' label='Store Transforms' location='(-18.0,2.9)' hide='False' mute='False' parent='Frame.015'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='4' type='SPLIT_EDGES' name='Split Edges' label='' location='(2.0,0.6)' hide='False' mute='False' parent='Frame.003'>
+			<INPUTS>
+				 <INPUT id='7' name='Mesh' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='8' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='9' name='Mesh' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='5' type='FRAME' name='Frame.003' label='Split Faces' location='(-16.8,4.0)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='6' type='FRAME' name='Frame.004' label='Local Transform  (Make all faces sitting on top of each other)' location='(-17.6,0.7)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='7' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute' label='' location='(4.3,2.4)' hide='False' mute='False' domain='FACE' data_type='FLOAT' parent='Frame.005'>
+			<INPUTS>
+				 <INPUT id='10' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='11' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='12' name='Name' type='STRING' is_linked='False' default_value='Gradient'/>
+				 <INPUT id='13' name='Value' type='VALUE' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='14' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='8' type='MATH' name='Math' label='' location='(4.3,1.4)' hide='True' mute='False' operation='DIVIDE' use_clamp='False' parent='Frame.005'>
+			<INPUTS>
+				 <INPUT id='15' name='Value' type='VALUE' is_linked='True'/>
+				 <INPUT id='16' name='Value' type='VALUE' is_linked='True'/>
+				 <INPUT id='17' name='Value' type='VALUE' is_linked='False' default_value='0.5'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='18' name='Value' type='VALUE' is_linked='True' default_value='0.0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='9' type='MATH' name='Math.001' label='' location='(4.3,1.2)' hide='True' mute='False' operation='SUBTRACT' use_clamp='False' parent='Frame.005'>
+			<INPUTS>
+				 <INPUT id='19' name='Value' type='VALUE' is_linked='True'/>
+				 <INPUT id='20' name='Value' type='VALUE' is_linked='True'/>
+				 <INPUT id='21' name='Value' type='VALUE' is_linked='False' default_value='0.5'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='22' name='Value' type='VALUE' is_linked='True' default_value='0.0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='10' type='INPUT_ATTRIBUTE' name='Named Attribute.001' label='' location='(4.3,1.0)' hide='False' mute='False' data_type='INT' parent='Frame.005'>
+			<INPUTS>
+				 <INPUT id='23' name='Name' type='STRING' is_linked='False' default_value='Loop ID'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='24' name='Attribute' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='25' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='11' type='FRAME' name='Frame.005' label='Gradient' location='(-11.2,-1.5)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='12' type='INPUT_ATTRIBUTE' name='Named Attribute.002' label='' location='(7.0,-1.2)' hide='False' mute='False' data_type='FLOAT_VECTOR' parent='Frame.006'>
+			<INPUTS>
+				 <INPUT id='26' name='Name' type='STRING' is_linked='False' default_value='FL Rot'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='27' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='28' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='13' type='FRAME' name='Frame.006' label='Local Rotation' location='(-11.5,0.8)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='14' type='COMBXYZ' name='Combine XYZ' label='' location='(6.1,0.0)' hide='False' mute='False' parent='Frame.007'>
+			<INPUTS>
+				 <INPUT id='29' name='X' type='VALUE' is_linked='True'/>
+				 <INPUT id='30' name='Y' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='31' name='Z' type='VALUE' is_linked='False' default_value='0.0'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='32' name='Vector' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='15' type='MAP_RANGE' name='Map Range' label='' location='(6.1,-0.6)' hide='True' mute='False' data_type='FLOAT' parent='Frame.007'>
+			<INPUTS>
+				 <INPUT id='33' name='Value' type='VALUE' is_linked='True'/>
+				 <INPUT id='34' name='From Min' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='35' name='From Max' type='VALUE' is_linked='False' default_value='1.0'/>
+				 <INPUT id='36' name='To Min' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='37' name='To Max' type='VALUE' is_linked='False' default_value='1.0'/>
+				 <INPUT id='38' name='Steps' type='VALUE' is_linked='False' default_value='4.0'/>
+				 <INPUT id='39' name='Vector' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='40' name='From Min' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='41' name='From Max' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='42' name='To Min' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='43' name='To Max' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='44' name='Steps' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='45' name='Result' type='VALUE' is_linked='True' default_value='0.0'/>
+				 <OUTPUT id='46' name='Vector' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='16' type='FRAME' name='Frame.007' label='Gradient' location='(-11.9,0.0)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='17' type='INPUT_ATTRIBUTE' name='Named Attribute.003' label='' location='(6.0,-0.8)' hide='False' mute='False' data_type='FLOAT' parent='Frame.007'>
+			<INPUTS>
+				 <INPUT id='47' name='Name' type='STRING' is_linked='False' default_value='Gradient'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='48' name='Attribute' type='VALUE' is_linked='True' default_value='0.0'/>
+				 <OUTPUT id='49' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='18' type='MIX' name='Mix' label='' location='(-4.5,0.0)' hide='True' mute='False' data_type='VECTOR' parent='None'>
+			<INPUTS>
+				 <INPUT id='50' name='Factor' type='VALUE' is_linked='True'/>
+				 <INPUT id='51' name='Factor' type='VECTOR' is_linked='True'/>
+				 <INPUT id='52' name='A' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='53' name='B' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='54' name='A' type='VECTOR' is_linked='True'/>
+				 <INPUT id='55' name='B' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='56' name='A' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='57' name='B' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='58' name='A' type='ROTATION' is_linked='False' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+				 <INPUT id='59' name='B' type='ROTATION' is_linked='False' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='60' name='Result' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <OUTPUT id='61' name='Result' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='62' name='Result' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <OUTPUT id='63' name='Result' type='ROTATION' is_linked='False' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='19' type='FRAME' name='Frame.008' label='Stack Face Transforms' location='(-9.7,2.5)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='20' type='SET_POSITION' name='Set Position' label='' location='(11.3,1.1)' hide='False' mute='False' parent='Frame.009'>
+			<INPUTS>
+				 <INPUT id='64' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='65' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='66' name='Position' type='VECTOR' is_linked='True'/>
+				 <INPUT id='67' name='Offset' type='VECTOR' is_linked='False' default_value='<Vector (0.0000, 0.0000, 0.0000)>'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='68' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='21' type='GROUP' name='Position Transform Node.003' label='Position Transform' location='(11.3,-0.3)' hide='False' mute='False' parent='Frame.009'>
+			<INPUTS>
+				 <INPUT id='69' name='Position' type='VECTOR' is_linked='True'/>
+				 <INPUT id='70' name='Location' type='VECTOR' is_linked='True'/>
+				 <INPUT id='71' name='Rotation' type='ROTATION' is_linked='True'/>
+				 <INPUT id='72' name='Scale' type='VECTOR' is_linked='True'/>
+				 <INPUT id='73' name='Undo Transform' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='74' name='Position' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='22' type='INPUT_ATTRIBUTE' name='Named Attribute.004' label='' location='(10.0,0.0)' hide='False' mute='False' data_type='FLOAT_VECTOR' parent='Frame.009'>
+			<INPUTS>
+				 <INPUT id='75' name='Name' type='STRING' is_linked='False' default_value='VL Pos'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='76' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='77' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='23' type='INPUT_ATTRIBUTE' name='Named Attribute.005' label='' location='(10.0,-0.7)' hide='False' mute='False' data_type='FLOAT_VECTOR' parent='Frame.009'>
+			<INPUTS>
+				 <INPUT id='78' name='Name' type='STRING' is_linked='False' default_value='F Pos'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='79' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='80' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='24' type='INPUT_ATTRIBUTE' name='Named Attribute.006' label='' location='(10.0,-1.3)' hide='False' mute='False' data_type='FLOAT_VECTOR' parent='Frame.009'>
+			<INPUTS>
+				 <INPUT id='81' name='Name' type='STRING' is_linked='False' default_value='F Rot'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='82' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='83' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='25' type='INPUT_ATTRIBUTE' name='Named Attribute.007' label='' location='(10.0,-2.0)' hide='False' mute='False' data_type='FLOAT' parent='Frame.009'>
+			<INPUTS>
+				 <INPUT id='84' name='Name' type='STRING' is_linked='False' default_value='F Scl'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='85' name='Attribute' type='VALUE' is_linked='True' default_value='0.0'/>
+				 <OUTPUT id='86' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='26' type='FRAME' name='Frame.009' label='New Vertex Transform' location='(-7.9,1.5)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='27' type='INDEX' name='Index' label='' location='(-5.5,0.2)' hide='False' mute='False' parent='Frame.010'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='87' name='Index' type='INT' is_linked='True' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='28' type='COMPARE' name='Compare' label='' location='(-4.7,0.2)' hide='True' mute='False' mode='ELEMENT' data_type='INT' operation='EQUAL' parent='Frame.010'>
+			<INPUTS>
+				 <INPUT id='88' name='A' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='89' name='B' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='90' name='A' type='INT' is_linked='True'/>
+				 <INPUT id='91' name='B' type='INT' is_linked='True'/>
+				 <INPUT id='92' name='A' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='93' name='B' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='94' name='A' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='95' name='B' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='96' name='A' type='STRING' is_linked='False' default_value=''/>
+				 <INPUT id='97' name='B' type='STRING' is_linked='False' default_value=''/>
+				 <INPUT id='98' name='C' type='VALUE' is_linked='False' default_value='0.8999999761581421'/>
+				 <INPUT id='99' name='Angle' type='VALUE' is_linked='False' default_value='0.08726649731397629'/>
+				 <INPUT id='100' name='Epsilon' type='VALUE' is_linked='False' default_value='0.0010000000474974513'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='101' name='Result' type='BOOLEAN' is_linked='True' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='29' type='FRAME' name='Frame.010' label='Select Your Root face here' location='(-22.3,-1.2)' hide='False' mute='False' parent='Frame.015'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='30' type='SCALE_ELEMENTS' name='Scale Elements' label='' location='(2.9,0.6)' hide='False' mute='False' domain='FACE' parent='Frame.003'>
+			<INPUTS>
+				 <INPUT id='102' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='103' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='104' name='Scale' type='VALUE' is_linked='False' default_value='1.0'/>
+				 <INPUT id='105' name='Center' type='VECTOR' is_linked='False' default_value='<Vector (0.0000, 0.0000, 0.0000)>'/>
+				 <INPUT id='106' name='Axis' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='107' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='31' type='FRAME' name='Frame.015' label='GeometryAnalyser' location='(-0.5,-0.2)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='32' type='GROUP_INPUT' name='Group Input.001' label='' location='(-8.3,-0.9)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='108' name='Geometry' type='GEOMETRY' is_linked='False'/>
+				 <OUTPUT id='109' name='Progression' type='VALUE' is_linked='True' default_value='0.5'/>
+				 <OUTPUT id='110' name='Range' type='VALUE' is_linked='True' default_value='0.5'/>
+				 <OUTPUT id='111' name='RootIndex' type='INT' is_linked='False' default_value='15'/>
+				 <OUTPUT id='112' name='' type='CUSTOM' is_linked='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='33' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.001' label='' location='(-0.8,0.4)' hide='False' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame.011'>
+			<INPUTS>
+				 <INPUT id='113' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='114' name='Selection' type='BOOLEAN' is_linked='True'/>
+				 <INPUT id='115' name='Name' type='STRING' is_linked='False' default_value='F Rot'/>
+				 <INPUT id='116' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='117' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='34' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.002' label='' location='(0.0,0.5)' hide='False' mute='False' domain='FACE' data_type='FLOAT' parent='Frame.011'>
+			<INPUTS>
+				 <INPUT id='118' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='119' name='Selection' type='BOOLEAN' is_linked='True'/>
+				 <INPUT id='120' name='Name' type='STRING' is_linked='False' default_value='F Scl'/>
+				 <INPUT id='121' name='Value' type='VALUE' is_linked='False' default_value='1.0'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='122' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='35' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.003' label='' location='(0.9,0.5)' hide='False' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame.011'>
+			<INPUTS>
+				 <INPUT id='123' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='124' name='Selection' type='BOOLEAN' is_linked='True'/>
+				 <INPUT id='125' name='Name' type='STRING' is_linked='False' default_value='F Pos'/>
+				 <INPUT id='126' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='127' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='36' type='FRAME' name='Frame.011' label='Stack Data' location='(8.8,0.4)' hide='False' mute='False' parent='Frame.008'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='37' type='INPUT_ATTRIBUTE' name='Named Attribute' label='' location='(-1.2,-1.0)' hide='False' mute='False' data_type='INT' parent='Frame.012'>
+			<INPUTS>
+				 <INPUT id='128' name='Name' type='STRING' is_linked='False' default_value='F Parent'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='129' name='Attribute' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='130' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='38' type='INPUT_ATTRIBUTE' name='Named Attribute.008' label='' location='(-1.2,-1.8)' hide='False' mute='False' data_type='FLOAT_VECTOR' parent='Frame.012'>
+			<INPUTS>
+				 <INPUT id='131' name='Name' type='STRING' is_linked='False' default_value='F Rot'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='132' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='133' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='39' type='FIELD_AT_INDEX' name='Evaluate at Index' label='' location='(-1.2,-1.7)' hide='True' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame.012'>
+			<INPUTS>
+				 <INPUT id='134' name='Index' type='INT' is_linked='True'/>
+				 <INPUT id='135' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='136' name='Value' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='40' type='FRAME' name='Frame.012' label='Stack Local Rotations' location='(6.5,0.7)' hide='False' mute='False' parent='Frame.008'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='41' type='INPUT_ATTRIBUTE' name='Named Attribute.009' label='' location='(4.0,-0.5)' hide='False' mute='False' data_type='INT' parent='Frame.008'>
+			<INPUTS>
+				 <INPUT id='137' name='Name' type='STRING' is_linked='False' default_value='Loop ID'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='138' name='Attribute' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='139' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='42' type='ATTRIBUTE_STATISTIC' name='Attribute Statistic' label='' location='(4.0,1.2)' hide='False' mute='False' domain='FACE' data_type='FLOAT' parent='Frame.008'>
+			<INPUTS>
+				 <INPUT id='140' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='141' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='142' name='Attribute' type='VALUE' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='143' name='Mean' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <OUTPUT id='144' name='Median' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <OUTPUT id='145' name='Sum' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <OUTPUT id='146' name='Min' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <OUTPUT id='147' name='Max' type='VALUE' is_linked='True' default_value='0.0'/>
+				 <OUTPUT id='148' name='Range' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <OUTPUT id='149' name='Standard Deviation' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <OUTPUT id='150' name='Variance' type='VALUE' is_linked='False' default_value='0.0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='43' type='MATH' name='Math.002' label='' location='(5.0,0.8)' hide='False' mute='False' operation='ADD' use_clamp='False' parent='Frame.008'>
+			<INPUTS>
+				 <INPUT id='151' name='Value' type='VALUE' is_linked='True'/>
+				 <INPUT id='152' name='Value' type='VALUE' is_linked='False' default_value='1.0'/>
+				 <INPUT id='153' name='Value' type='VALUE' is_linked='False' default_value='0.5'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='154' name='Value' type='VALUE' is_linked='True' default_value='0.0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='44' type='REPEAT_INPUT' name='Repeat Input' label='' location='(6.1,0.7)' hide='False' mute='False' parent='Frame.008'>
+			<INPUTS>
+				 <INPUT id='155' name='Iterations' type='INT' is_linked='True'/>
+				 <INPUT id='156' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='157' name='' type='CUSTOM' is_linked='False'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='158' name='Iteration' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='159' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <OUTPUT id='160' name='' type='CUSTOM' is_linked='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='45' type='REPEAT_OUTPUT' name='Repeat Output' label='' location='(10.7,1.0)' hide='False' mute='False' parent='Frame.008'>
+			<INPUTS>
+				 <INPUT id='161' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='162' name='' type='CUSTOM' is_linked='False'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='163' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <OUTPUT id='164' name='' type='CUSTOM' is_linked='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='46' type='COMPARE' name='Compare.001' label='' location='(7.0,1.1)' hide='True' mute='False' mode='ELEMENT' data_type='INT' operation='EQUAL' parent='Frame.008'>
+			<INPUTS>
+				 <INPUT id='165' name='A' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='166' name='B' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='167' name='A' type='INT' is_linked='True'/>
+				 <INPUT id='168' name='B' type='INT' is_linked='True'/>
+				 <INPUT id='169' name='A' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='170' name='B' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='171' name='A' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='172' name='B' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='173' name='A' type='STRING' is_linked='False' default_value=''/>
+				 <INPUT id='174' name='B' type='STRING' is_linked='False' default_value=''/>
+				 <INPUT id='175' name='C' type='VALUE' is_linked='False' default_value='0.8999999761581421'/>
+				 <INPUT id='176' name='Angle' type='VALUE' is_linked='False' default_value='0.08726649731397629'/>
+				 <INPUT id='177' name='Epsilon' type='VALUE' is_linked='False' default_value='0.0010000000474974513'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='178' name='Result' type='BOOLEAN' is_linked='True' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='47' type='INPUT_ATTRIBUTE' name='Named Attribute.011' label='' location='(6.9,0.7)' hide='False' mute='False' data_type='INT' parent='Frame.008'>
+			<INPUTS>
+				 <INPUT id='179' name='Name' type='STRING' is_linked='False' default_value='Loop ID'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='180' name='Attribute' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='181' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='48' type='INPUT_ATTRIBUTE' name='Named Attribute.012' label='FL Pos' location='(3.3,-1.0)' hide='True' mute='False' data_type='FLOAT_VECTOR' parent='Frame.013'>
+			<INPUTS>
+				 <INPUT id='182' name='Name' type='STRING' is_linked='False' default_value='FL Pos'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='183' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='184' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='49' type='INPUT_ATTRIBUTE' name='Named Attribute.013' label='' location='(2.3,-1.4)' hide='False' mute='False' data_type='INT' parent='Frame.013'>
+			<INPUTS>
+				 <INPUT id='185' name='Name' type='STRING' is_linked='False' default_value='F Parent'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='186' name='Attribute' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='187' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='50' type='INPUT_ATTRIBUTE' name='Named Attribute.014' label='F Scl' location='(3.3,-2.3)' hide='True' mute='False' data_type='FLOAT' parent='Frame.013'>
+			<INPUTS>
+				 <INPUT id='188' name='Name' type='STRING' is_linked='False' default_value='F Scl'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='189' name='Attribute' type='VALUE' is_linked='True' default_value='0.0'/>
+				 <OUTPUT id='190' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='51' type='INPUT_ATTRIBUTE' name='Named Attribute.015' label='F Pos' location='(3.3,-1.4)' hide='True' mute='False' data_type='FLOAT_VECTOR' parent='Frame.013'>
+			<INPUTS>
+				 <INPUT id='191' name='Name' type='STRING' is_linked='False' default_value='F Pos'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='192' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='193' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='52' type='GROUP' name='Position Transform Node.002' label='Position Transform' location='(4.4,-0.9)' hide='False' mute='False' parent='Frame.013'>
+			<INPUTS>
+				 <INPUT id='194' name='Position' type='VECTOR' is_linked='True'/>
+				 <INPUT id='195' name='Location' type='VECTOR' is_linked='True'/>
+				 <INPUT id='196' name='Rotation' type='ROTATION' is_linked='True'/>
+				 <INPUT id='197' name='Scale' type='VECTOR' is_linked='True'/>
+				 <INPUT id='198' name='Undo Transform' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='199' name='Position' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='53' type='FIELD_AT_INDEX' name='Evaluate at Index.001' label='' location='(3.4,-1.2)' hide='True' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame.013'>
+			<INPUTS>
+				 <INPUT id='200' name='Index' type='INT' is_linked='True'/>
+				 <INPUT id='201' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='202' name='Value' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='54' type='FIELD_AT_INDEX' name='Evaluate at Index.002' label='' location='(3.3,-2.1)' hide='True' mute='False' domain='FACE' data_type='FLOAT' parent='Frame.013'>
+			<INPUTS>
+				 <INPUT id='203' name='Index' type='INT' is_linked='True'/>
+				 <INPUT id='204' name='Value' type='VALUE' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='205' name='Value' type='VALUE' is_linked='True' default_value='0.0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='55' type='INPUT_ATTRIBUTE' name='Named Attribute.016' label='F Rot' location='(3.3,-1.8)' hide='True' mute='False' data_type='FLOAT_VECTOR' parent='Frame.013'>
+			<INPUTS>
+				 <INPUT id='206' name='Name' type='STRING' is_linked='False' default_value='F Rot'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='207' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='208' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='56' type='FIELD_AT_INDEX' name='Evaluate at Index.003' label='' location='(3.3,-1.6)' hide='True' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame.013'>
+			<INPUTS>
+				 <INPUT id='209' name='Index' type='INT' is_linked='True'/>
+				 <INPUT id='210' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='211' name='Value' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='57' type='FRAME' name='Frame.013' label='Parent Transform' location='(4.9,0.6)' hide='False' mute='False' parent='Frame.008'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='58' type='ROTATE_ROTATION' name='Rotate Rotation' label='' location='(-0.4,-1.4)' hide='False' mute='False' parent='Frame.012'>
+			<INPUTS>
+				 <INPUT id='212' name='Rotation' type='ROTATION' is_linked='True'/>
+				 <INPUT id='213' name='Rotate By' type='ROTATION' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='214' name='Rotation' type='ROTATION' is_linked='True' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='59' type='DUAL_MESH' name='Dual Mesh' label='' location='(-2.1,1.2)' hide='False' mute='False' parent='Frame.014'>
+			<INPUTS>
+				 <INPUT id='215' name='Mesh' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='216' name='Keep Boundaries' type='BOOLEAN' is_linked='False' default_value='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='217' name='Dual Mesh' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='60' type='SAMPLE_INDEX' name='Sample Index' label='' location='(-1.0,1.2)' hide='False' mute='False' domain='POINT' data_type='INT' parent='Frame.014'>
+			<INPUTS>
+				 <INPUT id='218' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='219' name='Value' type='INT' is_linked='True'/>
+				 <INPUT id='220' name='Index' type='INT' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='221' name='Value' type='INT' is_linked='True' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='61' type='FRAME' name='Frame.014' label='Parent Data' location='(-24.5,-0.3)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='62' type='SHORTEST_EDGE_PATHS' name='Shortest Edge Paths' label='' location='(-2.1,0.6)' hide='False' mute='False' parent='Frame.014'>
+			<INPUTS>
+				 <INPUT id='222' name='End Vertex' type='BOOLEAN' is_linked='True'/>
+				 <INPUT id='223' name='Edge Cost' type='VALUE' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='224' name='Next Vertex Index' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='225' name='Total Cost' type='VALUE' is_linked='True' default_value='0.0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='63' type='VALUE' name='Value' label='' location='(-2.0,0.0)' hide='False' mute='False' parent='Frame.014'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='226' name='Value' type='VALUE' is_linked='True' default_value='1.0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='64' type='INDEX' name='Index.001' label='' location='(-1.1,0.1)' hide='False' mute='False' parent='Frame.014'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='227' name='Index' type='INT' is_linked='True' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='65' type='SAMPLE_INDEX' name='Sample Index.001' label='' location='(-1.1,-0.2)' hide='False' mute='False' domain='POINT' data_type='INT' parent='Frame.014'>
+			<INPUTS>
+				 <INPUT id='228' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='229' name='Value' type='INT' is_linked='True'/>
+				 <INPUT id='230' name='Index' type='INT' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='231' name='Value' type='INT' is_linked='True' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='66' type='INDEX' name='Index.002' label='' location='(-1.1,-1.2)' hide='False' mute='False' parent='Frame.014'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='232' name='Index' type='INT' is_linked='True' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='67' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.004' label='' location='(2.3,0.6)' hide='False' mute='False' domain='FACE' data_type='INT' parent='Frame.016'>
+			<INPUTS>
+				 <INPUT id='233' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='234' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='235' name='Name' type='STRING' is_linked='False' default_value='F Parent'/>
+				 <INPUT id='236' name='Value' type='INT' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='237' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='68' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.005' label='' location='(3.3,0.7)' hide='False' mute='False' domain='FACE' data_type='INT' parent='Frame.016'>
+			<INPUTS>
+				 <INPUT id='238' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='239' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='240' name='Name' type='STRING' is_linked='False' default_value='Loop ID'/>
+				 <INPUT id='241' name='Value' type='INT' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='242' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='69' type='FRAME' name='Frame.016' label='Store Parent/Loop Data' location='(-27.7,1.8)' hide='False' mute='False' parent='None'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='70' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.006' label='' location='(4.2,0.7)' hide='False' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame.016'>
+			<INPUTS>
+				 <INPUT id='243' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='244' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='245' name='Name' type='STRING' is_linked='False' default_value='F Normal'/>
+				 <INPUT id='246' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='247' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='71' type='INPUT_NORMAL' name='Normal.001' label='' location='(4.2,-0.2)' hide='False' mute='False' parent='Frame.016'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='248' name='Normal' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='72' type='EDGES_OF_CORNER' name='Edges of Corner' label='' location='(0.5,1.2)' hide='False' mute='False' parent='Frame.017'>
+			<INPUTS>
+				 <INPUT id='249' name='Corner Index' type='INT' is_linked='False' default_value='0'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='250' name='Next Edge Index' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='251' name='Previous Edge Index' type='INT' is_linked='False' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='73' type='FACE_OF_CORNER' name='Face of Corner' label='' location='(1.6,1.8)' hide='False' mute='False' parent='Frame.017'>
+			<INPUTS>
+				 <INPUT id='252' name='Corner Index' type='INT' is_linked='False' default_value='0'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='253' name='Face Index' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='254' name='Index in Face' type='INT' is_linked='False' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='74' type='CORNERS_OF_EDGE' name='Corners of Edge' label='' location='(1.6,1.2)' hide='False' mute='False' parent='Frame.017'>
+			<INPUTS>
+				 <INPUT id='255' name='Edge Index' type='INT' is_linked='True'/>
+				 <INPUT id='256' name='Weights' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='257' name='Sort Index' type='INT' is_linked='False' default_value='0'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='258' name='Corner Index' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='259' name='Total' type='INT' is_linked='False' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='75' type='CORNERS_OF_EDGE' name='Corners of Edge.001' label='' location='(1.6,0.4)' hide='False' mute='False' parent='Frame.017'>
+			<INPUTS>
+				 <INPUT id='260' name='Edge Index' type='INT' is_linked='True'/>
+				 <INPUT id='261' name='Weights' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='262' name='Sort Index' type='INT' is_linked='False' default_value='1'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='263' name='Corner Index' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='264' name='Total' type='INT' is_linked='False' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='76' type='FACE_OF_CORNER' name='Face of Corner.001' label='' location='(2.6,0.9)' hide='False' mute='False' parent='Frame.017'>
+			<INPUTS>
+				 <INPUT id='265' name='Corner Index' type='INT' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='266' name='Face Index' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='267' name='Index in Face' type='INT' is_linked='False' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='77' type='FRAME' name='Frame.017' label='Corner not on self Face' location='(-3.7,-1.3)' hide='False' mute='False' parent='Frame.001'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='78' type='COMPARE' name='Compare.002' label='' location='(2.6,1.9)' hide='False' mute='False' mode='ELEMENT' data_type='INT' operation='EQUAL' parent='Frame.017'>
+			<INPUTS>
+				 <INPUT id='268' name='A' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='269' name='B' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='270' name='A' type='INT' is_linked='True'/>
+				 <INPUT id='271' name='B' type='INT' is_linked='True'/>
+				 <INPUT id='272' name='A' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='273' name='B' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='274' name='A' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='275' name='B' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='276' name='A' type='STRING' is_linked='False' default_value=''/>
+				 <INPUT id='277' name='B' type='STRING' is_linked='False' default_value=''/>
+				 <INPUT id='278' name='C' type='VALUE' is_linked='False' default_value='0.8999999761581421'/>
+				 <INPUT id='279' name='Angle' type='VALUE' is_linked='False' default_value='0.08726649731397629'/>
+				 <INPUT id='280' name='Epsilon' type='VALUE' is_linked='False' default_value='0.0010000000474974513'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='281' name='Result' type='BOOLEAN' is_linked='True' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='79' type='SWITCH' name='Switch' label='' location='(2.6,0.2)' hide='False' mute='False' parent='Frame.017'>
+			<INPUTS>
+				 <INPUT id='282' name='Switch' type='BOOLEAN' is_linked='True'/>
+				 <INPUT id='283' name='False' type='INT' is_linked='True'/>
+				 <INPUT id='284' name='True' type='INT' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='285' name='Output' type='INT' is_linked='True' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='80' type='INPUT_ATTRIBUTE' name='Named Attribute.017' label='' location='(0.3,2.7)' hide='False' mute='False' data_type='INT' parent='Frame.021'>
+			<INPUTS>
+				 <INPUT id='286' name='Name' type='STRING' is_linked='False' default_value='F Parent'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='287' name='Attribute' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='288' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='81' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.007' label='' location='(3.5,3.1)' hide='False' mute='False' domain='FACE' data_type='INT' parent='Frame.018'>
+			<INPUTS>
+				 <INPUT id='289' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='290' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='291' name='Name' type='STRING' is_linked='False' default_value='C1 Parent'/>
+				 <INPUT id='292' name='Value' type='INT' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='293' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='82' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.008' label='' location='(4.3,3.2)' hide='False' mute='False' domain='FACE' data_type='INT' parent='Frame.018'>
+			<INPUTS>
+				 <INPUT id='294' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='295' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='296' name='Name' type='STRING' is_linked='False' default_value='C2 Parent'/>
+				 <INPUT id='297' name='Value' type='INT' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='298' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='83' type='OFFSET_CORNER_IN_FACE' name='Offset Corner in Face' label='' location='(4.3,2.1)' hide='False' mute='False' parent='Frame.018'>
+			<INPUTS>
+				 <INPUT id='299' name='Corner Index' type='INT' is_linked='True'/>
+				 <INPUT id='300' name='Offset' type='INT' is_linked='False' default_value='1'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='301' name='Corner Index' type='INT' is_linked='True' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='84' type='INPUT_ATTRIBUTE' name='Named Attribute.018' label='' location='(4.3,1.5)' hide='False' mute='False' data_type='INT' parent='Frame.018'>
+			<INPUTS>
+				 <INPUT id='302' name='Name' type='STRING' is_linked='False' default_value='C1 Parent'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='303' name='Attribute' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='304' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='85' type='FRAME' name='Frame.018' label='Parent Face Corners' location='(-1.3,-2.4)' hide='False' mute='False' parent='Frame.001'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='86' type='CORNERS_OF_FACE' name='Corners of Face' label='' location='(2.3,2.2)' hide='False' mute='False' parent='Frame.019'>
+			<INPUTS>
+				 <INPUT id='305' name='Face Index' type='INT' is_linked='False' default_value='0'/>
+				 <INPUT id='306' name='Weights' type='VALUE' is_linked='True'/>
+				 <INPUT id='307' name='Sort Index' type='INT' is_linked='False' default_value='0'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='308' name='Corner Index' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='309' name='Total' type='INT' is_linked='False' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='87' type='BOOLEAN_MATH' name='Boolean Math' label='' location='(1.5,1.8)' hide='True' mute='False' operation='NOT' parent='Frame.019'>
+			<INPUTS>
+				 <INPUT id='310' name='Boolean' type='BOOLEAN' is_linked='True'/>
+				 <INPUT id='311' name='Boolean' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='312' name='Boolean' type='BOOLEAN' is_linked='True' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='88' type='FRAME' name='Frame.019' label='Corner Index' location='(-0.3,-3.1)' hide='False' mute='False' parent='Frame.001'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='89' type='COMPARE' name='Compare.003' label='' location='(0.3,2.0)' hide='False' mute='False' mode='ELEMENT' data_type='INT' operation='EQUAL' parent='Frame.021'>
+			<INPUTS>
+				 <INPUT id='313' name='A' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='314' name='B' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='315' name='A' type='INT' is_linked='True'/>
+				 <INPUT id='316' name='B' type='INT' is_linked='True'/>
+				 <INPUT id='317' name='A' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='318' name='B' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='319' name='A' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='320' name='B' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='321' name='A' type='STRING' is_linked='False' default_value=''/>
+				 <INPUT id='322' name='B' type='STRING' is_linked='False' default_value=''/>
+				 <INPUT id='323' name='C' type='VALUE' is_linked='False' default_value='0.8999999761581421'/>
+				 <INPUT id='324' name='Angle' type='VALUE' is_linked='False' default_value='0.08726649731397629'/>
+				 <INPUT id='325' name='Epsilon' type='VALUE' is_linked='False' default_value='0.0010000000474974513'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='326' name='Result' type='BOOLEAN' is_linked='True' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='90' type='FACE_OF_CORNER' name='Face of Corner.002' label='' location='(0.3,1.1)' hide='False' mute='False' parent='Frame.021'>
+			<INPUTS>
+				 <INPUT id='327' name='Corner Index' type='INT' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='328' name='Face Index' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='329' name='Index in Face' type='INT' is_linked='False' default_value='0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='91' type='FRAME' name='Frame.021' label='Is on Parent Face' location='(-0.2,-2.3)' hide='False' mute='False' parent='Frame.001'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='92' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.009' label='' location='(-0.9,0.0)' hide='False' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame.024'>
+			<INPUTS>
+				 <INPUT id='330' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='331' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='332' name='Name' type='STRING' is_linked='False' default_value='F Rot'/>
+				 <INPUT id='333' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='334' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='93' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.010' label='' location='(0.0,0.0)' hide='False' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame.023'>
+			<INPUTS>
+				 <INPUT id='335' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='336' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='337' name='Name' type='STRING' is_linked='False' default_value='F Pos'/>
+				 <INPUT id='338' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='339' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='94' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.011' label='' location='(0.9,0.0)' hide='False' mute='False' domain='FACE' data_type='FLOAT' parent='Frame.022'>
+			<INPUTS>
+				 <INPUT id='340' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='341' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='342' name='Name' type='STRING' is_linked='False' default_value='F Scl'/>
+				 <INPUT id='343' name='Value' type='VALUE' is_linked='False' default_value='0.0'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='344' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='95' type='MIX' name='Mix.001' label='' location='(0.0,-1.0)' hide='False' mute='False' data_type='VECTOR' parent='Frame.023'>
+			<INPUTS>
+				 <INPUT id='345' name='Factor' type='VALUE' is_linked='False' default_value='0.5'/>
+				 <INPUT id='346' name='Factor' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='347' name='A' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='348' name='B' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <INPUT id='349' name='A' type='VECTOR' is_linked='True'/>
+				 <INPUT id='350' name='B' type='VECTOR' is_linked='True'/>
+				 <INPUT id='351' name='A' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='352' name='B' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <INPUT id='353' name='A' type='ROTATION' is_linked='False' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+				 <INPUT id='354' name='B' type='ROTATION' is_linked='False' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='355' name='Result' type='VALUE' is_linked='False' default_value='0.0'/>
+				 <OUTPUT id='356' name='Result' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='357' name='Result' type='RGBA' is_linked='False' default_value='<bpy_float[4], NodeSocketColor.default_value>'/>
+				 <OUTPUT id='358' name='Result' type='ROTATION' is_linked='False' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='96' type='FRAME' name='Frame.022' label='Start Scale' location='(2.0,0.2)' hide='False' mute='False' parent='Frame.002'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='97' type='FRAME' name='Frame.023' label='Start Position' location='(2.1,0.3)' hide='False' mute='False' parent='Frame.002'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='98' type='FRAME' name='Frame.024' label='Start Rotation' location='(2.2,0.4)' hide='False' mute='False' parent='Frame.002'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='99' type='INPUT_NORMAL' name='Normal' label='' location='(-0.9,-2.0)' hide='False' mute='False' parent='Frame.024'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='359' name='Normal' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='100' type='VECT_MATH' name='Vector Math' label='' location='(-1.8,-1.6)' hide='False' mute='False' operation='SUBTRACT' parent='Frame.024'>
+			<INPUTS>
+				 <INPUT id='360' name='Vector' type='VECTOR' is_linked='True'/>
+				 <INPUT id='361' name='Vector' type='VECTOR' is_linked='True'/>
+				 <INPUT id='362' name='Vector' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='363' name='Scale' type='VALUE' is_linked='False' default_value='1.0'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='364' name='Vector' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='365' name='Value' type='VALUE' is_linked='False' default_value='0.0'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='101' type='POSITION' name='Position' label='' location='(-4.6,-2.0)' hide='False' mute='False' parent='Frame.025'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='366' name='Position' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='102' type='INPUT_ATTRIBUTE' name='Named Attribute.019' label='' location='(-4.6,-2.3)' hide='False' mute='False' data_type='INT' parent='Frame.025'>
+			<INPUTS>
+				 <INPUT id='367' name='Name' type='STRING' is_linked='False' default_value='C1 Parent'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='368' name='Attribute' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='369' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='103' type='INPUT_ATTRIBUTE' name='Named Attribute.020' label='' location='(-4.6,-1.3)' hide='False' mute='False' data_type='INT' parent='Frame.025'>
+			<INPUTS>
+				 <INPUT id='370' name='Name' type='STRING' is_linked='False' default_value='C2 Parent'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='371' name='Attribute' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='372' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='104' type='FIELD_AT_INDEX' name='Evaluate at Index.004' label='' location='(-3.8,-1.4)' hide='False' mute='False' domain='CORNER' data_type='FLOAT_VECTOR' parent='Frame.025'>
+			<INPUTS>
+				 <INPUT id='373' name='Index' type='INT' is_linked='True'/>
+				 <INPUT id='374' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='375' name='Value' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='105' type='FIELD_AT_INDEX' name='Evaluate at Index.005' label='' location='(-3.8,-2.2)' hide='False' mute='False' domain='CORNER' data_type='FLOAT_VECTOR' parent='Frame.025'>
+			<INPUTS>
+				 <INPUT id='376' name='Index' type='INT' is_linked='True'/>
+				 <INPUT id='377' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='378' name='Value' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='106' type='FRAME' name='Frame.025' label='Positions of Corners' location='(-15.7,4.6)' hide='False' mute='False' parent='Frame.015'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='107' type='ALIGN_ROTATION_TO_VECTOR' name='Align Rotation to Vector' label='' location='(-1.8,-0.7)' hide='False' mute='False' parent='Frame.024'>
+			<INPUTS>
+				 <INPUT id='379' name='Rotation' type='ROTATION' is_linked='False' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+				 <INPUT id='380' name='Factor' type='VALUE' is_linked='False' default_value='1.0'/>
+				 <INPUT id='381' name='Vector' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='382' name='Rotation' type='ROTATION' is_linked='True' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='108' type='ALIGN_ROTATION_TO_VECTOR' name='Align Rotation to Vector.001' label='' location='(-0.9,-1.1)' hide='False' mute='False' parent='Frame.024'>
+			<INPUTS>
+				 <INPUT id='383' name='Rotation' type='ROTATION' is_linked='True'/>
+				 <INPUT id='384' name='Factor' type='VALUE' is_linked='False' default_value='1.0'/>
+				 <INPUT id='385' name='Vector' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='386' name='Rotation' type='ROTATION' is_linked='True' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='109' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.012' label='' location='(-1.1,0.9)' hide='False' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame'>
+			<INPUTS>
+				 <INPUT id='387' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='388' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='389' name='Name' type='STRING' is_linked='False' default_value='FL Rot'/>
+				 <INPUT id='390' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='391' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='110' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.013' label='' location='(3.2,0.9)' hide='False' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame.026'>
+			<INPUTS>
+				 <INPUT id='392' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='393' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='394' name='Name' type='STRING' is_linked='False' default_value='FL Pos'/>
+				 <INPUT id='395' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='396' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='111' type='STORE_NAMED_ATTRIBUTE' name='Store Named Attribute.014' label='' location='(6.0,1.1)' hide='False' mute='False' domain='POINT' data_type='FLOAT_VECTOR' parent='Frame.027'>
+			<INPUTS>
+				 <INPUT id='397' name='Geometry' type='GEOMETRY' is_linked='True'/>
+				 <INPUT id='398' name='Selection' type='BOOLEAN' is_linked='False' default_value='True'/>
+				 <INPUT id='399' name='Name' type='STRING' is_linked='False' default_value='VL Pos'/>
+				 <INPUT id='400' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='401' name='Geometry' type='GEOMETRY' is_linked='True'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='112' type='INVERT_ROTATION' name='Invert Rotation' label='' location='(-1.2,-0.8)' hide='False' mute='False' parent='Frame'>
+			<INPUTS>
+				 <INPUT id='402' name='Rotation' type='ROTATION' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='403' name='Rotation' type='ROTATION' is_linked='True' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='113' type='FIELD_AT_INDEX' name='Evaluate at Index.006' label='' location='(-1.2,-1.3)' hide='False' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame'>
+			<INPUTS>
+				 <INPUT id='404' name='Index' type='INT' is_linked='True'/>
+				 <INPUT id='405' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='406' name='Value' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='114' type='INPUT_ATTRIBUTE' name='Named Attribute.021' label='' location='(-1.2,-2.1)' hide='False' mute='False' data_type='INT' parent='Frame'>
+			<INPUTS>
+				 <INPUT id='407' name='Name' type='STRING' is_linked='False' default_value='F Parent'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='408' name='Attribute' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='409' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='115' type='INPUT_ATTRIBUTE' name='Named Attribute.022' label='' location='(-2.3,-1.2)' hide='False' mute='False' data_type='FLOAT_VECTOR' parent='Frame'>
+			<INPUTS>
+				 <INPUT id='410' name='Name' type='STRING' is_linked='False' default_value='F Rot'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='411' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='412' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='116' type='FRAME' name='Frame' label='FL Rot' location='(5.9,1.4)' hide='False' mute='False' parent='Frame.004'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='117' type='INPUT_ATTRIBUTE' name='Named Attribute.023' label='' location='(1.4,0.2)' hide='False' mute='False' data_type='FLOAT_VECTOR' parent='Frame.026'>
+			<INPUTS>
+				 <INPUT id='413' name='Name' type='STRING' is_linked='False' default_value='F Pos'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='414' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='415' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='118' type='INPUT_ATTRIBUTE' name='Named Attribute.024' label='' location='(1.4,-0.4)' hide='False' mute='False' data_type='INT' parent='Frame.026'>
+			<INPUTS>
+				 <INPUT id='416' name='Name' type='STRING' is_linked='False' default_value='F Parent'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='417' name='Attribute' type='INT' is_linked='True' default_value='0'/>
+				 <OUTPUT id='418' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='119' type='INPUT_ATTRIBUTE' name='Named Attribute.025' label='' location='(1.4,-1.0)' hide='False' mute='False' data_type='FLOAT_VECTOR' parent='Frame.026'>
+			<INPUTS>
+				 <INPUT id='419' name='Name' type='STRING' is_linked='False' default_value='F Rot'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='420' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='421' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='120' type='FIELD_AT_INDEX' name='Evaluate at Index.007' label='' location='(2.4,0.0)' hide='False' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame.026'>
+			<INPUTS>
+				 <INPUT id='422' name='Index' type='INT' is_linked='True'/>
+				 <INPUT id='423' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='424' name='Value' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='121' type='FIELD_AT_INDEX' name='Evaluate at Index.008' label='' location='(2.4,-0.8)' hide='False' mute='False' domain='FACE' data_type='FLOAT_VECTOR' parent='Frame.026'>
+			<INPUTS>
+				 <INPUT id='425' name='Index' type='INT' is_linked='True'/>
+				 <INPUT id='426' name='Value' type='VECTOR' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='427' name='Value' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='122' type='GROUP' name='Position Transform Node.001' label='Position Transform' location='(3.2,-0.3)' hide='False' mute='False' parent='Frame.026'>
+			<INPUTS>
+				 <INPUT id='428' name='Position' type='VECTOR' is_linked='True'/>
+				 <INPUT id='429' name='Location' type='VECTOR' is_linked='True'/>
+				 <INPUT id='430' name='Rotation' type='ROTATION' is_linked='True'/>
+				 <INPUT id='431' name='Scale' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='432' name='Undo Transform' type='BOOLEAN' is_linked='False' default_value='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='433' name='Position' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='123' type='FRAME' name='Frame.026' label='Local Position' location='(4.0,1.3)' hide='False' mute='False' parent='Frame.004'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='124' type='POSITION' name='Position.001' label='' location='(5.0,0.4)' hide='False' mute='False' parent='Frame.027'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='434' name='Position' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='125' type='INPUT_ATTRIBUTE' name='Named Attribute.026' label='' location='(5.0,0.0)' hide='False' mute='False' data_type='FLOAT_VECTOR' parent='Frame.027'>
+			<INPUTS>
+				 <INPUT id='435' name='Name' type='STRING' is_linked='False' default_value='F Pos'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='436' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='437' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='126' type='INPUT_ATTRIBUTE' name='Named Attribute.027' label='' location='(5.0,-0.6)' hide='False' mute='False' data_type='FLOAT_VECTOR' parent='Frame.027'>
+			<INPUTS>
+				 <INPUT id='438' name='Name' type='STRING' is_linked='False' default_value='F Rot'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='439' name='Attribute' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <OUTPUT id='440' name='Exists' type='BOOLEAN' is_linked='False' default_value='False'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='127' type='GROUP' name='Position Transform Node' label='Position Transform' location='(5.9,0.0)' hide='False' mute='False' parent='Frame.027'>
+			<INPUTS>
+				 <INPUT id='441' name='Position' type='VECTOR' is_linked='True'/>
+				 <INPUT id='442' name='Location' type='VECTOR' is_linked='True'/>
+				 <INPUT id='443' name='Rotation' type='ROTATION' is_linked='True'/>
+				 <INPUT id='444' name='Scale' type='VECTOR' is_linked='False' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+				 <INPUT id='445' name='Undo Transform' type='BOOLEAN' is_linked='False' default_value='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='446' name='Position' type='VECTOR' is_linked='True' default_value='<bpy_float[3], NodeSocketVector.default_value>'/>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='128' type='FRAME' name='Frame.027' label='Vertex Local Transform' location='(3.2,1.1)' hide='False' mute='False' parent='Frame.004'>
+			<INPUTS>
+			 </INPUTS>
+			 <OUTPUTS>
+			 </OUTPUTS>
+		 </NODE>
+		<NODE id='129' type='ROTATE_ROTATION' name='Rotate Rotation.001' label='' location='(-1.2,-0.1)' hide='False' mute='False' parent='Frame'>
+			<INPUTS>
+				 <INPUT id='447' name='Rotation' type='ROTATION' is_linked='True'/>
+				 <INPUT id='448' name='Rotate By' type='ROTATION' is_linked='True'/>
+			 </INPUTS>
+			 <OUTPUTS>
+				 <OUTPUT id='449' name='Rotation' type='ROTATION' is_linked='True' default_value='<Euler (x=0.0000, y=0.0000, z=0.0000), order="XYZ">'/>
+			 </OUTPUTS>
+		 </NODE>
+	 </NODES>
+	 <LINKS>
+		<LINK from_node='8' from_socket='18' to_node='7' to_socket='13'/>
+		<LINK from_node='9' from_socket='22' to_node='8' to_socket='15'/>
+		<LINK from_node='15' from_socket='45' to_node='14' to_socket='29'/>
+		<LINK from_node='17' from_socket='48' to_node='15' to_socket='33'/>
+		<LINK from_node='14' from_socket='32' to_node='18' to_socket='50'/>
+		<LINK from_node='12' from_socket='27' to_node='18' to_socket='54'/>
+		<LINK from_node='14' from_socket='32' to_node='18' to_socket='51'/>
+		<LINK from_node='21' from_socket='74' to_node='20' to_socket='66'/>
+		<LINK from_node='22' from_socket='76' to_node='21' to_socket='69'/>
+		<LINK from_node='23' from_socket='79' to_node='21' to_socket='70'/>
+		<LINK from_node='24' from_socket='82' to_node='21' to_socket='71'/>
+		<LINK from_node='25' from_socket='85' to_node='21' to_socket='72'/>
+		<LINK from_node='27' from_socket='87' to_node='28' to_socket='90'/>
+		<LINK from_node='0' from_socket='3' to_node='28' to_socket='91'/>
+		<LINK from_node='4' from_socket='9' to_node='30' to_socket='102'/>
+		<LINK from_node='20' from_socket='68' to_node='1' to_socket='5'/>
+		<LINK from_node='32' from_socket='110' to_node='8' to_socket='16'/>
+		<LINK from_node='32' from_socket='109' to_node='9' to_socket='19'/>
+		<LINK from_node='10' from_socket='24' to_node='9' to_socket='20'/>
+		<LINK from_node='34' from_socket='122' to_node='35' to_socket='123'/>
+		<LINK from_node='33' from_socket='117' to_node='34' to_socket='118'/>
+		<LINK from_node='37' from_socket='129' to_node='39' to_socket='134'/>
+		<LINK from_node='38' from_socket='132' to_node='39' to_socket='135'/>
+		<LINK from_node='41' from_socket='138' to_node='42' to_socket='142'/>
+		<LINK from_node='42' from_socket='147' to_node='43' to_socket='151'/>
+		<LINK from_node='43' from_socket='154' to_node='44' to_socket='155'/>
+		<LINK from_node='44' from_socket='159' to_node='33' to_socket='113'/>
+		<LINK from_node='35' from_socket='127' to_node='45' to_socket='161'/>
+		<LINK from_node='47' from_socket='180' to_node='46' to_socket='168'/>
+		<LINK from_node='46' from_socket='178' to_node='33' to_socket='114'/>
+		<LINK from_node='46' from_socket='178' to_node='34' to_socket='119'/>
+		<LINK from_node='46' from_socket='178' to_node='35' to_socket='124'/>
+		<LINK from_node='49' from_socket='186' to_node='53' to_socket='200'/>
+		<LINK from_node='50' from_socket='189' to_node='54' to_socket='204'/>
+		<LINK from_node='49' from_socket='186' to_node='54' to_socket='203'/>
+		<LINK from_node='51' from_socket='192' to_node='53' to_socket='201'/>
+		<LINK from_node='55' from_socket='207' to_node='56' to_socket='210'/>
+		<LINK from_node='49' from_socket='186' to_node='56' to_socket='209'/>
+		<LINK from_node='48' from_socket='183' to_node='52' to_socket='194'/>
+		<LINK from_node='53' from_socket='202' to_node='52' to_socket='195'/>
+		<LINK from_node='56' from_socket='211' to_node='52' to_socket='196'/>
+		<LINK from_node='54' from_socket='205' to_node='52' to_socket='197'/>
+		<LINK from_node='52' from_socket='199' to_node='35' to_socket='126'/>
+		<LINK from_node='39' from_socket='136' to_node='58' to_socket='212'/>
+		<LINK from_node='58' from_socket='214' to_node='33' to_socket='116'/>
+		<LINK from_node='44' from_socket='158' to_node='46' to_socket='167'/>
+		<LINK from_node='45' from_socket='163' to_node='20' to_socket='64'/>
+		<LINK from_node='7' from_socket='14' to_node='42' to_socket='140'/>
+		<LINK from_node='7' from_socket='14' to_node='44' to_socket='156'/>
+		<LINK from_node='18' from_socket='61' to_node='58' to_socket='213'/>
+		<LINK from_node='59' from_socket='217' to_node='60' to_socket='218'/>
+		<LINK from_node='63' from_socket='226' to_node='62' to_socket='223'/>
+		<LINK from_node='62' from_socket='224' to_node='60' to_socket='219'/>
+		<LINK from_node='64' from_socket='227' to_node='60' to_socket='220'/>
+		<LINK from_node='66' from_socket='232' to_node='65' to_socket='230'/>
+		<LINK from_node='62' from_socket='225' to_node='65' to_socket='229'/>
+		<LINK from_node='59' from_socket='217' to_node='65' to_socket='228'/>
+		<LINK from_node='65' from_socket='231' to_node='68' to_socket='241'/>
+		<LINK from_node='60' from_socket='221' to_node='67' to_socket='236'/>
+		<LINK from_node='67' from_socket='237' to_node='68' to_socket='238'/>
+		<LINK from_node='68' from_socket='242' to_node='70' to_socket='243'/>
+		<LINK from_node='71' from_socket='248' to_node='70' to_socket='246'/>
+		<LINK from_node='0' from_socket='0' to_node='59' to_socket='215'/>
+		<LINK from_node='28' from_socket='101' to_node='62' to_socket='222'/>
+		<LINK from_node='0' from_socket='0' to_node='67' to_socket='233'/>
+		<LINK from_node='72' from_socket='250' to_node='74' to_socket='255'/>
+		<LINK from_node='72' from_socket='250' to_node='75' to_socket='260'/>
+		<LINK from_node='73' from_socket='253' to_node='78' to_socket='270'/>
+		<LINK from_node='74' from_socket='258' to_node='76' to_socket='265'/>
+		<LINK from_node='76' from_socket='266' to_node='78' to_socket='271'/>
+		<LINK from_node='78' from_socket='281' to_node='79' to_socket='282'/>
+		<LINK from_node='75' from_socket='263' to_node='79' to_socket='284'/>
+		<LINK from_node='74' from_socket='258' to_node='79' to_socket='283'/>
+		<LINK from_node='81' from_socket='293' to_node='82' to_socket='294'/>
+		<LINK from_node='83' from_socket='301' to_node='82' to_socket='297'/>
+		<LINK from_node='84' from_socket='303' to_node='83' to_socket='299'/>
+		<LINK from_node='86' from_socket='308' to_node='81' to_socket='292'/>
+		<LINK from_node='87' from_socket='312' to_node='86' to_socket='306'/>
+		<LINK from_node='90' from_socket='328' to_node='89' to_socket='316'/>
+		<LINK from_node='80' from_socket='287' to_node='89' to_socket='315'/>
+		<LINK from_node='89' from_socket='326' to_node='87' to_socket='310'/>
+		<LINK from_node='79' from_socket='285' to_node='90' to_socket='327'/>
+		<LINK from_node='70' from_socket='247' to_node='81' to_socket='289'/>
+		<LINK from_node='92' from_socket='334' to_node='93' to_socket='335'/>
+		<LINK from_node='93' from_socket='339' to_node='94' to_socket='340'/>
+		<LINK from_node='95' from_socket='356' to_node='93' to_socket='338'/>
+		<LINK from_node='101' from_socket='366' to_node='104' to_socket='374'/>
+		<LINK from_node='101' from_socket='366' to_node='105' to_socket='377'/>
+		<LINK from_node='103' from_socket='371' to_node='104' to_socket='373'/>
+		<LINK from_node='102' from_socket='368' to_node='105' to_socket='376'/>
+		<LINK from_node='104' from_socket='375' to_node='95' to_socket='349'/>
+		<LINK from_node='105' from_socket='378' to_node='95' to_socket='350'/>
+		<LINK from_node='100' from_socket='364' to_node='107' to_socket='381'/>
+		<LINK from_node='99' from_socket='359' to_node='108' to_socket='385'/>
+		<LINK from_node='107' from_socket='382' to_node='108' to_socket='383'/>
+		<LINK from_node='108' from_socket='386' to_node='92' to_socket='333'/>
+		<LINK from_node='105' from_socket='378' to_node='100' to_socket='361'/>
+		<LINK from_node='104' from_socket='375' to_node='100' to_socket='360'/>
+		<LINK from_node='82' from_socket='298' to_node='92' to_socket='330'/>
+		<LINK from_node='94' from_socket='344' to_node='4' to_socket='7'/>
+		<LINK from_node='109' from_socket='391' to_node='110' to_socket='392'/>
+		<LINK from_node='110' from_socket='396' to_node='111' to_socket='397'/>
+		<LINK from_node='114' from_socket='408' to_node='113' to_socket='404'/>
+		<LINK from_node='115' from_socket='411' to_node='113' to_socket='405'/>
+		<LINK from_node='113' from_socket='406' to_node='112' to_socket='402'/>
+		<LINK from_node='118' from_socket='417' to_node='120' to_socket='422'/>
+		<LINK from_node='118' from_socket='417' to_node='121' to_socket='425'/>
+		<LINK from_node='119' from_socket='420' to_node='121' to_socket='426'/>
+		<LINK from_node='117' from_socket='414' to_node='120' to_socket='423'/>
+		<LINK from_node='117' from_socket='414' to_node='122' to_socket='428'/>
+		<LINK from_node='120' from_socket='424' to_node='122' to_socket='429'/>
+		<LINK from_node='121' from_socket='427' to_node='122' to_socket='430'/>
+		<LINK from_node='122' from_socket='433' to_node='110' to_socket='395'/>
+		<LINK from_node='127' from_socket='446' to_node='111' to_socket='400'/>
+		<LINK from_node='124' from_socket='434' to_node='127' to_socket='441'/>
+		<LINK from_node='125' from_socket='436' to_node='127' to_socket='442'/>
+		<LINK from_node='126' from_socket='439' to_node='127' to_socket='443'/>
+		<LINK from_node='115' from_socket='411' to_node='129' to_socket='448'/>
+		<LINK from_node='112' from_socket='403' to_node='129' to_socket='447'/>
+		<LINK from_node='129' from_socket='449' to_node='109' to_socket='390'/>
+		<LINK from_node='30' from_socket='107' to_node='109' to_socket='387'/>
+		<LINK from_node='111' from_socket='401' to_node='7' to_socket='10'/>
+	 </LINKS>
+</NODE_XML>
+

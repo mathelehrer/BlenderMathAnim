@@ -15,6 +15,7 @@ from interface.ibpy import get_material, make_new_socket, OPERATORS
 from interface.interface_constants import blender_version
 from mathematics.groups.e8 import E8Lattice
 from utils.constants import RES_XML
+from utils.kwargs import get_from_kwargs
 
 pi = np.pi
 
@@ -2610,6 +2611,45 @@ class E8Node(GreenNode):
         print("done")
         return group
 
+# custom Node groups
+
+class NodeGroup:
+    def __init__(self,tree,**kwargs):
+        inputs = get_from_kwargs(kwargs,"inputs",{"Position":"VECTOR","Index":"INT"})
+        outputs = get_from_kwargs(kwargs,"outputs",{"Geometry":"GEOMETRY"})
+        self.create_node_group(tree,inputs,outputs,**kwargs)
+
+    def create_node_group(self,tree,inputs,outputs,**kwargs):
+
+        nodes = tree.nodes
+        name=get_from_kwargs(kwargs,"name","DefaultNodeGroup")
+        group = nodes.new(type='GeometryNodeGroup')
+        node_tree = bpy.data.node_groups.new(name, type='GeometryNodeTree')
+        group.node_tree = node_tree
+        nodes = node_tree.nodes
+
+        group.name = name
+
+        group_inputs = nodes.new('NodeGroupInput')
+        group_inputs.location = (0, 0)
+        group_outputs = nodes.new('NodeGroupOutput')
+
+        socket_types = {"STRING":'NodeSocketString',"BOOLEAN": 'NodeSocketBool',"MATERIAL": 'NodeSocketMaterial',
+                        "VECTOR":'NodeSocketVector',"INT":'NodeSocketInt', "MENU":'NodeSocketMenu',"COLLECTION":'NodeSocketCollection',
+                        "GEOMETRY":'NodeSocketGeometry', "TEXTURE":'NodeSocketTexture',"FLOAT":'NodeSocketFloat',
+                        "COLOR":'NodeSocketColor',"OBJECT": 'NodeSocketObject',"ROTATION":'NodeSocketRotation',
+                        "MATRIX": 'NodeSocketMatrix',"IMAGE": 'NodeSocketImage'}
+
+        for name,type in inputs.items():
+                make_new_socket(tree,name=name,io="INPUT",type=socket_types[type])
+        for name,type in outputs.items():
+                make_new_socket(tree,name=name,io="OUTPUT",type=socket_types[type])
+
+
+class TransformPositionNode(NodeGroup):
+    def __init__(self,tree,**kwargs):
+        super().__init__(tree,inputs={"Position":"VECTOR","Location":"VECTOR","Rotation":"ROTATION","Scale":"VECTOR","Undo Transformation":"BOOLEAN"},
+                         outputs={"Position":"VECTOR"},**kwargs)
 
 # custom Matrix operations #
 class Rotation(GreenNode):
