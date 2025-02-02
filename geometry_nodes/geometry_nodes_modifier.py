@@ -47,15 +47,16 @@ class GeometryNodesModifier:
     base class that organizes the boilerplate code for the creation of a geometry nodes modifier
     """
 
-    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True, group_input=False, **kwargs):
+    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True, group_output=True, group_input=False, **kwargs):
         tree = get_node_tree(name=name, type='GeometryNodeTree')
 
         # if  materials are created inside the geometry node, they are stored inside the following array
         # and will be added to the material slots of the blender object
         self.materials = []
         # create output nodes
-        self.group_outputs = tree.nodes.new('NodeGroupOutput')
-        make_new_socket(tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
+        if group_output:
+            self.group_outputs = tree.nodes.new('NodeGroupOutput')
+            make_new_socket(tree, name='Geometry', io='OUTPUT', type='NodeSocketGeometry')
         if group_input:
             self.group_inputs = tree.nodes.new('NodeGroupInput')
             make_new_socket(tree, name='Geometry', io='INPUT', type='NodeSocketGeometry')
@@ -3183,12 +3184,9 @@ class VoronoiModifier(GeometryNodesModifier):
 
 class UnfoldModifier(GeometryNodesModifier):
     def __init__(self, name="UnfoldModifier",**kwargs):
-        super().__init__(name, automatic_layout=False, **kwargs)
+        super().__init__(name, automatic_layout=False,group_output=False,group_input=False, **kwargs)
 
     def create_node(self,tree,**kwargs):
-        out = self.group_outputs
-        links = tree.links
-
         create_from_xml(tree,"unfolding_node",**kwargs)
 
 

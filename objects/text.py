@@ -47,15 +47,15 @@ class Text(BObject):
         material_node = get_geometry_node_from_modifier(self.modifier,label="FontMaterial")
         outline_material_node = get_geometry_node_from_modifier(self.modifier,label="OutlineMaterial")
 
-        material_node.inputs['Material'].default_value= mat
-        outline_material_node.inputs['Material'].default_value = mat_outline
+        # material_node.inputs['Material'].default_value= mat
+        # outline_material_node.inputs['Material'].default_value = mat_outline
 
         super().__init__(obj=cube, name=self.name, no_material=True, **kwargs)
         super().add_mesh_modifier('NODES', node_modifier=self.modifier)
 
     def write(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
         write_control = get_geometry_node_from_modifier(self.modifier,"WriteControl")
-        ibpy.change_default_value(write_control,from_value=0,to_value=self.modifier.number_of_letters,begin_time=begin_time,transition_time=transition_time)
+        # ibpy.change_default_value(write_control,from_value=0,to_value=self.modifier.number_of_letters,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
 
 class TextModifier(GeometryNodesModifier):
@@ -63,7 +63,7 @@ class TextModifier(GeometryNodesModifier):
         self.expression = expression
         self.number_of_letters =0
         super().__init__(get_from_kwargs(kwargs,'name',"GeoText"),
-                         group_input=False,automatic_layout=False,**kwargs)
+                         group_input=False,group_output=False,automatic_layout=False,**kwargs)
 
     def create_node(self,tree,**kwargs):
 

@@ -35,8 +35,10 @@
       <excludeFolder url="file://$MODULE_DIR$/video_short_moebius/media/raster" />
       <excludeFolder url="file://$MODULE_DIR$/video_short_moebius/media/svg" />
       <excludeFolder url="file://$MODULE_DIR$/video_primes2/media" />
+      <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/.venv1" />
     </content>
-    <orderEntry type="inheritedJdk" />
+    <orderEntry type="jdk" jdkName="Python 3.12 (BlenderMathAnim)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
