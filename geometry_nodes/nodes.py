@@ -2917,7 +2917,6 @@ class E8Node(GreenNode):
         return group
 
 # custom Node groups
-
 class NodeGroup(Node):
     def __init__(self,tree,**kwargs):
         inputs = get_from_kwargs(kwargs,"inputs",{"Position":"VECTOR","Index":"INT"})
@@ -2961,7 +2960,8 @@ class NodeGroup(Node):
 
 class TransformPositionNode(NodeGroup):
     def __init__(self,tree,**kwargs):
-        self.name = get_from_kwargs(kwargs,"name","TransformPositionNode")
+        self.name = get_from_kwargs(kwargs,"name",
+                                    "TransformPositionNode")
 
         super().__init__(tree,inputs={"Position":"VECTOR","Location":"VECTOR","Rotation":"ROTATION","Scale":"VECTOR","Undo Transformation":"BOOLEAN"},
                          outputs={"Position":"VECTOR"},name=self.name,offset_y=-400,**kwargs)
@@ -2995,6 +2995,47 @@ class TransformPositionNode(NodeGroup):
         switch = Switch(tree,input_type="VECTOR",switch=self.group_inputs.outputs["Undo Transformation"],
                         false=do_transform.outputs["result"],true=undo_transform.outputs["result"])
         tree.links.new(switch.outputs["Output"],self.group_outputs.inputs["Position"])
+
+class UnfoldMeshNode(NodeGroup):
+    def __init__(self,tree,progression=0,range=20,root_index=0,scale_elements=0.99,**kwargs):
+        self.name = get_from_kwargs(kwargs,"name","UnfoldMeshNode")
+        super().__init__(tree,inputs={"Mesh":"GEOMETRY","Progression":"FLOAT","Range":"FLOAT","RootIndex":"INT","ScaleElements":"FLOAT"},
+                         outputs={"Mesh":"GEOMETRY"},auto_layout=False,name=self.name,**kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_in = self.node.inputs["Mesh"]
+        self.geometry_out = self.node.outputs["Mesh"]
+
+        if isinstance(range,(int,float)):
+            self.node.inputs["Range"].default_value =range
+        else:
+            tree.links.new(range,self.node.inputs["Range"])
+
+        if isinstance(progression,(int,float)):
+            self.node.inputs["Progression"].default_value =progression
+        else:
+            tree.links.new(progression,self.node.inputs["Progression"])
+
+        if isinstance(root_index,int):
+            self.node.inputs["RootIndex"].default_value =root_index
+        else:
+            tree.links.new(root_index,self.node.inputs["RootIndex"])
+
+        if isinstance(scale_elements,(int,float)):
+            self.node.inputs["ScaleElements"].default_value =scale_elements
+        else:
+            tree.links.new(scale_elements,self.node.inputs["ScaleElements"])
+
+    def fill_group_with_node(self,tree,**kwargs):
+        # remove any existing node
+        nodes = tree.nodes
+        for n in nodes:
+            nodes.remove(n)
+
+        create_from_xml(tree,"unfolding_node",**kwargs)
+
 
 # custom Matrix operations #
 class Rotation(GreenNode):
@@ -3577,7 +3618,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                             break
                         elif line.startswith("<INPUTS>"):
                             input_count=0
-                            if node_attributes["type"]=='REPEAT_INPUT':
+                            if node_attributes["type"] in {'REPEAT_INPUT','FOREACH_GEOMETRY_ELEMENT_INPUT'}:
                                 save_for_after_pairing[node_id]={"inputs":[],"outputs":[]}
                         elif line.startswith("<OUTPUTS>"):
                             output_count=0
@@ -3588,7 +3629,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                         elif line.startswith("<INPUT "):
                             input_attributes = get_attributes(line)
                             input_id = int(input_attributes["id"])
-                            if node_attributes["type"]=='REPEAT_INPUT':
+                            if node_attributes["type"] in {"REPEAT_INPUT","FOREACH_GEOMETRY_ELEMENT_INPUT"}:
                                 # repeat inputs can only be initiated after pairing
                                 save_for_after_pairing[node_id]["inputs"].append(input_attributes)
 
@@ -3599,19 +3640,21 @@ def create_from_xml(tree,filename=None,**kwargs):
                                     node.inputs[input_count].default_value = get_default_value_for_socket(input_attributes)
                                 input_count += 1
                             else:
-                                result = create_socket(tree,node,node_attributes,input_attributes)
-                                if result:
-                                    node_structure[node_id]["inputs"][input_id]=input_count
-                                    input_count += 1
+                                if input_attributes["type"]!="CUSTOM": #FOREACH_GEOMETRY_ELEMENT_INPUT has a custom socket inbetween proper sockets
+                                    result = create_socket(tree,node,node_attributes,input_attributes)
+                                    if result:
+                                        node_structure[node_id]["inputs"][input_id]=input_count
+                                        input_count += 1
                                 else:
                                     print("Warning: unrecognized socket in ", node_id, socket_count,input_attributes["type"])
                                     node_structure[node_id]["inputs"][input_id] = -1 # take last slot (this dynamically generates new sockets for Group Input and Group Output
+                                    input_count +=1 #also increase input_count, since the custom socket can between real sockets
                             socket_count+=1
                         elif line.startswith("<OUTPUT "):
                             output_attributes = get_attributes(line)
                             output_id = int(output_attributes["id"])
 
-                            if node_attributes["type"]=='REPEAT_INPUT':
+                            if node_attributes["type"] in{'REPEAT_INPUT','FOREACH_GEOMETRY_ELEMENT_INPUT'}:
                                 # repeat inputs can only be initiated after pairing
                                 save_for_after_pairing[node_id]["outputs"].append(output_attributes)
 
@@ -3622,13 +3665,15 @@ def create_from_xml(tree,filename=None,**kwargs):
                                     node.outputs[output_count].default_value = get_default_value_for_socket(output_attributes)
                                 output_count += 1
                             else:
-                                result = create_socket(tree,node,node_attributes,output_attributes)
-                                if result:
-                                    node_structure[node_id]["outputs"][output_id]=output_count
-                                    output_count+=1
+                                if output_attributes["type"] !="CUSTOM": # FOREACH_GEOMETRY_ELEMENT_OUTPUT has a custom socket in between proper sockets
+                                    result = create_socket(tree,node,node_attributes,output_attributes)
+                                    if result:
+                                        node_structure[node_id]["outputs"][output_id]=output_count
+                                        output_count+=1
                                 else:
                                     print("Warning: unrecognized socket in ",node_id,socket_count,output_attributes["type"])
                                     node_structure[node_id]["outputs"][output_id] = -1 # take last slot (this dynamically generates new sockets for Grou
+                                    output_count += 1 # also increase output_count, since the custom socket can be between real sockets
                             socket_count += 1
 
             # establish parent relations
@@ -3641,10 +3686,22 @@ def create_from_xml(tree,filename=None,**kwargs):
                 name = node_structure[key]["name"]
                 print(name)
                 key=int(key)
+                # the input sockets are only created after pairing with the output node
+                # therefore the links can only be created after pairing
                 if "ForEachGeometryElementInput" in name:
                     # find the corresponding output node from name
                     out_name = name.replace("Input", "Output")
                     node_dir[key].pair_with_output(node_dir[name_dir[out_name]])
+                    input_count = 0
+                    for attributes in save_for_after_pairing[key]["inputs"]:
+                        input_id = int(attributes['id'])
+                        node_structure[key]["inputs"][input_id] = input_count
+                        input_count += 1
+                    output_count = 0
+                    for attributes in save_for_after_pairing[key]["outputs"]:
+                        output_id = int(attributes['id'])
+                        node_structure[key]["outputs"][output_id] = output_count
+                        output_count += 1
                 if "RepeatInput" in name:
                     # find the corresponding output node from name
                     out_name = name.replace("Input", "Output")

@@ -54,9 +54,13 @@ class Text(BObject):
         super().add_mesh_modifier('NODES', node_modifier=self.modifier)
 
     def write(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
-        write_control = get_geometry_node_from_modifier(self.modifier,"WriteControl")
-        # ibpy.change_default_value(write_control,from_value=0,to_value=self.modifier.number_of_letters,begin_time=begin_time,transition_time=transition_time)
+        write_control = get_geometry_node_from_modifier(self.modifier,"WriteControlNode")
+        ibpy.change_default_value(write_control,from_value=0,to_value=self.modifier.number_of_letters,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
+
+
+def below(out,buffer_y=200):
+    return out.location-Vector((0,buffer_y))
 
 class TextModifier(GeometryNodesModifier):
     def __init__(self,expression,**kwargs):
@@ -71,24 +75,45 @@ class TextModifier(GeometryNodesModifier):
         create_from_xml(tree,"geo_fonts",**kwargs)
 
         collection_info = tree.nodes.get("TextData")
-        # collection_info.inputs["Separate Children"].default_value = True
+        collection_info.inputs["Separate Children"].default_value = True
         collection_info.inputs["Collection"].default_value = get_collection(self.expression)
 
-        # out = self.group_outputs
-        # links = tree.links
-        #
-        #
-        # expr_location = InputVector(tree, name="ExprLocation",
-        #                              value=get_from_kwargs(kwargs,'location',Vector()))
-        # expr_rotation = InputVector(tree, name="ExprRotation",value=get_from_kwargs(kwargs,'rotation',Vector()))
-        # expr_info = CollectionInfo(tree, collection_name=self.expression,
-        #                             name="TextData")
-        # material = get_material(get_from_kwargs(kwargs,'material',"drawing"))
-        # self.materials.append(material)
-        # material_node =SetMaterial(tree,material=material)
-        # transform_geometry = TransformGeometry(tree,name="ExprTransform",translation=expr_location.std_out,
-        #                                        rotation=expr_rotation.std_out)
-        # create_geometry_line(tree,[expr_info,transform_geometry,material_node],out=out.inputs[0])
+        for n in tree.nodes:
+            if n.label=='FontMaterial':
+                material_node=n
+            if n.label=='OutlineMaterial':
+                outline_material_node=n
+            if n.label=='LastJoin':
+                last_join_node=n
+            if n.label=="Out":
+                out=n
+
+        material = get_material(get_from_kwargs(kwargs,'color',"text"),**kwargs)
+        self.materials.append(material)
+        material_node.inputs['Material'].default_value= material
+
+        outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        kwargs['emission']=outline_emission
+        outline_material = get_material(get_from_kwargs(kwargs,'outline_color',"text"),**kwargs)
+        self.materials.append(outline_material)
+        outline_material_node.inputs['Material'].default_value = outline_material
+
+        expr_location = InputVector(tree, name="ExprLocation",
+                                     value=get_from_kwargs(kwargs,'location',Vector()))
+        expr_rotation = InputVector(tree, name="ExprRotation",value=get_from_kwargs(kwargs,'rotation',Vector()))
+
+
+        transform_geometry = TransformGeometry(tree,name="ExprTransform",translation=expr_location.std_out,
+                                               rotation=expr_rotation.std_out)
+
+        # override default location
+        transform_geometry.node.location=below(out)
+        expr_location.node.location=below(transform_geometry.node,buffer_y=400)
+        expr_rotation.node.location=below(expr_location.node,buffer_y=200)
+
+        tree.links.new(last_join_node.outputs["Geometry"],transform_geometry.geometry_in)
+        tree.links.new(transform_geometry.geometry_out,out.inputs['Geometry'])
+
 
 
 ##

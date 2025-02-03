@@ -19,7 +19,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     Frame, SeparateXYZ, DualMesh, WireFrameRectangle, SplitEdges, VectorRotate, EvaluateOnDomain, InputNormal, \
     SubdivisionSurface, FaceArea, Quadrilateral, FilletCurve, FillCurve, SeparateGeometry, SortElements, \
     AlignRotationToVector, InputBoolean, IndexSwitch, QuaternionToRotation, StringToCurves, TransformPositionNode, \
-    create_from_xml
+    create_from_xml, UnfoldMeshNode
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -3189,11 +3189,32 @@ class UnfoldModifier(GeometryNodesModifier):
     def create_node(self,tree,**kwargs):
         create_from_xml(tree,"unfolding_node",**kwargs)
 
+class RubiksCubeUnfolded(GeometryNodesModifier):
+    def __init__(self, name="RubiksCubeUnfolded",**kwargs):
+        super().__init__(name,automatic_layout=True,group_output=True,group_input=True,**kwargs)
 
-##
+    def create_node(self,tree,**kwargs):
+        out = self.group_outputs
+        ins = self.group_inputs
+        links = tree.links
+        unfold_node = UnfoldMeshNode(tree,**kwargs)
+
+        dual_mesh = DualMesh(tree)
+        grid =Grid(tree,size_x=2,size_y=2,vertices_x=4,vertices_y=4)
+        split_edges = SplitEdges(tree)
+        scale_elements = ScaleElements(tree,scale=0.95)
+
+
+        face_rotations = NamedAttribute(tree,data_type='FLOAT_VECTOR',name='FRot')
+        iop = InstanceOnPoints(tree,rotation=face_rotations.std_out)
+
+        create_geometry_line(tree,[grid,split_edges,scale_elements],out=iop.inputs["Instance"])
+        create_geometry_line(tree,[unfold_node,dual_mesh,iop],ins=ins.outputs["Geometry"],out=out.inputs["Geometry"])
+
+
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
-##
+
 def generate_labels(tic_labels,axis_label, **kwargs):
     aligned = get_from_kwargs(kwargs, 'aligned', 'left')
     imported_svg_data = {}  # Build dictionary of imported svgs to use

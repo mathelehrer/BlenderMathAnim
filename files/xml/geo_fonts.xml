@@ -1,6 +1,6 @@
 <NODE_XML>
 	<NODES>
-		<NODE id="0" type="GROUP_OUTPUT" name="Group Output" label="" location="(14.3,2.6)" hide="False" mute="False" parent="None">
+		<NODE id="0" type="GROUP_OUTPUT" name="Group Output" label="Out" location="(14.3,2.6)" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="0" name="Geometry" type="GEOMETRY" is_linked="True"/>
 				<INPUT id="1" name="" type="CUSTOM" is_linked="False"/>
@@ -66,7 +66,7 @@
 				<OUTPUT id="29" name="Mesh" type="GEOMETRY" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="6" type="JOIN_GEOMETRY" name="Join Geometry" label="" location="(13.2,2.7)" hide="False" mute="False" parent="None">
+		<NODE id="6" type="JOIN_GEOMETRY" name="Join Geometry" label="LastJoin" location="(13.2,2.7)" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="30" name="Geometry" type="GEOMETRY" is_linked="True"/>
 			</INPUTS>
@@ -120,7 +120,7 @@
 				<OUTPUT id="53" name="Inverted" type="GEOMETRY" is_linked="False"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="11" type="VALUE" name="Value" label="" location="(-6.4,-0.2)" hide="False" mute="False" parent="Frame.006">
+		<NODE id="11" type="VALUE" name="Value" label="WriteControlNode" location="(-6.4,-0.2)" hide="False" mute="False" parent="Frame.006">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
@@ -147,7 +147,7 @@
 				<OUTPUT id="62" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="14" type="SET_MATERIAL" name="Set Material" label="" location="(11.8,-0.4)" hide="False" mute="False" parent="Frame.001">
+		<NODE id="14" type="SET_MATERIAL" name="Set Material" label="OutlineMaterial" location="(11.8,-0.4)" hide="False" mute="False" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="63" name="Geometry" type="GEOMETRY" is_linked="True"/>
 				<INPUT id="64" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
@@ -165,7 +165,7 @@
 				<OUTPUT id="68" name="Geometry" type="GEOMETRY" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="16" type="SET_MATERIAL" name="Set Material.001" label="" location="(1.8,2.1)" hide="False" mute="False" parent="Frame.003">
+		<NODE id="16" type="SET_MATERIAL" name="Set Material.001" label="FontMaterial" location="(1.8,2.1)" hide="False" mute="False" parent="Frame.003">
 			<INPUTS>
 				<INPUT id="69" name="Geometry" type="GEOMETRY" is_linked="True"/>
 				<INPUT id="70" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
