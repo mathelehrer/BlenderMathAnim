@@ -2852,6 +2852,7 @@ class RubiksCubeModifier(GeometryNodesModifier):
                                                    hide=False)
         store_face_normal = StoredNamedAttribute(tree,location=self.loc(0,1,2,0),data_type='FLOAT_VECTOR',
                                            domain='FACE',name="FaceNormal",value=normal.std_out,hide=False)
+        unfold = UnfoldMeshNode(tree,location=self.loc(0,1,2.5,1),hide=False)
         dual_mesh = DualMesh(tree,location=self.loc(0,1,3,0),hide=False)
         position3 = Position(tree,location=self.loc(0,1,-1,-3),hide=False)
         abs_2 = VectorMath(tree,operation="ABSOLUTE",inputs0=position3.std_out,
@@ -2893,7 +2894,7 @@ class RubiksCubeModifier(GeometryNodesModifier):
 
         realize_faces = RealizeInstances(tree,location=self.loc(0,1,7,0),hide=False)
         create_geometry_line(tree, [realize_cube,sep_geo,store_cubie_index_at_face,
-                                    store_face_normal,dual_mesh,sort,store_face_index,iop4,realize_faces])
+                                    store_face_normal,unfold,dual_mesh,sort,store_face_index,iop4,realize_faces])
 
         # face coloring
         block_y=-0.25
@@ -3193,24 +3194,61 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
     def __init__(self, name="RubiksCubeUnfolded",**kwargs):
         super().__init__(name,automatic_layout=True,group_output=True,group_input=True,**kwargs)
 
+    def loc(self, block_x=0, block_y=0, x=0, y=0,absolute=False):
+        block_width=7
+        block_height=5
+        if absolute:
+            return (200*(block_x*block_width+x),200*(block_y*block_height+y))
+        else:
+            return (block_x*block_width+x,block_y*block_height+y)
+
     def create_node(self,tree,**kwargs):
         out = self.group_outputs
         ins = self.group_inputs
         links = tree.links
-        unfold_node = UnfoldMeshNode(tree,**kwargs)
+        unfold_node = UnfoldMeshNode(tree,root_index=5,**kwargs)
 
         dual_mesh = DualMesh(tree)
         grid =Grid(tree,size_x=2,size_y=2,vertices_x=4,vertices_y=4)
         split_edges = SplitEdges(tree)
-        scale_elements = ScaleElements(tree,scale=0.95)
-
 
         face_rotations = NamedAttribute(tree,data_type='FLOAT_VECTOR',name='FRot')
         iop = InstanceOnPoints(tree,rotation=face_rotations.std_out)
+        realize_instances = RealizeInstances(tree)
+        normal = InputNormal(tree)
+        store_normal = StoredNamedAttribute(tree,data_type="FLOAT_VECTOR",domain="FACE",name="FaceNormal",value=normal.std_out)
+        dual_mesh2 = DualMesh(tree)
+        index = Index(tree)
+        store_face_index = StoredNamedAttribute(tree,data_type="INT",domain="POINT",name="FaceIndex",value=index.std_out)
 
-        create_geometry_line(tree,[grid,split_edges,scale_elements],out=iop.inputs["Instance"])
-        create_geometry_line(tree,[unfold_node,dual_mesh,iop],ins=ins.outputs["Geometry"],out=out.inputs["Geometry"])
+        create_geometry_line(tree,[grid,split_edges],out=iop.inputs["Instance"])
+        create_geometry_line(tree, [unfold_node, dual_mesh, iop], ins=ins.outputs["Geometry"])
+        # add faces
+        size = InputValue(tree, name="Cube Size", value=0.89, location=self.loc(-1, 2, 0, -1), hide=False)
 
+        bevel = InputValue(tree, name="Bevel", value=6.3, location=self.loc(-1, 1, -0.5, 1),hide=False)
+        bevel_function = make_function(tree,name="BevelFunction",location = self.loc(-1,1,0,0),
+                    functions={
+                        "bevel":"size,bevel,/"
+                    },inputs=["size","bevel"],outputs=["bevel"],
+                    scalars=["size","bevel"],hide=False)
+        links.new(size.std_out,bevel_function.inputs["size"])
+        links.new(bevel.std_out,bevel_function.inputs["bevel"])
+        quadri = Quadrilateral(tree, location=self.loc(-1, 0, 0, 0),
+                               width=size.std_out, height=size.std_out, hide=False)
+        fillet_curve = FilletCurve(tree, radius=bevel_function.outputs["bevel"], count=10,
+                                   location=self.loc(-1, 0, 1, 0), hide=False)
+        fill_cuve = FillCurve(tree, mode='NGONS', location=self.loc(-1, 0, 2, 0), hide=False)
+        extrude_face = ExtrudeMesh(tree, mode='FACES', offset_scale=1, offset=Vector([0,0,0.05]), location=self.loc(-1, 0, 3, 0),
+                                   hide=False)
+        create_geometry_line(tree, [quadri, fillet_curve, fill_cuve, extrude_face])
+
+        # instance faces on dual mesh
+        face_normal = NamedAttribute(tree,data_type="FLOAT_VECTOR",name="FaceNormal")
+        align = AlignRotationToVector(tree,vector=face_normal.std_out)
+        iop2 = InstanceOnPoints(tree, instance=extrude_face.geometry_out,rotation=align.std_out,scale=Vector([0.7]*3))
+
+        create_geometry_line(tree,[iop,realize_instances,store_normal,dual_mesh2,store_face_index,iop2],out=out.inputs["Geometry"])
 
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
