@@ -3036,6 +3036,47 @@ class UnfoldMeshNode(NodeGroup):
 
         create_from_xml(tree,"unfolding_node",**kwargs)
 
+class BeveledCubeNode(NodeGroup):
+    def __init__(self,tree,size=1,bevel=0.01,**kwargs):
+        self.name = get_from_kwargs(kwargs,"name","BeveledCubeNode")
+        super().__init__(tree,inputs={"Size":"FLOAT","Bevel":"FLOAT"},
+                         outputs={"Mesh":"GEOMETRY"},auto_layout=True,name=self.name,**kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_out = self.node.outputs["Mesh"]
+
+        if isinstance(size,(int,float)):
+            self.node.inputs["Size"].default_value =size
+        else:
+            tree.links.new(size,self.node.inputs["Size"])
+
+        if isinstance(bevel,(int,float)):
+            self.node.inputs["Bevel"].default_value =bevel
+        else:
+            tree.links.new(bevel,self.node.inputs["Bevel"])
+
+    def fill_group_with_node(self,tree,**kwargs):
+        links = tree.links
+        bevel_function = make_function(tree, name="BevelFunction",
+                                       functions={
+                                           "bevel": "size,bevel,/"
+                                       }, inputs=["size", "bevel"], outputs=["bevel"],
+                                       scalars=["size", "bevel"], hide=False)
+
+        links.new(self.group_inputs.outputs["Bevel"], bevel_function.inputs["bevel"])
+        links.new(self.group_inputs.outputs["Size"], bevel_function.inputs["size"])
+
+
+        cube = CubeMesh(tree, size=self.group_inputs.outputs["Size"], hide=False)
+        cube2 = CubeMesh(tree, size=bevel_function.outputs["bevel"], hide=False)
+        subsurf = SubdivisionSurface(tree, level=3, mesh=cube2.geometry_out, hide=False,)
+        iop2 = InstanceOnPoints(tree, scale=self.group_inputs.outputs["Size"], instance=subsurf.geometry_out, hide=False)
+        realize_instance2 = RealizeInstances(tree, hide=False)
+        convex_hull = ConvexHull(tree, hide=False)
+
+        create_geometry_line(tree, [cube, iop2, realize_instance2, convex_hull],out=self.group_outputs.inputs["Mesh"])
 
 # custom Matrix operations #
 class Rotation(GreenNode):
