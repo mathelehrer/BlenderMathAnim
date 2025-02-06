@@ -46,6 +46,12 @@ for node in geo_nodes:
     
     if hasattr(node,'axis'):
         filedata+=append(' axis="'+str(node.axis),end='"')
+        
+    if hasattr(node,'primary_axis'):
+        filedata+=append(' primary_axis="'+str(node.primary_axis),end='"')
+        
+    if hasattr(node,'secondary_axis'):
+        filedata+=append(' secondary_axis="'+str(node.secondary_axis),end='"')  
     
     if hasattr(node,'pivot_axis'):
         filedata+=append(' pivot_axis="'+str(node.pivot_axis),end='"')

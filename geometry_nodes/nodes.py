@@ -259,7 +259,10 @@ class Node:
             return RotateRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,rotation_space=rotation_space)
         if type=="INVERT_ROTATION":
             return InvertRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
-
+        if type=="AXES_TO_ROTATION":
+            primary_axis=attributes["primary_axis"]
+            secondary_axis=attributes["secondary_axis"]
+            return AxesToRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,primary_axis=primary_axis,secondary_axis=secondary_axis)
         # switches
         if type=="SWITCH":
             input_type = attributes["input_type"]
@@ -1373,6 +1376,64 @@ class RealizeInstances(GreenNode):
         if geometry:
             self.tree.links.new(geometry, self.node.inputs["Geometry"])
 
+class RotateInstances(GreenNode):
+    def __init__(self, tree, location=(0, 0),instances=None,
+                 selection=None,
+                 rotation=None,pivot_point=None,local_space=True,**kwargs):
+        self.node=tree.nodes.new(type="GeometryNodeRotateInstances")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.geometry_out=self.node.outputs["Instances"]
+        self.geometry_in=self.node.inputs["Instances"]
+
+        if instances:
+            self.tree.links.new(instances,self.node.inputs["Instances"])
+        if selection:
+            if isinstance(selection,bool):
+                self.node.inputs["Selection"].default_value=selection
+            else:
+                self.tree.links.new(selection,self.node.inputs["Selection"])
+        if rotation:
+            if isinstance(rotation,Vector):
+                self.node.inputs["Rotation"].default_value=rotation
+            else:
+                self.tree.links.new(rotation,self.node.inputs["Rotation"])
+        if pivot_point:
+            if isinstance(pivot_point,Vector):
+                self.node.inputs["Pivot Point"].default_value=pivot_point
+            else:
+                self.tree.links.new(pivot_point,self.node.inputs["Pivot Point"])
+
+        if isinstance(local_space,bool):
+            self.node.inputs["Local Space"].default_value=local_space
+        else:
+            self.tree.links.new(local_space,self.node.inputs["Local Space"])
+
+class TranslateInstances(GreenNode):
+    def __init__(self, tree, location=(0, 0), instances=None,selection=None,translation=None,
+                 local_space=True,**kwargs):
+        self.node=tree.nodes.new(type="GeometryNodeTranslateInstances")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.geometry_out=self.node.outputs["Instances"]
+        self.geometry_in=self.node.inputs["Instances"]
+
+        if selection:
+            if isinstance(selection, bool):
+                self.node.inputs["Selection"].default_value = selection
+            else:
+                self.tree.links.new(selection, self.node.inputs["Selection"])
+        if translation:
+            if isinstance(translation, Vector):
+                self.node.inputs["Translation"].default_value = translation
+            else:
+                self.tree.links.new(translation, self.node.inputs["Translation"])
+        if isinstance(local_space, bool):
+            self.node.inputs["Local Space"].default_value = local_space
+        else:
+            self.tree.links.new(local_space, self.node.inputs["Local Space"])
+
+
 class JoinGeometry(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  geometry=None, **kwargs
@@ -1404,6 +1465,14 @@ class SeparateGeometry(GreenNode):
 
         if selection:
             self.tree.links.new(selection,self.node.inputs["Selection"])
+
+class GeometryToInstance(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 **kwargs):
+        self.node=tree.nodes.new(type="GeometryNodeGeometryToInstance")
+        super().__init__(tree,location=location,**kwargs)
+        self.geometry_out=self.node.outputs["Instances"]
+        self.geometry_in=self.node.inputs["Geometry"]
 
 class DeleteGeometry(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -2038,6 +2107,26 @@ class AlignRotationToVector(RedNode):
             self.node.inputs["Factor"].default_value=factor
         else:
             tree.links.new(factor,self.node.inputs["Factor"])
+
+class AxesToRotation(BlueNode):
+    def __init__(self, tree, location=(0, 0),primary_axis='X',secondary_axis='Z',primary_direction=None,secondary_direction=None, **kwargs):
+        self.node = tree.nodes.new(type="FunctionNodeAxesToRotation")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.std_out=self.node.outputs["Rotation"]
+        self.node.primary_axis=primary_axis
+        self.node.secondary_axis=secondary_axis
+
+        if primary_direction is not None:
+            if isinstance(primary_direction,(list,Vector)):
+                self.node.inputs["Primary Axis"].default_value=primary_direction
+            else:
+                tree.links.new(primary_direction,self.node.inputs["Primary Axis"])
+        if secondary_direction is not None:
+            if isinstance(secondary_direction,(list,Vector)):
+                self.node.inputs["Secondary Axis"].default_value=secondary_direction
+            else:
+                tree.links.new(secondary_direction,self.node.inputs["Secondary Axis"])
 
 class QuaternionToRotation(BlueNode):
     def __init__(self, tree, location=(0, 0), w=1,x=0,y=0,z=0, **kwargs):

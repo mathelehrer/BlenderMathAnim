@@ -19,7 +19,8 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     Frame, SeparateXYZ, DualMesh, WireFrameRectangle, SplitEdges, VectorRotate, EvaluateOnDomain, InputNormal, \
     SubdivisionSurface, FaceArea, Quadrilateral, FilletCurve, FillCurve, SeparateGeometry, SortElements, \
     AlignRotationToVector, InputBoolean, IndexSwitch, QuaternionToRotation, StringToCurves, TransformPositionNode, \
-    create_from_xml, UnfoldMeshNode, BeveledCubeNode
+    create_from_xml, UnfoldMeshNode, BeveledCubeNode, CompareNode, GeometryToInstance, RotateInstances, \
+    TranslateInstances
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -3229,8 +3230,7 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
         create_geometry_line(tree, [cube1,unfold_node, dual_mesh, iop])
 
         # add faces
-        size = InputValue(tree, name="Cube Size", value=0.89, location=self.loc(-1, 2, 0, -1), hide=False)
-
+        size = InputValue(tree, name="FaceSize", value=0.89, location=self.loc(-1, 2, 0, -1), hide=False)
         bevel = InputValue(tree, name="Bevel", value=6.3, location=self.loc(-1, 1, -0.5, 1),hide=False)
         bevel_function = make_function(tree,name="BevelFunction",location = self.loc(-1,1,0,0),
                     functions={
@@ -3361,18 +3361,38 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
 
         # cubie branch
         # create a smooth cubies
-
+        show_cubies = InputBoolean(tree,value=True,label="ShowCubiesFlag")
         cube2 = CubeMesh(tree, size=r2_factor.std_out, vertices_x=3, vertices_y=3, vertices_z=3)
-
+        store_cubie_index = StoredNamedAttribute(tree,name="CubieIndex",data_type="INT",domain="POINT")
         # position cubies to the instances
-        cubie = BeveledCubeNode(tree,size=0.95,bevel=6.03)
-        iop_cubies = InstanceOnPoints(tree,instance=cubie.geometry_out)
+        cube_size = InputValue(tree,value=1,label="CubeSize")
+        cubie = BeveledCubeNode(tree,size=cube_size.std_out,bevel=6.03)
+        iop_cubies = InstanceOnPoints(tree,instance=cubie.geometry_out,selection=show_cubies.std_out)
         black = SetMaterial(tree,material="plastic_background")
-        create_geometry_line(tree,[cube2,iop_cubies,black,join])
+        create_geometry_line(tree,[cube2,store_cubie_index,iop_cubies,black,join])
 
         create_geometry_line(tree, [iop, realize_instances, store_normal, dual_mesh2, store_face_index, iop2,ri2,
-                                    material_black,material_red,material_blue,material_yellow,material_orange,material_green,material_white,join],
-                             out=out.inputs["Geometry"])
+                                    material_black,material_red,material_blue,material_yellow,material_orange,material_green,material_white,join])
+
+        # prepare selection for each face make index offset by 1
+
+        attr_face_index2=NamedAttribute(tree,data_type="INT",name="FaceIndex")
+        add_one = MathNode(tree,operation="ADD",inputs0=attr_face_index2.std_out,inputs1=1)
+
+        join2 = JoinGeometry(tree,label="TransformedFaces")
+        for i in range(1,55):
+            compare = CompareNode(tree,operation="EQUAL",inputs0=add_one.std_out,inputs1=i)
+            select_face = SeparateGeometry(tree,selection=compare.std_out,label="Face"+str(i))
+            geo_to_instance = GeometryToInstance(tree)
+
+            rotation = QuaternionToRotation(tree,label="RotationOfFace"+str(i))
+            pivot = InputVector(tree,label="PivotOfFace"+str(i))
+            translation = InputVector(tree,label="TranslationOfFace"+str(i))
+            rotate_instance = RotateInstances(tree,rotation=rotation.std_out,pivot=pivot.std_out,translation=translation.std_out,pivot_point=pivot.std_out)
+            translate_instance = TranslateInstances(tree,translation=translation.std_out)
+            create_geometry_line(tree,[join,select_face,geo_to_instance,rotate_instance,translate_instance,join2])
+
+        create_geometry_line(tree,[join2],out=out.inputs["Geometry"])
 
 
 # recreate the essentials to convert a latex expression into a collection of curves

@@ -817,7 +817,7 @@
 				<OUTPUT id="360" name="Result" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="76" type="INPUT_NORMAL" name="Normal" label="" location="(-17.5,0.8)" hide="False" mute="False" parent="None">
+		<NODE id="76" type="INPUT_NORMAL" name="Normal" label="" location="(-17.4,0.9)" hide="False" mute="False" parent="None">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
@@ -879,195 +879,184 @@
 				<OUTPUT id="380" name="Value" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="83" type="ALIGN_ROTATION_TO_VECTOR" name="Align Rotation to Vector" label="" location="(-18.3,2.1)" axis="X" pivot_axis="AUTO" hide="False" mute="False" parent="None">
+		<NODE id="83" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.012" label="" location="(-12.9,3.1)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
 			<INPUTS>
-				<INPUT id="381" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
-				<INPUT id="382" name="Factor" type="VALUE" is_linked="False" default_value="1.0"/>
-				<INPUT id="383" name="Vector" type="VECTOR" is_linked="True"/>
+				<INPUT id="381" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="382" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="383" name="Name" type="STRING" is_linked="False" default_value="FL Rot"/>
+				<INPUT id="384" name="Value" type="VECTOR" is_linked="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="384" name="Rotation" type="ROTATION" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="385" name="Geometry" type="GEOMETRY" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="84" type="ALIGN_ROTATION_TO_VECTOR" name="Align Rotation to Vector.001" label="" location="(-17.4,1.7)" axis="Z" pivot_axis="X" hide="False" mute="False" parent="None">
+		<NODE id="84" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.013" label="" location="(-10.3,3.1)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
 			<INPUTS>
-				<INPUT id="385" name="Rotation" type="ROTATION" is_linked="True"/>
-				<INPUT id="386" name="Factor" type="VALUE" is_linked="False" default_value="1.0"/>
-				<INPUT id="387" name="Vector" type="VECTOR" is_linked="True"/>
+				<INPUT id="386" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="387" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="388" name="Name" type="STRING" is_linked="False" default_value="FL Pos"/>
+				<INPUT id="389" name="Value" type="VECTOR" is_linked="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="388" name="Rotation" type="ROTATION" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="390" name="Geometry" type="GEOMETRY" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="85" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.012" label="" location="(-12.9,3.1)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="85" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.014" label="" location="(-8.4,3.1)" hide="False" mute="False" domain="POINT" data_type="FLOAT_VECTOR" parent="None">
 			<INPUTS>
-				<INPUT id="389" name="Geometry" type="GEOMETRY" is_linked="True"/>
-				<INPUT id="390" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
-				<INPUT id="391" name="Name" type="STRING" is_linked="False" default_value="FL Rot"/>
-				<INPUT id="392" name="Value" type="VECTOR" is_linked="True"/>
+				<INPUT id="391" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="392" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="393" name="Name" type="STRING" is_linked="False" default_value="VL Pos"/>
+				<INPUT id="394" name="Value" type="VECTOR" is_linked="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="393" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="395" name="Geometry" type="GEOMETRY" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="86" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.013" label="" location="(-10.3,3.1)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="86" type="INVERT_ROTATION" name="Invert Rotation" label="" location="(-12.9,1.3)" hide="False" mute="False" parent="None">
 			<INPUTS>
-				<INPUT id="394" name="Geometry" type="GEOMETRY" is_linked="True"/>
-				<INPUT id="395" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
-				<INPUT id="396" name="Name" type="STRING" is_linked="False" default_value="FL Pos"/>
-				<INPUT id="397" name="Value" type="VECTOR" is_linked="True"/>
+				<INPUT id="396" name="Rotation" type="ROTATION" is_linked="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="398" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="397" name="Rotation" type="ROTATION" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="87" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.014" label="" location="(-8.4,3.1)" hide="False" mute="False" domain="POINT" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="87" type="FIELD_AT_INDEX" name="Evaluate at Index.006" label="" location="(-12.9,0.8)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
 			<INPUTS>
-				<INPUT id="399" name="Geometry" type="GEOMETRY" is_linked="True"/>
-				<INPUT id="400" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
-				<INPUT id="401" name="Name" type="STRING" is_linked="False" default_value="VL Pos"/>
-				<INPUT id="402" name="Value" type="VECTOR" is_linked="True"/>
+				<INPUT id="398" name="Index" type="INT" is_linked="True"/>
+				<INPUT id="399" name="Value" type="VECTOR" is_linked="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="403" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="400" name="Value" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="88" type="INVERT_ROTATION" name="Invert Rotation" label="" location="(-12.9,1.3)" hide="False" mute="False" parent="None">
+		<NODE id="88" type="INPUT_ATTRIBUTE" name="Named Attribute.021" label="" location="(-13.0,0.0)" hide="False" mute="False" data_type="INT" parent="None">
 			<INPUTS>
-				<INPUT id="404" name="Rotation" type="ROTATION" is_linked="True"/>
+				<INPUT id="401" name="Name" type="STRING" is_linked="False" default_value="F Parent"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="405" name="Rotation" type="ROTATION" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="402" name="Attribute" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="403" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="89" type="FIELD_AT_INDEX" name="Evaluate at Index.006" label="" location="(-12.9,0.8)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="89" type="INPUT_ATTRIBUTE" name="Named Attribute.022" label="" location="(-14.0,0.9)" hide="False" mute="False" data_type="FLOAT_VECTOR" parent="None">
 			<INPUTS>
-				<INPUT id="406" name="Index" type="INT" is_linked="True"/>
-				<INPUT id="407" name="Value" type="VECTOR" is_linked="True"/>
+				<INPUT id="404" name="Name" type="STRING" is_linked="False" default_value="F Rot"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="408" name="Value" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="405" name="Attribute" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="406" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="90" type="INPUT_ATTRIBUTE" name="Named Attribute.021" label="" location="(-13.0,0.0)" hide="False" mute="False" data_type="INT" parent="None">
+		<NODE id="90" type="INPUT_ATTRIBUTE" name="Named Attribute.023" label="" location="(-12.1,2.4)" hide="False" mute="False" data_type="FLOAT_VECTOR" parent="None">
 			<INPUTS>
-				<INPUT id="409" name="Name" type="STRING" is_linked="False" default_value="F Parent"/>
+				<INPUT id="407" name="Name" type="STRING" is_linked="False" default_value="F Pos"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="410" name="Attribute" type="INT" is_linked="True" default_value="0"/>
-				<OUTPUT id="411" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="408" name="Attribute" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="409" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="91" type="INPUT_ATTRIBUTE" name="Named Attribute.022" label="" location="(-14.0,0.9)" hide="False" mute="False" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="91" type="INPUT_ATTRIBUTE" name="Named Attribute.024" label="" location="(-12.1,1.7)" hide="False" mute="False" data_type="INT" parent="None">
 			<INPUTS>
-				<INPUT id="412" name="Name" type="STRING" is_linked="False" default_value="F Rot"/>
+				<INPUT id="410" name="Name" type="STRING" is_linked="False" default_value="F Parent"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="413" name="Attribute" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
-				<OUTPUT id="414" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="411" name="Attribute" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="412" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="92" type="INPUT_ATTRIBUTE" name="Named Attribute.023" label="" location="(-12.1,2.4)" hide="False" mute="False" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="92" type="INPUT_ATTRIBUTE" name="Named Attribute.025" label="" location="(-12.1,1.0)" hide="False" mute="False" data_type="FLOAT_VECTOR" parent="None">
 			<INPUTS>
-				<INPUT id="415" name="Name" type="STRING" is_linked="False" default_value="F Pos"/>
+				<INPUT id="413" name="Name" type="STRING" is_linked="False" default_value="F Rot"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="416" name="Attribute" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
-				<OUTPUT id="417" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="414" name="Attribute" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="415" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="93" type="INPUT_ATTRIBUTE" name="Named Attribute.024" label="" location="(-12.1,1.7)" hide="False" mute="False" data_type="INT" parent="None">
+		<NODE id="93" type="FIELD_AT_INDEX" name="Evaluate at Index.007" label="" location="(-11.1,2.0)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
 			<INPUTS>
-				<INPUT id="418" name="Name" type="STRING" is_linked="False" default_value="F Parent"/>
+				<INPUT id="416" name="Index" type="INT" is_linked="True"/>
+				<INPUT id="417" name="Value" type="VECTOR" is_linked="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="419" name="Attribute" type="INT" is_linked="True" default_value="0"/>
-				<OUTPUT id="420" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="418" name="Value" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="94" type="INPUT_ATTRIBUTE" name="Named Attribute.025" label="" location="(-12.1,1.0)" hide="False" mute="False" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="94" type="FIELD_AT_INDEX" name="Evaluate at Index.008" label="" location="(-11.1,1.2)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
 			<INPUTS>
-				<INPUT id="421" name="Name" type="STRING" is_linked="False" default_value="F Rot"/>
+				<INPUT id="419" name="Index" type="INT" is_linked="True"/>
+				<INPUT id="420" name="Value" type="VECTOR" is_linked="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="422" name="Attribute" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
-				<OUTPUT id="423" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="421" name="Value" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="95" type="FIELD_AT_INDEX" name="Evaluate at Index.007" label="" location="(-11.1,2.0)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="95" type="GROUP" name="Position Transform Node.001" label="Position Transform" location="(-10.3,1.8)" hide="False" mute="False" parent="None">
 			<INPUTS>
-				<INPUT id="424" name="Index" type="INT" is_linked="True"/>
-				<INPUT id="425" name="Value" type="VECTOR" is_linked="True"/>
+				<INPUT id="422" name="Position" type="VECTOR" is_linked="True"/>
+				<INPUT id="423" name="Location" type="VECTOR" is_linked="True"/>
+				<INPUT id="424" name="Rotation" type="ROTATION" is_linked="True"/>
+				<INPUT id="425" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="426" name="Undo Transform" type="BOOLEAN" is_linked="False" default_value="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="426" name="Value" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="427" name="Position" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="96" type="FIELD_AT_INDEX" name="Evaluate at Index.008" label="" location="(-11.1,1.2)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="96" type="POSITION" name="Position.001" label="" location="(-9.3,2.4)" hide="False" mute="False" parent="None">
 			<INPUTS>
-				<INPUT id="427" name="Index" type="INT" is_linked="True"/>
-				<INPUT id="428" name="Value" type="VECTOR" is_linked="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="429" name="Value" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="428" name="Position" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="97" type="GROUP" name="Position Transform Node.001" label="Position Transform" location="(-10.3,1.8)" hide="False" mute="False" parent="None">
+		<NODE id="97" type="INPUT_ATTRIBUTE" name="Named Attribute.026" label="" location="(-9.3,2.0)" hide="False" mute="False" data_type="FLOAT_VECTOR" parent="None">
 			<INPUTS>
-				<INPUT id="430" name="Position" type="VECTOR" is_linked="True"/>
-				<INPUT id="431" name="Location" type="VECTOR" is_linked="True"/>
-				<INPUT id="432" name="Rotation" type="ROTATION" is_linked="True"/>
-				<INPUT id="433" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
-				<INPUT id="434" name="Undo Transform" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="429" name="Name" type="STRING" is_linked="False" default_value="F Pos"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="435" name="Position" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="430" name="Attribute" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="431" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="98" type="POSITION" name="Position.001" label="" location="(-9.3,2.4)" hide="False" mute="False" parent="None">
+		<NODE id="98" type="INPUT_ATTRIBUTE" name="Named Attribute.027" label="" location="(-9.3,1.3)" hide="False" mute="False" data_type="FLOAT_VECTOR" parent="None">
 			<INPUTS>
+				<INPUT id="432" name="Name" type="STRING" is_linked="False" default_value="F Rot"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="436" name="Position" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="433" name="Attribute" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="434" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="99" type="INPUT_ATTRIBUTE" name="Named Attribute.026" label="" location="(-9.3,2.0)" hide="False" mute="False" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="99" type="GROUP" name="Position Transform Node" label="Position Transform" location="(-8.4,1.9)" hide="False" mute="False" parent="None">
 			<INPUTS>
-				<INPUT id="437" name="Name" type="STRING" is_linked="False" default_value="F Pos"/>
+				<INPUT id="435" name="Position" type="VECTOR" is_linked="True"/>
+				<INPUT id="436" name="Location" type="VECTOR" is_linked="True"/>
+				<INPUT id="437" name="Rotation" type="ROTATION" is_linked="True"/>
+				<INPUT id="438" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="439" name="Undo Transform" type="BOOLEAN" is_linked="False" default_value="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="438" name="Attribute" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
-				<OUTPUT id="439" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="440" name="Position" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="100" type="INPUT_ATTRIBUTE" name="Named Attribute.027" label="" location="(-9.3,1.3)" hide="False" mute="False" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="100" type="ROTATE_ROTATION" name="Rotate Rotation.001" label="" location="(-12.9,2.0)" hide="False" mute="False" rotation_space="LOCAL" parent="None">
 			<INPUTS>
-				<INPUT id="440" name="Name" type="STRING" is_linked="False" default_value="F Rot"/>
+				<INPUT id="441" name="Rotation" type="ROTATION" is_linked="True"/>
+				<INPUT id="442" name="Rotate By" type="ROTATION" is_linked="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="441" name="Attribute" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
-				<OUTPUT id="442" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="443" name="Rotation" type="ROTATION" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="101" type="GROUP" name="Position Transform Node" label="Position Transform" location="(-8.4,1.9)" hide="False" mute="False" parent="None">
+		<NODE id="101" type="AXES_TO_ROTATION" name="Axes to Rotation" label="" location="(-17.4,1.7)" primary_axis="X" secondary_axis="Z" hide="False" mute="False" parent="None">
 			<INPUTS>
-				<INPUT id="443" name="Position" type="VECTOR" is_linked="True"/>
-				<INPUT id="444" name="Location" type="VECTOR" is_linked="True"/>
-				<INPUT id="445" name="Rotation" type="ROTATION" is_linked="True"/>
-				<INPUT id="446" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
-				<INPUT id="447" name="Undo Transform" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="444" name="Primary Axis" type="VECTOR" is_linked="True"/>
+				<INPUT id="445" name="Secondary Axis" type="VECTOR" is_linked="True"/>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="448" name="Position" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
-			</OUTPUTS>
-		</NODE>
-		<NODE id="102" type="ROTATE_ROTATION" name="Rotate Rotation.001" label="" location="(-12.9,2.0)" hide="False" mute="False" rotation_space="LOCAL" parent="None">
-			<INPUTS>
-				<INPUT id="449" name="Rotation" type="ROTATION" is_linked="True"/>
-				<INPUT id="450" name="Rotate By" type="ROTATION" is_linked="True"/>
-			</INPUTS>
-			<OUTPUTS>
-				<OUTPUT id="451" name="Rotation" type="ROTATION" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="446" name="Rotation" type="ROTATION" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
 	</NODES>
@@ -1164,36 +1153,35 @@
 		<LINK from_node="79" from_socket="370" to_node="82" to_socket="378"/>
 		<LINK from_node="81" from_socket="377" to_node="75" to_socket="351"/>
 		<LINK from_node="82" from_socket="380" to_node="75" to_socket="352"/>
-		<LINK from_node="77" from_socket="366" to_node="83" to_socket="383"/>
-		<LINK from_node="76" from_socket="361" to_node="84" to_socket="387"/>
-		<LINK from_node="83" from_socket="384" to_node="84" to_socket="385"/>
-		<LINK from_node="84" from_socket="388" to_node="72" to_socket="335"/>
 		<LINK from_node="82" from_socket="380" to_node="77" to_socket="363"/>
 		<LINK from_node="81" from_socket="377" to_node="77" to_socket="362"/>
 		<LINK from_node="65" from_socket="300" to_node="72" to_socket="332"/>
 		<LINK from_node="74" from_socket="346" to_node="2" to_socket="8"/>
-		<LINK from_node="85" from_socket="393" to_node="86" to_socket="394"/>
-		<LINK from_node="86" from_socket="398" to_node="87" to_socket="399"/>
-		<LINK from_node="90" from_socket="410" to_node="89" to_socket="406"/>
-		<LINK from_node="91" from_socket="413" to_node="89" to_socket="407"/>
-		<LINK from_node="89" from_socket="408" to_node="88" to_socket="404"/>
-		<LINK from_node="93" from_socket="419" to_node="95" to_socket="424"/>
-		<LINK from_node="93" from_socket="419" to_node="96" to_socket="427"/>
-		<LINK from_node="94" from_socket="422" to_node="96" to_socket="428"/>
-		<LINK from_node="92" from_socket="416" to_node="95" to_socket="425"/>
-		<LINK from_node="92" from_socket="416" to_node="97" to_socket="430"/>
-		<LINK from_node="95" from_socket="426" to_node="97" to_socket="431"/>
-		<LINK from_node="96" from_socket="429" to_node="97" to_socket="432"/>
-		<LINK from_node="97" from_socket="435" to_node="86" to_socket="397"/>
-		<LINK from_node="101" from_socket="448" to_node="87" to_socket="402"/>
-		<LINK from_node="98" from_socket="436" to_node="101" to_socket="443"/>
-		<LINK from_node="99" from_socket="438" to_node="101" to_socket="444"/>
-		<LINK from_node="100" from_socket="441" to_node="101" to_socket="445"/>
-		<LINK from_node="91" from_socket="413" to_node="102" to_socket="450"/>
-		<LINK from_node="88" from_socket="405" to_node="102" to_socket="449"/>
-		<LINK from_node="102" from_socket="451" to_node="85" to_socket="392"/>
-		<LINK from_node="20" from_socket="108" to_node="85" to_socket="389"/>
-		<LINK from_node="87" from_socket="403" to_node="3" to_socket="11"/>
+		<LINK from_node="83" from_socket="385" to_node="84" to_socket="386"/>
+		<LINK from_node="84" from_socket="390" to_node="85" to_socket="391"/>
+		<LINK from_node="88" from_socket="402" to_node="87" to_socket="398"/>
+		<LINK from_node="89" from_socket="405" to_node="87" to_socket="399"/>
+		<LINK from_node="87" from_socket="400" to_node="86" to_socket="396"/>
+		<LINK from_node="91" from_socket="411" to_node="93" to_socket="416"/>
+		<LINK from_node="91" from_socket="411" to_node="94" to_socket="419"/>
+		<LINK from_node="92" from_socket="414" to_node="94" to_socket="420"/>
+		<LINK from_node="90" from_socket="408" to_node="93" to_socket="417"/>
+		<LINK from_node="90" from_socket="408" to_node="95" to_socket="422"/>
+		<LINK from_node="93" from_socket="418" to_node="95" to_socket="423"/>
+		<LINK from_node="94" from_socket="421" to_node="95" to_socket="424"/>
+		<LINK from_node="95" from_socket="427" to_node="84" to_socket="389"/>
+		<LINK from_node="99" from_socket="440" to_node="85" to_socket="394"/>
+		<LINK from_node="96" from_socket="428" to_node="99" to_socket="435"/>
+		<LINK from_node="97" from_socket="430" to_node="99" to_socket="436"/>
+		<LINK from_node="98" from_socket="433" to_node="99" to_socket="437"/>
+		<LINK from_node="89" from_socket="405" to_node="100" to_socket="442"/>
+		<LINK from_node="86" from_socket="397" to_node="100" to_socket="441"/>
+		<LINK from_node="100" from_socket="443" to_node="83" to_socket="384"/>
+		<LINK from_node="20" from_socket="108" to_node="83" to_socket="381"/>
+		<LINK from_node="85" from_socket="395" to_node="3" to_socket="11"/>
 		<LINK from_node="0" from_socket="4" to_node="20" to_socket="105"/>
+		<LINK from_node="77" from_socket="366" to_node="101" to_socket="444"/>
+		<LINK from_node="76" from_socket="361" to_node="101" to_socket="445"/>
+		<LINK from_node="101" from_socket="446" to_node="72" to_socket="335"/>
 	</LINKS>
 </NODE_XML>
