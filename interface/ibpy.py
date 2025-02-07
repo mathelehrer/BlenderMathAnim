@@ -2938,6 +2938,27 @@ def change_default_vector(slot, from_value, to_value, begin_time=None, transitio
 
     return begin_time + transition_time
 
+def change_default_rotation(slot,from_value,to_value,
+                            begin_time=None,transition_time=None,data_path="default_value",
+                            begin_frame=0,transition_frames=DEFAULT_ANIMATION_TIME*FRAME_RATE):
+
+    if begin_time:
+        begin_frame = begin_time * FRAME_RATE
+    else:
+        begin_time = begin_frame / FRAME_RATE
+    if transition_time:
+        transition_frames = transition_time * FRAME_RATE
+    else:
+        transition_time = transition_frames / FRAME_RATE
+    if from_value is not None:
+        slot.default_value = from_value
+        insert_keyframe(slot, data_path, begin_frame)
+    slot.default_value = to_value
+    insert_keyframe(slot, data_path, begin_frame + transition_frames)
+
+    return begin_time + transition_time
+
+
 def change_value(value, from_value, to_value, begin_time=None, transition_time=None, data_path="default_value",
                  begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME * FRAME_RATE):
     if begin_time:

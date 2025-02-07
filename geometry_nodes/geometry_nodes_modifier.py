@@ -48,7 +48,7 @@ class GeometryNodesModifier:
     base class that organizes the boilerplate code for the creation of a geometry nodes modifier
     """
 
-    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True, group_output=True, group_input=False, **kwargs):
+    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True,mode="Sugiyama", group_output=True, group_input=False, **kwargs):
         tree = get_node_tree(name=name, type='GeometryNodeTree')
 
         # if  materials are created inside the geometry node, they are stored inside the following array
@@ -65,7 +65,7 @@ class GeometryNodesModifier:
         self.create_node(tree, **kwargs)
         # automatically layout nodes
         if automatic_layout:
-            layout(tree)
+            layout(tree,mode = mode)
         self.tree = tree
         self.nodes = self.tree.nodes  # needed for ibpy.get_geometry_node_from_modifier
 
@@ -3276,12 +3276,12 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
         blue_selector_switch = InputBoolean(tree, name="BlueSelectorSwitch", value=True,
                                             location=self.loc(block_x, block_y, 2, -2.5), hide=False)
 
-        yellow_selector = make_function(tree, name="YellowSelector", location=self.loc(block_x, block_y, 3, -1.5),
+        green_selector = make_function(tree, name="GreenSelector", location=self.loc(block_x, block_y, 3, -1.5),
                                         functions={
                                             "select": "face_index,17,>,face_index,27,<,and,switch,and"
                                         }, inputs=["switch", "face_index"], outputs=["select"],
                                         scalars=["switch", "face_index", "select"], hide=False)
-        yellow_selector_switch = InputBoolean(tree, name="YellowSelectorSwitch", value=True,
+        green_selector_switch = InputBoolean(tree, name="GreenSelectorSwitch", value=True,
                                               location=self.loc(block_x, block_y, 3, -2.5), hide=False)
 
         orange_selector = make_function(tree, name="OrangeSelector", location=self.loc(block_x, block_y, 4, -1.5),
@@ -3292,12 +3292,12 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
         orange_selector_switch = InputBoolean(tree, name="OrangeSelectorSwitch", value=True,
                                               location=self.loc(block_x, block_y, 4, -2.5), hide=False)
 
-        green_selector = make_function(tree, name="GreenSelector", location=self.loc(block_x, block_y, 5, -1.5),
+        yellow_selector = make_function(tree, name="YellowSelector", location=self.loc(block_x, block_y, 5, -1.5),
                                        functions={
                                            "select": "face_index,8,>,face_index,18,<,and,switch,and"
                                        }, inputs=["switch", "face_index"], outputs=["select"],
                                        scalars=["switch", "face_index", "select"], hide=False)
-        green_selector_switch = InputBoolean(tree, name="GreenSelectorSwitch", value=True,
+        yellow_selector_switch = InputBoolean(tree, name="YellowSelectorSwitch", value=True,
                                              location=self.loc(block_x, block_y, 5, -2.5), hide=False)
 
         white_selector = make_function(tree, name="WhiteSelector", location=self.loc(block_x, block_y, 6, -1.5),
@@ -3357,7 +3357,7 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
 
 
         # join geometry
-        join = JoinGeometry(tree)
+        join = JoinGeometry(tree,label="JoinGeometry")
 
         # cubie branch
         # create a smooth cubies
@@ -3372,27 +3372,43 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
         create_geometry_line(tree,[cube2,store_cubie_index,iop_cubies,black,join])
 
         create_geometry_line(tree, [iop, realize_instances, store_normal, dual_mesh2, store_face_index, iop2,ri2,
-                                    material_black,material_red,material_blue,material_yellow,material_orange,material_green,material_white,join])
+                                    material_black,material_red,material_blue,material_yellow,material_orange,material_green,material_white])
+
+        last_color = material_white
 
         # prepare selection for each face make index offset by 1
 
         attr_face_index2=NamedAttribute(tree,data_type="INT",name="FaceIndex")
         add_one = MathNode(tree,operation="ADD",inputs0=attr_face_index2.std_out,inputs1=1)
 
-        join2 = JoinGeometry(tree,label="TransformedFaces")
         for i in range(1,55):
             compare = CompareNode(tree,operation="EQUAL",inputs0=add_one.std_out,inputs1=i)
             select_face = SeparateGeometry(tree,selection=compare.std_out,label="Face"+str(i))
-            geo_to_instance = GeometryToInstance(tree)
 
-            rotation = QuaternionToRotation(tree,label="RotationOfFace"+str(i))
-            pivot = InputVector(tree,label="PivotOfFace"+str(i))
-            translation = InputVector(tree,label="TranslationOfFace"+str(i))
-            rotate_instance = RotateInstances(tree,rotation=rotation.std_out,pivot=pivot.std_out,translation=translation.std_out,pivot_point=pivot.std_out)
-            translate_instance = TranslateInstances(tree,translation=translation.std_out)
-            create_geometry_line(tree,[join,select_face,geo_to_instance,rotate_instance,translate_instance,join2])
+            # simulation zon doesn't work
 
-        create_geometry_line(tree,[join2],out=out.inputs["Geometry"])
+            # position = Position(tree)
+            # center = InputVector(tree,label="RotationCenterOfFace"+str(i))
+            # angle = InputValue(tree,label="RotationAngleOfFace"+str(i))
+            # translation=InputVector(tree,label="TranslationOfFace"+str(i))
+            # vector_rot = VectorRotate(tree,rotation_type='Z_AXIS',vector=position.std_out,center=center.std_out,angle=angle.std_out)
+            # simulation = Simulation(tree,label="TransformationOfFace"+str(i))
+            # set_pos = SetPosition(tree,position=vector_rot.std_out,offset=translation.std_out)
+            # simulation.create_geometry_line([set_pos])
+
+            geo_to_instance = GeometryToInstance(tree,label="InstanceOfFace"+str(i))
+
+            # these elements should be used to create custom transformations
+
+            # rotation = QuaternionToRotation(tree, label="RotationOfFace" + str(i))
+            # pivot = InputVector(tree, label="PivotOfFace" + str(i))
+            # translation = InputVector(tree, label="TranslationOfFace" + str(i))
+            # rotate_instance = RotateInstances(tree, rotation=rotation.std_out, pivot=pivot.std_out)
+            # translate_instance = TranslateInstances(tree, translation=translation.std_out)
+
+            create_geometry_line(tree,[last_color,select_face,geo_to_instance,join])
+
+        create_geometry_line(tree,[join],out=out.inputs["Geometry"])
 
 
 # recreate the essentials to convert a latex expression into a collection of curves

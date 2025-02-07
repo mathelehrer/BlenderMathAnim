@@ -2498,10 +2498,11 @@ class VectorRotate(BlueNode):
             else:
                 tree.links.new(angle, self.node.inputs["Angle"])
 
-        if isinstance(axis, (Vector, list)):
-            self.node.inputs["Axis"].default_value = axis
-        else:
-            tree.links.new(axis, self.node.inputs["Axis"])
+        if axis:
+            if isinstance(axis, (Vector, list)):
+                self.node.inputs["Axis"].default_value = axis
+            else:
+                tree.links.new(axis, self.node.inputs["Axis"])
 
 class Switch(BlueNode):
     def __init__(self, tree, location=(0, 0), input_type="GEOMETRY",
