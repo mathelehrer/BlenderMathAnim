@@ -211,6 +211,25 @@ class GeoRubiksCube(BObject):
 
         return begin_time + transition_time
 
+    def corner_triality_off(self, begin_time, transition_time):
+        """
+        undo parity
+        """
+
+        switch_labels = ["RedSelector", "GreenSelector", "BlueSelector", "YellowSelector", "WhiteSelector",
+                         "OrangeSelector", "Corner", "CornerSelector"]
+        switches = [get_geometry_node_from_modifier(self.rc_geometry, label=label + "Switch") for label in
+                    switch_labels]
+
+        for i in range(6):
+            change_default_boolean(switches[i], from_value=False, to_value=True,
+                                   begin_time=begin_time + transition_time)
+        change_default_boolean(switches[6], from_value=True, to_value=False,
+                               begin_time=begin_time + transition_time / 2)
+        change_default_boolean(switches[7], from_value=True, to_value=False, begin_time=begin_time)
+
+        return begin_time + transition_time
+
 
 class GeoRubiksCubeUnfold(BObject):
     def __init__(self, **kwargs):
@@ -871,5 +890,24 @@ class GeoRubiksCubeUnfold(BObject):
         change_default_boolean(switches[6], from_value=True, to_value=False,
                                begin_time=begin_time + transition_time / 2)
         change_default_boolean(switches[7], from_value=True, to_value=False, begin_time=begin_time )
+
+        return begin_time + transition_time
+
+    def corner_triality_off(self, begin_time, transition_time):
+        """
+        undo parity
+        """
+
+        switch_labels = ["RedSelector", "GreenSelector", "BlueSelector", "YellowSelector", "WhiteSelector",
+                         "OrangeSelector", "Corner", "CornerSelector"]
+        switches = [get_geometry_node_from_modifier(self.rc_geometry, label=label + "Switch") for label in
+                    switch_labels]
+
+        for i in range(6):
+            change_default_boolean(switches[i], from_value=False, to_value=True,
+                                   begin_time=begin_time + transition_time)
+        change_default_boolean(switches[6], from_value=True, to_value=False,
+                               begin_time=begin_time + transition_time / 2)
+        change_default_boolean(switches[7], from_value=True, to_value=False, begin_time=begin_time)
 
         return begin_time + transition_time
