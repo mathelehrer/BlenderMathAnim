@@ -130,7 +130,7 @@ class GeoRubiksCube(BObject):
         change_default_value(size, from_value=0, to_value=0.890, begin_time=begin_time, transition_time=transition_time)
         return begin_time + transition_time
 
-    def transform(self, word, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+    def transform(self, word,pause=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         dt = transition_time / len(word)
         t0 = begin_time
         for letter in word:
@@ -146,7 +146,7 @@ class GeoRubiksCube(BObject):
                 ibpy.change_default_quaternion(self.cubie_rotation_nodes[idx], from_value=from_angle, to_value=to_angle,
                                                begin_time=t0, transition_time=dt)
 
-            t0 += dt
+            t0 += (dt+pause)
             # update physical state
             new_state = {}
             for src, replacement in transformation.items():
@@ -159,7 +159,7 @@ class GeoRubiksCube(BObject):
 
     def edge_parity_transition(self, begin_time, transition_time):
         """
-        here the texture of the edge faces is changed into a two-color mode with edge labels -1 and 1
+        here the texture of the edge faces is changed into a two-color mode with edge labels 0 and 1
         """
 
         switch_labels = ["RedSelector", "GreenSelector", "BlueSelector", "YellowSelector", "WhiteSelector",
@@ -172,6 +172,42 @@ class GeoRubiksCube(BObject):
         change_default_boolean(switches[6], from_value=False, to_value=True,
                                begin_time=begin_time + transition_time / 2)
         change_default_boolean(switches[7], from_value=False, to_value=True, begin_time=begin_time + transition_time)
+
+        return begin_time + transition_time
+
+    def corner_triality_transition(self, begin_time, transition_time):
+        """
+        here the texture of the edge faces is changed into a two-color mode with corner labels 0,1 and 2
+        """
+
+        switch_labels = ["RedSelector", "GreenSelector", "BlueSelector", "YellowSelector", "WhiteSelector",
+                         "OrangeSelector", "Corner", "CornerSelector"]
+        switches = [get_geometry_node_from_modifier(self.rc_geometry, label=label + "Switch") for label in
+                    switch_labels]
+
+        for i in range(6):
+            change_default_boolean(switches[i], from_value=True, to_value=False, begin_time=begin_time)
+        change_default_boolean(switches[6], from_value=False, to_value=True,
+                               begin_time=begin_time + transition_time / 2)
+        change_default_boolean(switches[7], from_value=False, to_value=True, begin_time=begin_time + transition_time)
+
+        return begin_time + transition_time
+
+    def edge_parity_off(self, begin_time, transition_time):
+        """
+        undo parity
+        """
+
+        switch_labels = ["RedSelector", "GreenSelector", "BlueSelector", "YellowSelector", "WhiteSelector",
+                         "OrangeSelector", "Edge", "EdgeSelector"]
+        switches = [get_geometry_node_from_modifier(self.rc_geometry, label=label + "Switch") for label in
+                    switch_labels]
+
+        for i in range(6):
+            change_default_boolean(switches[i], from_value=False, to_value=True, begin_time=begin_time+transition_time)
+        change_default_boolean(switches[6], from_value=True, to_value=False,
+                               begin_time=begin_time + transition_time / 2)
+        change_default_boolean(switches[7], from_value=True, to_value=False, begin_time=begin_time )
 
         return begin_time + transition_time
 
@@ -225,6 +261,9 @@ class GeoRubiksCubeUnfold(BObject):
         return begin_time + transition_time
 
     def rotate_face(self, index, angle, center, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        """
+        implement the rotation of individual faces as additional instance rotation nodes
+        """
         tree = self.rc_geometry.tree
         links = tree.links
 
@@ -233,23 +272,21 @@ class GeoRubiksCubeUnfold(BObject):
         final_join = self.final_join
 
         rotate_instance = RotateInstances(tree, rotation=Vector(), pivot_point=center, local_space=False)
-        realize_instance = RealizeInstances(tree)
-        geo_to_instance = GeometryToInstance(tree)
         # cut old link
         for l in last_node.outputs[0].links:
             links.remove(l)
         links.new(last_node.outputs[0], rotate_instance.geometry_in)
-        # links.new(rotate_instance.geometry_out, realize_instance.geometry_in)
-        # links.new(realize_instance.geometry_out, geo_to_instance.geometry_in)
-        # links.new(geo_to_instance.geometry_out, final_join.inputs["Geometry"])
-        # self.last_transform[index] = geo_to_instance.node
         links.new(rotate_instance.geometry_out, final_join.inputs["Geometry"])
         self.last_transform[index] = rotate_instance.node
         # set keyframes
         change_default_rotation(rotate_instance.node.inputs["Rotation"], from_value=Euler(),
                                 to_value=Euler([0, 0, angle]), begin_time=begin_time, transition_time=transition_time)
 
+
     def translate_face(self, index, translation, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        """
+        implement the rotation of individual faces as additional instance translation nodes
+        """
         tree = self.rc_geometry.tree
         links = tree.links
 
@@ -258,16 +295,10 @@ class GeoRubiksCubeUnfold(BObject):
         final_join = self.final_join
 
         translate_instance = TranslateInstances(tree, translation=translation, local_space=False)
-        realize_instance = RealizeInstances(tree)
-        geo_to_instance = GeometryToInstance(tree)
         # cut old link
         for l in last_node.outputs[0].links:
             links.remove(l)
         links.new(last_node.outputs[0], translate_instance.geometry_in)
-        # links.new(translate_instance.geometry_out,realize_instance.geometry_in)
-        # links.new(realize_instance.geometry_out,geo_to_instance.geometry_in)
-        # links.new(geo_to_instance.geometry_out, final_join.inputs["Geometry"])
-        # self.last_transform[index] = geo_to_instance.node
         links.new(translate_instance.geometry_out, final_join.inputs["Geometry"])
         self.last_transform[index] = translate_instance.node
         # set keyframes
@@ -277,7 +308,7 @@ class GeoRubiksCubeUnfold(BObject):
     def layout_nodes(self):
         layout(self.rc_geometry.tree)
 
-    def transform(self, word, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+    def transform(self, word, pause=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         """
         The transformations are performed through a simulation node.
         This means that all transformation parameters (angle, translations) have to be entered incrementally per frame
@@ -286,7 +317,7 @@ class GeoRubiksCubeUnfold(BObject):
         dt = transition_time / len(word)
         t0 = begin_time
         for letter in word:
-            if letter == 'u':
+            if letter == 'f':
                 positions = {19, 20, 21, 22, 23, 24, 25, 26, 27, 10, 13, 16, 28, 31, 34, 37, 40, 43, 46, 49, 52}
                 for i in positions:
                     self.rotate_face(self.position_face_map[i], -pi / 2, Vector(), begin_time=t0, transition_time=dt)
@@ -318,7 +349,7 @@ class GeoRubiksCubeUnfold(BObject):
                 self.position_face_map[40] = second
                 self.position_face_map[37] = third
 
-            if letter == 'U':
+            if letter == 'F':
                 faces = {19, 20, 21, 22, 23, 24, 25, 26, 27, 10, 13, 16, 28, 31, 34, 37, 40, 43, 46, 49, 52}
                 for i in faces:
                     self.rotate_face(self.position_face_map[i], pi / 2, Vector(), begin_time=t0, transition_time=dt)
@@ -350,7 +381,7 @@ class GeoRubiksCubeUnfold(BObject):
                 self.position_face_map[49] = second
                 self.position_face_map[52] = third
 
-            if letter == 'd':
+            if letter == 'b':
                 rotations1 = {1, 2, 3, 4, 5, 6, 7, 8, 9}
                 rotations2 = {12, 15, 18, 30, 33, 36, 48, 51, 54, 39, 42, 45}
                 for i in rotations1:
@@ -387,7 +418,7 @@ class GeoRubiksCubeUnfold(BObject):
                 self.position_face_map[51] = second
                 self.position_face_map[54] = third
 
-            if letter == 'D':
+            if letter == 'B':
                 rotations1 = {1, 2, 3, 4, 5, 6, 7, 8, 9}
                 rotations2 = {12, 15, 18, 30, 33, 36, 48, 51, 54, 39, 42, 45}
                 for i in rotations1:
@@ -424,7 +455,7 @@ class GeoRubiksCubeUnfold(BObject):
                 self.position_face_map[42] = second
                 self.position_face_map[39] = third
 
-            if letter == 'f':
+            if letter == 'd':
                 rotations = {10, 11, 12, 13, 14, 15, 16, 17, 18}
                 translations = {39, 38, 37, 19, 22, 25}
                 mix1 = {52, 53, 54}
@@ -471,7 +502,7 @@ class GeoRubiksCubeUnfold(BObject):
                 self.position_face_map[4] = second
                 self.position_face_map[1] = third
 
-            if letter == 'F':
+            if letter == 'D':
                 rotations = {10, 11, 12, 13, 14, 15, 16, 17, 18}
                 translations = {19, 22, 25, 52, 53, 54}
                 mix1 = {39, 38, 37}
@@ -519,7 +550,7 @@ class GeoRubiksCubeUnfold(BObject):
                 self.position_face_map[22] = second
                 self.position_face_map[25] = third
 
-            if letter == 'b':
+            if letter == 'u':
                 rotations = {28, 29, 30, 31, 32, 33, 34, 35, 36}
                 translations = {27, 24, 21, 46, 47, 48}
                 mix1 = {43, 44, 45}
@@ -568,7 +599,7 @@ class GeoRubiksCubeUnfold(BObject):
                 self.position_face_map[44] = second
                 self.position_face_map[43] = third
 
-            if letter == 'B':
+            if letter == 'U':
                 rotations = {28, 29, 30, 31, 32, 33, 34, 35, 36}
                 translations = {27, 24, 21, 43, 44, 45}
                 mix1 = {46, 47, 48}
@@ -784,14 +815,14 @@ class GeoRubiksCubeUnfold(BObject):
                 self.position_face_map[35] = second
                 self.position_face_map[36] = third
 
-            t0 = t0 + dt
+            t0 = t0 + (dt+pause)
 
         self.layout_nodes()
-        return begin_time + transition_time
+        return t0
 
     def edge_parity_transition(self, begin_time, transition_time):
         """
-        here the texture of the edge faces is changed into a two-color mode with edge labels -1 and 1
+        here the texture of the edge faces is changed into a two-color mode with edge labels 0 and 1
         """
 
         switch_labels = ["RedSelector", "GreenSelector", "BlueSelector", "YellowSelector", "WhiteSelector",
@@ -804,5 +835,41 @@ class GeoRubiksCubeUnfold(BObject):
         change_default_boolean(switches[6], from_value=False, to_value=True,
                                begin_time=begin_time + transition_time / 2)
         change_default_boolean(switches[7], from_value=False, to_value=True, begin_time=begin_time + transition_time)
+
+        return begin_time + transition_time
+
+    def corner_triality_transition(self, begin_time, transition_time):
+        """
+        here the texture of the edge faces is changed into a two-color mode with corner labels 0,1 and 2
+        """
+
+        switch_labels = ["RedSelector", "GreenSelector", "BlueSelector", "YellowSelector", "WhiteSelector",
+                         "OrangeSelector", "Corner", "CornerSelector"]
+        switches = [get_geometry_node_from_modifier(self.rc_geometry, label=label + "Switch") for label in
+                    switch_labels]
+
+        for i in range(6):
+            change_default_boolean(switches[i], from_value=True, to_value=False, begin_time=begin_time)
+        change_default_boolean(switches[6], from_value=False, to_value=True,
+                               begin_time=begin_time + transition_time / 2)
+        change_default_boolean(switches[7], from_value=False, to_value=True, begin_time=begin_time + transition_time)
+
+        return begin_time + transition_time
+
+    def edge_parity_off(self, begin_time, transition_time):
+        """
+        undo parity
+        """
+
+        switch_labels = ["RedSelector", "GreenSelector", "BlueSelector", "YellowSelector", "WhiteSelector",
+                         "OrangeSelector", "Edge", "EdgeSelector"]
+        switches = [get_geometry_node_from_modifier(self.rc_geometry, label=label + "Switch") for label in
+                    switch_labels]
+
+        for i in range(6):
+            change_default_boolean(switches[i], from_value=False, to_value=True, begin_time=begin_time+transition_time)
+        change_default_boolean(switches[6], from_value=True, to_value=False,
+                               begin_time=begin_time + transition_time / 2)
+        change_default_boolean(switches[7], from_value=True, to_value=False, begin_time=begin_time )
 
         return begin_time + transition_time

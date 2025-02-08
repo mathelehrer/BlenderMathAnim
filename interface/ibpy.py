@@ -7159,3 +7159,18 @@ def to_vector(z):
         return Vector(z)
     else:
         return z
+
+def camera_alignment_euler(bob,camera_location,):
+    """
+    calculate the Euler angle that is needed to align an object to the camera perspective
+    """
+
+    # get own location
+    obj = get_obj(bob)
+    own_location = obj.location
+    # calculate direction to camera
+    direction = to_vector(camera_location) - own_location
+    direction.normalize()
+
+    # no rotation would be needed, when the camera direction was (0,0,1)
+    return direction.to_track_quat('Z', 'Y').to_euler()
