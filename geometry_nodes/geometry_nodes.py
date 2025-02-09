@@ -446,7 +446,7 @@ def create_e8():
         e8coords.append(sampleIndex)
 
     # pairing vertices with repeat zone
-    repeat = RepeatZone(node_tree, location=(left, 0), width=5)
+    repeat = RepeatZone(node_tree, location=(left, 0), node_width=5)
     repeat.add_socket(socket_type="INT", name='i')
     links.new(domain_size.outputs["Point Count"], repeat.inputs["Iterations"])
     addOne = make_function(node_tree, functions={

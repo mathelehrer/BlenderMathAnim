@@ -14,6 +14,7 @@ from interface import ibpy
 from interface.ibpy import get_material, make_new_socket, OPERATORS
 from interface.interface_constants import blender_version
 from mathematics.groups.e8 import E8Lattice
+from utils.color_conversion import get_color
 from utils.constants import RES_XML
 from utils.kwargs import get_from_kwargs
 
@@ -42,7 +43,7 @@ def parse_location(location):
 
 
 class Node:
-    def __init__(self, tree, location=(0, 0), width=200, height=100, offset_y=0,**kwargs):
+    def __init__(self, tree, location=(0, 0), node_width=200, node_height=100, offset_y=0, **kwargs):
         """
         TODO: I have to do this nicer
         """
@@ -50,7 +51,7 @@ class Node:
         self.tree = tree
         self.location = location
         self.l, self.m = location
-        self.node.location = (self.l * width, self.m * height+offset_y)
+        self.node.location = (self.l * node_width, self.m * node_height + offset_y)
         self.links = tree.links
 
         if "hide" in kwargs:
@@ -90,150 +91,162 @@ class Node:
         # io nodes
 
         if type=="GROUP_INPUT":
-            return GroupInput(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return GroupInput(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="GROUP_OUTPUT":
-            return GroupOutput(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return GroupOutput(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         # input nodes
         if type=="VALUE":
-            return InputValue(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return InputValue(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="INPUT_INT":
             integer = int(attributes["integer"])
-            return InputInteger(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,integer=integer)
+            return InputInteger(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,integer=integer)
+        if type=="RANDOM_VALUE":
+            data_type = attributes["data_type"]
+            return RandomValue(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type)
         # read nodes
         if type =="INDEX":
-            return Index(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return Index(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type =="POSITION":
-            return Position(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return Position(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="COLLECTION_INFO":
             transform_space=attributes["transform_space"]
-            return CollectionInfo(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,transform_space=transform_space)
+            return CollectionInfo(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,transform_space=transform_space)
         if type=="INPUT_NORMAL":
-            return InputNormal(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return InputNormal(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         # geometry nodes
         if type=="MESH_LINE":
-            return MeshLine(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return MeshLine(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="MESH_TO_CURVE":
-            return MeshToCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return MeshToCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="MESH_TO_POINTS":
-            return MeshToPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return MeshToPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="SUBDIVISION_SURFACE":
-            return SubdivisionSurface(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return SubdivisionSurface(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="SPLIT_EDGES":
-            return SplitEdges(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return SplitEdges(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="REALIZE_INSTANCES":
-            return RealizeInstances(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return RealizeInstances(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="SET_POSITION":
-            return SetPosition(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return SetPosition(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="POINTS_TO_CURVES":
-            return PointsToCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return PointsToCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="SEPARATE_GEOMETRY":
             domain=attributes["domain"]
-            return SeparateGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain)
+            return SeparateGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,domain=domain)
         if type=="SORT_ELEMENTS":
             domain=attributes["domain"]
-            return SortElements(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain)
+            return SortElements(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,domain=domain)
         if type=="DELETE_GEOMETRY":
             domain=attributes["domain"]
             mode=attributes["mode"]
-            return DeleteGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain,mode=mode)
+            return DeleteGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,domain=domain,mode=mode)
         if type=="JOIN_GEOMETRY":
-            return JoinGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return JoinGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="SET_MATERIAL":
-            return SetMaterial(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return SetMaterial(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="SCALE_ELEMENTS":
             domain=attributes["domain"]
             scale_mode=attributes["scale_mode"]
-            return ScaleElements(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain,scale_mode=scale_mode)
-        if type=="MESH_PRIMITIVE_CUBE":
-            return ScaleElements(tree, location=location, name=name, label=label, hide=hide, mute=mute, height=200)
+            return ScaleElements(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,domain=domain,scale_mode=scale_mode)
+
+        # instances
+        if type=="INSTANCE_ON_POINTS":
+            return InstanceOnPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+
         # attribute nodes
         if type=="STORE_NAMED_ATTRIBUTE":
             data_type = attributes["data_type"]
             domain = attributes["domain"]
-            return StoredNamedAttribute(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,domain=domain)
+            return StoredNamedAttribute(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type,domain=domain)
         if type=="INPUT_ATTRIBUTE":
             data_type = attributes["data_type"]
-            return NamedAttribute(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type)
+            return NamedAttribute(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type)
         if type=="ATTRIBUTE_DOMAIN_SIZE":
             component = attributes["component"]
-            return DomainSize(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,component=component)
+            return DomainSize(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,component=component)
         if type=="ATTRIBUTE_STATISTIC":
             data_type = attributes["data_type"]
             domain=attributes["domain"]
-            return AttributeStatistic(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,domain=domain)
+            return AttributeStatistic(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type,domain=domain)
         if type=="SAMPLE_INDEX":
             data_type = attributes["data_type"]
             domain=attributes["domain"]
-            return SampleIndex(tree,location=location,name=name,label=label,hide=mute,height=200,data_type=data_type,domain=domain)
+            return SampleIndex(tree,location=location,name=name,label=label,hide=mute,node_height=200,data_type=data_type,domain=domain)
 
         # points
         if type=="POINTS":
-            return Points(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return Points(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         # mesh
         if type == "EXTRUDE_MESH":
             mode = attributes["mode"]
-            return ExtrudeMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,mode=mode)
+            return ExtrudeMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
         if type=="DUAL_MESH":
-            return DualMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return DualMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="SHORTEST_EDGE_PATHS":
-            return ShortestEdgePaths(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return ShortestEdgePaths(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="EDGES_OF_CORNER":
-            return EdgesOfCorner(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return EdgesOfCorner(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="FACE_OF_CORNER":
-            return FaceOfCorner(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return FaceOfCorner(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="CORNERS_OF_EDGE":
-            return CornersOfEdge(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return CornersOfEdge(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="CORNERS_OF_FACE":
-            return CornersOfFace(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return CornersOfFace(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="OFFSET_CORNER_IN_FACE":
-            return OffsetCornerInFace(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return OffsetCornerInFace(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+        if type=="MESH_PRIMITIVE_CUBE":
+            return CubeMesh(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
+        if type=="MESH_PRIMITIVE_GRID":
+            return Grid(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         # curves
         if type=="CURVE_PRIMITIVE_CIRCLE":
             mode=attributes["mode"]
-            return CurveCircle(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,mode=mode)
-
+            return CurveCircle(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
+        if type=="CURVE_PRIMITIVE_QUADRILATERAL":
+            return CurveQuadrilateral(tree, location=location, name=name, label=label, hide=hide, mute=mute,
+                                      node_height=200)
         # if type=="CURVE_TO_POINTS":
         #     mode = attributes["mode"]
-        #     return CurveToPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,mode=mode)
+        #     return CurveToPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
         if type=="CURVE_TO_MESH":
-            return CurveToMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return CurveToMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="RESAMPLE_CURVE":
             mode =attributes["mode"]
-            return ResampleCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,mode=mode)
+            return ResampleCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
         if type=="FILLET_CURVE":
             mode = attributes["mode"]
-            return FilletCurve(tree, location=location, name=name, label=label, hide=hide, mute=mute,height=200,mode=mode)
+            return FilletCurve(tree, location=location, name=name, label=label, hide=hide, mute=mute,node_height=200,mode=mode)
         if type=="FILL_CURVE":
             mode = attributes["mode"]
-            return FillCurve(tree, location=location, name=name, label=label, hide=hide, mute=mute,height=200,mode=mode)
+            return FillCurve(tree, location=location, name=name, label=label, hide=hide, mute=mute,node_height=200,mode=mode)
         if type=="SAMPLE_CURVE":
             data_type = attributes["data_type"]
             mode = attributes["mode"]
-            return SampleCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,mode=mode)
+            return SampleCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type,mode=mode)
 
         # auxiliaries
         if type == "MATH":
             operation = attributes["operation"]
-            return MathNode(tree, location=location, name=name, label=label, hide=hide, operation=operation, mute=mute,height=200)
+            return MathNode(tree, location=location, name=name, label=label, hide=hide, operation=operation, mute=mute,node_height=200)
         if type == "VECT_MATH":
             operation = attributes["operation"]
-            return VectorMath(tree, location=location, name=name, label=label, hide=hide, operation=operation, mute=mute,height=200)
+            return VectorMath(tree, location=location, name=name, label=label, hide=hide, operation=operation, mute=mute,node_height=200)
         if type=="SEPXYZ":
-            return SeparateXYZ(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return SeparateXYZ(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="COMBXYZ":
-            return CombineXYZ(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return CombineXYZ(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="COMPARE":
             operation=attributes["operation"]
             data_type=attributes["data_type"]
-            return CompareNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,operation=operation,data_type=data_type)
+            return CompareNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,operation=operation,data_type=data_type)
         if type=="MAP_RANGE":
             data_type=attributes["data_type"]
             interpolation_type=attributes["interpolation_type"]
-            return MapRange(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,interpolation_type=interpolation_type)
+            return MapRange(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type,interpolation_type=interpolation_type)
         if type=="MIX":
             data_type=attributes["data_type"]
             factor_mode=attributes["factor_mode"]
@@ -242,65 +255,65 @@ class Node:
                 clamp_factor=True
             else:
                 clamp_factor=False
-            return MixNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,factor_mode=factor_mode,clamp_factor=clamp_factor)
+            return MixNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type,factor_mode=factor_mode,clamp_factor=clamp_factor)
 
         if type=="BOOLEAN_MATH":
             operation = attributes["operation"]
-            return BooleanMath(tree, location=location, name=name, label=label, hide=hide, operation=operation, mute=mute,height=200)
+            return BooleanMath(tree, location=location, name=name, label=label, hide=hide, operation=operation, mute=mute,node_height=200)
 
 
         # rotations
         if type=="ALIGN_ROTATION_TO_VECTOR":
             axis=attributes["axis"]
             pivot_axis=attributes["pivot_axis"]
-            return AlignRotationToVector(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,axis=axis,pivot_axis=pivot_axis)
+            return AlignRotationToVector(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,axis=axis,pivot_axis=pivot_axis)
         if type=="ROTATE_ROTATION":
             rotation_space = attributes["rotation_space"]
-            return RotateRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,rotation_space=rotation_space)
+            return RotateRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,rotation_space=rotation_space)
         if type=="INVERT_ROTATION":
-            return InvertRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return InvertRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="AXES_TO_ROTATION":
             primary_axis=attributes["primary_axis"]
             secondary_axis=attributes["secondary_axis"]
-            return AxesToRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,primary_axis=primary_axis,secondary_axis=secondary_axis)
+            return AxesToRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,primary_axis=primary_axis,secondary_axis=secondary_axis)
         # switches
         if type=="SWITCH":
             input_type = attributes["input_type"]
-            return Switch(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,input_type=input_type)
+            return Switch(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,input_type=input_type)
 
             # don't know the category yet
         if type=="FIELD_ON_DOMAIN":
             data_type=attributes["data_type"]
             domain=attributes["domain"]
-            return EvaluateOnDomain(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,domain=domain)
+            return EvaluateOnDomain(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type,domain=domain)
 
         if type=="FIELD_AT_INDEX":
             data_type=attributes["data_type"]
             domain = attributes["domain"]
-            return EvaluateAtIndex(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,data_type=data_type,domain=domain)
+            return EvaluateAtIndex(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type,domain=domain)
 
         if type=="REROUTE":
             location = parse_location(attributes["location"])
-            return ReRoute(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return ReRoute(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="FRAME":
             location=parse_location(attributes["location"])
-            return Frame(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return Frame(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         if type=="GROUP_OUTPUT":
-            return GroupOutput(tree,location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return GroupOutput(tree,location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         # For Each
         if type=="FOREACH_GEOMETRY_ELEMENT_INPUT":
-            return ForEachInput(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return ForEachInput(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         if type=="FOREACH_GEOMETRY_ELEMENT_OUTPUT":
             domain = attributes["domain"]
-            return ForEachOutput(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain)
+            return ForEachOutput(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,domain=domain)
 
         if type=="REPEAT_INPUT":
-            return RepeatInput(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return RepeatInput(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="REPEAT_OUTPUT":
-            return RepeatOutput(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200)
+            return RepeatOutput(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         # Custom Nodes
         if type=="GROUP":
@@ -715,8 +728,8 @@ class CornersOfFace(RedNode):
 class Quadrilateral(GreenNode):
     def  __init__(self, tree, location=(0, 0),
                   mode="RECTANGLE",
-                  width=1,
-                  height=1,
+                  node_width=1,
+                  node_height=1,
                   **kwargs
                   ):
         self.node = tree.nodes.new(type="GeometryNodeCurvePrimitiveQuadrilateral")
@@ -724,14 +737,14 @@ class Quadrilateral(GreenNode):
         self.node.mode = mode
         self.geometry_out = self.node.outputs["Curve"]
 
-        if isinstance(width, (int, float)):
-            self.node.inputs["Width"].default_value = width
+        if isinstance(node_width, (int, float)):
+            self.node.inputs["Width"].default_value = node_width
         else:
-            self.tree.links.new(width, self.node.inputs["Width"])
-        if isinstance(height, (int, float)):
-            self.node.inputs["Height"].default_value = height
+            self.tree.links.new(node_width, self.node.inputs["Width"])
+        if isinstance(node_height, (int, float)):
+            self.node.inputs["Height"].default_value = node_height
         else:
-            self.tree.links.new(height, self.node.inputs["Height"])
+            self.tree.links.new(node_height, self.node.inputs["Height"])
 
 class ResampleCurve(GreenNode):
     def __init__(self, tree, location=(0, 0),mode="COUNT",curve=None,
@@ -919,8 +932,8 @@ class CurveCircle(GreenNode):
             self.tree.links.new(resolution, self.node.inputs["Resolution"])
 
 class CurveQuadrilateral(GreenNode):
-    def __init__(self, tree, location=(0, 0),mode="RECTANGLE",
-                 width=0.02,height=0.02, **kwargs):
+    def __init__(self, tree, location=(0, 0), mode="RECTANGLE",
+                 width=0.02, height=0.02, **kwargs):
         """
 
         :param tree:
@@ -940,7 +953,7 @@ class CurveQuadrilateral(GreenNode):
             self.node.inputs["Width"].default_value = width
         else:
             self.tree.links.new(width, self.node.inputs["Width"])
-        if isinstance(height, (int,float)):
+        if isinstance(height, (int, float)):
             self.node.inputs["Height"].default_value = height
         else:
             self.tree.links.new(height, self.node.inputs["Height"])
@@ -2159,7 +2172,7 @@ class QuaternionToRotation(BlueNode):
 # blue nodes
 class RandomValue(BlueNode):
     def __init__(self, tree, data_type="FLOAT_VECTOR", location=(0, 0), min=-1 * Vector([1, 1, 1]),
-                 max=Vector([1, 1, 1]), seed=0, **kwargs):
+                 max=Vector([1, 1, 1]),probability = 0.5,  seed=0, **kwargs):
         """
 
         :param tree:
@@ -2180,15 +2193,44 @@ class RandomValue(BlueNode):
         else:
             self.std_out == self.node.outputs[1]
 
-        if isinstance(min, (int, float, list, Vector)):
-            self.node.inputs["Min"].default_value = min
-        else:
-            self.node.inputs["Min"] = min
+        if self.node.data_type == "FLOAT":
+            if isinstance(min, (int, float)):
+                self.node.inputs[2].default_value = min
+            elif isinstance(min, bpy.types.NodeSocketFloat):
+                tree.links.new(min,self.node.inputs[2])
 
-        if isinstance(max, (int, float, list, Vector)):
-            self.node.inputs["Max"].default_value = max
-        else:
-            self.node.inputs["Max"] = max
+        elif data_type == "FLOAT_VECTOR":
+            if isinstance(min, (list, Vector)):
+                self.node.inputs[0].default_value = min
+            elif isinstance(min, bpy.types.NodeSocketVector):
+                tree.links.new(min,self.node.inputs[0])
+        elif data_type == "INT":
+            if isinstance(min, (int, float)):
+                self.node.inputs[4].default_value = min
+            elif isinstance(min, bpy.types.NodeSocketInt):
+                tree.links.new(min,self.node.inputs[4])
+
+        if probability is not None:
+            if isinstance(probability, (int, float)):
+                self.node.inputs[6].default_value = probability
+            else:
+                tree.links.new(probability,self.node.inputs[6])
+
+        if self.node.data_type == "FLOAT":
+            if isinstance(max, (int, float)):
+                self.node.inputs[3].default_value = max
+            elif isinstance(max, bpy.types.NodeSocketFloat):
+                tree.links.new(max,self.node.inputs[3])
+        elif data_type == "FLOAT_VECTOR":
+            if isinstance(max, (list, Vector)):
+                self.node.inputs[1].default_value = max
+            elif isinstance(max, bpy.types.NodeSocketVector):
+                tree.links.new(max,self.node.inputs[1])
+        elif data_type == "INT":
+            if isinstance(max, (int, float)):
+                self.node.inputs[5].default_value = max
+            elif isinstance(max, bpy.types.NodeSocketInt):
+                tree.links.new(max,self.node.inputs[5])
 
         if isinstance(seed, (int, float)):
             self.node.inputs["Seed"].default_value = seed
@@ -2567,11 +2609,11 @@ class RepeatOutput(GreenNode):
         self.node.repeat_items.new(socket_type,socket_name)
 
 class RepeatZone(GreenNode):
-    def __init__(self, tree, location=(0, 0), width=5, iterations=10, geometry=None, **kwargs):
+    def __init__(self, tree, location=(0, 0), node_width=5, iterations=10, geometry=None, **kwargs):
         self.repeat_output = tree.nodes.new("GeometryNodeRepeatOutput")
         self.repeat_input = tree.nodes.new("GeometryNodeRepeatInput")
         self.repeat_input.location = (location[0] * 200, location[1] * 200)
-        self.repeat_output.location = (location[0] * 200 + width * 200, location[1] * 200)
+        self.repeat_output.location = (location[0] * 200 + node_width * 200, location[1] * 200)
         self.repeat_input.pair_with_output(self.repeat_output)
         self.node = self.repeat_input
         self.geometry_in = self.repeat_input.inputs["Geometry"]
@@ -2610,11 +2652,11 @@ class RepeatZone(GreenNode):
         self.tree.links.new(self.repeat_input.outputs["Geometry"], last.geometry_in)
 
 class Simulation(GreenNode):
-    def __init__(self, tree, location=(0, 0), width=5, geometry=None, **kwargs):
+    def __init__(self, tree, location=(0, 0), node_width=5, geometry=None, **kwargs):
         self.simulation_output = tree.nodes.new("GeometryNodeSimulationOutput")
         self.simulation_input = tree.nodes.new("GeometryNodeSimulationInput")
         self.simulation_input.location = (location[0] * 200, location[1] * 200)
-        self.simulation_output.location = (location[0] * 200 + width * 200, location[1] * 100)
+        self.simulation_output.location = (location[0] * 200 + node_width * 200, location[1] * 100)
         self.simulation_input.pair_with_output(self.simulation_output)
         self.node = self.simulation_input
         self.geometry_in = self.simulation_input.inputs["Geometry"]
@@ -2749,7 +2791,7 @@ class WireFrame(GreenNode):
 
 class WireFrameRectangle(GreenNode):
     def __init__(self, tree, location=(0, 0),
-                 width=0.02,height=0.02,
+                 node_width=0.02, node_height=0.02,
                  geometry=None,
                  **kwargs
                  ):
@@ -2762,14 +2804,14 @@ class WireFrameRectangle(GreenNode):
 
         if geometry:
             self.tree.links.new(geometry, self.geometry_in)
-        if isinstance(width, (int, float)):
-            self.node.inputs["Width"].default_value =width
+        if isinstance(node_width, (int, float)):
+            self.node.inputs["Width"].default_value =node_width
         else:
-            self.tree.links.new(width, self.node.inputs["Width"])
-        if isinstance(height, (int, float)):
-            self.node.inputs["Height"].default_value =height
+            self.tree.links.new(node_width, self.node.inputs["Width"])
+        if isinstance(node_height, (int, float)):
+            self.node.inputs["Height"].default_value =node_height
         else:
-            self.tree.links.new(height, self.node.inputs["Height"])
+            self.tree.links.new(node_height, self.node.inputs["Height"])
 
     def create_node(self, nodes, name="WireframeNode"):
         tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
@@ -3086,46 +3128,6 @@ class TransformPositionNode(NodeGroup):
                         false=do_transform.outputs["result"],true=undo_transform.outputs["result"])
         tree.links.new(switch.outputs["Output"],self.group_outputs.inputs["Position"])
 
-class UnfoldMeshNode(NodeGroup):
-    def __init__(self,tree,progression=0,range=20,root_index=0,scale_elements=0.99,**kwargs):
-        self.name = get_from_kwargs(kwargs,"name","UnfoldMeshNode")
-        super().__init__(tree,inputs={"Mesh":"GEOMETRY","Progression":"FLOAT","Range":"FLOAT","RootIndex":"INT","ScaleElements":"FLOAT"},
-                         outputs={"Mesh":"GEOMETRY"},auto_layout=False,name=self.name,**kwargs)
-
-        self.inputs = self.node.inputs
-        self.outputs = self.node.outputs
-
-        self.geometry_in = self.node.inputs["Mesh"]
-        self.geometry_out = self.node.outputs["Mesh"]
-
-        if isinstance(range,(int,float)):
-            self.node.inputs["Range"].default_value =range
-        else:
-            tree.links.new(range,self.node.inputs["Range"])
-
-        if isinstance(progression,(int,float)):
-            self.node.inputs["Progression"].default_value =progression
-        else:
-            tree.links.new(progression,self.node.inputs["Progression"])
-
-        if isinstance(root_index,int):
-            self.node.inputs["RootIndex"].default_value =root_index
-        else:
-            tree.links.new(root_index,self.node.inputs["RootIndex"])
-
-        if isinstance(scale_elements,(int,float)):
-            self.node.inputs["ScaleElements"].default_value =scale_elements
-        else:
-            tree.links.new(scale_elements,self.node.inputs["ScaleElements"])
-
-    def fill_group_with_node(self,tree,**kwargs):
-        # remove any existing node
-        nodes = tree.nodes
-        for n in nodes:
-            nodes.remove(n)
-
-        create_from_xml(tree,"unfolding_node",**kwargs)
-
 class BeveledCubeNode(NodeGroup):
     def __init__(self,tree,size=1,bevel=0.01,**kwargs):
         self.name = get_from_kwargs(kwargs,"name","BeveledCubeNode")
@@ -3167,22 +3169,6 @@ class BeveledCubeNode(NodeGroup):
         convex_hull = ConvexHull(tree, hide=False)
 
         create_geometry_line(tree, [cube, iop2, realize_instance2, convex_hull],out=self.group_outputs.inputs["Mesh"])
-
-class SimpleRubiksCubeNode(NodeGroup):
-    def __init__(self,tree,**kwargs):
-        self.name = get_from_kwargs(kwargs, "name", "SimpleRubiksCubeNode")
-        super().__init__(tree,
-                         outputs={"Geometry": "GEOMETRY"}, auto_layout=False, name=self.name, **kwargs)
-
-        self.geometry_out = self.node.outputs["Geometry"]
-
-    def fill_group_with_node(self, tree, **kwargs):
-        # remove any existing node
-        nodes = tree.nodes
-        for n in nodes:
-            nodes.remove(n)
-
-        create_from_xml(tree, "simple_rubikscube_node", **kwargs)
 
 
 # custom Matrix operations #
@@ -3679,6 +3665,11 @@ def get_default_value_for_socket(attributes):
         parsed = parse_default_attribute(attributes['default_value'])
         print("rotation: ",list(parsed))
         return list(parsed)
+    elif socket_type=='MATERIAL':
+        color = attributes['default_value']
+        if len(color)==0:
+            return None
+        return ibpy.get_material(color)
 
 
 def create_socket(tree, node, node_attributes, attributes):
@@ -3784,6 +3775,8 @@ def create_from_xml(tree,filename=None,**kwargs):
                             elif len(node.inputs)>input_count and node.inputs[input_count].name!="": # avoid virtual socket
                                 node_structure[node_id]["inputs"][input_id] = input_count
                                 node.inputs[input_count].name=input_attributes['name']
+                                if node_id==14:
+                                    pass
                                 if 'default_value' in input_attributes:
                                     node.inputs[input_count].default_value = get_default_value_for_socket(input_attributes)
                                 input_count += 1

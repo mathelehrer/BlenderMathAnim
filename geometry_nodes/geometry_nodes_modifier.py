@@ -3,11 +3,10 @@ import math
 import os
 from copy import deepcopy
 
-import bpy
 import numpy as np
 
 from appearance.textures import phase2hue_material, gradient_from_attribute, z_gradient, double_gradient
-from extended_math_nodes.generic_nodes import LegendrePolynomial, AssociatedLegendrePolynomial, \
+from extended_math_nodes.generic_nodes import AssociatedLegendrePolynomial, \
     SphericalHarmonicsRekursive, SphericalHarmonics200
 from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, InstanceOnPoints, JoinGeometry, \
     create_geometry_line, RealizeInstances, Position, make_function, ObjectInfo, SetPosition, Index, SetMaterial, \
@@ -17,10 +16,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch, MeshToPoints, \
     SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputRotation, InvertRotation, RotateRotation, \
     Frame, SeparateXYZ, DualMesh, WireFrameRectangle, SplitEdges, VectorRotate, EvaluateOnDomain, InputNormal, \
-    SubdivisionSurface, FaceArea, Quadrilateral, FilletCurve, FillCurve, SeparateGeometry, SortElements, \
-    AlignRotationToVector, InputBoolean, IndexSwitch, QuaternionToRotation, StringToCurves, TransformPositionNode, \
-    create_from_xml, UnfoldMeshNode, BeveledCubeNode, CompareNode, GeometryToInstance, RotateInstances, \
-    TranslateInstances, AxesToRotation, SimpleRubiksCubeNode
+    create_from_xml
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -29,7 +25,6 @@ from objects.derived_objects.p_arrow import PArrow
 from utils.constants import FRAME_RATE, TEMPLATE_TEXT_FILE, SVG_DIR, TEX_DIR, TEX_TEXT_TO_REPLACE, TEMPLATE_TEX_FILE, \
     TEX_LOCAL_SCALE_UP, DEFAULT_ANIMATION_TIME
 from utils.kwargs import get_from_kwargs
-from utils.utils import to_vector
 
 pi = np.pi
 tau = 2 * pi
@@ -2761,7 +2756,7 @@ class VoronoiModifier(GeometryNodesModifier):
         store_index = StoredNamedAttribute(tree,data_type="INT",domain="FACE",name="Index",value=index.std_out)
         split_edges = SplitEdges(tree)
         wireframe_material = get_material("gold")
-        wireframe=WireFrameRectangle(tree,width=0.02,height=0.02)
+        wireframe=WireFrameRectangle(tree, node_width=0.02, node_height=0.02)
         self.materials.append(wireframe_material)
         set_material_wireframe=SetMaterial(tree,material=wireframe_material)
         scale_elements=ScaleElements(tree,scale=0.99)
@@ -2812,19 +2807,6 @@ class UnfoldModifier(GeometryNodesModifier):
 
     def create_node(self,tree,**kwargs):
         create_from_xml(tree,"unfolding_node",**kwargs)
-
-class RubiksCubeTower(GeometryNodesModifier):
-    def __init__(self, name="RubiksCubeTower",**kwargs):
-        super().__init__(name, automatic_layout=True,group_output=True,group_input=False, **kwargs)
-
-    def create_node(self,tree,**kwargs):
-        out = self.group_outputs
-        links = tree.links
-        # show points
-
-        simpleCube = SimpleRubiksCubeNode(tree)
-        links.new(simpleCube.outputs["Geometry"],out.inputs["Geometry"])
-
 
 
 # recreate the essentials to convert a latex expression into a collection of curves
