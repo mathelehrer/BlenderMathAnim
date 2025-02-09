@@ -146,8 +146,8 @@ class Node:
             domain=attributes["domain"]
             scale_mode=attributes["scale_mode"]
             return ScaleElements(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=200,domain=domain,scale_mode=scale_mode)
-
-
+        if type=="MESH_PRIMITIVE_CUBE":
+            return ScaleElements(tree, location=location, name=name, label=label, hide=hide, mute=mute, height=200)
         # attribute nodes
         if type=="STORE_NAMED_ATTRIBUTE":
             data_type = attributes["data_type"]
@@ -3167,6 +3167,23 @@ class BeveledCubeNode(NodeGroup):
         convex_hull = ConvexHull(tree, hide=False)
 
         create_geometry_line(tree, [cube, iop2, realize_instance2, convex_hull],out=self.group_outputs.inputs["Mesh"])
+
+class SimpleRubiksCubeNode(NodeGroup):
+    def __init__(self,tree,**kwargs):
+        self.name = get_from_kwargs(kwargs, "name", "SimpleRubiksCubeNode")
+        super().__init__(tree,
+                         outputs={"Geometry": "GEOMETRY"}, auto_layout=False, name=self.name, **kwargs)
+
+        self.geometry_out = self.node.outputs["Geometry"]
+
+    def fill_group_with_node(self, tree, **kwargs):
+        # remove any existing node
+        nodes = tree.nodes
+        for n in nodes:
+            nodes.remove(n)
+
+        create_from_xml(tree, "simple_rubikscube_node", **kwargs)
+
 
 # custom Matrix operations #
 class Rotation(GreenNode):

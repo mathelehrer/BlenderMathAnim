@@ -20,7 +20,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     SubdivisionSurface, FaceArea, Quadrilateral, FilletCurve, FillCurve, SeparateGeometry, SortElements, \
     AlignRotationToVector, InputBoolean, IndexSwitch, QuaternionToRotation, StringToCurves, TransformPositionNode, \
     create_from_xml, UnfoldMeshNode, BeveledCubeNode, CompareNode, GeometryToInstance, RotateInstances, \
-    TranslateInstances, AxesToRotation
+    TranslateInstances, AxesToRotation, SimpleRubiksCubeNode
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -2812,6 +2812,20 @@ class UnfoldModifier(GeometryNodesModifier):
 
     def create_node(self,tree,**kwargs):
         create_from_xml(tree,"unfolding_node",**kwargs)
+
+class RubiksCubeTower(GeometryNodesModifier):
+    def __init__(self, name="RubiksCubeTower",**kwargs):
+        super().__init__(name, automatic_layout=True,group_output=True,group_input=False, **kwargs)
+
+    def create_node(self,tree,**kwargs):
+        out = self.group_outputs
+        links = tree.links
+        # show points
+
+        simpleCube = SimpleRubiksCubeNode(tree)
+        links.new(simpleCube.outputs["Geometry"],out.inputs["Geometry"])
+
+
 
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
