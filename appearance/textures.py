@@ -3547,10 +3547,21 @@ def set_sky_background(**kwargs):
     sky.dust_density = dust
     sky.ozone_density = ozone
 
+    sun_disc=get_from_kwargs(kwargs, 'sun_disc', False)
+    sky.sun_disc = sun_disc
+
+    sun_rotation = get_from_kwargs(kwargs, 'sun_rotation', 0)
+    sky.sun_rotation = sun_rotation
+
+    sun_elevation = get_from_kwargs(kwargs, 'sun_elevation', 0)
+    sky.sun_elevation = sun_elevation
+
     background = nodes.get("Background")
     background.location = (0, 0)
 
+    strength = get_from_kwargs(kwargs, 'strength', 1)
+    background.inputs['Strength'].default_value = strength
     links.new(sky.outputs['Color'], background.inputs['Color'])
     links.new(background.outputs['Background'], out.inputs["Surface"])
 
-    animate_sky_background(sky, **kwargs)
+    animate_sky_background(**kwargs)

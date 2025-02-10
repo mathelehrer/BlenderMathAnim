@@ -1317,24 +1317,48 @@ def animate_glare(glare, **kwargs):
     insert_keyframe(glare, 'threshold', end_frame)
 
 
-def animate_sky_background(sky, **kwargs):
-    begin_frame = get_from_kwargs(kwargs, 'begin_frame', 0)
-    end_frame = get_from_kwargs(kwargs, 'end_frame', DEFAULT_ANIMATION_TIME * FRAME_RATE)
+def get_sky():
+    world = bpy.data.worlds[-1]
+    nodes = world.node_tree.nodes
+    return nodes['Sky Texture']
 
-    elevation_start = get_from_kwargs(kwargs, 'elevation_start', 10)
-    elevation_end = get_from_kwargs(kwargs, 'elevation_end', 0)
+def animate_sky_background(**kwargs):
 
-    rotation_start = get_from_kwargs(kwargs, 'rotation_start', 0)
-    rotation_end = get_from_kwargs(kwargs, 'rotation_end', 45)
+    sky = get_sky()
+    if 'begin_frame' in kwargs:
+        begin_frame = get_from_kwargs(kwargs, 'begin_frame', 0)
+        end_frame = get_from_kwargs(kwargs, 'end_frame', DEFAULT_ANIMATION_TIME * FRAME_RATE)
 
-    sky.sun_elevation = elevation_start
-    sky.sun_rotation = rotation_start
-    insert_keyframe(sky, 'sun_elevation', begin_frame)
-    insert_keyframe(sky, 'sun_rotation', begin_frame)
-    sky.sun_elevation = elevation_end
-    sky.sun_rotation = rotation_end
-    insert_keyframe(sky, 'sun_elevation', end_frame)
-    insert_keyframe(sky, 'sun_rotation', end_frame)
+    elif 'begin_time' in kwargs:
+        begin_frame = get_from_kwargs(kwargs, 'begin_time', 0) * FRAME_RATE
+        end_frame = begin_frame+ get_from_kwargs(kwargs, 'transition_time', DEFAULT_ANIMATION_TIME) * FRAME_RATE
+    else:
+        begin_frame = 0
+        end_frame = DEFAULT_ANIMATION_TIME * FRAME_RATE
+
+    if 'elevation_start' in kwargs:
+        elevation_start = get_from_kwargs(kwargs, 'elevation_start', 10)
+        elevation_end = get_from_kwargs(kwargs, 'elevation_end', 0)
+        sky.sun_elevation = elevation_start
+        insert_keyframe(sky, 'sun_elevation', begin_frame)
+        sky.sun_elevation = elevation_end
+        insert_keyframe(sky, 'sun_elevation', end_frame)
+
+    if 'rotation_start' in kwargs:
+        rotation_start = get_from_kwargs(kwargs, 'rotation_start', 10)
+        rotation_end = get_from_kwargs(kwargs, 'rotation_end', 0)
+        sky.sun_rotation = rotation_start
+        insert_keyframe(sky, 'sun_rotation', begin_frame)
+        sky.sun_rotation = rotation_end
+        insert_keyframe(sky, 'sun_rotation', end_frame)
+
+    if 'altitude_start' in kwargs:
+        altitude_start = get_from_kwargs(kwargs, 'altitude_start', 10)
+        altitude_end = get_from_kwargs(kwargs, 'altitude_end', 0)
+        sky.altitude = altitude_start
+        insert_keyframe(sky, 'altitude', begin_frame)
+        sky.altitude = altitude_end
+        insert_keyframe(sky, 'altitude', end_frame)
 
 
 def set_hdri_background(filename='', ext='exr', simple=False, transparent=False, background="background", strength=0.2,
