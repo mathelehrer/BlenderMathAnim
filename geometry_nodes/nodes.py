@@ -2698,9 +2698,10 @@ class ForEachZone(GreenNode):
         self.foreach_output.location = (location[0] * 200 + node_width * 200, location[1] * 100)
         self.foreach_input.pair_with_output(self.foreach_output)
         self.node = self.foreach_input
+        self.index = self.foreach_input.outputs[0]
         self.geometry_in = self.foreach_input.inputs["Geometry"]
-        self.geometry_out = self.foreach_output.outputs["Geometry"]
-        tree.links.new(self.foreach_input.outputs["Geometry"], self.foreach_output.inputs["Geometry"])
+        self.geometry_out = self.foreach_output.outputs[2]
+        # tree.links.new(self.foreach_input.outputs["Element"], self.foreach_output.inputs["Geometry"])
         super().__init__(tree, location=location, **kwargs)
 
         if geometry is not None:
@@ -2715,11 +2716,6 @@ class ForEachZone(GreenNode):
         self.foreach_output.state_items.new(socket_type, name)
         self.foreach_input.outputs[name].default_value = value
 
-    def join_in_geometries(self, out_socket_name=None):
-        join = JoinGeometry(self.tree, geometry=self.foreach_input.outputs[0:-1])
-        if out_socket_name:
-            self.tree.links.new(join.geometry_out, self.foreach_output.inputs[out_socket_name])
-
     def create_geometry_line(self, nodes):
         last = nodes.pop()
         self.tree.links.new(last.geometry_out, self.foreach_output.inputs["Geometry"])
@@ -2727,7 +2723,7 @@ class ForEachZone(GreenNode):
             current = nodes.pop()
             self.tree.links.new(current.geometry_out, last.geometry_in)
             last = current
-        self.tree.links.new(self.foreach_input.outputs["Geometry"], last.geometry_in)
+        self.tree.links.new(self.foreach_input.outputs["Element"], last.geometry_in)
 
 class ForEachInput(GreenNode):
     def __init__(self, tree, location=(0, 0),
