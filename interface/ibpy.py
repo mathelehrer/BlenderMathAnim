@@ -2925,6 +2925,16 @@ def change_default_boolean(slot, from_value, to_value, begin_time=None, data_pat
 
     return (begin_frame + 1) / FRAME_RATE
 
+def change_default_integer(slot, from_value, to_value, begin_time=None, data_path="integer",
+                           begin_frame=0,transition_time=DEFAULT_ANIMATION_TIME):
+
+    if from_value is not None:
+        slot.integer = from_value
+        insert_keyframe(slot, data_path, begin_time*FRAME_RATE)
+    slot.integer = to_value
+    insert_keyframe(slot, data_path, (begin_time+transition_time)*FRAME_RATE)
+    return begin_time+transition_time
+
 def change_default_quaternion(slot,from_value,to_value,begin_time=None,transition_time=DEFAULT_ANIMATION_TIME,
                               begin_frame=0):
     if begin_time:
@@ -5712,6 +5722,12 @@ def set_linear_action_modifier(bob):
         for kp in fcurve.keyframe_points:
             kp.interpolation = 'LINEAR'
 
+def set_bezier_action_modifier(bob):
+    obj = get_obj(bob)
+    action = bpy.data.actions[obj.modifiers[0].node_group.name+'Action']
+    for fcurve in action.fcurves:
+        for kp in fcurve.keyframe_points:
+            kp.interpolation = 'BEZIER'
 
 def set_linear_fcurves_for_nodes(node):
     selected_f_curve = None

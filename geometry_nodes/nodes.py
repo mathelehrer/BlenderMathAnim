@@ -2398,9 +2398,9 @@ class MathNode(BlueNode):
 class CompareNode(BlueNode):
     def __init__(self, tree, location=(0, 0), operation="EQUAL",
                  data_type="FLOAT",
-                 inputs0=None,
-                 inputs1=None,
-                 inputs2=None, **kwargs):
+                 inputs0=0,
+                 inputs1=0,
+                 inputs2=0, **kwargs):
         """
 
         """
@@ -2411,24 +2411,62 @@ class CompareNode(BlueNode):
         self.node.data_type = data_type
         self.node.operation = operation
 
+        if data_type=="FLOAT":
+            if isinstance(inputs0,(bool,int,float)):
+                self.node.inputs[0].default_value=inputs0
+            else:
+                tree.links.new(inputs0,self.node.inputs[0])
+            if isinstance(inputs1,(bool,int,float)):
+                self.node.inputs[1].default_value=inputs1
+            else:
+                tree.links.new(inputs1,self.node.inputs[1])
+            # needed for float comparison
+            if inputs2:
+                if isinstance(inputs2, (bool, int, float)):
+                    self.node.inputs[2].default_value = inputs2
+                else:
+                    tree.links.new(inputs2, self.node.inputs[2])
+        elif data_type=="INT":
+            if isinstance(inputs0,(bool,int,float)):
+                self.node.inputs[2].default_value=inputs0
+            else:
+                tree.links.new(inputs0,self.node.inputs[2])
+            if isinstance(inputs1,(bool,int,float)):
+                self.node.inputs[3].default_value=inputs1
+            else:
+                tree.links.new(inputs1,self.node.inputs[3])
+        elif data_type=="FLOAT_VECTOR":
+            if isinstance(inputs0,(list,Vector)):
+                self.node.inputs[4].default_value=inputs0
+            else:
+                tree.links.new(inputs0,self.node.inputs[4])
+            if isinstance(inputs1,(list,Vector)):
+                self.node.inputs[5].default_value=inputs1
+            else:
+                tree.links.new(inputs1,self.node.inputs[5])
+        elif data_type=="COLOR":
+            if isinstance(inputs0,(list,Vector)):
+                self.node.inputs[6].default_value=inputs0
+            else:
+                tree.links.new(inputs0,self.node.inputs[6])
+            if isinstance(inputs1,(list,Vector)):
+                self.node.inputs[7].default_value=inputs1
+            else:
+                tree.links.new(inputs1,self.node.inputs[7])
+        elif data_type=="STRING":
+            if isinstance(inputs0,(list,Vector)):
+                self.node.inputs[8].default_value=inputs0
+            else:
+                tree.links.new(inputs0,self.node.inputs[8])
+            if isinstance(inputs1,(list,Vector)):
+                self.node.inputs[9].default_value=inputs1
+            else:
+                tree.links.new(inputs1,self.node.inputs[9])
 
-        if inputs0:
-            if isinstance(inputs0, (bool, int, float)):
-                self.node.inputs[0].default_value = inputs0
-            else:
-                tree.links.new(inputs0, self.node.inputs[0])
-        if inputs1:
-            if isinstance(inputs1, (bool, int, float)):
-                self.node.inputs[1].default_value = inputs1
-            else:
-                tree.links.new(inputs1, self.node.inputs[1])
 
-        # needed for float comparison
-        if inputs2:
-            if isinstance(inputs2, (bool, int, float)):
-                self.node.inputs[2].default_value = inputs2
-            else:
-                tree.links.new(inputs2, self.node.inputs[2])
+
+
+
 
 class Switch(BlueNode):
     def __init__(self, tree, location=(0, 0), input_type="GEOMETRY",switch=False,false=None,true=None,**kwargs):
