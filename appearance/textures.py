@@ -2693,6 +2693,34 @@ def make_silk_material():
     coords = nodes.new(type='ShaderNodeTexCoord')
     links.new(coords.outputs['UV'], mapping.inputs['Vector'])
 
+def make_cloud_material():
+    color=bpy.data.materials.new(name='clouds')
+    color.use_nodes=True
+    nodes=color.node_tree.nodes
+    links=color.node_tree.links
+    bsdf=nodes['Principled BSDF']
+    nodes.remove(bsdf)
+
+    noise = nodes.new(type='ShaderNodeTexNoise')
+    noise.inputs['Scale'].default_value = 1.8
+    noise.inputs['Detail'].default_value = 9.2
+    noise.inputs['Roughness'].default_value = 0.1
+    noise.inputs['Distortion'].default_value = 6.4
+
+    ramp = nodes.new(type='ShaderNodeValToRGB')
+    ramp.color_ramp.elements[0].position = 0.3
+    links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
+    div= nodes.new(type='ShaderNodeMath')
+    div.label="CloudDensityFactor"
+    div.name="CloudDensityFactor"
+    div.operation='DIVIDE'
+    div.inputs[1].default_value=100
+    links.new(ramp.outputs['Color'],div.inputs[0])
+
+    absorption = nodes.new(type='ShaderNodeVolumeAbsorption')
+    links.new(div.outputs[0],absorption.inputs['Density'])
+    mat = nodes.get('Material Output')
+    links.new(absorption.outputs['Volume'],mat.inputs['Volume'])
 
 def make_gold_material():
     color = bpy.data.materials.new(name='gold')

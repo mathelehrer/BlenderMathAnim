@@ -1316,6 +1316,10 @@ def animate_glare(glare, **kwargs):
     glare.threshold = threshold_end
     insert_keyframe(glare, 'threshold', end_frame)
 
+def get_background():
+    world = bpy.data.worlds['World']
+    nodes = world.node_tree.nodes
+    return nodes['Background']
 
 def get_sky():
     world = bpy.data.worlds[-1]
@@ -1323,18 +1327,24 @@ def get_sky():
     return nodes['Sky Texture']
 
 def animate_sky_background(**kwargs):
-
+    background = get_background()
     sky = get_sky()
+
     if 'begin_frame' in kwargs:
         begin_frame = get_from_kwargs(kwargs, 'begin_frame', 0)
         end_frame = get_from_kwargs(kwargs, 'end_frame', DEFAULT_ANIMATION_TIME * FRAME_RATE)
-
     elif 'begin_time' in kwargs:
         begin_frame = get_from_kwargs(kwargs, 'begin_time', 0) * FRAME_RATE
         end_frame = begin_frame+ get_from_kwargs(kwargs, 'transition_time', DEFAULT_ANIMATION_TIME) * FRAME_RATE
     else:
         begin_frame = 0
         end_frame = DEFAULT_ANIMATION_TIME * FRAME_RATE
+
+    if 'strength_start' in kwargs:
+        strength_start = get_from_kwargs(kwargs, 'strength_start', 0)
+        strength_end = get_from_kwargs(kwargs, 'strength_end', 1)
+        change_default_value(background.inputs['Strength'], from_value=strength_start, to_value=strength_end,
+                             begin_frame=begin_frame,transition_frames=end_frame-begin_frame)
 
     if 'elevation_start' in kwargs:
         elevation_start = get_from_kwargs(kwargs, 'elevation_start', 10)
