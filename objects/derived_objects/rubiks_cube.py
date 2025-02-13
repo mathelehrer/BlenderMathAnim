@@ -40,7 +40,7 @@ class BRubiksCube(BObject):
         self.kwargs = kwargs
         location = self.get_from_kwargs('location', [0, 0, 0])
         rotation = self.get_from_kwargs('rotation_euler', [0, 0, 0])
-        colors = self.get_from_kwargs('colors', []) #["text","red","green","blue","orange","yellow"]
+        colors = self.get_from_kwargs('colors', ["background","text","blue","red","green","orange","yellow"])
         name = self.get_from_kwargs('name', "RubiksCube3x3")
         emission = self.get_from_kwargs('emission', 0.1)
 
@@ -51,6 +51,8 @@ class BRubiksCube(BObject):
         # override default colors
         if colors:
             materials = []
+            if isinstance(emission, float):
+                emission=[emission]*len(colors)
             for color, emission in zip(colors, emission):
                 materials.append(ibpy.get_material("plastic_" + color, emission=emission))
 
@@ -216,7 +218,6 @@ class BRubiksCube(BObject):
             arrows.append(EmptyArrow(name="face" + str(idx).zfill(2) + val["color"], rotation_euler=rotation,
                                      location=self.physical_locs[val["parent"]]+val["orientation"]))
         return arrows
-
     # Getter functions
 
     def get_cubie_at_position(self, src_pos):
@@ -412,7 +413,7 @@ class BRubiksCubeLocalCenters(BObject):
         location = self.get_from_kwargs('location', [0, 0, 0])
         rotation = self.get_from_kwargs('rotation_euler', [0, 0, 0])
         # necessary to load default colors
-        colors = self.get_from_kwargs('colors', []) #["text","red","green","blue","orange","yellow"]
+        colors = self.get_from_kwargs('colors', ["background","text","blue","red","green","orange","yellow"])
         name = self.get_from_kwargs('name', "RubiksCube3x3")
         emission = self.get_from_kwargs('emission', 0.1)
         cubies =["Cube0"+str(i) for i in range(1,10)]+["Cube"+str(i) for i in range(10,28)]
@@ -423,6 +424,8 @@ class BRubiksCubeLocalCenters(BObject):
         #override default colors
         if colors:
             materials =[]
+            if isinstance(emission,float):
+                emission=[emission]*len(colors)
             for color,emission in zip(colors,emission):
                 materials.append(ibpy.get_material("plastic_"+color,emission=emission))
 
