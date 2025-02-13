@@ -138,8 +138,8 @@ class Face(BObject, NodeMixin):
         for i in range(n):
             self.vertex_spheres[i].grow(begin_time=begin_time + i * dt, transition_time=dt, modus='from_center')
             if i > 0:
-                self.edge_cylinders[i - 1].grow(begin_time=begin_time + i * dt, transition_time=dt, modus='from_start')
-        self.edge_cylinders[-1].grow(begin_time=begin_time + half, transition_time=dt, modus='from_start')
+                self.edge_cylinders[i - 1].grow(begin_time=begin_time + i * dt, transition_time=dt)
+        self.edge_cylinders[-1].grow(begin_time=begin_time + half, transition_time=dt)
         if show_face:
             self.polygon.appear(begin_time=begin_time + half, transition_time=half)
 

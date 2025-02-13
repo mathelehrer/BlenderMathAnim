@@ -1035,6 +1035,19 @@ class CurveToMesh(GreenNode):
         if profile_curve:
             self.tree.links.new(profile_curve, self.node.inputs["Profile Curve"])
 
+# String operations
+class ValueToString(BlueNode):
+    def __init__(self,tree,location=(0,0),value=0,data_type="INT",**kwargs):
+        self.node=tree.nodes.new(type="FunctionNodeValueToString")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.std_out = self.node.outputs["String"]
+        self.node.data_type = data_type
+
+        if isinstance(value, (int, float)):
+            self.node.inputs["Value"].default_value = value
+        else:
+            self.tree.links.new(value,self.node.inputs["Value"])
 
 # default meshes
 
@@ -1263,7 +1276,7 @@ class InstanceOnPoints(GreenNode):
             self.node.inputs["Rotation"].default_value = rotation
         else:
             self.tree.links.new(rotation, self.node.inputs["Rotation"])
-        if isinstance(scale, Vector):
+        if isinstance(scale, (Vector,list)):
             self.node.inputs["Scale"].default_value = scale
         else:
             self.tree.links.new(scale, self.node.inputs["Scale"])

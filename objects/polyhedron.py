@@ -162,8 +162,7 @@ class Polyhedron(BObject):
         super().grow(index, begin_time, transition_time, faces=False)
 
     def grow_recursively(self, face_node, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME, show_faces=True):
-        face_node.grow(begin_time=begin_time + self.counter * transition_time, transition_time=transition_time,
-                       show_face=show_faces)
+        face_node.grow(begin_time=begin_time + self.counter * transition_time, transition_time=transition_time)
         self.counter += 1
         for child in face_node.children:
             self.grow_recursively(child, begin_time=begin_time, transition_time=transition_time, show_faces=show_faces)

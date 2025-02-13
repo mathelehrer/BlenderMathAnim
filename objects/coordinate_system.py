@@ -520,12 +520,11 @@ class CoordinateSystem(BObject):
 
         offset = transition_time / 4 / len(self.x_lines)
         for i, line in enumerate(self.x_lines):
-            line.grow(begin_time=begin_time + i * offset, transition_time=transition_time / 2, modus='from_start')
+            line.grow(begin_time=begin_time + i * offset, transition_time=transition_time / 2)
 
         offset = transition_time / 4 / len(self.y_lines)
         for i, line in enumerate(self.y_lines):
-            line.grow(begin_time=begin_time + i * offset + transition_time / 2, transition_time=transition_time / 2,
-                      modus='from_start')
+            line.grow(begin_time=begin_time + i * offset + transition_time / 2, transition_time=transition_time / 2)
         return begin_time+transition_time
 
     def grid_next_transform(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):

@@ -63,7 +63,7 @@ class SoME(BObject):
         self.some.write(begin_time=begin_time,transition_time=dt1)
         self.torus.appear(begin_time=begin_time+dt2,transition_time=dt2)
         for cyl in self.cylinders:
-            cyl.grow(begin_time=begin_time+2*dt2,transition_time=dt2)
+            cyl.grow(begin_time=begin_time + 2 * dt2, transition_time=dt2)
 
         return begin_time+transition_time
 

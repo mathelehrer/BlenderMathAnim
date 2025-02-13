@@ -50,7 +50,7 @@ class Tree(BObject):
             for i, node in enumerate(self.nodes):
                 node.appear(begin_time=begin_time + (i + 0.5) * dt, transition_time=dt / 2)
             for i, line in enumerate(self.lines):
-                line.grow(begin_time=begin_time + (i + 1) * dt, transition_time=dt / 2, modus="from_top")
+                line.grow(begin_time=begin_time + (i + 1) * dt, transition_time=dt / 2)
             t=begin_time+transition_time
         if mode == 'level_wise':
             max_level = self.get_max_level()
@@ -77,7 +77,7 @@ class Tree(BObject):
         for c,i in enumerate(node_set):
             self.nodes[i].appear(begin_time=begin_time + (c+ 1) * dt, transition_time=dt / 2)
             if self.nodes[i].line:
-                self.nodes[i].line.grow(begin_time=begin_time + (c + 0.5) * dt, transition_time=dt / 2, modus="from_top")
+                self.nodes[i].line.grow(begin_time=begin_time + (c + 0.5) * dt, transition_time=dt / 2)
 
         return begin_time+transition_time
 
@@ -89,7 +89,7 @@ class Tree(BObject):
             node = self.node(w)
             node.appear(begin_time+(i+1)*dt,transition_time=dt/2)
             if node.line:
-                node.line.grow(begin_time=begin_time+(i+0.5)*dt,transition_time=dt/2,modus="from_top")
+                node.line.grow(begin_time=begin_time + (i + 0.5) * dt, transition_time=dt / 2)
 
         return begin_time+transition_time
 
@@ -185,7 +185,7 @@ class Tree(BObject):
     def appear_recursively(self, node, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
         node.appear(begin_time=begin_time, transition_time=transition_time)
         if node.line:
-            node.line.grow(modus='from_start',begin_time=begin_time, transition_time=transition_time/4)
+            node.line.grow(begin_time=begin_time, transition_time=transition_time / 4)
         for child in node.children:
             self.appear_recursively(child, begin_time=begin_time+transition_time/4, transition_time=3*transition_time/4)
 

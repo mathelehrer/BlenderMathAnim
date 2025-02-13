@@ -193,9 +193,9 @@ class LogoPreImage(BObject):
         t0 = begin_time
         delta = int(len(self.b_children)/3)
         for i in range(delta):
-            self.b_children[i].grow(begin_time=t0,transition_time=dt)
-            self.b_children[i+delta].grow(begin_time=t0,transition_time=dt)
-            self.b_children[i+2*delta].grow(begin_time=t0,transition_time=dt)
+            self.b_children[i].grow(begin_time=t0, transition_time=dt)
+            self.b_children[i + delta].grow(begin_time=t0, transition_time=dt)
+            self.b_children[i + 2 * delta].grow(begin_time=t0, transition_time=dt)
             t0+=dt
 
     def transform(self,transformation, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):

@@ -808,7 +808,7 @@ class SimpleTexBObject(SVGBObject):
     def grow_letter(self, index, final_scale=1, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
         letter = self.letters[index]
         letter.appear(begin_time=begin_time, transition_time=transition_time)
-        letter.grow(final_scale, begin_time=begin_time, transition_time=transition_time)
+        letter.grow(final_scale, transition_time=transition_time)
         self.write(letter_set={index}, begin_time=begin_time * 1.02, transition_time=0)
 
     def move_to_match_letter(self, target=None, src_letter_index=0, target_letter_index=0, begin_time=0,

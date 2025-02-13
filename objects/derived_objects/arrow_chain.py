@@ -83,7 +83,7 @@ class ArrowChain(BObject):
 
     def grow(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         [arrow.rotate(rotation_euler=self.rotation+Vector([0,phase,0]),begin_time=0,transition_time=0) for arrow,phase in zip(self.arrows,self.phases) if phase!=0]
-        [arrow.grow(begin_time=begin_time,transition_time=transition_time) for arrow in self.arrows]
+        [arrow.grow(begin_time=begin_time, transition_time=transition_time) for arrow in self.arrows]
         # make earlier arrows fainter
         [arrow.change_alpha(alpha=0.5+0.5*(i+1)/len(self.arrows),begin_time=1/FRAME_RATE,transition_time=0) for i,arrow in enumerate(self.arrows)]
 

@@ -56,6 +56,6 @@ class BSlider(BObject):
         self.label.write(begin_time=begin_time+0.75*transition_time,transition_time=0.25*transition_time)
         l = max(list(self.dimensions))
         if self.numberline:
-            self.numberline.grow(begin_time=begin_time,transition_time=transition_time)
+            self.numberline.grow(begin_time=begin_time, transition_time=transition_time)
         return ibpy.change_default_value(self.growth_slot,from_value=-1.1*l,to_value=1.1*l,begin_time=begin_time,transition_time=transition_time)
 

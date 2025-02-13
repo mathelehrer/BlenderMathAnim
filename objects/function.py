@@ -320,11 +320,11 @@ class SimpleFunction(BObject):
             if inverted:
                 delta = transition_time / len(self.pieces)
                 for i, piece in enumerate(reversed(self.pieces)):
-                    piece.grow(begin_time=begin_time + i * delta, transition_time=delta, inverted=inverted)
+                    piece.grow(begin_time=begin_time + i * delta, transition_time=delta)
             else:
                 delta = transition_time / len(self.pieces)
                 for i, piece in enumerate(self.pieces):
-                    piece.grow(begin_time=begin_time + i * delta, transition_time=delta, inverted=inverted)
+                    piece.grow(begin_time=begin_time + i * delta, transition_time=delta)
 
     def save_eval(self, mapping, x):
         try:

@@ -347,7 +347,7 @@ class NumberLine(BObject):
 
         t0 = begin_time
         super().appear(alpha=alpha, begin_time=t0,silent=silent,children=False,**kwargs) # apearance of children is handled in the remainder
-        self.cyl.grow(self.cyl.intrinsic_scale, begin_time=t0, transition_time=cyl_time, modus=self.grow_mode)
+        self.cyl.grow(self.cyl.intrinsic_scale, transition_time=cyl_time)
         t0 += cyl_time
         self.tip.grow(self.tip.intrinsic_scale, begin_time=t0, transition_time=tip_time)
         if self.axis_label:
