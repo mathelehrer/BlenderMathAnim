@@ -866,6 +866,61 @@ class BRubiksCubeLocalCenters(BObject):
         self.cubie_states[idx]=(pos,rotation)
         return begin_time+transition_time
 
+    def swap_cubies(self, pos1, pos2, begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        # get physical cubies at the swapping positions
+        idx1 = self.get_cubie_at_position(pos1)
+        idx2 = self.get_cubie_at_position(pos2)
+
+        print("swap cubies ",idx1," and ",idx2)
+        # get curves
+        curve1 = self.curve_map[pos1]
+        curve2 = self.curve_map[pos2]
+
+        for curve in {curve1,curve2}:
+            for idx in {idx1,idx2}:
+                if not (self.children[idx - 1], curve) in FOLLOW_PATH_DICTIONARY.keys():
+                    ibpy.set_follow(self.children[idx - 1], curve, use_curve_follow=False)
+                    ibpy.set_follow_influence(self.children[idx - 1], curve, 0, begin_time=0)
+
+        # redirect first cubie
+        one = self.children[idx1 - 1]
+        ibpy.follow(one, curve1, initial_value=1, final_value=0, begin_time=begin_time, transition_time=transition_time)
+        ibpy.follow(one, curve2, initial_value=0, final_value=1, begin_time=begin_time, transition_time=transition_time)
+        ibpy.change_follow_influence(one,curve1,1,0,begin_time=begin_time, transition_time=transition_time)
+        ibpy.change_follow_influence(one,curve2,0,1,begin_time=begin_time, transition_time=transition_time)
+
+        # redirect second cubie
+        two = self.children[idx2 - 1]
+        ibpy.follow(two, curve2, initial_value=1, final_value=0, begin_time=begin_time,
+                    transition_time=transition_time)
+        ibpy.follow(two, curve1, initial_value=0, final_value=1, begin_time=begin_time,
+                    transition_time=transition_time)
+        ibpy.change_follow_influence(two, curve2, 1, 0, begin_time=begin_time, transition_time=transition_time)
+        ibpy.change_follow_influence(two, curve2, 0, 1, begin_time=begin_time, transition_time=transition_time)
+
+        # rotate cubies
+        quaternion1 = self.disassemble_rotation[pos1].copy()
+        quaternion2 = self.disassemble_rotation[pos2].copy()
+        iquaternion1=quaternion1.copy()
+        iquaternion2=quaternion2.copy()
+        iquaternion1.invert()
+        iquaternion2.invert()
+        rotation1 = quaternion2@iquaternion1
+        rotation2 = quaternion1@iquaternion2
+
+        state1 = self.cubie_states[idx1][1]
+        state2 = self.cubie_states[idx2][1]
+        new_state1 = rotation1 @ state1
+        self.children[idx1-1].rotate(rotation_quaternion=new_state1, begin_time=begin_time, transition_time=transition_time)
+        new_state2 = rotation2 @ state2
+        self.children[idx2-1].rotate(rotation_quaternion=new_state2, begin_time=begin_time, transition_time=transition_time)
+
+        # update state
+        self.cubie_states[idx1]=(pos2,new_state1)
+        self.cubie_states[idx2]=(pos1,new_state2)
+
+        return begin_time+transition_time
+
     def move_cubies(self,src_pos,target_positions,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
         """
         Move cubie from one position of the rubik's cube to another.
