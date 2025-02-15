@@ -30,8 +30,9 @@ class Text(BObject):
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name',"TextObject")
         self.rotation = self.get_from_kwargs('rotation', Vector((math.pi / 2, 0, 0)))
+        self.location = self.get_from_kwargs('location', Vector((0, 0, 0)))
 
-        self.modifier = TextModifier(expression,rotation=self.rotation,**kwargs)
+        self.modifier = TextModifier(expression,rotation=self.rotation,location=self.location,**kwargs)
         cube = ibpy.add_cube()
         self.kwargs = kwargs
 

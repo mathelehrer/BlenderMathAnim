@@ -1,5 +1,6 @@
 import numpy as np
 from mathutils import Vector, Quaternion, Euler
+from sympy import factor
 
 from interface import ibpy
 from interface.ibpy import FOLLOW_PATH_DICTIONARY, Vector, Quaternion, Euler
@@ -866,7 +867,7 @@ class BRubiksCubeLocalCenters(BObject):
         self.cubie_states[idx]=(pos,rotation)
         return begin_time+transition_time
 
-    def swap_cubies(self, pos1, pos2, begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def swap_cubies(self, pos1, pos2, rot1=Quaternion(),rot2=Quaternion(),begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,factor=1):
         # get physical cubies at the swapping positions
         idx1 = self.get_cubie_at_position(pos1)
         idx2 = self.get_cubie_at_position(pos2)
@@ -884,19 +885,23 @@ class BRubiksCubeLocalCenters(BObject):
 
         # redirect first cubie
         one = self.children[idx1 - 1]
-        ibpy.follow(one, curve1, initial_value=1, final_value=0, begin_time=begin_time, transition_time=transition_time)
-        ibpy.follow(one, curve2, initial_value=0, final_value=1, begin_time=begin_time, transition_time=transition_time)
-        ibpy.change_follow_influence(one,curve1,1,0,begin_time=begin_time, transition_time=transition_time)
-        ibpy.change_follow_influence(one,curve2,0,1,begin_time=begin_time, transition_time=transition_time)
+        ibpy.follow(one, curve1, initial_value=1, final_value=1, begin_time=begin_time, transition_time=transition_time)
+        ibpy.follow(one, curve2, initial_value=1, final_value=1, begin_time=begin_time, transition_time=transition_time)
+        ibpy.change_follow_influence(one, curve1, 0, factor, begin_time=begin_time, transition_time=transition_time / 2)
+        ibpy.change_follow_influence(one, curve2, 0, factor, begin_time=begin_time, transition_time=transition_time / 2)
+        ibpy.change_follow_influence(one, curve1, factor, 0, begin_time=begin_time+transition_time/2, transition_time=transition_time / 2)
+        ibpy.change_follow_influence(one, curve2, factor, 0, begin_time=begin_time+transition_time/2, transition_time=transition_time / 2)
+        self.children[idx1 - 1].move_to(target_location=self.get_cubie_location(pos2),begin_time=begin_time+transition_time/4,transition_time=transition_time/2)
 
         # redirect second cubie
         two = self.children[idx2 - 1]
-        ibpy.follow(two, curve2, initial_value=1, final_value=0, begin_time=begin_time,
-                    transition_time=transition_time)
-        ibpy.follow(two, curve1, initial_value=0, final_value=1, begin_time=begin_time,
-                    transition_time=transition_time)
-        ibpy.change_follow_influence(two, curve2, 1, 0, begin_time=begin_time, transition_time=transition_time)
-        ibpy.change_follow_influence(two, curve2, 0, 1, begin_time=begin_time, transition_time=transition_time)
+        ibpy.follow(two, curve2, initial_value=1, final_value=1, begin_time=begin_time,transition_time=transition_time)
+        ibpy.follow(two, curve1, initial_value=1, final_value=1, begin_time=begin_time,transition_time=transition_time)
+        ibpy.change_follow_influence(two, curve2, 0, factor, begin_time=begin_time, transition_time=transition_time/2)
+        ibpy.change_follow_influence(two, curve1, 0, factor, begin_time=begin_time, transition_time=transition_time/2)
+        ibpy.change_follow_influence(two, curve1, factor, 0, begin_time=begin_time + transition_time / 2,transition_time=transition_time / 2)
+        ibpy.change_follow_influence(two, curve2, factor, 0, begin_time=begin_time + transition_time / 2,transition_time=transition_time / 2)
+        self.children[idx2-1].move_to(target_location=self.get_cubie_location(pos1),begin_time=begin_time+transition_time/4,transition_time=transition_time/2)
 
         # rotate cubies
         quaternion1 = self.disassemble_rotation[pos1].copy()
@@ -905,8 +910,8 @@ class BRubiksCubeLocalCenters(BObject):
         iquaternion2=quaternion2.copy()
         iquaternion1.invert()
         iquaternion2.invert()
-        rotation1 = quaternion2@iquaternion1
-        rotation2 = quaternion1@iquaternion2
+        rotation1 = rot1@iquaternion2@quaternion1
+        rotation2 = rot2@iquaternion1@quaternion2
 
         state1 = self.cubie_states[idx1][1]
         state2 = self.cubie_states[idx2][1]
