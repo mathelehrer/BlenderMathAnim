@@ -763,6 +763,25 @@ class BRubiksCubeLocalCenters(BObject):
         ibpy.set_frame(old_frame)
         return permutation
 
+    def get_cubie_permutation(self):
+        mapping = {key:val[0] for key,val in self.cubie_states.items()}
+        visited = set()
+        cycles = []
+
+        for start in mapping:
+            if start not in visited:
+                cycle = []
+                current = start
+                while current not in visited:
+                    visited.add(current)
+                    cycle.append(current)
+                    current = mapping[current]
+                cycles.append(cycle)
+
+        # Format the cycles into the desired string format
+        formatted_cycles = ['(' + ' '.join(map(str, cycle)) + ')' for cycle in cycles]
+        return ''.join(formatted_cycles)
+
     # Appearance and transformations
     def appear(self,
                begin_time=0,
@@ -880,7 +899,8 @@ class BRubiksCubeLocalCenters(BObject):
         for curve in {curve1,curve2}:
             for idx in {idx1,idx2}:
                 if not (self.children[idx - 1], curve) in FOLLOW_PATH_DICTIONARY.keys():
-                    ibpy.set_follow(self.children[idx - 1], curve, use_curve_follow=False)
+                    ibpy.set_follow(self.children[idx - 1], curve, use_curve_follow=False,
+                                    use_curve_radius=False,use_fixed_location=False)
                     ibpy.set_follow_influence(self.children[idx - 1], curve, 0, begin_time=0)
 
         # redirect first cubie
@@ -897,10 +917,10 @@ class BRubiksCubeLocalCenters(BObject):
         two = self.children[idx2 - 1]
         ibpy.follow(two, curve2, initial_value=1, final_value=1, begin_time=begin_time,transition_time=transition_time)
         ibpy.follow(two, curve1, initial_value=1, final_value=1, begin_time=begin_time,transition_time=transition_time)
-        ibpy.change_follow_influence(two, curve2, 0, factor, begin_time=begin_time, transition_time=transition_time/2)
-        ibpy.change_follow_influence(two, curve1, 0, factor, begin_time=begin_time, transition_time=transition_time/2)
-        ibpy.change_follow_influence(two, curve1, factor, 0, begin_time=begin_time + transition_time / 2,transition_time=transition_time / 2)
-        ibpy.change_follow_influence(two, curve2, factor, 0, begin_time=begin_time + transition_time / 2,transition_time=transition_time / 2)
+        ibpy.change_follow_influence(two, curve2, 0, 2*factor, begin_time=begin_time, transition_time=transition_time/2)
+        ibpy.change_follow_influence(two, curve1, 0, 2*factor, begin_time=begin_time, transition_time=transition_time/2)
+        ibpy.change_follow_influence(two, curve1, 2*factor, 0, begin_time=begin_time + transition_time / 2,transition_time=transition_time / 2)
+        ibpy.change_follow_influence(two, curve2, 2*factor, 0, begin_time=begin_time + transition_time / 2,transition_time=transition_time / 2)
         self.children[idx2-1].move_to(target_location=self.get_cubie_location(pos1),begin_time=begin_time+transition_time/4,transition_time=transition_time/2)
 
         # rotate cubies

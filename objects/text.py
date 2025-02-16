@@ -44,7 +44,6 @@ class Text(BObject):
         get_from_kwargs(kwargs,'emission',0) # just remove it from kwargs
         outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
         mat_outline = get_material(outline_color,emission=outline_emission,**kwargs)
-
         material_node = get_geometry_node_from_modifier(self.modifier,label="FontMaterial")
         outline_material_node = get_geometry_node_from_modifier(self.modifier,label="OutlineMaterial")
 
@@ -77,7 +76,13 @@ class TextModifier(GeometryNodesModifier):
 
         collection_info = tree.nodes.get("TextData")
         collection_info.inputs["Separate Children"].default_value = True
-        collection_info.inputs["Collection"].default_value = get_collection(self.expression)
+        # blender cuts the collection names to a length of 63 letter
+        # in order to find the collection in the node setup, the name must be shortened appropriately
+        # TODO If a name only differs after the first 63 letters, the proper collection might not be found
+
+        collection_name = self.expression[0:63]
+        # print("abbreviated collection name: ",collection_name)
+        collection_info.inputs["Collection"].default_value = get_collection(collection_name)
 
         for n in tree.nodes:
             if n.label=='FontMaterial':

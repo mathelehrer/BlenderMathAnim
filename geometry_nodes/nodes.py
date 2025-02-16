@@ -73,7 +73,7 @@ class Node:
     @classmethod
     def from_attributes(cls,tree,attributes):
         name = attributes["name"]
-        print("Create Node from attributes: ",attributes["id"],": ", name)
+        # print("Create Node from attributes: ",attributes["id"],": ", name)
         location = parse_location(attributes["location"])
         label = attributes["label"]
         if attributes["hide"]=="False":
@@ -3739,17 +3739,17 @@ def get_default_value_for_socket(attributes):
         return float(attributes['default_value'])
     elif socket_type == 'VECTOR':
         parsed = parse_default_attribute(attributes['default_value'])
-        print("vector: ",parsed)
+        # print("vector: ",parsed)
         return Vector(parsed)
     elif socket_type == 'STRING':
         return str(attributes['default_value'])
     elif socket_type =='RGBA':
         parsed = parse_default_attribute(attributes['default_value'])
-        print("color: ",list(parsed))
+        # print("color: ",list(parsed))
         return list(parsed)
     elif socket_type=='ROTATION':
         parsed = parse_default_attribute(attributes['default_value'])
-        print("rotation: ",list(parsed))
+        # print("rotation: ",list(parsed))
         return list(parsed)
     elif socket_type=='MATERIAL':
         color = attributes['default_value']
@@ -3759,9 +3759,9 @@ def get_default_value_for_socket(attributes):
 
 
 def create_socket(tree, node, node_attributes, attributes):
-    print(node)
-    print(node_attributes)
-    print(attributes)
+    # print(node)
+    # print(node_attributes)
+    # print(attributes)
     if attributes['type']=='CUSTOM':
         # empty socket, nothing to do
         return False
@@ -3873,7 +3873,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                                         node_structure[node_id]["inputs"][input_id]=input_count
                                         input_count += 1
                                 else:
-                                    print("Warning: unrecognized socket in ", node_id, socket_count,input_attributes["type"])
+                                    # print("Warning: unrecognized socket in ", node_id, socket_count,input_attributes["type"])
                                     node_structure[node_id]["inputs"][input_id] = -1 # take last slot (this dynamically generates new sockets for Group Input and Group Output
                                     input_count +=1 #also increase input_count, since the custom socket can between real sockets
                             socket_count+=1
@@ -3898,7 +3898,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                                         node_structure[node_id]["outputs"][output_id]=output_count
                                         output_count+=1
                                 else:
-                                    print("Warning: unrecognized socket in ",node_id,socket_count,output_attributes["type"])
+                                    # print("Warning: unrecognized socket in ",node_id,socket_count,output_attributes["type"])
                                     node_structure[node_id]["outputs"][output_id] = -1 # take last slot (this dynamically generates new sockets for Grou
                                     output_count += 1 # also increase output_count, since the custom socket can be between real sockets
                             socket_count += 1
@@ -3911,7 +3911,7 @@ def create_from_xml(tree,filename=None,**kwargs):
             # check for zone pairing
             for key, val in node_dir.items():
                 name = node_structure[key]["name"]
-                print(name)
+                # print(name)
                 key=int(key)
                 # the input sockets are only created after pairing with the output node
                 # therefore the links can only be created after pairing
@@ -3955,7 +3955,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                 output_id = node_structure[from_node]["outputs"][from_socket]
                 input_id = node_structure[to_node]["inputs"][to_socket]
 
-                print("link ",node_dir[from_node],": ",str(from_socket),"->",str(to_socket),": ",node_dir[to_node])
+                # print("link ",node_dir[from_node],": ",str(from_socket),"->",str(to_socket),": ",node_dir[to_node])
                 if output_id<len(node_dir[from_node].outputs):
                     tree.links.new(node_dir[from_node].outputs[output_id],node_dir[to_node].inputs[input_id])
 
