@@ -1291,6 +1291,16 @@ def change_emission_by_name(name_part, from_value, to_value, begin_frame, frame_
                 bsdf.inputs['Emission Strength'].default_value = to_value
                 insert_keyframe(bsdf.inputs['Emission Strength'], 'default_value', frame=begin_frame + frame_duration)
 
+def change_emission_of_material(mat,from_value,to_value,begin_frame,frame_duration):
+    nodes = mat.node_tree.nodes
+    if 'Principled BSDF' in nodes:
+        bsdf = nodes['Principled BSDF']
+        if bsdf.inputs[EMISSION].default_value[0:3] == (0, 0, 0):
+            bsdf.inputs[EMISSION].default_value = bsdf.inputs['Base Color'].default_value
+        bsdf.inputs['Emission Strength'].default_value = from_value
+        insert_keyframe(bsdf.inputs['Emission Strength'], 'default_value', frame=begin_frame)
+        bsdf.inputs['Emission Strength'].default_value = to_value
+        insert_keyframe(bsdf.inputs['Emission Strength'], 'default_value', frame=begin_frame + frame_duration)
 
 def change_alpha_by_name(name_part, from_value, to_value, begin_frame, frame_duration):
     for mat in bpy.data.materials:
@@ -2332,7 +2342,6 @@ def get_material_from_modifier(modifier, label):
             if 'Material' in n.inputs:
                 return n.inputs['Material'].default_value
     return None
-
 
 def get_spacing_value(bob):
     mat = get_material_of(bob)
@@ -7164,6 +7173,21 @@ def change_glow_threshold(from_value=1,to_value=0,begin_time=0,transition_time=D
 
     return begin_time + transition_time
 
+
+def change_glow_size(from_value=1,to_value=0,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    """
+    it is not recommended to use this for a smooth transformation. The effect jumps in integer values
+    """
+    nodes = bpy.context.scene.node_tree.nodes
+    glare = nodes.get("Glare")
+
+    if from_value is not None:
+            glare.size = from_value
+            insert_keyframe(glare, "size", begin_time*FRAME_RATE)
+    glare.size = to_value
+    insert_keyframe(glare, "size",(begin_time+transition_time)*FRAME_RATE)
+
+    return begin_time + transition_time
 
 '''
 Animation helpers

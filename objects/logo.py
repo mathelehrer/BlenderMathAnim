@@ -346,6 +346,15 @@ class LogoFromInstances(BObject):
     def get_instances(self):
         return self.red_instances+self.green_instances+self.blue_instances
 
+    def get_red_instances(self):
+        return self.red_instances
+
+    def get_green_instances(self):
+        return self.green_instances
+
+    def get_blue_instances(self):
+        return self.blue_instances
+
     def appear(self,begin_time=0,
                transition_time=DEFAULT_ANIMATION_TIME,
                **kwargs):
