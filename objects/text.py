@@ -53,9 +53,11 @@ class Text(BObject):
         super().__init__(obj=cube, name=self.name, no_material=True, **kwargs)
         super().add_mesh_modifier('NODES', node_modifier=self.modifier)
 
-    def write(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def write(self,from_letter=0,to_letter=None,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        if to_letter is None:
+            to_letter = self.modifier.number_of_letters
         write_control = get_geometry_node_from_modifier(self.modifier,"WriteControlNode")
-        ibpy.change_default_value(write_control,from_value=0,to_value=self.modifier.number_of_letters,begin_time=begin_time,transition_time=transition_time)
+        ibpy.change_default_value(write_control,from_value=from_letter,to_value=to_letter,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
 
 
