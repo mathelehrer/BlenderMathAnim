@@ -287,13 +287,15 @@ class BObject(object):
                 # change made on 2023-04-13 for the laptop class
                 # obj_name = name + '_' + objects[i]
                 # converted to
+                bpy_name=obj.name
                 obj_name=name+'_'+obj.name
                 if i==0:
                     # added kwargs on 2024-12-08 to treat all cubies of the rubik's cube equivalently
                     bobs.append(BObject(obj=obj, color=col, name=obj_name,emission=emission,**kwargs))
                 else:
                     bobs.append(BObject(obj=obj, color=col, name=obj_name, **kwargs))
-                IMPORTED_OBJECTS.append(obj_name)
+                #IMPORTED_OBJECTS.append(obj_name)
+                IMPORTED_OBJECTS.append(bpy_name) # 2025-02-18 to allow multiple imports of the same object
             return bobs
         else:
             obj = import_object(filename)
@@ -749,6 +751,7 @@ class BObject(object):
         :return:
         """
         ibpy.shrink(self, begin_frame=begin_time*FRAME_RATE, frame_duration=FRAME_RATE*transition_time,scale=0)
+        return begin_time+transition_time
 
     def next_to(self, parent, direction=RIGHT, buff=SMALL_BUFF, shift=0 * RIGHT):
         """

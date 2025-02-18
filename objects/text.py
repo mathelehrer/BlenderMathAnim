@@ -18,7 +18,7 @@ class Text(BObject):
     """
     A new class for a text object based on geometry nodes
     """
-    def __init__(self,expression, **kwargs):
+    def __init__(self,expression,sample_points=101, **kwargs):
         """
         example:
         text = Text("Hallo Welt",color="drawing",outline_color="example",aligned="center",
@@ -32,7 +32,7 @@ class Text(BObject):
         self.rotation = self.get_from_kwargs('rotation', Vector((math.pi / 2, 0, 0)))
         self.location = self.get_from_kwargs('location', Vector((0, 0, 0)))
 
-        self.modifier = TextModifier(expression,rotation=self.rotation,location=self.location,**kwargs)
+        self.modifier = TextModifier(expression,rotation=self.rotation,location=self.location,sample_points=sample_points,**kwargs)
         cube = ibpy.add_cube()
         self.kwargs = kwargs
 
@@ -60,6 +60,71 @@ class Text(BObject):
         ibpy.change_default_value(write_control,from_value=from_letter,to_value=to_letter,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
 
+    def unwrite(self,letters,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        all_letters = self.modifier.number_of_letters
+        write_control = get_geometry_node_from_modifier(self.modifier,"WriteControlNode")
+        ibpy.change_default_value(write_control,from_value=all_letters,to_value=all_letters-letters,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+class MorphText(BObject):
+    """
+    A new class for a morphing text object based on geometry nodes
+    """
+    def __init__(self,expression1,expression2,morph_shift=Vector(),sample_points=101, **kwargs):
+        """
+        example:
+        text = MorphText(r"\text{Hallo Welt}",\text{"Welcome!"},sample_points=1001,color="drawing",outline_color="example",aligned="center",
+        emission=0.5,outline_emission=2)
+        t0  = 1
+        t0 = 0.5+ text.write(begin_time=1,transition_time=1)
+        t0 = 0.5 + text.morph(begin_time=t0,transition_time=1)
+
+        """
+        self.kwargs = kwargs
+        self.name = self.get_from_kwargs('name',"TextObject")
+        self.rotation = self.get_from_kwargs('rotation', Vector((math.pi / 2, 0, 0)))
+        self.location = self.get_from_kwargs('location', Vector((0, 0, 0)))
+
+        self.modifier = MorphTextModifier(expression1,expression2,morph_shift=morph_shift,sample_points=sample_points,
+                                          rotation=self.rotation,location=self.location,**kwargs)
+        cube = ibpy.add_cube()
+        self.kwargs = kwargs
+
+        #apply colors
+        color = get_from_kwargs(kwargs,'color',"text")
+        outline_color = get_from_kwargs(kwargs,'outline_color',color)
+
+        mat = get_material(color,**kwargs)
+        get_from_kwargs(kwargs,'emission',0) # just remove it from kwargs
+        outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        mat_outline = get_material(outline_color,emission=outline_emission,**kwargs)
+        material_node = get_geometry_node_from_modifier(self.modifier,label="FontMaterial")
+        outline_material_node = get_geometry_node_from_modifier(self.modifier,label="OutlineMaterial")
+
+        # material_node.inputs['Material'].default_value= mat
+        # outline_material_node.inputs['Material'].default_value = mat_outline
+
+        super().__init__(obj=cube, name=self.name, no_material=True, **kwargs)
+        super().add_mesh_modifier('NODES', node_modifier=self.modifier)
+
+    def write(self,from_letter=0,to_letter=None,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        if to_letter is None:
+            to_letter = self.modifier.number_of_letters
+        write_control = get_geometry_node_from_modifier(self.modifier,"WriteControlNode")
+        ibpy.change_default_value(write_control,from_value=from_letter,to_value=to_letter,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def unwrite(self,letters,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        all_letters = self.modifier.number_of_letters
+        write_control = get_geometry_node_from_modifier(self.modifier,"WriteControlNode")
+        ibpy.change_default_value(write_control,from_value=all_letters,to_value=all_letters-letters,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def morph(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        morph_control = get_geometry_node_from_modifier(self.modifier,"MorphControlNode")
+        ibpy.change_default_value(morph_control,from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
 
 def below(out,buffer_y=200):
     return out.location-Vector((0,buffer_y))
@@ -68,6 +133,8 @@ class TextModifier(GeometryNodesModifier):
     def __init__(self,expression,**kwargs):
         self.expression = expression
         self.number_of_letters =0
+        self.sample_points = get_from_kwargs(kwargs,'sample_points',101)
+
         super().__init__(get_from_kwargs(kwargs,'name',"GeoText"),
                          group_input=False,group_output=False,automatic_layout=False,**kwargs)
 
@@ -82,9 +149,13 @@ class TextModifier(GeometryNodesModifier):
         # in order to find the collection in the node setup, the name must be shortened appropriately
         # TODO If a name only differs after the first 63 letters, the proper collection might not be found
 
-        collection_name = self.expression[0:63]
+        collection_name = hashed_tex(self.expression)
         # print("abbreviated collection name: ",collection_name)
         collection_info.inputs["Collection"].default_value = get_collection(collection_name)
+
+        # adjust parameter
+        sample_points_nodes = tree.nodes.get("SamplePointsNode")
+        sample_points_nodes.integer = self.sample_points
 
         for n in tree.nodes:
             if n.label=='FontMaterial':
@@ -123,6 +194,84 @@ class TextModifier(GeometryNodesModifier):
         tree.links.new(transform_geometry.geometry_out,out.inputs['Geometry'])
 
 
+class MorphTextModifier(GeometryNodesModifier):
+    def __init__(self,expression1,expression2,**kwargs):
+        self.expression1 = expression1
+        self.expression2 = expression2
+        self.number_of_letters =0
+        self.morph_shift = get_from_kwargs(kwargs,'morph_shift',Vector())
+        self.sample_points = get_from_kwargs(kwargs,'sample_points',101)
+
+        super().__init__(get_from_kwargs(kwargs,'name',"GeoText"),
+                         group_input=False,group_output=False,automatic_layout=False,**kwargs)
+
+    def create_node(self,tree,**kwargs):
+
+        self.number_of_letters = generate_expression(self.expression1, **kwargs)
+        self.number_of_morph_letters = generate_expression(self.expression2, **kwargs)
+
+        create_from_xml(tree,"geo_morph_fonts",**kwargs)
+
+        collection_info = tree.nodes.get("TextData")
+        collection_info.inputs["Separate Children"].default_value = True
+
+        collection_info2 = tree.nodes.get("MorphData")
+        collection_info2.inputs["Separate Children"].default_value = True
+
+        # blender cuts the collection names to a length of 63 letter
+        # in order to find the collection in the node setup, the name must be shortened appropriately
+        # TODO If a name only differs after the first 63 letters, the proper collection might not be found
+
+        collection_name1 = hashed_tex(self.expression1)
+        # print("abbreviated collection name: ",collection_name)
+        collection_info.inputs["Collection"].default_value = get_collection(collection_name1)
+
+        collection_name2 = hashed_tex(self.expression2)
+        collection_info2.inputs["Collection"].default_value = get_collection(collection_name2)
+
+        # adjust parameter
+        sample_points_nodes = tree.nodes.get("SamplePointsNode")
+        sample_points_nodes.integer=self.sample_points
+
+        morph_shift_nodes = tree.nodes.get("MorphShiftNode")
+        morph_shift_nodes.vector=self.morph_shift
+
+        for n in tree.nodes:
+            if n.label=='FontMaterial':
+                material_node=n
+            if n.label=='OutlineMaterial':
+                outline_material_node=n
+            if n.label=='LastJoin':
+                last_join_node=n
+            if n.label=="Out":
+                out=n
+
+        material = get_material(get_from_kwargs(kwargs,'color',"text"),**kwargs)
+        self.materials.append(material)
+        material_node.inputs['Material'].default_value= material
+
+        outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        kwargs['emission']=outline_emission
+        outline_material = get_material(get_from_kwargs(kwargs,'outline_color',"text"),**kwargs)
+        self.materials.append(outline_material)
+        outline_material_node.inputs['Material'].default_value = outline_material
+
+        expr_location = InputVector(tree, name="ExprLocation",
+                                     value=get_from_kwargs(kwargs,'location',Vector()))
+        expr_rotation = InputVector(tree, name="ExprRotation",value=get_from_kwargs(kwargs,'rotation',Vector()))
+
+
+        transform_geometry = TransformGeometry(tree,name="ExprTransform",translation=expr_location.std_out,
+                                               rotation=expr_rotation.std_out)
+
+        # override default location
+        transform_geometry.node.location=below(out)
+        expr_location.node.location=below(transform_geometry.node,buffer_y=400)
+        expr_rotation.node.location=below(expr_location.node,buffer_y=200)
+
+        tree.links.new(last_join_node.outputs["Geometry"],transform_geometry.geometry_in)
+        tree.links.new(transform_geometry.geometry_out,out.inputs['Geometry'])
+
 
 ##
 # recreate the essentials to convert a latex expression into a collection of curves
@@ -138,7 +287,7 @@ def generate_expression(expression, **kwargs):
         path=get_file_path(expression)
         imported_svg_data = import_svg_data(imported_svg_data,path,kwargs)
         imported_svg_data = align_figures(imported_svg_data, aligned)
-        collection = ibpy.make_new_collection(expression,hide_render=True,hide_viewport=True)
+        collection = ibpy.make_new_collection(hashed_tex(expression),hide_render=True,hide_viewport=True)
         curves = imported_svg_data[list(imported_svg_data.keys())[-1]]
         for curve in curves:
             # make curve dimension 3D to preserve spline property
@@ -335,7 +484,7 @@ def dvi_to_svg(dvi_file):
         os.system(" ".join(commands))
     return result
 
-def hashed_tex(expression, typeface):
+def hashed_tex(expression, typeface="default"):
     string = expression + typeface
     hasher = hashlib.sha256(string.encode())
     return hasher.hexdigest()[:16]

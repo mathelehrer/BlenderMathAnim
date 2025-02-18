@@ -104,6 +104,9 @@ class Node:
         if type=="RANDOM_VALUE":
             data_type = attributes["data_type"]
             return RandomValue(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type)
+        if type=="INPUT_VECTOR":
+            return InputVector(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+
         # read nodes
         if type =="INDEX":
             return Index(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
@@ -150,6 +153,9 @@ class Node:
             domain=attributes["domain"]
             scale_mode=attributes["scale_mode"]
             return ScaleElements(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,domain=domain,scale_mode=scale_mode)
+        if type=="TRANSFORM_GEOMETRY":
+            mode=attributes["mode"]
+            return TransformGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
 
         # instances
         if type=="INSTANCE_ON_POINTS":
