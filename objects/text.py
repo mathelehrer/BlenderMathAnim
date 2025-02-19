@@ -125,6 +125,13 @@ class MorphText(BObject):
         ibpy.change_default_value(morph_control,from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
 
+    def unwrite(self, letters=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        all_letters = self.modifier.number_of_letters
+        write_control = get_geometry_node_from_modifier(self.modifier, "WriteControlNode")
+        ibpy.change_default_value(write_control, from_value=all_letters, to_value=all_letters - letters,
+                                  begin_time=begin_time,
+                                  transition_time=transition_time)
+        return begin_time + transition_time
 
 def below(out,buffer_y=200):
     return out.location-Vector((0,buffer_y))
