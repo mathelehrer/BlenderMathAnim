@@ -1510,7 +1510,6 @@ def star_color(temp=None, type=None, **kwargs):
 
     return mat
 
-
 def eight_dimensional_color(u_dim=0, v_dim=1, **kwargs):
     mat = bpy.data.materials.new(name="material_for_e8")
     mat.use_nodes = True
@@ -1555,7 +1554,6 @@ def eight_dimensional_color(u_dim=0, v_dim=1, **kwargs):
     customize_material(mat, **kwargs)
     return mat
 
-
 def phase2hue_material(attribute_names=None, **kwargs):
     mat = bpy.data.materials.new(name="Phase2HueMaterial")
     mat.use_nodes = True
@@ -1589,7 +1587,6 @@ def phase2hue_material(attribute_names=None, **kwargs):
         links.new(attr2.fac_out, trafo.inputs["alpha"])
         links.new(trafo.outputs["alpha"], bsdf.inputs["Alpha"])
     return mat
-
 
 def create_material_for_e8_visuals(attribute_names=None, **kwargs):
     """
@@ -1646,7 +1643,6 @@ def create_material_for_e8_visuals(attribute_names=None, **kwargs):
 
     return mat
 
-
 def create_material_from_geometry_attribute(bob, attr_name='', **kwargs):
     """
     This is new stuff that I don't know where this will go to (18.2.2024)
@@ -1680,7 +1676,6 @@ def create_material_from_geometry_attribute(bob, attr_name='', **kwargs):
     for slot in bob.ref_obj.material_slots:
         slot.material.blend_method = 'HASHED'
         slot.material.shadow_method = 'HASHED'
-
 
 def region_indicator(region_functions=['x,1,<', 'x,1,>'], colors=['text', 'background'],
                      name=None, parameters=[], scalar_parameters=[], **kwargs):
@@ -1752,7 +1747,6 @@ def region_indicator(region_functions=['x,1,<', 'x,1,>'], colors=['text', 'backg
         links.new(fcn_nodes[0].outputs[0], alpha_factor.inputs[1])
 
     return customize_material(mat, **kwargs)
-
 
 def instance_indicator_material(colors=['drawing', 'important'],
                                 name='Indicator', **kwargs):
@@ -1861,7 +1855,6 @@ def instance_indicator_material(colors=['drawing', 'important'],
 
     return mat
 
-
 def mandelbrot_indicator_material(colors=['drawing', 'important'], name='MandelBrotSetIndicator', **kwargs):
     """
     create a material that indicates the location inside or outside the Mandelbrot set
@@ -1953,7 +1946,6 @@ def mandelbrot_indicator_material(colors=['drawing', 'important'], name='MandelB
         links.new(object_node.outputs['Location'], indicator.inputs['In'])
 
     return mat
-
 
 def make_complex_function_material(bob, functions, shape=True, name='complex_material', **kwargs):
     """
@@ -2094,7 +2086,6 @@ def make_complex_function_material(bob, functions, shape=True, name='complex_mat
 
     return mixer_dialers
 
-
 def make_transformations_and_complex_material(bob, transformations, name='complex_material'):
     """
     allows for arbitrary vertex transformations
@@ -2220,7 +2211,6 @@ def make_transformations_and_complex_material(bob, transformations, name='comple
 
     return mixer_dialers
 
-
 def make_conformal_transformation_material(bob, conformal_transformations, name='complex_material'):
     """
     add texture that color-codes the phases of a complex bobject
@@ -2333,7 +2323,6 @@ def make_conformal_transformation_material(bob, conformal_transformations, name=
 
     return mixer_dialers
 
-
 def make_solid_material(bob, color_index):
     mat_name = "solid_" + str(color_index + 1)
 
@@ -2352,7 +2341,6 @@ def make_solid_material(bob, color_index):
         ref.data.materials.append(material)
     else:
         ref.material_slots[0].material = material
-
 
 def make_glossy_material(bob, color_index):
     mat_name = "glossy_" + str(color_index + 1)
@@ -2380,7 +2368,6 @@ def make_glossy_material(bob, color_index):
     else:
         ref.material_slots[0].material = material
 
-
 def make_basic_material(rgb=None, name=None):
     if rgb is None or name is None:
         raise Warning('Need rgb and name to make basic color')
@@ -2393,7 +2380,6 @@ def make_basic_material(rgb=None, name=None):
     nodes = color.node_tree.nodes
     nodes['Principled BSDF'].inputs['Base Color'].default_value = rgb
     color.diffuse_color = rgb
-
 
 def make_fake_glass_material(rgb=None, name=None, absorption_density=0.5, ior=1):
     if rgb is None or name is None:
@@ -2445,7 +2431,6 @@ def make_fake_glass_material(rgb=None, name=None, absorption_density=0.5, ior=1)
     bsdf.location = (-400, 0)
     color.diffuse_color = rgb
 
-
 def make_plastic_material(rgb=None, name=None):
     if rgb is None or name is None:
         raise Warning('Need rgb and name to make basic color')
@@ -2461,8 +2446,7 @@ def make_plastic_material(rgb=None, name=None):
     # bsdf.inputs['Subsurface Color'].default_value=rgb
     bsdf.inputs[SPECULAR].default_value = 1
     bsdf.inputs['Roughness'].default_value = 0.1
-    # bsdf.inputs['Specular Tint'].default_value=0.5
-
+    # bsdf.inputs['Specular Tint'].default_value=0.
 
 def make_checker_material():
     color = bpy.data.materials.new(name='checker')
@@ -2476,7 +2460,6 @@ def make_checker_material():
     color.node_tree.links.new(checker.outputs['Color'], nodes['Principled BSDF'].inputs['Base Color'])
     color.node_tree.links.new(input.outputs['Position'], checker.inputs['Vector'])
 
-
 def make_mirror_material():
     color = bpy.data.materials.new(name='mirror')
     color.use_nodes = True
@@ -2487,7 +2470,6 @@ def make_mirror_material():
     bsdf.inputs['Metallic'].default_value = 1
     bsdf.inputs['Roughness'].default_value = 0
     bsdf.inputs['IOR'].default_value = 0
-
 
 def make_magnet_material():
     for name in {"maget", "magnetX", "magnetY"}:
@@ -2594,7 +2576,6 @@ def make_magnet_material():
         coords.location = (-1200, 0)
         links.new(coords.outputs['Generated'], sep_xyz.inputs['Vector'])
 
-
 def make_sign_material():
     material = bpy.data.materials.new(name="sign")
     material.use_nodes = True
@@ -2630,7 +2611,6 @@ def make_sign_material():
     val.location = (-700, 0)
     links.new(val.outputs['Value'], range.inputs['Value'])
 
-
 def make_sand_material():
     color = bpy.data.materials.new(name='sand')
     color.use_nodes = True
@@ -2663,7 +2643,6 @@ def make_sand_material():
     coords = nodes.new(type='ShaderNodeTexCoord')
     links.new(coords.outputs['Generated'], wave.inputs['Vector'])
     links.new(coords.outputs['Generated'], noise.inputs['Vector'])
-
 
 def make_silk_material():
     color = bpy.data.materials.new(name='silk')
@@ -2761,7 +2740,6 @@ def make_gold_material():
     links.new(coords.outputs['Object'], noise.inputs['Vector'])
     links.new(coords.outputs['Object'], noise2.inputs['Vector'])
 
-
 def make_screen_material():
     color = bpy.data.materials.new(name='screen')
     color.use_nodes = True
@@ -2787,7 +2765,6 @@ def make_screen_material():
     coords = nodes.new(type='ShaderNodeTexCoord')
     coords.location = (-600, 0)
     links.new(coords.outputs['Generated'], movie.inputs['Vector'])
-
 
 def make_silver_material():
     color = bpy.data.materials.new(name='silver')
@@ -2833,7 +2810,6 @@ def make_silver_material():
     links.new(coords.outputs['Generated'], noise.inputs['Vector'])
     links.new(coords.outputs['Generated'], noise2.inputs['Vector'])
 
-
 def make_scattering_material(**kwargs):
     color = bpy.data.materials.new(name='scatter_volume')
     color.use_nodes = True
@@ -2853,7 +2829,6 @@ def make_scattering_material(**kwargs):
     links.new(scatter.outputs['Volume'], material.inputs['Volume'])
 
     return color
-
 
 def make_marble_material():
     color = bpy.data.materials.new(name='marble')
@@ -2893,12 +2868,10 @@ def make_marble_material():
     coords = nodes.new(type='ShaderNodeTexCoord')
     links.new(coords.outputs['Generated'], noise2.inputs['Vector'])
 
-
 def make_metal_materials():
     for i in range(1, 10):
         gray = i / 10
         make_metal_material(gray=gray)
-
 
 def make_metal_material(gray=0.5):
     color = bpy.data.materials.new(name='metal_' + str(gray))
@@ -2908,7 +2881,6 @@ def make_metal_material(gray=0.5):
     bsdf.inputs['Metallic'].default_value = 1
     bsdf.inputs['Roughness'].default_value = 0.1
     bsdf.inputs['Base Color'].default_value = [gray, gray, gray, 1]
-
 
 def make_wood_material():
     color = bpy.data.materials.new(name='wood')
@@ -2970,7 +2942,6 @@ def make_wood_material():
     coords = nodes.new(type='ShaderNodeTexCoord')
     links.new(coords.outputs['Generated'], mapping.inputs['Vector'])
 
-
 def make_creature_material(rgb=None, name=None):
     if rgb is None or name is None:
         raise Warning('Need rgb and name to make creature color')
@@ -2987,7 +2958,6 @@ def make_creature_material(rgb=None, name=None):
 
     # which doesn't take alpha
     color.diffuse_color = rgb
-
 
 def make_translucent_material(rgb=None, name=None):
     if rgb is None or name is None:
@@ -3040,7 +3010,6 @@ def make_translucent_material(rgb=None, name=None):
     glass = nodes.new(type='ShaderNodeBsdfGlass')
     glass.inputs['Color'].default_value = [1, 1, 1, 1]
     color.node_tree.links.new(glass.outputs['BSDF'], shader1.inputs[2])
-
 
 def mandel_on_riemann_sphere(**kwargs):
     if 'iterations' in kwargs:
@@ -3282,7 +3251,6 @@ def mandel_on_riemann_sphere(**kwargs):
 
     return material
 
-
 def coarse_graining(bob, **kwargs):
     obj = get_obj(bob)
     # select the channel that should be coarse grained
@@ -3346,7 +3314,6 @@ def coarse_graining(bob, **kwargs):
 
     return material
 
-
 def monte_carlo_mandel(bob, **kwargs):
     obj = get_obj(bob)
 
@@ -3362,7 +3329,6 @@ def monte_carlo_mandel(bob, **kwargs):
     # for cycles
     material.cycles.displacement_method = 'DISPLACEMENT'  # for real displacement
     material.use_nodes = True
-
 
 def penrose_material(base_color, contrast=1, **kwargs):
     material = bpy.data.materials.new(name='Penrose')
@@ -3458,13 +3424,11 @@ def penrose_material(base_color, contrast=1, **kwargs):
 
     return material
 
-
 def material_clean_up():
     # Function for removing some duplicate materials from repeated imports
     for mat in bpy.data.materials:
         if 'color' not in mat.name:
             bpy.data.materials.remove(mat)
-
 
 def get_alpha_of_material(material):
     if isinstance(material, str):
@@ -3472,7 +3436,6 @@ def get_alpha_of_material(material):
     nodes = material.node_tree.nodes
     bsdf = nodes.get('Principled BSDF')
     return bsdf.inputs['Alpha']
-
 
 def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('drawing', 0.5)}):
     """
@@ -3540,11 +3503,9 @@ def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('draw
 
     return mixers
 
-
 #################
 # backgrounds ###
 #################
-
 
 def set_sky_background(**kwargs):
     # remove lights

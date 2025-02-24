@@ -202,8 +202,8 @@ class Laptop(BObject):
         begin_frame = begin_time * FRAME_RATE
         self.screen.change_emission(to_value=0.8)
         ibpy.set_movie_start(self.screen, begin_frame)
-        ibpy.mix_color(self.screen, from_value=0, to_value=1, begin_frame=begin_time * FRAME_RATE,
-                       frame_duration=transition_time * FRAME_RATE)
+        # ibpy.mix_color(self.screen, from_value=0, to_value=1, begin_frame=begin_time * FRAME_RATE,
+        #                frame_duration=transition_time * FRAME_RATE)
         return begin_time + transition_time
 
     def stop_movie(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
@@ -281,8 +281,8 @@ class Laptop(BObject):
             layout['6']
         ]
         for t in toggles:
-            self.key_press(t, begin_time=t0, transition_time=1 / 3)
-        t0 += 1 / 3
+            self.key_press(t, begin_time=t0, transition_time=interval)
+        t0 += interval
 
         for c in text:
             key = layout[c]
