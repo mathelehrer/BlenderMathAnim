@@ -2284,7 +2284,6 @@ class SeparateXYZ(BlueNode):
 class CombineXYZ(BlueNode):
     def __init__(self, tree, location=(0, 0), x=0, y=0, z=0, **kwargs):
         """
-
         :param tree:
         :param data_type: "FLOAT", "INT", "FLOAT_VECTOR", "BOOLEAN"
         :param location:
@@ -2319,6 +2318,54 @@ class CombineXYZ(BlueNode):
             if not isinstance(z,bpy.types.NodeSocketFloat):
                 z = z.std_out
             tree.links.new(z, self.node.inputs["Z"])
+
+class CombineMatrix(BlueNode):
+    def __init__(self, tree, location=(0, 0), col1 = Vector(),col2=Vector(),col3=Vector(), col4=Vector([0,0,0,1]), **kwargs):
+        """
+            creates a 4x4 matrix, that can be used for transformations
+        """
+        self.node = tree.nodes.new(type="FunctionNodeCombineMatrix")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Matrix"]
+
+        if isinstance(col1, (list,Vector)):
+            for i in range(len(col1)):
+                socket_label = "Column 1 Row "+str(i+1)
+                self.node.inputs[socket_label].default_value = col1[i]
+
+        if isinstance(col2, (list,Vector)):
+            for i in range(len(col2)):
+                socket_label = "Column 2 Row "+str(i+1)
+                self.node.inputs[socket_label].default_value = col2[i]
+
+        if isinstance(col3, (list,Vector)):
+            for i in range(len(col3)):
+                socket_label = "Column 3 Row "+str(i+1)
+                self.node.inputs[socket_label].default_value = col3[i]
+
+        if isinstance(col4, (list,Vector)):
+            for i in range(len(col4)):
+                socket_label = "Column 4 Row "+str(i+1)
+                self.node.inputs[socket_label].default_value = col4[i]
+
+class TransformPoint(BlueNode):
+    def __init__(self, tree, location=(0, 0), vector=Vector(),transform=None, **kwargs):
+        """
+            creates a transformation node that allows to apply matrices to points
+        """
+        self.node = tree.nodes.new(type="FunctionNodeTransformPoint")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Vector"]
+
+        if isinstance(vector, (list,Vector)):
+            self.node.inputs["Vector"].default_value = vector
+        else:
+            tree.links.new(vector,self.node.inputs["Vector"])
+
+        if transform is not None:
+            tree.links.new(transform,self.node.inputs["Transform"])
 
 class MapRange(BlueNode):
     def __init__(self,tree, location=(0,0),data_type="FLOAT",interpolation_type="LINEAR",
@@ -2481,11 +2528,6 @@ class CompareNode(BlueNode):
                 self.node.inputs[9].default_value=inputs1
             else:
                 tree.links.new(inputs1,self.node.inputs[9])
-
-
-
-
-
 
 class Switch(BlueNode):
     def __init__(self, tree, location=(0, 0), input_type="GEOMETRY",switch=False,false=None,true=None,**kwargs):
