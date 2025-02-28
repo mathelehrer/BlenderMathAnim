@@ -3064,7 +3064,6 @@ class InsideConvexHull(GreenNode):
         tree_links.new(notAndMath.std_out, group_outputs.inputs["Is Outside"])
         return group
 
-
 class InsideConvexHull3D(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  target_geometry=None,
@@ -3303,7 +3302,6 @@ class BeveledCubeNode(NodeGroup):
         convex_hull = ConvexHull(tree, hide=False)
 
         create_geometry_line(tree, [cube, iop2, realize_instance2, convex_hull],out=self.group_outputs.inputs["Mesh"])
-
 
 # custom Matrix operations #
 class Rotation(GreenNode):
