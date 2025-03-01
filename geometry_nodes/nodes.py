@@ -1825,6 +1825,7 @@ class SetShadeSmooth(GreenNode):
 
 class TransformGeometry(GreenNode):
     def __init__(self, tree, location=(0, 0),
+                 geometry = None,
                  translation_x=None,
                  translation_y=None,
                  translation_z=None,
@@ -1844,6 +1845,9 @@ class TransformGeometry(GreenNode):
 
         self.geometry_out = self.node.outputs["Geometry"]
         self.geometry_in = self.node.inputs["Geometry"]
+
+        if geometry:
+            tree.links.new(geometry, self.node.inputs["Geometry"])
 
         if translation_z is not None or translation_y is not None or translation_x is not None:
             if translation_z is None:
@@ -2159,6 +2163,23 @@ class AxesToRotation(BlueNode):
                 self.node.inputs["Secondary Axis"].default_value=secondary_direction
             else:
                 tree.links.new(secondary_direction,self.node.inputs["Secondary Axis"])
+
+class RotateVector(BlueNode):
+    def __init__(self,tree,location=(0,0),vector=Vector(),rotation=Vector(), **kwargs):
+        self.node = tree.nodes.new(type="FunctionNodeRotateVector")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.std_out=self.node.outputs["Vector"]
+
+        if isinstance(vector,(list,Vector)):
+            self.node.inputs["Vector"].default_value=vector
+        else:
+            tree.links.new(vector,self.node.inputs["Vector"])
+
+        if isinstance(rotation,(list,Vector)):
+            self.node.inputs["Rotation"].default_value=rotation
+        else:
+            tree.links.new(rotation,self.node.inputs["Rotation"])
 
 class QuaternionToRotation(BlueNode):
     def __init__(self, tree, location=(0, 0), w=1,x=0,y=0,z=0, **kwargs):
@@ -2605,9 +2626,9 @@ class VectorMath(BlueNode):
             tree.links.new(inputs1, self.node.inputs[1])
         if float_input:
             if isinstance(float_input, (float, int)):
-                self.node.inputs[3].default_value = float_input
+                self.node.inputs["Scale"].default_value = float_input
             else:
-                tree.links.new(float_input, self.node.inputs[3])
+                tree.links.new(float_input, self.node.inputs["Scale"])
 
 class VectorRotate(BlueNode):
     def __init__(self, tree, location=(0, 0),rotation_type="AXIS_ANGLE", vector= None, center = None, axis = None, angle = 0,

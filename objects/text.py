@@ -60,8 +60,11 @@ class Text(BObject):
         ibpy.change_default_value(write_control,from_value=from_letter,to_value=to_letter,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
 
-    def unwrite(self,letters,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def unwrite(self,letters=None,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+
         all_letters = self.modifier.number_of_letters
+        if letters is None:
+            letters = all_letters
         write_control = get_geometry_node_from_modifier(self.modifier,"WriteControlNode")
         ibpy.change_default_value(write_control,from_value=all_letters,to_value=all_letters-letters,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time

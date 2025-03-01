@@ -9,7 +9,7 @@ from appearance.textures import make_basic_material, make_creature_material, mak
     make_fake_glass_material, make_plastic_material, make_checker_material, make_mirror_material, make_sand_material, \
     make_gold_material, make_silver_material, make_screen_material, make_marble_material, make_metal_materials, \
     make_wood_material, make_scattering_material, make_silk_material, make_magnet_material, make_sign_material, \
-    make_cloud_material
+    make_cloud_material, make_six_color_ramp_material
 from interface import ibpy
 from perform.render import render_with_skips
 from utils.constants import DEFAULT_SCENE_BUFFER, LIGHT_TYPE, CAMERA_LOCATION, CAMERA_ANGLE, FRAME_RATE, COLORS_SCALED, \
@@ -290,3 +290,4 @@ def define_materials():
     make_silk_material()
     make_magnet_material()
     make_sign_material()
+    make_six_color_ramp_material()

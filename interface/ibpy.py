@@ -238,6 +238,10 @@ def get_value_at_frame(function, frm):
     set_frame(frm)
     return function.value
 
+def get_default_value_at_frame(socket,frm):
+    set_frame(frm)
+    return socket.default_value
+
 
 ##########
 # camera #

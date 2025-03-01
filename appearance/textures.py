@@ -2873,6 +2873,42 @@ def make_metal_materials():
         gray = i / 10
         make_metal_material(gray=gray)
 
+def make_six_color_ramp_material(**kwargs):
+    color = bpy.data.materials.new(name='six_color_ramp')
+    color.use_nodes = True
+    nodes = color.node_tree.nodes
+    links = color.node_tree.links
+    bsdf = nodes['Principled BSDF']
+    bsdf.inputs[SPECULAR].default_value = 1
+    bsdf.inputs['Roughness'].default_value = 0.1
+
+    ramp = nodes.new(type='ShaderNodeValToRGB')
+    ramp.color_ramp.elements[0].position = 0
+    ramp.color_ramp.elements[0].color = get_color('yellow')
+    ramp.color_ramp.elements[1].position = 0.2
+    ramp.color_ramp.elements[1].color = get_color('green')
+    ramp.color_ramp.elements.new(0.4)
+    ramp.color_ramp.elements[2].color = get_color('text')
+    ramp.color_ramp.elements.new(0.6)
+    ramp.color_ramp.elements[3].color = get_color('orange')
+    ramp.color_ramp.elements.new(0.8)
+    ramp.color_ramp.elements[4].color = get_color('blue')
+    ramp.color_ramp.elements.new(1)
+    ramp.color_ramp.elements[5].color = get_color('red')
+
+    links.new(ramp.outputs['Color'], bsdf.inputs['Base Color'])
+    links.new(ramp.outputs['Color'], bsdf.inputs[EMISSION])
+
+    attr = nodes.new('ShaderNodeAttribute')
+    attr.attribute_name = 'FaceIndex'
+
+    div = nodes.new('ShaderNodeMath')
+    div.operation = 'DIVIDE'
+    div.inputs[1].default_value = 5
+    links.new(attr.outputs['Fac'], div.inputs[0])
+    links.new(div.outputs['Value'], ramp.inputs['Fac'])
+
+
 def make_metal_material(gray=0.5):
     color = bpy.data.materials.new(name='metal_' + str(gray))
     color.use_nodes = True
