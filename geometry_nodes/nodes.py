@@ -1021,6 +1021,7 @@ class CurveToMesh(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  curve=None,
                  profile_curve=None,
+                 fill_caps = True,
                  **kwargs):
         """
 
@@ -1036,6 +1037,7 @@ class CurveToMesh(GreenNode):
         self.geometry_out = self.node.outputs["Mesh"]
         self.geometry_in = self.node.inputs["Curve"]
 
+        self.node.inputs["Fill Caps"].default_value = fill_caps
         if curve:
             self.tree.links.new(curve, self.node.inputs["Curve"])
         if profile_curve:
@@ -1049,6 +1051,7 @@ class ValueToString(BlueNode):
 
         self.std_out = self.node.outputs["String"]
         self.node.data_type = data_type
+
 
         if isinstance(value, (int, float)):
             self.node.inputs["Value"].default_value = value
@@ -2811,12 +2814,13 @@ class Simulation(GreenNode):
         self.tree.links.new(self.simulation_input.outputs["Geometry"], last.geometry_in)
 
 class ForEachZone(GreenNode):
-    def __init__(self, tree, location=(0, 0), node_width=5, geometry=None, **kwargs):
+    def __init__(self, tree, location=(0, 0), domain="POINT",node_width=5, geometry=None, **kwargs):
         self.foreach_output = tree.nodes.new("GeometryNodeForeachGeometryElementOutput")
         self.foreach_input = tree.nodes.new("GeometryNodeForeachGeometryElementInput")
         self.foreach_input.location = (location[0] * 200, location[1] * 200)
         self.foreach_output.location = (location[0] * 200 + node_width * 200, location[1] * 100)
         self.foreach_input.pair_with_output(self.foreach_output)
+        self.foreach_output.domain = domain
         self.node = self.foreach_input
         self.index = self.foreach_input.outputs[0]
         self.geometry_in = self.foreach_input.inputs["Geometry"]
@@ -2893,9 +2897,11 @@ class WireFrame(GreenNode):
                  radius=0.02,
                  resolution=4,
                  geometry=None,
+                 fill_caps=True,
                  **kwargs
                  ):
 
+        self.fill_caps = fill_caps
         self.node = self.create_node(tree.nodes)
         super().__init__(tree, location=location, **kwargs)
 
@@ -2939,7 +2945,7 @@ class WireFrame(GreenNode):
         mesh2curve = MeshToCurve(tree, location=(1, 0))
         curve_circle = CurveCircle(tree, location=(1, 1), resolution=group_inputs.outputs["Resolution"],
                                    radius=group_inputs.outputs["Radius"])
-        curve2mesh = CurveToMesh(tree, location=(2, 0), profile_curve=curve_circle.geometry_out)
+        curve2mesh = CurveToMesh(tree, location=(2, 0), profile_curve=curve_circle.geometry_out,fill_caps=self.fill_caps)
         create_geometry_line(tree, [mesh2curve, curve2mesh],
                              ins=group_inputs.outputs["Mesh"], out=group_outputs.inputs["Mesh"])
         return group
