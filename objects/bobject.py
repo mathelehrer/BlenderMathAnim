@@ -39,7 +39,7 @@ class BObject(object):
         self.updaters = []
         self.label_sep = 1
         self.name = self.get_from_kwargs('name', 'b_object')
-        self.hide = False # per default each object is visible. It can be changed with toggle_hide
+        self.hide = self.get_from_kwargs('hide',False) # per default each object is visible. It can be changed with toggle_hide
         if 'obj' in kwargs:
             ref_obj = kwargs['obj']
             if self.name != 'b_object':

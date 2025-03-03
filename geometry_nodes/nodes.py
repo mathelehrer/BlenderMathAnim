@@ -1700,7 +1700,9 @@ class NamedAttribute(RedNode):
             self.tree.links.new(name, self.node.inputs["Name"])
 
 class AttributeStatistic(BlueNode):
-    def __init__(self, tree, location=(0, 0),data_type="FLOAT",domain="POINT",geometry=None,selection=None,attribute=None,std_out="Mean",**kwargs):
+    def __init__(self, tree, location=(0, 0),data_type="FLOAT",domain="POINT",
+                 geometry=None,selection=None,attribute=None,
+                 std_out="Mean",**kwargs):
         self.node = tree.nodes.new(type="GeometryNodeAttributeStatistic")
         super().__init__(tree,location=location,**kwargs)
 
@@ -1708,8 +1710,10 @@ class AttributeStatistic(BlueNode):
         self.node.domain=domain
 
         self.std_out = self.node.outputs[std_out]
+        self.geometry_in = self.node.inputs["Geometry"]
+
         if geometry:
-            self.geometry_in = self.node.inputs["Geometry"]
+            tree.links.new(geometry,self.node.inputs["Geometry"])
         if selection:
             if isinstance(selection, bool):
                 self.node.inputs["Selection"].default_value = selection
@@ -3900,6 +3904,8 @@ def create_from_xml(tree,filename=None,**kwargs):
                     node_attributes = get_attributes(line)
                     node = Node.from_attributes(tree,node_attributes)
                     node_id = int(node_attributes["id"])
+                    if node_id==89:
+                        pass
                     node_name = node_attributes["name"]
                     node_structure[node_id]={"name": node_name, "inputs":dict(), "outputs":dict()}
                     if node is None:

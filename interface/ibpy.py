@@ -817,12 +817,22 @@ def hide_rec(obj, begin_time=0):
         insert_keyframe(obj, 'hide_render', frame - 1)
         obj.hide_render = True
         insert_keyframe(obj, 'hide_render', frame)
+        if hasattr(obj, 'hide_viewport'):
+            obj.hide_viewport = False
+            insert_keyframe(obj, 'hide_viewport', frame-1)
+            obj.hide_viewport = True
+            insert_keyframe(obj, 'hide_viewport', frame)
     elif hasattr(obj, 'data'):
-        if hasattr(obj.data, 'hide_rander'):
+        if hasattr(obj.data, 'hide_render'):
             obj.data.hide_render = False
-            insert_keyframe(obj, 'hide_render', frame - 1)
+            insert_keyframe(obj.data, 'hide_render', frame - 1)
             obj.data.hide_render = True
-            insert_keyframe(obj, 'hide_render', frame)
+            insert_keyframe(obj.data, 'hide_render', frame)
+            if hasattr(obj.data, 'hide_viewport'):
+                obj.data.hide_viewport = False
+                insert_keyframe(obj.data, 'hide_viewport', frame - 1)
+                obj.data.hide_viewport = True
+                insert_keyframe(obj.data, 'hide_viewport', frame)
     # obj.hide_set(True)
     for child in obj.children:
         hide_rec(child, begin_time=begin_time)
