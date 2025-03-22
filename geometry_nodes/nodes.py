@@ -1281,7 +1281,7 @@ class InstanceOnPoints(GreenNode):
         self.geometry_out = self.node.outputs["Instances"]
         self.geometry_in = self.node.inputs["Points"]
 
-        if isinstance(rotation, Vector):
+        if isinstance(rotation, (list,Vector)):
             self.node.inputs["Rotation"].default_value = rotation
         else:
             self.tree.links.new(rotation, self.node.inputs["Rotation"])
@@ -2065,6 +2065,18 @@ class InputNormal(RedNode):
         super().__init__(tree, location=location, **kwargs)
 
         self.std_out = self.node.outputs["Normal"]
+
+class InputMaterial(RedNode):
+    def __init__(self, tree, location=(0, 0),material=None, **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeInputMaterial")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Material"]
+        if material is not None:
+            if isinstance(material, str):
+                self.node.material=ibpy.get_material(material,**kwargs)
+            elif isinstance(material, bpy.types.Material):
+                self.node.material=material
 
 class Index(RedNode):
     def __init__(self, tree, location=(0, 0), **kwargs):

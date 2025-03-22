@@ -54,6 +54,16 @@ def flag_operators(expr):
 
     return expr
 
+def parse_int_tuple(expr):
+    # remove parenthesis
+    if expr[0] == '(':
+        expr = expr[1:]
+    if expr[-1]==')':
+        expr = expr[:-1]
+
+    parts = expr.split(',')
+    return tuple([int(p) for p in parts])
+
 
 class ExpressionConverter:
     def __init__(self, infix):
