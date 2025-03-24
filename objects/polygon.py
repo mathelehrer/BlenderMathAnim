@@ -224,3 +224,4 @@ class Triangle(BObject):
             col_dic[4]
         ]
         ibpy.set_vertex_colors(self, colors)
+

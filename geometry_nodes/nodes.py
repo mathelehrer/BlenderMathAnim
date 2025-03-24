@@ -101,6 +101,9 @@ class Node:
         if type=="INPUT_INT":
             integer = int(attributes["integer"])
             return InputInteger(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,integer=integer)
+        if type=="INPUT_BOOL":
+            boolean = bool(attributes["boolean"])
+            return InputBoolean(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,boolean=boolean)
         if type=="RANDOM_VALUE":
             data_type = attributes["data_type"]
             return RandomValue(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type)
@@ -774,6 +777,33 @@ class ResampleCurve(GreenNode):
             self.node.inputs["Count"].default_value = count
         else:
             self.tree.links.new(count, self.node.inputs["Count"])
+
+class TrimCurve(GreenNode):
+    def __init__(self, tree, location=(0, 0),curve=None,
+                 selection = None,
+                 mode='FACTOR',start=0,end=1,**kwargs):
+        self.node=tree.nodes.new(type="GeometryNodeTrimCurve")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.node.mode=mode
+        self.geometry_out=self.node.outputs["Curve"]
+        self.geometry_in=self.node.inputs["Curve"]
+
+        if curve:
+            self.tree.links.new(curve,self.node.inputs["Curve"])
+
+        if selection:
+            self.tree.links.new(curve,self.node.inputs["Selection"])
+
+        if isinstance(start, (int,float)):
+            self.node.inputs["Start"].default_value = start
+        else:
+            self.tree.links.new(start, self.node.inputs["Start"])
+
+        if isinstance(end, (int,float)):
+            self.node.inputs["End"].default_value = end
+        else:
+            self.tree.links.new(end, self.node.inputs["End"])
 
 class FilletCurve(GreenNode):
     def __init__(self, tree, location=(0, 0),mode="POLY",radius=1,curve=None,
@@ -1815,6 +1845,7 @@ class SetMaterial(GreenNode):
             self.inputs["Material"].default_value = material
         else:  # link socket
             self.tree.links.new(material, self.inputs["Material"])
+        self.material = material
 
 class MergeByDistance(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -2771,7 +2802,10 @@ class IndexSwitch(BlueNode):
     def add_item(self,socket):
         if self.added_items>len(self.slots)-3:
             self.new_item()
-        self.tree.links.new(socket,self.slots[self.added_items+1])
+        if isinstance(socket,int):
+            self.slots[self.added_items+1].default_value=socket
+        else:
+            self.tree.links.new(socket,self.slots[self.added_items+1])
         self.added_items+=1
 
     def new_item(self):
@@ -2880,7 +2914,7 @@ class Simulation(GreenNode):
         self.tree.links.new(self.simulation_input.outputs["Geometry"], last.geometry_in)
 
 class ForEachZone(GreenNode):
-    def __init__(self, tree, location=(0, 0), domain="POINT",node_width=5, geometry=None, **kwargs):
+    def __init__(self, tree, location=(0, 0), domain="POINT",node_width=5, geometry=None,selection=None, **kwargs):
         self.foreach_output = tree.nodes.new("GeometryNodeForeachGeometryElementOutput")
         self.foreach_input = tree.nodes.new("GeometryNodeForeachGeometryElementInput")
         self.foreach_input.location = (location[0] * 200, location[1] * 200)
@@ -2896,6 +2930,9 @@ class ForEachZone(GreenNode):
 
         if geometry is not None:
             tree.links.new(geometry, self.foreach_input.inputs["Geometry"])
+
+        if selection is not None:
+            tree.links.new(selection,self.foreach_input.inputs["Selection"])
 
     def add_socket(self, socket_type="GEOMETRY", name="socket", value=0):
         """
@@ -3015,6 +3052,64 @@ class WireFrame(GreenNode):
         create_geometry_line(tree, [mesh2curve, curve2mesh],
                              ins=group_inputs.outputs["Mesh"], out=group_outputs.inputs["Mesh"])
         return group
+
+class CurveWireFrame(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 radius=0.02,
+                 resolution=4,
+                 geometry=None,
+                 fill_caps=True,
+                 **kwargs
+                 ):
+
+        self.fill_caps = fill_caps
+        self.node = self.create_node(tree.nodes)
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Curve"]
+
+        if geometry:
+            self.tree.links.new(geometry, self.geometry_in)
+        if isinstance(radius, (int, float)):
+            self.node.inputs["Radius"].default_value = radius
+        else:
+            self.tree.links.new(radius, self.node.inputs["Radius"])
+        if isinstance(resolution, int):
+            self.node.inputs["Resolution"].default_value = resolution
+        else:
+            self.tree.links.new(resolution, self.node.inputs["Resolution"])
+
+    def create_node(self, nodes, name="WireframeNode"):
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
+
+        group.name = name
+        group.node_tree = tree
+
+        # create inputs and outputs
+        tree_nodes = tree.nodes
+        tree_links = tree.links
+
+        group_inputs = tree_nodes.new("NodeGroupInput")
+        group_outputs = tree_nodes.new("NodeGroupOutput")
+
+        make_new_socket(tree, name="Curve", io="INPUT", type="NodeSocketGeometry")
+        make_new_socket(tree, name="Radius", io="INPUT", type="NodeSocketFloat")
+        make_new_socket(tree, name="Resolution", io="INPUT", type="NodeSocketInt")
+
+        make_new_socket(tree, name="Mesh", io="OUTPUT", type="NodeSocketGeometry")
+
+        group_inputs.location = (0, 0)
+        group_outputs.location = (600, 0)
+
+        curve_circle = CurveCircle(tree, location=(1, 1), resolution=group_inputs.outputs["Resolution"],
+                                   radius=group_inputs.outputs["Radius"])
+        curve2mesh = CurveToMesh(tree, location=(2, 0), profile_curve=curve_circle.geometry_out,fill_caps=self.fill_caps)
+        create_geometry_line(tree, [curve2mesh],
+                             ins=group_inputs.outputs["Curve"], out=group_outputs.inputs["Mesh"])
+        return group
+
 
 class WireFrameRectangle(GreenNode):
     def __init__(self, tree, location=(0, 0),
