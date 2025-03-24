@@ -2068,6 +2068,13 @@ class InputNormal(RedNode):
 
 class InputMaterial(RedNode):
     def __init__(self, tree, location=(0, 0),material=None, **kwargs):
+        """
+        create an MaterialINput node
+        :param tree:
+        :param location:
+        :param material:
+        :param kwargs:
+        """
         self.node = tree.nodes.new(type="GeometryNodeInputMaterial")
         super().__init__(tree, location=location, **kwargs)
 
