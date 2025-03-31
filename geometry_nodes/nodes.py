@@ -1010,6 +1010,7 @@ class StringToCurves(GreenNode):
         self.node.align_x=align_x
         self.node.align_y=align_y
         self.node.pivot_mode=pivot_mode
+        self.node.font = bpy.data.fonts.get("Symbola Regular")
 
         if isinstance(string, str):
             self.node.inputs["String"].default_value = string
@@ -1936,10 +1937,11 @@ class TransformGeometry(GreenNode):
         else:
             self.tree.links.new(translation, self.inputs["Translation"])
 
-        if isinstance(rotation, (list, Vector)):
-            self.inputs["Rotation"].default_value = rotation
-        else:
-            self.tree.links.new(rotation, self.inputs["Rotation"])
+        if rotation is not None:
+            if isinstance(rotation, (list, Vector)):
+                self.inputs["Rotation"].default_value = rotation
+            else:
+                self.tree.links.new(rotation, self.inputs["Rotation"])
 
         if isinstance(scale, (list, Vector)):
             self.inputs["Scale"].default_value = scale

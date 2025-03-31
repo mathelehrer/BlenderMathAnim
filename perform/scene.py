@@ -14,7 +14,7 @@ from interface import ibpy
 from perform.render import render_with_skips
 from utils.constants import DEFAULT_SCENE_BUFFER, LIGHT_TYPE, CAMERA_LOCATION, CAMERA_ANGLE, FRAME_RATE, COLORS_SCALED, \
     DEFAULT_SCENE_DURATION, SAMPLE_COUNT, LIGHT_SAMPLING_THRESHOLD, RESOLUTION_PERCENTAGE, RENDER_DIR, \
-    BLEND_FRM_RATE_DIR, COLOR_NAMES, COLORS
+    BLEND_FRM_RATE_DIR, COLOR_NAMES, COLORS, FONT_DIR
 from utils.kwargs import get_from_kwargs
 
 
@@ -246,6 +246,10 @@ def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_
     else:
         transparent = False
     scn.render.film_transparent=transparent
+
+    # load fonts
+
+    bpy.ops.font.open(filepath=os.path.join(FONT_DIR, "Symbola/Symbola.ttf"))
 
 def get_total_duration(scenes):
     # scenes is a list of (name, object) pairs

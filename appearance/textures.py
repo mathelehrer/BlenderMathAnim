@@ -263,6 +263,10 @@ def shade_material(material, shading):
         color[0] *= down
         color[1] *= down
         color[2] *= down
+    elif shading == 'darker2':
+        color[0] *= down**2
+        color[1] *= down**2
+        color[2] *= down**2
 
     for i in range(3):
         color[i] = np.minimum(1, color[i])

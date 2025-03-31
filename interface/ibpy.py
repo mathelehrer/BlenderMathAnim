@@ -1761,6 +1761,11 @@ def customize_material(material, **kwargs):
     else:
         alpha = 1
 
+    if 'shading' in kwargs:
+        shading = kwargs.pop('shading')
+    else:
+        shading = None
+
     if 'Principled BSDF' in material.node_tree.nodes:
         bsdf = material.node_tree.nodes['Principled BSDF']
     else:
@@ -1801,6 +1806,37 @@ def customize_material(material, **kwargs):
                 blue1 = blue * scale
                 material.node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value = [red1, green1, blue1,
                                                                                                   alpha]
+            color = bsdf.inputs['Base Color'].default_value
+            up = 1.5
+            down = 1 / up
+
+            if shading == 'redder':
+                color[0] *= up
+                color[1] *= down
+                color[2] *= down
+            elif shading == 'greener':
+                color[0] *= down
+                color[1] *= up
+                color[2] *= down
+            elif shading == 'bluer':
+                color[0] *= down
+                color[1] *= down
+                color[2] *= up
+            elif shading == 'brighter':
+                color[0] *= up
+                color[1] *= up
+                color[2] *= up
+            elif shading == 'darker':
+                color[0] *= down
+                color[1] *= down
+                color[2] *= down
+            elif shading == 'darker2':
+                color[0] *= down ** 2
+                color[1] *= down ** 2
+                color[2] *= down ** 2
+
+            for i in range(3):
+                color[i] = np.minimum(1, color[i])
 
         if emission is not None:
             set_emission(material, emission)
@@ -6095,6 +6131,31 @@ def add_mesh_modifier(bob, **kwargs):
                     modifiers["Output_" + str(i + 1) + "_attribute_name"] = name
         else:
             print("No node data was provided! You either need to add a 'node_group' or a  'node_modifier' keyword")
+
+def replace_mesh_modifier(bob, **kwargs):
+    '''
+    This is a new start for a more generic modifier function
+    :param bob:
+    :param kwargs:
+    :return:
+    '''
+    obj = get_obj(bob)
+    type = kwargs.pop('type')
+    if 'name' in kwargs:
+        name = kwargs.pop('name')
+    else:
+        name = 'modifier_' + str(type)
+
+    if type == 'NODES':
+        if 'node_modifier' in kwargs:
+            node_modifier = kwargs.pop('node_modifier')
+            obj.modifiers[0].node_group = node_modifier.get_node_tree()
+        elif 'node_group' in kwargs:
+            node_group = kwargs.pop('node_group')
+            obj.modifiers[0].node_group = node_group
+        else:
+            print("No node data was provided! You either need to add a 'node_group' or a  'node_modifier' keyword")
+
 
 def apply_modifiers(bob):
     obj = get_obj(bob)
