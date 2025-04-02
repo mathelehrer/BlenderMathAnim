@@ -995,7 +995,7 @@ class CurveQuadrilateral(GreenNode):
             self.tree.links.new(height, self.node.inputs["Height"])
 
 class StringToCurves(GreenNode):
-    def __init__(self, tree, location=(0, 0),overflow='OVERFLOW',align_x="CENTER",align_y="MIDDLE",pivot_mode="MIDPOINT",
+    def __init__(self, tree, location=(0, 0),font="Symbola Regular",overflow='OVERFLOW',align_x="CENTER",align_y="MIDDLE",pivot_mode="MIDPOINT",
                  string="0",size=1,character_spacing=1,word_spacing=1,line_spacing=1,textbox_width=0, **kwargs):
         """
         """
@@ -1010,7 +1010,7 @@ class StringToCurves(GreenNode):
         self.node.align_x=align_x
         self.node.align_y=align_y
         self.node.pivot_mode=pivot_mode
-        self.node.font = bpy.data.fonts.get("Symbola Regular")
+        self.node.font = bpy.data.fonts.get(font)
 
         if isinstance(string, str):
             self.node.inputs["String"].default_value = string
@@ -2776,10 +2776,15 @@ class Switch(BlueNode):
             tree.links.new(switch, self.switch)
 
         if true:
-            tree.links.new(true, self.true)
-
+            if isinstance(true, (bpy.types.NodeSocket)):
+                tree.links.new(true, self.true)
+            else:
+                self.true.default_value = true
         if false:
-            tree.links.new(false, self.false)
+            if isinstance(false, (bpy.types.NodeSocket)):
+                tree.links.new(false, self.false)
+            else:
+                self.false.default_value = false
 
 class IndexSwitch(BlueNode):
     def __init__(self, tree, location=(0, 0), data_type="GEOMETRY",
