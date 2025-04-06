@@ -563,6 +563,13 @@ class graph_core(object):
             if vv is None:
                 str_data = str(list(self.sV.o.values())[0].data)
                 # raise Exception("Missing connection for node: ",str_data)
+                print( "The algorithm breaks because of an unconnected root: ")
+                print(v.data)
+                print(v.data.name)
+                print(v.data.label)
+                print("in: ",v.e_in)
+                print("out: ",v.e_out)
+                exit(1)
             if vv.ind == 0: # if the algorithm breaks at this point, maybe there is a root node without an edge
                 _visit(vv, scs)
         # now possibly unvisited vertices:
