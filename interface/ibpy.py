@@ -1070,7 +1070,9 @@ def un_link(obj, collection=None):
         :return:
         """
     if collection is None:
-        bpy.context.scene.collection.objects.unlink(obj)
+        collection = 'Scene Collection'
+        bpy.context.scene.collection.children[collection].objects.unlink(obj)
+        # bpy.context.scene.collection.objects.unlink(obj)
     else:
         bpy.context.scene.collection.children[collection].objects.unlink(obj)
 

@@ -628,7 +628,7 @@ class BObject(object):
             obj = self.ref_obj
             if not linked:
                 if obj.name not in bpy.context.scene.objects:
-                    ibpy.link(obj,collection=self.collection)
+                    ibpy.link(obj,collection=self.collection,**kwargs)
 
             if clear_data:  # this is useful for copies of objects to remove animation data from inherited from the parent
                 ibpy.clear_animation_data(self)

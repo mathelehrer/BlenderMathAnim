@@ -113,6 +113,11 @@ class DigitalRange(BObject):
     The morphing through all values is established during the construction
 
     later on the values are changed by selecting shape parameters
+
+    example:
+
+    dim  = DigitalRange(list(range(-3, 4)), digits=0, aligned="center", signed=True, color="example")
+
     """
 
     def __init__(self, values, **kwargs):
@@ -144,17 +149,26 @@ class DigitalRange(BObject):
         self.dict = {np.round(10**self.digits*v)/10**self.digits:i for i,v in enumerate(self.values)}
         self.current_value = None
 
-    def write(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def write(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
+        # only link and appear container of the letters, make sure that the children are not visible and linked
+        self.appear(begin_time=begin_time,transition_time=0,children=False,recursively=False)
         self.current_value = self.initial_value
-        return self.show(self.initial_value,begin_time=begin_time,transition_time=transition_time)
+        self.bobs[0].write(begin_time=begin_time,transition_time=transition_time,**kwargs)
+        return begin_time+transition_time
+
 
     def show(self, from_value,to_value=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
 
         if self.start:
             self.start=False
-            self.appear(begin_time=begin_time,transition_time=transition_time)
-            self.first.appear( begin_time=begin_time, transition_time=transition_time,writing=False)  # link first line invisible to blender
+            # link all other words and make them invisible
+            for i in range(1,len(self.bobs)):
+                bobj = self.bobs[i]
+                ibpy.link(bobj)
             self.morph()
+            for i in range(1,len(self.bobs)):
+                bobj = self.bobs[i]
+                ibpy.hide(bobj)
 
         if to_value is None:
             to_value=from_value
