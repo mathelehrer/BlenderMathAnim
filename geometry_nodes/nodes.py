@@ -503,7 +503,7 @@ class ExtrudeMesh(GreenNode):
                  mode="VERTICES",
                  mesh=None,
                  selection=None,
-                 offset=Vector(),
+                 offset=None,
                  offset_scale=1, **kwargs):
         """
 
@@ -1696,6 +1696,35 @@ class BoundingBox(GreenNode):
 
         if geometry:
             self.tree.links.new(geometry, self.node.inputs["Geometry"])
+
+class MeshBoolean(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 operation="DIFFERENCE",solver="FLOAT",
+                 mesh_1=None,mesh_2=None,self_intersection=False,
+                 hole_tolerant=False, **kwargs
+                 ):
+        self.node = tree.nodes.new(type="GeometryNodeMeshBoolean")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Mesh 1"]
+        self.node.operation = operation
+        self.node.solver = solver
+
+        if mesh_1:
+            self.tree.links.new(mesh_1, self.node.inputs["Mesh 1"])
+        if mesh_2:
+            self.tree.links.new(mesh_2, self.node.inputs["Mesh 2"])
+
+        if isinstance(self_intersection, bool):
+            self.node.inputs["Self Intersection"].default_value = self_intersection
+        else:
+            tree.links.new(self_intersection, self.node.inputs["Self Intersection"])
+
+        if isinstance(hole_tolerant,bool):
+            self.node.inputs["Hole Tolerant"].default_value=hole_tolerant
+        else:
+            tree.links.new(hole_tolerant,self.node.inputs["Hole Tolerant"])
 
 #################
 ## Attributes ###
@@ -2947,7 +2976,7 @@ class ForEachZone(GreenNode):
         :param name:
         :return:
         """
-        self.foreach_output.state_items.new(socket_type, name)
+        self.foreach_output.input_items.new(socket_type, name)
         self.foreach_input.outputs[name].default_value = value
 
     def create_geometry_line(self, nodes):

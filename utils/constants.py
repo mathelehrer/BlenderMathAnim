@@ -118,6 +118,18 @@ COLOR_NAMES = [
     'yellow',
     'magenta',
     'cyan',
+    'mega1',
+    'mega2',
+    'mega3',
+    'mega4',
+    'mega5',
+    'mega6',
+    'mega7',
+    'mega8',
+    'mega9',
+    'mega10',
+    'mega11',
+    'mega12',
     'gray_1',
     'gray_2',
     'gray_3',
@@ -178,103 +190,22 @@ if color_scheme == -1:
         [200,200,0,1],# yellow
         [255,0,255,1],# magenta
         [0,255,255,1], # cyan
-    ]
-
-elif color_scheme == 0:
-    # https://digitalsynopsis.com/design/color-schemes-palettes-combinations/  four seasons
-    COLORS = [
-        [0, 0, 0, 1],  # black background
-        [247, 220, 104, 1],  # milky yellow
-        [46, 149, 153, 1],  # turquoise
-        [244, 108, 63, 1],  # orange
-        [167, 34, 111, 1],  # pink
-        [255, 255, 255, 1],  # white
-        [225, 0, 32, 1],  # custom 1 # the values are adjusted to incorporate the gamma factor of 1.2 in the end
-        [249, 189, 179, 1],  # custom 2
-        [234, 75, 77, 1],  # custom 3
-        [243, 153, 143, 1],  # custom 4
-        [239, 115, 107, 1],  # custom 5
-    ]
-
-elif color_scheme == 4:  # UCSF
-    # https://identity.ucsf.edu/print-digital/digital-colors
-    COLORS = [
-        [5, 32, 73, 1],  # Dark blue
-        [255, 255, 255, 1],  # White
-        [255, 221, 0, 1],  # Yellow
-        [80, 99, 128, 1],  # Light Navy
-        [47, 51, 54, 1],  # Two darker than first video
-        [0, 0, 0, 1],  # Black
-        [113, 111, 178, 1],  # Light purple
-        [180, 185, 191, 1],  # Dark gray
-        [209, 211, 211, 1],  # Light gray
-    ]
-    COLOR_NAMES = None
-
-elif color_scheme == 5:
-    # https://adrian.simionov.io/aws/2020/04/24/aws-color-palette.html
-    COLORS = [
-        [35, 47, 60, 1],  # dark blue background
-        [143, 168, 194, 1],  # light blue foreground
-        [92, 191, 168, 1],  # turquoise
-        [253, 152, 49, 1],  # orange
-        [252, 85, 139, 1],  # pink
-        [249, 90, 83, 1],  # red
-        [157, 113, 249, 1],  # purple
-        [78, 134, 249, 1],  # blue
-        [34, 163, 196, 1],  # cyan
-        [112, 171, 74, 1],  # green
-        [250, 250, 250, 1],  # white
-        [59, 76, 89, 1],  # background_alt
-        [78, 88, 98, 1],  # background_alt2
-        [73, 86, 90, 1],  # background_alt3
-    ]
-
-elif color_scheme == 1:
-    # Coolors Exported Palette - https://coolors.co/393e41-f3f2f0-3e7ea0-ff9400-e7e247
-    COLORS = [
-        [57, 62, 65, 1],
-        # [211, 208, 203, 1],
-        [243, 242, 240, 1],
-        [62, 126, 160, 1],
-        [255, 148, 0, 1],
-        # [232, 225, 34, 1],
-        [231, 226, 71, 1],
-        # [106, 141, 115, 1]
-        [215, 38, 61, 1]
-        # [255, 0, 0, 1]
-    ]
-
-elif color_scheme == 2:  # Main. Why isn't #1 main? Because your face.
-    COLORS = [
-        # [42, 46, 48, 1], #Three darker than first video
-        [47, 51, 54, 1],  # Two darker than first video
-        # [211, 208, 203, 1],
-        [243, 242, 240, 1],
-        [62, 126, 160, 1],
-        [255, 148, 0, 1],
-        # [232, 225, 34, 1],
-        [231, 226, 71, 1],
-        # [106, 141, 115, 1]
-        [214, 59, 80, 1],
-        # [255, 0, 0, 1]
-        [105, 143, 63, 1],
-        [219, 90, 186, 1],
-        [145, 146.5, 147, 1],  # Gray from averaging 1 and 2
-        [0, 0, 0, 1]
+        [187,220,126,1],# mega1
+        [251,107,-12,1],# mega2
+        [194,194,194,1],# mega3
+        [241,157,192,1],# mega4
+        [255,251,158,1],# mega5
+        [118,199,241,1],# mega6
+        [-5,102,-11,1],# mega7
+        [255,255,255,1],# mega8
+        [95,80,156,1],# mega9
+        [250,196,-15,1],# mega10
+        [2,56,187,1],# mega11
+        [220,31,22,1],# mega12
     ]
 
 
-elif color_scheme == 3:
-    # Coolors Exported Palette - coolors.co/191308-bbd8b3-f3b61f-48a0c9-72120d
-    COLORS = [
-        [1, 33, 31, 1],
-        [255, 237, 225, 1],
-        [32, 164, 243, 1],
-        [255, 51, 102, 1],
-        [234, 196, 53, 1],
-        [215, 38, 61, 1]
-    ]
+
 
 # add gray values
 for i in range(1, 10):
