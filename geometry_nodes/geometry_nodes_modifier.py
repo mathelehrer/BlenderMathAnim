@@ -2808,7 +2808,6 @@ class UnfoldModifier(GeometryNodesModifier):
     def create_node(self,tree,**kwargs):
         create_from_xml(tree,"unfolding_node",**kwargs)
 
-
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
 
