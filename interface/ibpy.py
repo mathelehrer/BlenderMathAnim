@@ -1875,7 +1875,11 @@ def get_material(material, **kwargs):
         elif material == 'hue':
             material = make_hue_material(**kwargs)
         else:
-            material = bpy.data.materials[material].copy()
+            if material not in bpy.data.materials:
+                # return default drawing material
+                material = bpy.data.materials["drawing"].copy()
+            else:
+                material = bpy.data.materials[material].copy()
         # override default values
         material = customize_material(material, **kwargs)
 

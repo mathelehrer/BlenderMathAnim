@@ -120,6 +120,10 @@ class Node:
             return CollectionInfo(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,transform_space=transform_space)
         if type=="INPUT_NORMAL":
             return InputNormal(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+        if type=="INPUT_MATERIAL":
+            material=attributes["material"]
+            return InputMaterial(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200,
+                                 material=material)
 
         # geometry nodes
         if type=="MESH_LINE":
@@ -210,6 +214,10 @@ class Node:
             return CubeMesh(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type=="MESH_PRIMITIVE_GRID":
             return Grid(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+        if type=="MESH_PRIMITIVE_CYLINDER":
+            return CylinderMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+        if type == "MESH_PRIMITIVE_CONE":
+            return ConeMesh(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
 
         # curves
         if type=="CURVE_PRIMITIVE_CIRCLE":
@@ -218,6 +226,11 @@ class Node:
         if type=="CURVE_PRIMITIVE_QUADRILATERAL":
             return CurveQuadrilateral(tree, location=location, name=name, label=label, hide=hide, mute=mute,
                                       node_height=200)
+        if type=="CURVE_PRIMITIVE_ARC":
+            mode=attributes["mode"]
+            return CurveArc(tree,location=location,name=name,
+                            label=label,hide=hide,mute=mute,node_height=200,
+                            mode=mode)
         # if type=="CURVE_TO_POINTS":
         #     mode = attributes["mode"]
         #     return CurveToPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
@@ -285,11 +298,14 @@ class Node:
             primary_axis=attributes["primary_axis"]
             secondary_axis=attributes["secondary_axis"]
             return AxesToRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,primary_axis=primary_axis,secondary_axis=secondary_axis)
+
         # switches
         if type=="SWITCH":
             input_type = attributes["input_type"]
             return Switch(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,input_type=input_type)
-
+        if type=="INDEX_SWITCH":
+            data_type=attributes["data_type"]
+            return IndexSwitch(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type)
             # don't know the category yet
         if type=="FIELD_ON_DOMAIN":
             data_type=attributes["data_type"]
@@ -966,6 +982,57 @@ class CurveCircle(GreenNode):
             self.node.inputs["Resolution"].default_value = resolution
         else:
             self.tree.links.new(resolution, self.node.inputs["Resolution"])
+
+class CurveArc(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 mode="RADIUS",
+                 resolution=16,
+                 radius=1,start_angle=0,sweep_angle=315,
+                 connect_center=False,invert_arc=False,
+                 **kwargs):
+        """
+
+        :param tree:
+        :param location:
+        :param mode: "RADIUS", "POINTS"
+        :param resolution:
+        :param radius:
+        :param start_angle:
+        :param sweep_angle:
+        :param connect_center:
+        :param invert_arc:
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="GeometryNodeCurveArc")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs["Curve"]
+        self.node.mode = mode
+
+        if isinstance(radius, (int, float)):
+            self.node.inputs["Radius"].default_value = radius
+        else:
+            self.tree.links.new(radius, self.node.inputs["Radius"])
+        if isinstance(resolution, int):
+            self.node.inputs["Resolution"].default_value = resolution
+        else:
+            self.tree.links.new(resolution, self.node.inputs["Resolution"])
+        if isinstance(start_angle,(int,float)):
+            self.node.inputs["Start Angle"].default_value=start_angle
+        else:
+            tree.links.new(start_angle,self.node.inputs["Start Angle"])
+        if isinstance(sweep_angle,(int,float)):
+            self.node.inputs["Sweep Angle"].default_value=sweep_angle
+        else:
+            tree.links.new(sweep_angle,self.node.inputs["Sweep Angle"])
+        if isinstance(connect_center,bool):
+            self.node.inputs["Connect Center"].default_value=connect_center
+        else:
+            tree.links.new(connect_center,self.node.inputs["Connect Center"])
+        if isinstance(invert_arc,bool):
+            self.node.inputs["Invert Arc"].default_value=invert_arc
+        else:
+            tree.links.new(invert_arc,self.node.inputs["Invert Arc"])
 
 class CurveQuadrilateral(GreenNode):
     def __init__(self, tree, location=(0, 0), mode="RECTANGLE",
@@ -4023,7 +4090,7 @@ def get_default_value_for_socket(attributes):
         return list(parsed)
     elif socket_type=='MATERIAL':
         color = attributes['default_value']
-        if len(color)==0:
+        if color=='None' or len(color)==0:
             return None
         return ibpy.get_material(color)
 
@@ -4097,7 +4164,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                     node_attributes = get_attributes(line)
                     node = Node.from_attributes(tree,node_attributes)
                     node_id = int(node_attributes["id"])
-                    if node_id==89:
+                    if node_id==16:
                         pass
                     node_name = node_attributes["name"]
                     node_structure[node_id]={"name": node_name, "inputs":dict(), "outputs":dict()}
