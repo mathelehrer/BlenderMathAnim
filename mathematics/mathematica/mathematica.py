@@ -22,6 +22,7 @@ def factorial(n:int)->int:
     if n==0 or n==1:
         return 1
     return n*factorial(n-1)
+
 def choose(lst,choice):
     '''
     >>> choose(list(range(5)),2)
@@ -60,7 +61,6 @@ def partition(lst, size, step, wrap=0):
     tmp = lst + lst[0:wrap]
     return [tmp[i:(i + size)] for i in range(0, len(tmp) - size + 1, step)]
 
-
 def random_points(dim=3, n=10, domain=10, seed=None):
     """
     returns a list of tuples of random points
@@ -81,7 +81,6 @@ def random_points(dim=3, n=10, domain=10, seed=None):
     else:
         return [t + tuple([-domain + np.random.random() * 2 * domain]) for t in
                 random_points(dim - 1, n=n, domain=domain, seed=seed)]
-
 
 def unit_tuples(dim):
     return [tuple(v) for v in np.identity(dim)]
@@ -258,6 +257,7 @@ def find_closest(point_list,point):
             dist=next_dist
 
     return closest
+
 
 if __name__ == '__main__':
     import doctest

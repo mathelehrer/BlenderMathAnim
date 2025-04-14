@@ -4,6 +4,7 @@ from sympy import factor
 
 from interface import ibpy
 from interface.ibpy import FOLLOW_PATH_DICTIONARY, Vector, Quaternion, Euler
+from mathematics.zeros import chop
 from objects.bobject import BObject
 from objects.curve import BezierDataCurve
 from objects.empties import EmptyArrow
@@ -292,7 +293,15 @@ class BRubiksCube(BObject):
         ibpy.set_frame(old_frame)
         return permutation
 
+    def show_state(self):
+        # chop the quaternion states
+        chopped_states = {}
+        for key,val in self.cubie_states.items():
+            chopped_states[key]=(val[0],Quaternion([chop(val[1][i]) for i in range(4)]))
+        return chopped_states
+
     # transformation functions
+
 
     def appear(self,
                begin_time=0,
@@ -390,7 +399,6 @@ class BRubiksCube(BObject):
             ibpy.set_linear_fcurves(child)
 
         return begin_time+transition_time
-
 
 class BRubiksCubeLocalCenters(BObject):
     def __init__(self, **kwargs):
