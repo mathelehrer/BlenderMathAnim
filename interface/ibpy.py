@@ -3010,6 +3010,11 @@ def change_default_integer(slot, from_value, to_value, begin_time=None, data_pat
     insert_keyframe(slot, data_path, (begin_time+transition_time)*FRAME_RATE)
     return begin_time+transition_time
 
+def change_default_material(slot, to_value=None, begin_time=None, data_path="material", begin_frame=0):
+    if to_value is not None:
+        slot.material = to_value
+    return begin_time
+
 def change_default_quaternion(slot,from_value,to_value,begin_time=None,transition_time=DEFAULT_ANIMATION_TIME,
                               begin_frame=0):
     if begin_time:

@@ -167,7 +167,9 @@ class Node:
         # instances
         if type=="INSTANCE_ON_POINTS":
             return InstanceOnPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
-
+        if type=="ROTATE_INSTANCES":
+            return RotateInstances(tree, location=location, name=name, label=label, hide=hide, mute=mute,
+                                    node_height=200)
         # attribute nodes
         if type=="STORE_NAMED_ATTRIBUTE":
             data_type = attributes["data_type"]

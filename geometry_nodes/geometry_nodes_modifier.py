@@ -46,7 +46,8 @@ class GeometryNodesModifier:
     def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True,mode="Sugiyama", group_output=True, group_input=False, **kwargs):
         tree = get_node_tree(name=name, type='GeometryNodeTree')
 
-        # if  materials are created inside the geometry node, they are stored inside the following array
+        # if  materials are created inside the geometry node,
+        # they are stored inside the following array
         # and will be added to the material slots of the blender object
         self.materials = []
         # create output nodes
