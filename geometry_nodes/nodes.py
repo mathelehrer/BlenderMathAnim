@@ -2902,13 +2902,31 @@ class IndexSwitch(BlueNode):
             else:
                 tree.links.new(index, self.index)
 
+    def add_new_item_from_xml(self,default_value=None):
+        """
+        do not use this function, use add_new_item instead
+        it is only used for the xml import
+        """
+        self.new_item()
+        if self.added_items==0:
+            self.added_items=2 # these are the items existing by default
+        self.added_items+=1
+        if default_value:
+            self.slots[self.added_items].default_value=default_value
+        return True
+
     def add_item(self,socket):
+        """
+         only use this function, when you add switch items,
+         it assumes that you wire the index socket independently
+        """
         if self.added_items>len(self.slots)-3:
             self.new_item()
-        if isinstance(socket,int):
-            self.slots[self.added_items+1].default_value=socket
-        else:
-            self.tree.links.new(socket,self.slots[self.added_items+1])
+        if socket:
+            if isinstance(socket,int):
+                self.slots[self.added_items+1].default_value=socket
+            else:
+                self.tree.links.new(socket,self.slots[self.added_items+1])
         self.added_items+=1
 
     def new_item(self):
@@ -4055,7 +4073,7 @@ def parse_default_attribute(attribute):
     math nodes like Compare have VECTOR sockets that are not used but are filled with <bpy_float[3]...> stuff that cannot be parsed
     """
     if (attribute.startswith("(") and attribute.endswith(")")) or (attribute.startswith("[") and attribute.endswith("]")):
-        attribute = attribute[1:-2]
+        attribute = attribute[1:-1]
         parts = attribute.split(",")
         comps = [float(part) for part in parts]
         return tuple(comps)
@@ -4103,13 +4121,21 @@ def create_socket(tree, node, node_attributes, attributes):
         # empty socket, nothing to do
         return False
     else:
+        if node_attributes['type'] == 'INDEX_SWITCH': # just add empty socket to Index Switch
+            # this is called, when IndexSwitch node is created from XML
+            if "default_value" in attributes:
+                default_value = get_default_value_for_socket(attributes)
+                node.add_new_item_from_xml(default_value)
+            else:
+                node.add_new_item_from_xml()
+            return True
         if node_attributes['type']=='GROUP_INPUT':
             tree.interface.new_socket(attributes['name'],description='',in_out="INPUT",socket_type=SOCKET_TYPES[attributes['type']])
             if "default_value" in attributes:
                 default_value = get_default_value_for_socket(attributes)
                 tree.interface.items_tree.get(attributes['name']).default_value=default_value
             return True
-        if node_attributes['type']=='GROUP_OUTPUT':
+        elif node_attributes['type']=='GROUP_OUTPUT':
             tree.interface.new_socket(attributes['name'],description='',in_out="OUTPUT",socket_type=SOCKET_TYPES[attributes['type']])
             return True
         else:
@@ -4164,7 +4190,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                     node_attributes = get_attributes(line)
                     node = Node.from_attributes(tree,node_attributes)
                     node_id = int(node_attributes["id"])
-                    if node_id==16:
+                    if node_id==22:
                         pass
                     node_name = node_attributes["name"]
                     node_structure[node_id]={"name": node_name, "inputs":dict(), "outputs":dict()}
@@ -4200,7 +4226,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                             elif len(node.inputs)>input_count and node.inputs[input_count].name!="": # avoid virtual socket
                                 node_structure[node_id]["inputs"][input_id] = input_count
                                 node.inputs[input_count].name=input_attributes['name']
-                                if node_id==14:
+                                if node_id==16:
                                     pass
                                 if 'default_value' in input_attributes:
                                     node.inputs[input_count].default_value = get_default_value_for_socket(input_attributes)
@@ -4296,7 +4322,13 @@ def create_from_xml(tree,filename=None,**kwargs):
 
                 # print("link ",node_dir[from_node],": ",str(from_socket),"->",str(to_socket),": ",node_dir[to_node])
                 if output_id<len(node_dir[from_node].outputs):
-                    tree.links.new(node_dir[from_node].outputs[output_id],node_dir[to_node].inputs[input_id])
+                    if input_id<len(node_dir[to_node].inputs) and output_id<len(node_dir[from_node].outputs):
+                        tree.links.new(node_dir[from_node].outputs[output_id],node_dir[to_node].inputs[input_id])
+                    else:
+                        if not input_id < len(node_dir[to_node].inputs):
+                            print("Failed to connect to input "+str(input_id)+" of node "+str(to_node))
+                        if not output_id<len(node_dir[from_node].outputs):
+                            print("Failed to connect from output "+str(output_id)+" of node "+str(from_node))
 
 def create_geometry_line(tree, green_nodes, out=None, ins=None):
     first = True
