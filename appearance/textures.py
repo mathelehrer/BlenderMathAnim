@@ -2884,7 +2884,7 @@ def make_six_color_ramp_material(**kwargs):
     links = color.node_tree.links
     bsdf = nodes['Principled BSDF']
     bsdf.inputs[SPECULAR].default_value = 1
-    bsdf.inputs['Roughness'].default_value = 0.3
+    bsdf.inputs['Roughness'].default_value = 0.5
 
     ramp = nodes.new(type='ShaderNodeValToRGB')
     ramp.color_ramp.elements[0].position = 0

@@ -1,3 +1,6 @@
+import sympy
+from sympy.combinatorics import Permutation
+
 from interface.ibpy import OPERATORS
 
 
@@ -63,6 +66,20 @@ def parse_int_tuple(expr):
 
     parts = expr.split(',')
     return tuple([int(p) for p in parts])
+
+def parse_permutation(cycle_string):
+    perm = Permutation()
+    cycles = cycle_string.split(")(")
+    for cycle in cycles:
+        cycle = cycle.replace(")", "")
+        cycle = cycle.replace("(", "")
+        numbers = cycle.split(" ")
+        numbers = [int(n) for n in numbers]
+        if len(numbers) == 1:
+            pass
+        else:
+            perm = perm(*numbers)
+    return perm
 
 
 class ExpressionConverter:

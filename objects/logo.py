@@ -269,10 +269,9 @@ class GeometryLogo(BObject):
                               silent=silent,linked=linked,nice_alpha=nice_alpha,children=children,**kwargs)
 
 class LogoFromInstances(BObject):
-    def __init__(self, details=3, instance_red=Sphere, instance_green=Sphere, instance_blue=Sphere,
-                 kwargs_red={},kwargs_green={},kwargs_blue={}, **kwargs):
+    def __init__(self, details=2, instance_red=Sphere, instance_green=Sphere, instance_blue=Sphere,
+                 kwargs_red={"color":"important"},kwargs_green={"color":"joker"},kwargs_blue={"color":"drawing"}, **kwargs):
         """
-
         Create a logo with custom instances
         """
         self.kwargs = kwargs

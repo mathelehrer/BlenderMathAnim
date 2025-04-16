@@ -250,10 +250,9 @@ FINAL_DIR = os.path.join(BLEND_DIR, "final")
 RENDER_DIR = "/filme/working_dir/"
 DATA_DIR = os.path.join(LOC_FILE_DIR, 'data')
 GLOBAL_DATA_DIR=os.path.join(RES_DIR,"data")
+GLOBAL_DATA_DIR2=os.path.join(RES_DIR2,"data")
 OSL_DIR = os.path.join(RES_DIR, "osl")
 PRIMITIVES_DIR = os.path.join(RES_DIR, 'blend/primitives')
-
-print(os.getcwd())
 
 for folder in [MEDIA_DIR, TEX_DIR, SVG_DIR, BLEND_DIR, RES_DIR, TEX_TPL_DIR, BLEND_TPL_DIR, IMG_DIR,
                RENDER_DIR, DATA_DIR,APPEND_DIR]:

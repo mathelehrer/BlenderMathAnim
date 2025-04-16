@@ -20,12 +20,13 @@ class Sphere(GeoBObject):
     mesh_type = 'iso'
     """
 
-    def __init__(self, r, **kwargs):
+    def __init__(self, r=1, **kwargs):
         """
         :param r:  radius of the sphere
         :param kwargs:
         """
         self.kwargs = kwargs
+        self.scale = self.get_from_kwargs('scale', [1,1,1])
         mesh_type = self.get_from_kwargs('mesh_type', 'iso')
 
         if mesh_type == 'uv':
@@ -38,11 +39,12 @@ class Sphere(GeoBObject):
         name = self.get_from_kwargs('name', default_name)
 
         res = self.get_from_kwargs('resolution', 4)
-        sphere = add_sphere(radius=r, mesh_type=mesh_type, resolution=res, location=(0, 0, 0), scale=(1, 1, 1),
+        sphere = add_sphere(radius=r, mesh_type=mesh_type, resolution=res,
+                            location=(0, 0, 0),
                             enter_editmode=False,
                             align='WORLD',smooth=smooth)
 
-        super().__init__(obj=sphere, name=name, smooth=smooth,**kwargs)
+        super().__init__(obj=sphere, name=name, smooth=smooth,scale=self.scale,**kwargs)
         self.label_sep = 2 * r  # override default label separation
 
 
