@@ -79,6 +79,9 @@ class Text(BObject):
     def length(self):
         return self.modifier.number_of_letters
 
+    def get_text_bounding_box(self):
+        self.modifier
+
 class MorphText(BObject):
     """
     A new class for a morphing text object based on geometry nodes
@@ -154,14 +157,17 @@ class TextModifier(GeometryNodesModifier):
         self.expression = expression
         self.number_of_letters =0
         self.sample_points = get_from_kwargs(kwargs,'sample_points',101)
-
+        self.group_outputs = None
         super().__init__(get_from_kwargs(kwargs,'name',"GeoText"),
                          group_input=False,group_output=False,automatic_layout=False,**kwargs)
+
 
     def create_node(self,tree,**kwargs):
 
         self.number_of_letters = generate_expression(self.expression, **kwargs)
         create_from_xml(tree,"geo_fonts",**kwargs)
+
+        self.group_outputs = tree.nodes.get("GroupOutput")
 
         collection_info = tree.nodes.get("TextData")
         collection_info.inputs["Separate Children"].default_value = True

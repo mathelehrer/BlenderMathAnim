@@ -163,6 +163,9 @@ class Node:
         if type=="TRANSFORM_GEOMETRY":
             mode=attributes["mode"]
             return TransformGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
+        if type=="BOUNDING_BOX":
+            return BoundingBox(tree, location=location, name=name, label=label, hide=hide, mute=mute,
+                                     node_height=200)
 
         # instances
         if type=="INSTANCE_ON_POINTS":
