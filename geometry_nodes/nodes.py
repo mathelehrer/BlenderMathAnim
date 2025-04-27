@@ -2921,17 +2921,19 @@ class IndexSwitch(BlueNode):
         return True
 
     def add_item(self,socket):
-        """
-         only use this function, when you add switch items,
-         it assumes that you wire the index socket independently
-        """
-        if self.added_items>len(self.slots)-3:
-            self.new_item()
-        if socket:
-            if isinstance(socket,int):
-                self.slots[self.added_items+1].default_value=socket
-            else:
-                self.tree.links.new(socket,self.slots[self.added_items+1])
+        # """
+        #  only use this function, when you add switch items,
+        #  it assumes that you wire the index socket independently
+        # """
+        # if self.added_items>len(self.slots)-3:
+        #     self.new_item()
+        # if socket:
+        #     if isinstance(socket,int):
+        #         self.slots[self.added_items+1].default_value=socket
+        #     else:
+        #         self.tree.links.new(socket,self.slots[self.added_items+1])
+
+        ibpy.add_item_to_switch(self.node,self.added_items,socket,self.tree)
         self.added_items+=1
 
     def new_item(self):

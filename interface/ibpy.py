@@ -7,6 +7,7 @@ import bpy
 import numpy as np
 
 from mathutils import Vector, Matrix, Quaternion, Euler
+
 from interface.interface_constants import EMISSION, TRANSMISSION, BLENDER_EEVEE, blender_version
 from utils.color_conversion import get_color_from_string, get_color
 from utils.constants import BLEND_DIR, FRAME_RATE, OBJECT_APPEARANCE_TIME, OSL_DIR, COLOR_NAMES, IMG_DIR, \
@@ -3000,14 +3001,16 @@ def change_default_boolean(slot, from_value, to_value, begin_time=None, data_pat
 
     return (begin_frame + 1) / FRAME_RATE
 
-def change_default_integer(slot, from_value, to_value, begin_time=None, data_path="integer",
-                           begin_frame=0,transition_time=DEFAULT_ANIMATION_TIME):
-
+def change_default_integer(slot, from_value, to_value, begin_time=None, data_path="integer",transition_time=DEFAULT_ANIMATION_TIME):
     if from_value is not None:
         slot.integer = from_value
         insert_keyframe(slot, data_path, begin_time*FRAME_RATE)
     slot.integer = to_value
-    insert_keyframe(slot, data_path, (begin_time+transition_time)*FRAME_RATE)
+    if transition_time==0:
+        frame = begin_time*FRAME_RATE+1 # make sure that there is at least one frame to jump
+    else:
+        frame =(begin_time+transition_time)*FRAME_RATE
+    insert_keyframe(slot, data_path, frame)
     return begin_time+transition_time
 
 def change_default_material(slot, to_value=None, begin_time=None, data_path="material", begin_frame=0):
@@ -3090,6 +3093,33 @@ def change_value(value, from_value, to_value, begin_time=None, transition_time=N
     insert_keyframe(value.outputs[0], data_path, begin_frame + transition_frames)
 
     return begin_time + transition_time
+
+def add_item_to_switch(switch_node,idx,socket_or_value,tree):
+    """
+     only use this function, when you add switch items,
+     it assumes that you wire the index socket independently
+
+     the slots[0] is reserved for the switch
+     slots[1]
+     slots[2]
+     exist by default
+     slot[3] is virtual by default
+
+     len(switch_node.slots)=4 by default
+
+     idx = 0 stands for the first index value it is tranfered to slots[1]
+     idx = 1 can also be connected directly
+
+     beginning with idx =2 new items have to be created first
+    """
+    slots = switch_node.inputs
+    while idx > len(slots) - 3:
+        switch_node.index_switch_items.new()
+    if socket_or_value is not None:
+        if isinstance(socket_or_value, int):
+            slots[idx+1].default_value = socket_or_value
+        else:
+            tree.links.new(socket_or_value, slots[idx+1])
 
 
 def make_image__stretched_over_geometry(src, v_min, v_max):
@@ -6772,8 +6802,8 @@ def find_center_of_highest_vertices(obj):
 
 '''
 Getter and setter for various parameters
+Bounding boxes
 '''
-
 
 def get_bounding_box(bob):
     o = get_obj(bob)

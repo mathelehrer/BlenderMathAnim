@@ -371,12 +371,12 @@ class BRubiksCube(BObject):
                 source_state_pos = [25, 22, 19, 20, 21, 24, 27, 26, 23]
                 target_state_pos = [19, 20, 21, 24, 27, 26, 25, 22, 23]
                 rot = Quaternion(-ez, pi / 2)
-            elif letter == 't':
+            elif letter == 't' or letter=='u':
                 # rotation of the top face clockwise
                 target_state_pos = [1, 4, 7, 8, 9, 6, 3, 2, 5]
                 source_state_pos = [7, 8, 9, 6, 3, 2, 1, 4, 5]
                 rot = Quaternion(ez, -pi / 2)
-            elif letter == 'T':
+            elif letter == 'T' or letter=='U':
                 # rotation of the top face counterclockwise
                 source_state_pos = [1, 4, 7, 8, 9, 6, 3, 2, 5]
                 target_state_pos = [7, 8, 9, 6, 3, 2, 1, 4, 5]

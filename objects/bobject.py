@@ -681,10 +681,8 @@ class BObject(object):
                 ibpy.fade_out_quickly(self, disappear_frame, transition_frames, **kwargs)
             else:
                 ibpy.fade_out(self, disappear_frame, transition_frames, alpha=alpha, **kwargs)
-
         if alpha == 0:
             self.appeared = False
-
         return begin_time + transition_time
 
     def move_fast(self,direction=Vector(),begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
@@ -809,14 +807,14 @@ class BObject(object):
         ibpy.grow(self, scale, begin_time * FRAME_RATE, transition_time * FRAME_RATE, initial_scale, modus)
         return begin_time + transition_time
 
-    def shrink(self,scale=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+    def shrink(self,initial_scale=1,scale=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         """
         shrink an object to 0
         :param begin_time: starting time
         :param transition_time: duration
         :return:
         """
-        ibpy.shrink(self, begin_frame=begin_time*FRAME_RATE, frame_duration=FRAME_RATE*transition_time,scale=0)
+        ibpy.shrink(self,initial_scale=initial_scale, begin_frame=begin_time*FRAME_RATE, frame_duration=FRAME_RATE*transition_time,scale=scale)
         return begin_time+transition_time
 
     def next_to(self, parent, direction=RIGHT, buff=SMALL_BUFF, shift=0 * RIGHT):

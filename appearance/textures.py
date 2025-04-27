@@ -11,7 +11,8 @@ from extended_math_nodes.generic_nodes import SphericalHarmonics200, SphericalHa
 from geometry_nodes.nodes import make_function
 from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
-    Vector, set_material, create_iterator_group, get_obj, animate_sky_background
+    Vector, set_material, create_iterator_group, get_obj, animate_sky_background, make_image_material, \
+    make_gradient_material, make_dashed_material, make_mandelbrot_material, make_iteration_material, make_hue_material
 from interface.interface_constants import TRANSMISSION, SPECULAR, EMISSION, blender_version
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics, AssociatedLegendre
@@ -40,6 +41,40 @@ def convert_strings_to_colors(color_names):
 
 def get_color_from_name(color_name):
     return COLORS_SCALED[COLOR_NAMES.index(color_name)]
+
+def get_texture(material, **kwargs):
+    """
+    this method is intended to supersed the get_material method
+    """
+    if isinstance(material,bpy.types.Material):
+        return material
+    if isinstance(material, str):
+        if material == 'image' and 'src' in kwargs:
+            return make_image_material(**kwargs).copy()
+        elif material == 'gradient':
+            material = make_gradient_material(**kwargs)
+        elif material == 'dashed':
+            material = make_dashed_material(**kwargs)
+        elif material == 'magnet':
+            material = make_magnet_material(**kwargs)
+        elif material == 'mandelbrot':
+            material = make_mandelbrot_material(**kwargs)
+        elif material == 'iteration':
+            material = make_iteration_material(**kwargs)
+        elif material == 'hue':
+            material = make_hue_material(**kwargs)
+        elif material == 'gold':
+            material = make_gold_material(**kwargs)
+        else:
+            if material not in bpy.data.materials:
+                # return default drawing material
+                material = bpy.data.materials["drawing"].copy()
+            else:
+                material = bpy.data.materials[material].copy()
+        # override default values
+        material = customize_material(material, **kwargs)
+
+        return material
 
 
 def apply_material(obj, col, shading=None, recursive=False, type_req=None, intensity=None, **kwargs):
@@ -2705,7 +2740,7 @@ def make_cloud_material():
     mat = nodes.get('Material Output')
     links.new(absorption.outputs['Volume'],mat.inputs['Volume'])
 
-def make_gold_material():
+def make_gold_material(**kwargs):
     color = bpy.data.materials.new(name='gold')
     color.use_nodes = True
     nodes = color.node_tree.nodes
@@ -2715,8 +2750,9 @@ def make_gold_material():
     bsdf.inputs['Metallic'].default_value = 1
     bsdf.inputs['Roughness'].default_value = 0.27
 
+    bump_strength=get_from_kwargs(kwargs,'bump_strength',0.2)
     bump = nodes.new(type='ShaderNodeBump')
-    bump.inputs['Strength'].default_value = 0.2
+    bump.inputs['Strength'].default_value = bump_strength
     links.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
 
     ramp = nodes.new(type='ShaderNodeValToRGB')
@@ -2743,6 +2779,7 @@ def make_gold_material():
     coords = nodes.new(type='ShaderNodeTexCoord')
     links.new(coords.outputs['Object'], noise.inputs['Vector'])
     links.new(coords.outputs['Object'], noise2.inputs['Vector'])
+    return color
 
 def make_screen_material():
     color = bpy.data.materials.new(name='screen')

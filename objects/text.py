@@ -50,6 +50,13 @@ class Text(BObject):
         # material_node.inputs['Material'].default_value= mat
         # outline_material_node.inputs['Material'].default_value = mat_outline
 
+        keep_outline = get_from_kwargs(kwargs, 'keep_outline', False)
+        keep_outline_node = get_geometry_node_from_modifier(self.modifier, "KeepOutline")
+        if keep_outline:
+            ibpy.change_default_boolean(keep_outline_node,False,True,begin_frame=0)
+        else:
+            ibpy.change_default_boolean(keep_outline_node,True,False,begin_frame=0)
+
         super().__init__(obj=cube, name=self.name, no_material=True, **kwargs)
         super().add_mesh_modifier('NODES', node_modifier=self.modifier)
 
@@ -67,6 +74,9 @@ class Text(BObject):
         ibpy.change_default_value(write_control,from_value=from_letter,to_value=to_letter,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
 
+    def disappear(self, alpha=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+        return self.unwrite(begin_time=begin_time, transition_time=transition_time, **kwargs)
+
     def unwrite(self,letters=None,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
 
         all_letters = self.modifier.number_of_letters
@@ -78,9 +88,6 @@ class Text(BObject):
 
     def length(self):
         return self.modifier.number_of_letters
-
-    def get_text_bounding_box(self):
-        self.modifier
 
 class MorphText(BObject):
     """
