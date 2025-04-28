@@ -1550,15 +1550,18 @@ def change_hdri_strength(start, end, begin_time=0, transition_time=DEFAULT_ANIMA
     insert_keyframe(strength_socket, 'default_value', frame + int(transition_time * FRAME_RATE))
 
 
-def dim_background(value=[0, 0, 0, 1], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, transparent=True):
+def dim_background(value=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, transparent=True):
+    if value is None:
+        value = [0, 0, 0,1]
     print("Dim background to", value, "at the time", begin_time)
     nodes = bpy.data.worlds["World"].node_tree.nodes
     if 'Mix' in nodes:
         mixer = nodes["Mix"]
 
-    insert_keyframe(mixer.inputs[1], 'default_value', frame=begin_time * FRAME_RATE)
-    mixer.inputs[1].default_value = value
-    insert_keyframe(mixer.inputs[1], 'default_value', frame=(begin_time + transition_time) * FRAME_RATE)
+        background_rgb=nodes["RGB"]
+        insert_keyframe(background_rgb.outputs["Color"], 'default_value', frame=begin_time * FRAME_RATE)
+        background_rgb.outputs['Color'].default_value = value
+        insert_keyframe(background_rgb.outputs["Color"], 'default_value', frame=(begin_time + transition_time) * FRAME_RATE)
 
     bpy.data.scenes["Scene"].render.film_transparent = transparent
 

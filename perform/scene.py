@@ -188,17 +188,21 @@ def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_
 
     scn.gravity = (0, 0, -9.81)
 
+
+    # setup simple background with light path for reflections
     bpy.ops.world.new()
     world = bpy.data.worlds[-1]
     scn.world = world
     nodes = world.node_tree.nodes
-    nodes.new(type='ShaderNodeMixRGB')
-    nodes.new(type='ShaderNodeLightPath')
-    nodes.new(type='ShaderNodeRGB')
-    world.node_tree.links.new(nodes[2].outputs[0], nodes[1].inputs[0])
-    world.node_tree.links.new(nodes[3].outputs[0], nodes[2].inputs[0])
-    world.node_tree.links.new(nodes[4].outputs[0], nodes[2].inputs[2])
-    nodes[4].outputs[0].default_value = COLORS_SCALED[0]
+    mixer = nodes.new(type='ShaderNodeMix')
+    mixer.data_type='RGBA'
+    light_path = nodes.new(type='ShaderNodeLightPath')
+    world_out = nodes.get("World Output")
+    color = nodes.new(type='ShaderNodeRGB')
+    world.node_tree.links.new(light_path.outputs['Is Camera Ray'], mixer.inputs['Factor'])
+    world.node_tree.links.new(color.outputs['Color'], mixer.inputs['A'])
+    world.node_tree.links.new(mixer.outputs['Result'], world_out.inputs['Surface'])
+    color.outputs['Color'].default_value = COLORS_SCALED[0] # background color by default
 
     define_materials()
 
