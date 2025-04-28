@@ -2052,15 +2052,23 @@ class TransformGeometry(GreenNode):
 class ObjectInfo(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  transform_space="RELATIVE",
+                 as_instance=False,
                  object=None, **kwargs
                  ):
         self.node = tree.nodes.new(type="GeometryNodeObjectInfo")
         super().__init__(tree, location=location, **kwargs)
         self.node.transform_space = transform_space
+
+
         if object is not None:
             self.node.inputs["Object"].default_value = object
 
         self.geometry_out = self.node.outputs["Geometry"]
+
+        if isinstance(as_instance,bool):
+            self.node.inputs["As Instance"].default_value = True
+        else:
+            tree.links.new(as_instance,self.node.inputs["As Instance"])
 
 class DomainSize(GreenNode):
     """

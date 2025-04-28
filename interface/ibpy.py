@@ -187,17 +187,9 @@ def add_point_light(**kwargs):
     :param kwargs: location,radius,scale,energy
     :return:
     '''
-    if 'energy' in kwargs:
-        energy = kwargs['energy']
-    else:
-        energy = 10
-    kwargs.pop('energy')
 
-    if 'color' in kwargs:
-        color = kwargs['color']
-    else:
-        color = [1] * 4
-    kwargs.pop('color')
+    energy = get_from_kwargs(kwargs, 'energy', 10)
+    color = get_from_kwargs(kwargs, 'color', [1]*3)
 
     bpy.ops.object.light_add(type='POINT', **kwargs)
     point = bpy.context.object
@@ -205,6 +197,9 @@ def add_point_light(**kwargs):
     point.data.color = color
     return point
 
+def get_point_light_object():
+    # return bpy.data.lights['Point']  this cannot be instanciated in geometry nodes
+    return bpy.data.objects['Point']
 
 def switch_on(bob, begin_frame=0, frame_duration=1):
     obj = bob.ref_obj
