@@ -603,7 +603,7 @@ class BObject(object):
         ibpy.shader_value(self, old_value, new_value, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
         return begin_time + transition_time
 
-    def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+    def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,scale=1,
                clear_data=False, silent=False,linked=False, nice_alpha=False,children=True,**kwargs):
         """
         makes the object simply fade in with in the transition time

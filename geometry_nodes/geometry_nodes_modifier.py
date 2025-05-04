@@ -2102,7 +2102,7 @@ class NumberLineModifier(GeometryNodesModifier):
                 tic_labels[rounded_val] = [x0+dx * i]
 
         tic_label_aligned = get_from_kwargs(kwargs,"tic_label_aligned","center")
-        tic_labels, axis_label = generate_labels(tic_labels,axis_label, aligned = tic_label_aligned, **kwargs)
+        tic_labels, axis_label = generate_labels(tic_labels,axis_label, **kwargs)
         downshift=-5
         in_min = InputValue(tree,location=(left,downshift), name='Minimum', value=domain[0])
         in_max = InputValue(tree,location=(left,downshift+0.25), name='Maximum', value=domain[1])
@@ -2662,13 +2662,13 @@ class LogoModifier(GeometryNodesModifier):
         join_geometry = JoinGeometry(tree)
         segments = [64,32,32]
         rings = [32,16,16]
-        radii = [1/3,1/9,0.0675]
+        radii = [1,1,1]
         for i,circle in enumerate(circles):
             object = ibpy.get_obj_from_name(circle)
             object_info = ObjectInfo(tree, object=object)
             pos = Position(tree)
             get_pos_and_scale = make_function(tree,name="PositionAndScale",
-                        functions={"position":["pos_x","0","pos_y"],
+                        functions={"position":["pos_x","pos_y","0"],
                                    "scale":["pos_z"]*3
                         },inputs=["pos"],outputs=["position","scale"],
                         scalars=[],vectors=["pos","position","scale"])
@@ -2676,7 +2676,8 @@ class LogoModifier(GeometryNodesModifier):
             store_center=StoredNamedAttribute(tree,data_type='FLOAT_VECTOR',name=center_names[i],value=pos.std_out)
             set_pos = SetPosition(tree,position=get_pos_and_scale.outputs["position"])
             uv_sphere=UVSphere(tree,segments=segments[i],rings=rings[i],radius=radii[i])
-            iop = InstanceOnPoints(tree,instance=uv_sphere.geometry_out,scale=get_pos_and_scale.outputs["scale"])
+            transform_geometry = TransformGeometry(tree,geometry=uv_sphere.geometry_out,translation=[0,0,-1])
+            iop = InstanceOnPoints(tree,instance=transform_geometry.geometry_out,scale=get_pos_and_scale.outputs["scale"])
             realize_instance = RealizeInstances(tree)
 
             center_attr = NamedAttribute(tree,name=center_names[i],data_type="FLOAT_VECTOR")
@@ -2708,7 +2709,7 @@ class LogoModifier(GeometryNodesModifier):
                                                    iop,realize_instance,
                                                    store_theta,store_phi,material_node,join_geometry])
 
-        transform_geometry = TransformGeometry(tree,translation=[0,0,-5.5],rotation=[0,0,pi],scale=[5.5]*3)
+        transform_geometry = TransformGeometry(tree,translation=[0,0,-5.5],rotation=[pi/2,0,0],scale=[5.5]*3)
         shade_smooth = SetShadeSmooth(tree)
         create_geometry_line(tree,[join_geometry,transform_geometry,shade_smooth],out=out.inputs["Geometry"])
 

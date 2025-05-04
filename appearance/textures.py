@@ -2750,9 +2750,14 @@ def make_gold_material(**kwargs):
     bsdf.inputs['Metallic'].default_value = 1
     bsdf.inputs['Roughness'].default_value = 0.27
 
+    bumpiness=nodes.new(type='ShaderNodeValue')
+    bumpiness.name="Bumpiness"
+    bumpiness.label="Bumpiness"
+
     bump_strength=get_from_kwargs(kwargs,'bump_strength',0.2)
+    bumpiness.outputs['Value'].default_value = bump_strength
     bump = nodes.new(type='ShaderNodeBump')
-    bump.inputs['Strength'].default_value = bump_strength
+    links.new(bumpiness.outputs['Value'],bump.inputs['Strength'])
     links.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
 
     ramp = nodes.new(type='ShaderNodeValToRGB')

@@ -190,11 +190,13 @@ def add_point_light(**kwargs):
 
     energy = get_from_kwargs(kwargs, 'energy', 10)
     color = get_from_kwargs(kwargs, 'color', [1]*3)
+    max_bounces = get_from_kwargs(kwargs, 'max_bounces', 1024)
 
     bpy.ops.object.light_add(type='POINT', **kwargs)
     point = bpy.context.object
     point.data.energy = energy
     point.data.color = color
+    point.data.cycles.max_bounces = max_bounces
     return point
 
 def get_point_light_object():
