@@ -3094,6 +3094,7 @@ def change_value(value, from_value, to_value, begin_time=None, transition_time=N
 
     return begin_time + transition_time
 
+
 def add_item_to_switch(switch_node,idx,socket_or_value,tree):
     """
      only use this function, when you add switch items,

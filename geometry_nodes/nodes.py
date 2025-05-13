@@ -101,6 +101,9 @@ class Node:
         if type=="INPUT_INT":
             integer = int(attributes["integer"])
             return InputInteger(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,integer=integer)
+        if type=="INPUT_STRING":
+            string = attributes["string"]
+            return InputString(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,string=string)
         if type=="INPUT_BOOL":
             boolean = bool(attributes["boolean"])
             return InputBoolean(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,boolean=boolean)
@@ -225,6 +228,14 @@ class Node:
             return ConeMesh(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
 
         # curves
+        if type=="STRING_TO_CURVES":
+            font = attributes["font"]
+            overflow=attributes["overflow"]
+            align_x=attributes["align_x"]
+            align_y=attributes["align_y"]
+            pivot_mode=attributes["pivot_mode"]
+            return StringToCurves(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,
+                                  font=font,overflow=overflow,align_x=align_x,align_y=align_y,pivot_mode=pivot_mode)
         if type=="CURVE_PRIMITIVE_CIRCLE":
             mode=attributes["mode"]
             return CurveCircle(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
@@ -1067,7 +1078,12 @@ class CurveQuadrilateral(GreenNode):
             self.tree.links.new(height, self.node.inputs["Height"])
 
 class StringToCurves(GreenNode):
-    def __init__(self, tree, location=(0, 0),font="Symbola Regular",overflow='OVERFLOW',align_x="CENTER",align_y="MIDDLE",pivot_mode="MIDPOINT",
+    def __init__(self, tree, location=(0, 0),
+                 font="Symbola Regular",
+                 overflow='OVERFLOW',
+                 align_x="CENTER",
+                 align_y="MIDDLE",
+                 pivot_mode="MIDPOINT",
                  string="0",size=1,character_spacing=1,word_spacing=1,line_spacing=1,textbox_width=0, **kwargs):
         """
         """
@@ -2256,6 +2272,14 @@ class InputInteger(RedNode):
         self.std_out = self.node.outputs["Integer"]
         self.node.integer = integer
 
+class InputString(RedNode):
+    def __init__(self, tree, location=(0, 0), string="", **kwargs):
+        self.node = tree.nodes.new(type="FunctionNodeInputString")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["String"]
+        self.node.string=string
+
 class SceneTime(RedNode):
     def __init__(self, tree, location=(0, 0), std_out="Seconds", **kwargs):
         self.node = tree.nodes.new(type="GeometryNodeInputSceneTime")
@@ -3103,6 +3127,7 @@ class ForEachInput(GreenNode):
 
         self.geometry_in = self.node.inputs["Geometry"]
         self.geometry_out = self.node.outputs[0]
+        self.pair_node=None
 
         if geometry:
             tree.links.new(geometry,self.node.inputs["Geometry"])
@@ -3110,9 +3135,11 @@ class ForEachInput(GreenNode):
             tree.links.new(selection,self.node.inputs["Selection"])
 
     def pair_with_output(self,output):
+        self.pair_node = output
         if isinstance(output,Node):
             output = output.node
         self.node.pair_with_output(output)
+
 
 class ForEachOutput(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -3128,6 +3155,15 @@ class ForEachOutput(GreenNode):
         if geometry:
             tree.links.new(geometry,self.node.inputs["Geometry"])
 
+    def add_socket(self, socket_type="GEOMETRY", name="socket", value=None):
+        """
+        :param socket_type: "FLOAT", "INT", "BOOLEAN", "VECTOR", "ROTATION", "STRING", "RGBA", "OBJECT", "IMAGE", "GEOMETRY", "COLLECTION", "TEXTURE", "MATERIAL"
+        :param name:
+        :return:
+        """
+        self.node.input_items.new(socket_type, name)
+        if value is not None:
+            self.node.outputs[name].default_value = value
 
 # custom composite nodes
 
@@ -4045,12 +4081,13 @@ def get_attributes(line):
     values = []
     key=""
     val=""
+    value_started=False
     for letter in line:
         if letter=='<':
             pass
         elif letter=='>':
             break # ignore anything after the end
-        elif letter==' ':
+        elif letter==' ' and not value_started: # only use spaces outside of String expressions as tag separator
             if not tag_label_ended:
                 tag_label_ended=True
         else:
@@ -4232,6 +4269,8 @@ def create_from_xml(tree,filename=None,**kwargs):
                         elif line.startswith("</OUTPUTS>"):
                             pass
                         elif line.startswith("<INPUT "):
+                            if node_id == 8:
+                                pass
                             input_attributes = get_attributes(line)
                             input_id = int(input_attributes["id"])
                             if node_attributes["type"] in {"REPEAT_INPUT","FOREACH_GEOMETRY_ELEMENT_INPUT"}:
@@ -4241,8 +4280,6 @@ def create_from_xml(tree,filename=None,**kwargs):
                             elif len(node.inputs)>input_count and node.inputs[input_count].name!="": # avoid virtual socket
                                 node_structure[node_id]["inputs"][input_id] = input_count
                                 node.inputs[input_count].name=input_attributes['name']
-                                if node_id==16:
-                                    pass
                                 if 'default_value' in input_attributes:
                                     node.inputs[input_count].default_value = get_default_value_for_socket(input_attributes)
                                 input_count += 1
@@ -4295,7 +4332,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                 key=int(key)
                 # the input sockets are only created after pairing with the output node
                 # therefore the links can only be created after pairing
-                if "ForEachGeometryElementInput" in name:
+                if "ForEachGeometryElementInput" in name or "For Each Geometry Element Input" in name:
                     # find the corresponding output node from name
                     out_name = name.replace("Input", "Output")
                     node_dir[key].pair_with_output(node_dir[name_dir[out_name]])
@@ -4333,11 +4370,21 @@ def create_from_xml(tree,filename=None,**kwargs):
                 to_node = int(node_attributes["to_node"])
 
                 output_id = node_structure[from_node]["outputs"][from_socket]
+                if  to_socket==48:
+                    i=0
+                    i+=1
                 input_id = node_structure[to_node]["inputs"][to_socket]
 
                 # print("link ",node_dir[from_node],": ",str(from_socket),"->",str(to_socket),": ",node_dir[to_node])
                 if output_id<len(node_dir[from_node].outputs):
                     if input_id<len(node_dir[to_node].inputs) and output_id<len(node_dir[from_node].outputs):
+                        # check for virtual ports
+                        if node_dir[to_node].inputs[input_id].type=="CUSTOM":
+                            node = node_dir[to_node]
+                            from_socket = node_dir[from_node].outputs[output_id]
+                            pair_node = node.pair_node
+                            pair_node.add_socket(from_socket.type,from_socket.name)
+                            pass
                         tree.links.new(node_dir[from_node].outputs[output_id],node_dir[to_node].inputs[input_id])
                     else:
                         if not input_id < len(node_dir[to_node].inputs):
