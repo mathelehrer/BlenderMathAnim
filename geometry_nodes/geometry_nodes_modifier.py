@@ -58,18 +58,20 @@ class GeometryNodesModifier:
             self.group_inputs = tree.nodes.new('NodeGroupInput')
             make_new_socket(tree, name='Geometry', io='INPUT', type='NodeSocketGeometry')
         self.group_output = tree.nodes.get("Group Output")
+
+        self.tree = tree
+        self.nodes = self.tree.nodes  # needed for ibpy.get_geometry_node_from_modifier
+
         self.create_node(tree, **kwargs)
         # automatically layout nodes
         if automatic_layout:
             layout(tree,mode = mode)
-        self.tree = tree
-        self.nodes = self.tree.nodes  # needed for ibpy.get_geometry_node_from_modifier
 
-    def create_node(self, tree):
+
+    def create_node(self, tree, **kwargs):
         """
         this method is to be overridden to customize your geometry node modifier
-        :param nodes:
-        :param links:
+        :param tree:
         :return:
         """
 

@@ -41,7 +41,6 @@ def parse_location(location):
     coords = location.split(",")
     return (float(coords[0]), float(coords[1]))
 
-
 class Node:
     def __init__(self, tree, location=(0, 0), node_width=200, node_height=100, offset_y=0, **kwargs):
         """
@@ -110,8 +109,10 @@ class Node:
         if type=="RANDOM_VALUE":
             data_type = attributes["data_type"]
             return RandomValue(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type)
+        if type == "INPUT_STRING":
+            return RandomValue(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type=="INPUT_VECTOR":
-            return InputVector(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+            return InputString(tree,location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
 
         # read nodes
         if type =="INDEX":
@@ -381,7 +382,6 @@ class GroupOutput(Node):
     def add_socket(self, socket_type, socket_name):
         self.node.repeat_items.new(socket_type, socket_name)
 
-
 class ReRoute(Node):
     """
     ReRoute nodes are created, when the links are split and re-routed.
@@ -454,10 +454,7 @@ class BlueNode(Node):
         # changed from self.std_out=self.outputs["Value"] to accomodate Vector outputs
         self.std_out = self.outputs[0]
 
-#################
-#  green nodes  #
-#################
-
+#   green nodes  #
 # mesh primitives
 class MeshLine(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -2279,6 +2276,15 @@ class InputString(RedNode):
 
         self.std_out = self.node.outputs["String"]
         self.node.string=string
+
+class InputString(RedNode):
+    def __init__(self, tree, location=(0, 0), string="", **kwargs):
+        self.node = tree.nodes.new(type="FunctionNodeInputString")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["String"]
+        self.node.string = string
+
 
 class SceneTime(RedNode):
     def __init__(self, tree, location=(0, 0), std_out="Seconds", **kwargs):
