@@ -22,7 +22,6 @@ class NumberLine2(BObject):
                See below
            : Keyword Arguments:
                * *extra* (length=1,radius=0.05,domain=[0,1],location=[0,0,0],n_tics=10,
-               label='x',
                origin=0,
                tic_labels='AUTO',
                tic_label_digits=0,

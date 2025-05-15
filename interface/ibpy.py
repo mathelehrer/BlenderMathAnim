@@ -1002,7 +1002,7 @@ def get_collection_name(obj):
         return obj.name
 
 
-def link(obj, collection=None,recursively=True):
+def link(obj, collection=None,recursively=True,**kwargs):
     obj = get_obj(obj)
     if collection is None:
         collection = 'Scene Collection' # default collection
@@ -1683,6 +1683,9 @@ def set_alpha_and_keyframe(obj, value, frame, offset_for_slots=None, viewport = 
     :return:
     """
     obj = get_obj(obj)
+    if offset_for_slots is not None:
+        while len(offset_for_slots)<len(obj.material_slots):
+            offset_for_slots.append(offset_for_slots[-1])
 
     for s, material_slot in enumerate(obj.material_slots):
         material = material_slot.material
