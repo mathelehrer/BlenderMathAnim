@@ -170,6 +170,21 @@ class Node:
         if type=="BOUNDING_BOX":
             return BoundingBox(tree, location=location, name=name, label=label, hide=hide, mute=mute,
                                      node_height=200)
+        if type=="CONVEX_HULL":
+            return ConvexHull(tree, location=location, name=name, label=label, hide=hide, mute=mute,
+                                     node_height=200)
+        if type=="MESH_BOOLEAN":
+            operation = attributes["operation"]
+            solver = attributes["solver"]
+            return MeshBoolean(tree, location=location, name=name, label=label, hide=hide, mute=mute,
+                               operation=operation, solver=solver)
+        if type=="MERGE_BY_DISTANCE":
+            mode = attributes["mode"]
+            return MergeByDistance(tree,location=location,name=name,
+                                   label=label,hide=hide,mute=mute,
+                                   node_height=200,
+                                   mode=mode)
+
 
         # instances
         if type=="INSTANCE_ON_POINTS":
@@ -226,7 +241,9 @@ class Node:
         if type=="MESH_PRIMITIVE_CYLINDER":
             return CylinderMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type == "MESH_PRIMITIVE_CONE":
-            return ConeMesh(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
+            return ConeMesh(tree, location=location, name=name,
+                            label=label, hide=hide, mute=mute, node_height=200,
+                            )
 
         # curves
         if type=="STRING_TO_CURVES":
