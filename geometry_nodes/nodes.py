@@ -41,6 +41,12 @@ def parse_location(location):
     coords = location.split(",")
     return (float(coords[0]), float(coords[1]))
 
+def parse_vector(vector_str):
+    vector_str = vector_str.replace("[", "")
+    vector_str = vector_str.replace("]", "")
+    coords = vector_str.split(",")
+    return [float(coords[0]), float(coords[1]),float(coords[2])]
+
 class Node:
     def __init__(self, tree, location=(0, 0), node_width=200, node_height=100, offset_y=0, **kwargs):
         """
@@ -73,6 +79,8 @@ class Node:
     def from_attributes(cls,tree,attributes):
         name = attributes["name"]
         # print("Create Node from attributes: ",attributes["id"],": ", name)
+        if "location" not in attributes:
+            pass
         location = parse_location(attributes["location"])
         label = attributes["label"]
         if attributes["hide"]=="False":
@@ -87,8 +95,12 @@ class Node:
 
         type = attributes["type"]
 
-        # io nodes
+        # custom groups
+        if type=="GROUP":
+            if label=="BevelNode":
+                return BevelNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
+        # io nodes
         if type=="GROUP_INPUT":
             return GroupInput(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="GROUP_OUTPUT":
@@ -109,10 +121,12 @@ class Node:
         if type=="RANDOM_VALUE":
             data_type = attributes["data_type"]
             return RandomValue(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type)
-        if type == "INPUT_STRING":
-            return RandomValue(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type=="INPUT_VECTOR":
-            return InputString(tree,location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
+            vector = attributes["vector"]
+            return InputVector(tree,location=location, name=name, label=label, hide=hide, mute=mute, node_height=200,
+                               value=parse_vector(vector))
+        if type=="INPUT_SCENE_TIME":
+            return SceneTime(tree,location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
 
         # read nodes
         if type =="INDEX":
@@ -172,6 +186,9 @@ class Node:
                                      node_height=200)
         if type=="CONVEX_HULL":
             return ConvexHull(tree, location=location, name=name, label=label, hide=hide, mute=mute,
+                                     node_height=200)
+        if type=="SET_SHADE_SMOOTH":
+            return SetShadeSmooth(tree, location=location, name=name, label=label, hide=hide, mute=mute,
                                      node_height=200)
         if type=="MESH_BOOLEAN":
             operation = attributes["operation"]
@@ -236,6 +253,8 @@ class Node:
             return OffsetCornerInFace(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="MESH_PRIMITIVE_CUBE":
             return CubeMesh(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
+        if type=="MESH_PRIMITIVE_ICO_SPHERE":
+            return IcoSphere(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type=="MESH_PRIMITIVE_GRID":
             return Grid(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="MESH_PRIMITIVE_CYLINDER":
@@ -258,8 +277,9 @@ class Node:
             mode=attributes["mode"]
             return CurveCircle(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
         if type=="CURVE_PRIMITIVE_QUADRILATERAL":
+            mode = attributes["mode"]
             return CurveQuadrilateral(tree, location=location, name=name, label=label, hide=hide, mute=mute,
-                                      node_height=200)
+                                      node_height=200,mode=mode)
         if type=="CURVE_PRIMITIVE_ARC":
             mode=attributes["mode"]
             return CurveArc(tree,location=location,name=name,
@@ -312,11 +332,9 @@ class Node:
             else:
                 clamp_factor=False
             return MixNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type,factor_mode=factor_mode,clamp_factor=clamp_factor)
-
         if type=="BOOLEAN_MATH":
             operation = attributes["operation"]
             return BooleanMath(tree, location=location, name=name, label=label, hide=hide, operation=operation, mute=mute,node_height=200)
-
 
         # rotations
         if type=="ALIGN_ROTATION_TO_VECTOR":
@@ -332,6 +350,9 @@ class Node:
             primary_axis=attributes["primary_axis"]
             secondary_axis=attributes["secondary_axis"]
             return AxesToRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,primary_axis=primary_axis,secondary_axis=secondary_axis)
+        if type=="AXIS_ANGLE_TO_ROTATION":
+            return AxisAngleToRotation(tree,location=location,name=name,label=label,hide=hide,
+                                       mute=mute,node_height=200)
 
         # switches
         if type=="SWITCH":
@@ -361,10 +382,9 @@ class Node:
         if type=="GROUP_OUTPUT":
             return GroupOutput(tree,location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
-        # For Each
+        # Zones
         if type=="FOREACH_GEOMETRY_ELEMENT_INPUT":
             return ForEachInput(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
-
         if type=="FOREACH_GEOMETRY_ELEMENT_OUTPUT":
             domain = attributes["domain"]
             return ForEachOutput(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,domain=domain)
@@ -373,6 +393,11 @@ class Node:
             return RepeatInput(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="REPEAT_OUTPUT":
             return RepeatOutput(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+
+        if type == "SIMULATION_INPUT":
+            return SimulationInput(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
+        if type == "SIMULATION_OUTPUT":
+            return SimulationOutput(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
 
         # Custom Nodes
         if type=="GROUP":
@@ -1082,14 +1107,15 @@ class CurveQuadrilateral(GreenNode):
         self.geometry_out = self.node.outputs["Curve"]
         self.node.mode=mode
 
-        if isinstance(width, (int, float)):
-            self.node.inputs["Width"].default_value = width
-        else:
-            self.tree.links.new(width, self.node.inputs["Width"])
-        if isinstance(height, (int, float)):
-            self.node.inputs["Height"].default_value = height
-        else:
-            self.tree.links.new(height, self.node.inputs["Height"])
+        if mode=="RECTANGLE":
+            if isinstance(width, (int, float)):
+                self.node.inputs["Width"].default_value = width
+            else:
+                self.tree.links.new(width, self.node.inputs["Width"])
+            if isinstance(height, (int, float)):
+                self.node.inputs["Height"].default_value = height
+            else:
+                self.tree.links.new(height, self.node.inputs["Height"])
 
 class StringToCurves(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -2413,6 +2439,26 @@ class AxesToRotation(BlueNode):
             else:
                 tree.links.new(secondary_direction,self.node.inputs["Secondary Axis"])
 
+class AxisAngleToRotation(BlueNode):
+    def __init__(self, tree, location=(0, 0),axis=None,angle=0, **kwargs):
+        self.node = tree.nodes.new(type="FunctionNodeAxisAngleToRotation")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.std_out=self.node.outputs["Rotation"]
+
+
+        if axis is not None:
+            if isinstance(axis,(list,Vector)):
+                self.node.inputs["Axis"].default_value=axis
+            else:
+                tree.links.new(axis,self.node.inputs["Axis"])
+
+        if isinstance(angle,(int,float)):
+            self.node.inputs["Angle"].default_value=angle
+        else:
+            tree.links.new(angle,self.node.inputs["Angle"])
+
+
 class RotateVector(BlueNode):
     def __init__(self,tree,location=(0,0),vector=Vector(),rotation=Vector(), **kwargs):
         self.node = tree.nodes.new(type="FunctionNodeRotateVector")
@@ -3009,7 +3055,6 @@ class RepeatOutput(GreenNode):
     def __init__(self,tree,location=(0,0),**kwargs):
         self.node = tree.nodes.new(type="GeometryNodeRepeatOutput")
         super().__init__(tree,location=location,**kwargs)
-
     def add_socket(self,socket_type,socket_name):
         self.node.repeat_items.new(socket_type,socket_name)
 
@@ -3056,6 +3101,23 @@ class RepeatZone(GreenNode):
             self.tree.links.new(current.geometry_out, last.geometry_in)
             last = current
         self.tree.links.new(self.repeat_input.outputs["Geometry"], last.geometry_in)
+
+class SimulationInput(GreenNode):
+    def __init__(self,tree,location=(0,0),**kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeSimulationInput")
+        super().__init__(tree,location=location,**kwargs)
+    def pair_with_output(self,output):
+        if isinstance(output,Node):
+            output = output.node
+        self.node.pair_with_output(output)
+
+class SimulationOutput(GreenNode):
+    def __init__(self,tree,location=(0,0),**kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeSimulationOutput")
+        super().__init__(tree,location=location,**kwargs)
+    def add_socket(self,socket_type,socket_name):
+        self.node.state_items.new(socket_type,socket_name)
+
 
 class Simulation(GreenNode):
     def __init__(self, tree, location=(0, 0), node_width=5, geometry=None, **kwargs):
@@ -3686,6 +3748,52 @@ class BeveledCubeNode(NodeGroup):
 
         create_geometry_line(tree, [cube, iop2, realize_instance2, convex_hull],out=self.group_outputs.inputs["Mesh"])
 
+class BevelNode(NodeGroup):
+    def __init__(self,tree,radius=0.01,subdivisions=3,**kwargs):
+        self.name = get_from_kwargs(kwargs,"name","BevelNode")
+        super().__init__(tree,inputs={"Points":"GEOMETRY","Radius":"FLOAT","Subdivisions":"INT"},
+                         outputs={"Bevelled Geometry":"GEOMETRY"},
+                         auto_layout=True,name=self.name,**kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_out = self.node.outputs["Bevelled Geometry"]
+
+        if isinstance(radius,(int,float)):
+            self.node.inputs["Radius"].default_value =radius
+        else:
+            tree.links.new(radius,self.node.inputs["Radius"])
+
+        if isinstance(subdivisions,int):
+            self.node.inputs["Subdivisions"].default_value =subdivisions
+        else:
+            tree.links.new(subdivisions,self.node.inputs["Subdivisions"])
+
+    def fill_group_with_node(self,tree,**kwargs):
+        links = tree.links
+        pos = Position(tree)
+        normal = InputNormal(tree)
+        # this function insets the position of the spheres that the bevelled object is not increased in size
+        bevel_function = make_function(tree, name="BevelFunction",
+                                       functions={
+                                           "position": "pos,normal,1.5,radius,*,scale,sub"
+                                       }, inputs=["pos","normal","radius"], outputs=["position"],
+                                       scalars=["radius"],vectors=["pos","normal","position"], hide=True)
+
+        links.new(self.group_inputs.outputs["Radius"], bevel_function.inputs["radius"])
+        links.new(pos.std_out, bevel_function.inputs["pos"])
+        links.new(normal.std_out, bevel_function.inputs["normal"])
+
+        set_pos = SetPosition(tree,position=bevel_function.outputs["position"])
+        ico_sphere = IcoSphere(tree,radius=self.group_inputs.outputs["Radius"],
+                               subdivisions=self.group_inputs.outputs["Subdivisions"],hide=True)
+        iop = InstanceOnPoints(tree,instance=ico_sphere.geometry_out,hide=True)
+        realize_instance = RealizeInstances(tree,hide=True)
+        convex_hull = ConvexHull(tree,hide=True)
+        create_geometry_line(tree, [set_pos, iop, realize_instance, convex_hull],out=self.group_outputs.inputs["Bevelled Geometry"],
+                             ins = self.group_inputs.outputs["Points"])
+
 # custom Matrix operations #
 class Rotation(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -4214,12 +4322,12 @@ def create_socket(tree, node, node_attributes, attributes):
             tree.interface.new_socket(attributes['name'],description='',in_out="OUTPUT",socket_type=SOCKET_TYPES[attributes['type']])
             return True
         else:
-            # create socket in case of Repeat zone or GroupOutput
-            if "GeometryNodeRepeatOutput" in node.name:
+            # create socket in case of Repeat zone or GroupOutput or Simulation Zone
+            if "GeometryNodeRepeatOutput" in node.name or "GeometryNodeRepeatInput" in node.name:
                 node.add_socket(SOCKET_TYPES[node_attributes["type"]], node_attributes["name"])
                 return True
-            elif "GeometryNodeRepeatInput" in node.name:
-                node.add_socket(SOCKET_TYPES[node_attributes["type"]], node_attributes["name"])
+            elif "Simulation Input" in node.name or "Simulation Output" in node.name:
+                node.add_socket(attributes["type"], attributes["name"])
                 return True
             return False
 
@@ -4283,7 +4391,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                             break
                         elif line.startswith("<INPUTS>"):
                             input_count=0
-                            if node_attributes["type"] in {'REPEAT_INPUT','FOREACH_GEOMETRY_ELEMENT_INPUT'}:
+                            if node_attributes["type"] in {'REPEAT_INPUT','FOREACH_GEOMETRY_ELEMENT_INPUT',"SIMULATION_INPUT"}:
                                 save_for_after_pairing[node_id]={"inputs":[],"outputs":[]}
                         elif line.startswith("<OUTPUTS>"):
                             output_count=0
@@ -4292,11 +4400,11 @@ def create_from_xml(tree,filename=None,**kwargs):
                         elif line.startswith("</OUTPUTS>"):
                             pass
                         elif line.startswith("<INPUT "):
-                            if node_id == 8:
+                            if node_id == 16:
                                 pass
                             input_attributes = get_attributes(line)
                             input_id = int(input_attributes["id"])
-                            if node_attributes["type"] in {"REPEAT_INPUT","FOREACH_GEOMETRY_ELEMENT_INPUT"}:
+                            if node_attributes["type"] in {"REPEAT_INPUT","FOREACH_GEOMETRY_ELEMENT_INPUT","SIMULATION_INPUT"}:
                                 # repeat inputs can only be initiated after pairing
                                 save_for_after_pairing[node_id]["inputs"].append(input_attributes)
 
@@ -4312,6 +4420,8 @@ def create_from_xml(tree,filename=None,**kwargs):
                                     if result:
                                         node_structure[node_id]["inputs"][input_id]=input_count
                                         input_count += 1
+                                    else:
+                                        print("Something went wrong with socket creation for node ",node_id)
                                 else:
                                     # print("Warning: unrecognized socket in ", node_id, socket_count,input_attributes["type"])
                                     node_structure[node_id]["inputs"][input_id] = -1 # take last slot (this dynamically generates new sockets for Group Input and Group Output
@@ -4321,7 +4431,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                             output_attributes = get_attributes(line)
                             output_id = int(output_attributes["id"])
 
-                            if node_attributes["type"] in{'REPEAT_INPUT','FOREACH_GEOMETRY_ELEMENT_INPUT'}:
+                            if node_attributes["type"] in{'REPEAT_INPUT','FOREACH_GEOMETRY_ELEMENT_INPUT',"SIMULATION_INPUT"}:
                                 # repeat inputs can only be initiated after pairing
                                 save_for_after_pairing[node_id]["outputs"].append(output_attributes)
 
@@ -4337,6 +4447,8 @@ def create_from_xml(tree,filename=None,**kwargs):
                                     if result:
                                         node_structure[node_id]["outputs"][output_id]=output_count
                                         output_count+=1
+                                    else:
+                                        print("Something went wrong with creating sockets for ",node_id)
                                 else:
                                     # print("Warning: unrecognized socket in ",node_id,socket_count,output_attributes["type"])
                                     node_structure[node_id]["outputs"][output_id] = -1 # take last slot (this dynamically generates new sockets for Grou
@@ -4383,6 +4495,20 @@ def create_from_xml(tree,filename=None,**kwargs):
                         output_id = int(attributes['id'])
                         node_structure[key]["outputs"][output_id]=output_count
                         output_count+=1
+                if "Simulation Input" in name:
+                    # find the corresponding output node from name
+                    out_name = name.replace("Input", "Output")
+                    node_dir[key].pair_with_output(node_dir[name_dir[out_name]])
+                    input_count=0
+                    for  attributes in save_for_after_pairing[key]["inputs"]:
+                        input_id = int(attributes['id'])
+                        node_structure[key]["inputs"][input_id]=input_count
+                        input_count+=1
+                    output_count=0
+                    for attributes in save_for_after_pairing[key]["outputs"]:
+                        output_id = int(attributes['id'])
+                        node_structure[key]["outputs"][output_id]=output_count
+                        output_count+=1
 
             # parse link data
             for i in range(*links_range):
@@ -4393,9 +4519,8 @@ def create_from_xml(tree,filename=None,**kwargs):
                 to_node = int(node_attributes["to_node"])
 
                 output_id = node_structure[from_node]["outputs"][from_socket]
-                if  to_socket==48:
-                    i=0
-                    i+=1
+                if  to_socket==85:
+                    pass
                 input_id = node_structure[to_node]["inputs"][to_socket]
 
                 # print("link ",node_dir[from_node],": ",str(from_socket),"->",str(to_socket),": ",node_dir[to_node])

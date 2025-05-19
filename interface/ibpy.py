@@ -6165,8 +6165,7 @@ def add_mesh_modifier(bob, **kwargs):
                 for i, name in enumerate(attribute_names):
                     modifiers["Output_" + str(i + 1) + "_attribute_name"] = name
             # transfer possible color to the material slot of the blender object
-            for mat in node_modifier.materials:
-                obj.data.materials.append(mat)
+            append_materials(obj,node_modifier.materials)
         elif 'node_group' in kwargs:
             node_group = kwargs.pop('node_group')
             modifiers.node_group = node_group
@@ -6176,6 +6175,18 @@ def add_mesh_modifier(bob, **kwargs):
                     modifiers["Output_" + str(i + 1) + "_attribute_name"] = name
         else:
             print("No node data was provided! You either need to add a 'node_group' or a  'node_modifier' keyword")
+
+def append_materials(bobj,materials):
+    """
+    add additional materials to the material slots of an object
+    This function is used when a geometry nodes modifier is added to the object
+    add_mesh_modifier...
+
+    it can be used explicitly, when the materials are customized, after the geometry node has been created and added
+    """
+    obj = get_obj(bobj)
+    for mat in materials:
+        obj.data.materials.append(mat)
 
 def replace_mesh_modifier(bob, **kwargs):
     '''

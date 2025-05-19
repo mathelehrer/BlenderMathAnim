@@ -604,7 +604,8 @@ class BObject(object):
         return begin_time + transition_time
 
     def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,scale=1,
-               clear_data=False, silent=False,linked=False, nice_alpha=False,children=True,**kwargs):
+               clear_data=False, silent=False,linked=False, nice_alpha=False,children=True,
+               offset_for_slots=[0],**kwargs):
         """
         makes the object simply fade in with in the transition time
         from alpha = 0 to alpha defined in kwargs (default 1)
@@ -632,7 +633,8 @@ class BObject(object):
 
             if clear_data:  # this is useful for copies of objects to remove animation data from inherited from the parent
                 ibpy.clear_animation_data(self)
-            ibpy.fade_in(self, begin_time * FRAME_RATE, np.maximum(1, transition_time * FRAME_RATE), alpha=alpha,**kwargs)
+            ibpy.fade_in(self, begin_time * FRAME_RATE, np.maximum(1, transition_time * FRAME_RATE), alpha=alpha,
+                         offset_for_slots=offset_for_slots,**kwargs)
             self.appeared = True
 
         if children:

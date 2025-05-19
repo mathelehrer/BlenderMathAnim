@@ -3585,6 +3585,82 @@ def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('draw
 
     return mixers
 
+def billiards_cloth_material(**kwargs):
+    color = bpy.data.materials.new(name='BilliardCloth')
+
+    color.use_nodes = True
+    nodes = color.node_tree.nodes
+    links = color.node_tree.links
+    bsdf = nodes['Principled BSDF']
+    mat = nodes["Material Output"]
+
+    tex_coords =nodes.new(type='ShaderNodeTexCoord')
+    tex_coords.location = (-700, 0)
+
+    noise = nodes.new(type='ShaderNodeTexNoise')
+    noise.location=(-500,0)
+    noise.inputs['Scale'].default_value = 50
+    noise.inputs['Detail'].default_value = 2
+    noise.inputs['Roughness'].default_value = 0.5
+    links.new(tex_coords.outputs['Object'], noise.inputs["Vector"])
+
+    ramp = nodes.new(type='ShaderNodeValToRGB')
+    ramp.location=(-300,0)
+    ramp.color_ramp.elements[0].position = 0
+    ramp.color_ramp.elements[0].color = [0.011,0.133,0, 1]
+    ramp.color_ramp.elements[1].position = 1
+    ramp.color_ramp.elements[1].color = [0.117,0.403,0, 1]
+    links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
+    links.new(ramp.outputs['Color'], bsdf.inputs['Base Color'])
+
+
+    mapping = nodes.new(type='ShaderNodeMath')
+    mapping.location=(-300,300)
+    mapping.operation = 'MULTIPLY'
+    mapping.inputs[1].default_value =0.020
+    links.new(noise.outputs["Fac"], mapping.inputs[0])
+
+    displacement = nodes.new(type='ShaderNodeDisplacement')
+    displacement.location=(-0,500)
+    links.new(mapping.outputs["Value"], displacement.inputs["Height"])
+    links.new(displacement.outputs["Displacement"], mat.inputs["Displacement"])
+    return color
+
+def billiards_ball_material(**kwargs):
+    color = ibpy.get_material("plastic_custom1")
+
+    color.use_nodes = True
+    nodes = color.node_tree.nodes
+    links = color.node_tree.links
+    bsdf = nodes['Principled BSDF']
+    mat = nodes["Material Output"]
+
+    tex_coords =nodes.new(type='ShaderNodeTexCoord')
+    tex_coords.location = (-700, 0)
+
+    noise = nodes.new(type='ShaderNodeTexNoise')
+    noise.location=(-500,0)
+    noise.inputs['Scale'].default_value = 5
+    noise.inputs['Detail'].default_value = 2
+    noise.inputs['Roughness'].default_value = 0.5
+    links.new(tex_coords.outputs['Object'], noise.inputs["Vector"])
+
+    ramp = nodes.new(type='ShaderNodeValToRGB')
+    ramp.location=(-300,-300)
+    ramp.color_ramp.elements[0].position = 0.5
+    ramp.color_ramp.elements[0].color = [0.905,0.040,0.205,1]
+    links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
+
+    mul = nodes.new(type='ShaderNodeMath')
+    mul.operation='MULTIPLY'
+    mul.location=(-300,0)
+    mul.inputs[1].default_value=0.5
+    links.new(noise.outputs["Fac"],mul.inputs[0])
+
+    links.new(mul.outputs[0],bsdf.inputs["Roughness"])
+    links.new(ramp.outputs["Color"],bsdf.inputs["Base Color"])
+    return color
+
 #################
 # backgrounds ###
 #################
