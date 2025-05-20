@@ -5,6 +5,7 @@ from appearance.textures import apply_material
 from interface import ibpy
 from interface.ibpy import change_emission, Vector, Quaternion
 from utils.constants import *
+from utils.kwargs import get_from_kwargs
 from utils.utils import to_vector
 
 
@@ -661,7 +662,7 @@ class BObject(object):
         self.hide=not self.hide
         ibpy.set_hide(self,self.hide,frame=begin_time*FRAME_RATE)
 
-    def disappear(self, alpha=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+    def disappear(self, alpha=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, slot=None, **kwargs):
         """
         :param alpha:
         :param transition_time:
@@ -675,15 +676,12 @@ class BObject(object):
             else:
                 transition_frames = transition_time * FRAME_RATE
 
-            if 'quick' in kwargs:
-                quick = kwargs.pop('quick')
-            else:
-                quick = False
+            quick=get_from_kwargs(kwargs,"quick",False)
             if quick:
                 ibpy.fade_out_quickly(self, disappear_frame, transition_frames, **kwargs)
             else:
-                ibpy.fade_out(self, disappear_frame, transition_frames, alpha=alpha, **kwargs)
-        if alpha == 0:
+                ibpy.fade_out(self, disappear_frame, transition_frames, slot =slot, alpha=alpha, **kwargs)
+        if alpha == 0 and slot is None: # only disappear, when all slots have been zeroed.
             self.appeared = False
         return begin_time + transition_time
 

@@ -1659,7 +1659,10 @@ def get_alpha_at_current_keyframe(obj, frame, slot=0):
     if len(obj.material_slots) > 0:
         current_frame = get_frame()
         set_frame(frame)
-        material_slot = obj.material_slots[slot]
+        if slot is None:
+            material_slot = obj.material_slots[0]
+        else:
+            material_slot=obj.material_slots[slot]
         material = material_slot.material
         if _alpha := material.node_tree.nodes.get("AlphaFactor"):
             alpha = _alpha.inputs[0].default_value
@@ -1673,7 +1676,7 @@ def get_alpha_at_current_keyframe(obj, frame, slot=0):
     return 0
 
 
-def set_alpha_and_keyframe(obj, value, frame, offset_for_slots=None, viewport = "material"):
+def set_alpha_and_keyframe(obj, value, frame, offset_for_slots=None,slot=None, viewport = "material"):
     """
     keyframe the alpha value of an object
     :param offset_for_slots:
@@ -1683,20 +1686,31 @@ def set_alpha_and_keyframe(obj, value, frame, offset_for_slots=None, viewport = 
     :return:
     """
     obj = get_obj(obj)
-    if offset_for_slots is not None:
-        while len(offset_for_slots)<len(obj.material_slots):
-            offset_for_slots.append(offset_for_slots[-1])
-
-    for s, material_slot in enumerate(obj.material_slots):
-        material = material_slot.material
-        dialers = set_alpha_for_material(material, value, viewport=viewport)
-        if offset_for_slots is not None and len(offset_for_slots) > s:
-            offset = offset_for_slots[s] * FRAME_RATE
-        else:
-            offset = 0
-        if dialers:
-            for dialer in dialers:
-                insert_keyframe(dialer, 'default_value', frame + offset)
+    
+    if slot is None: 
+        if offset_for_slots is not None:
+            while len(offset_for_slots)<len(obj.material_slots):
+                offset_for_slots.append(offset_for_slots[-1])
+    
+        for s, material_slot in enumerate(obj.material_slots):
+            material = material_slot.material
+            dialers = set_alpha_for_material(material, value, viewport=viewport)
+            if offset_for_slots is not None and len(offset_for_slots) > s:
+                offset = offset_for_slots[s] * FRAME_RATE
+            else:
+                offset = 0
+            if dialers:
+                for dialer in dialers:
+                    insert_keyframe(dialer, 'default_value', frame + offset)
+    else:
+        if len(obj.material_slots)>slot:
+            material = obj.material_slots[slot].material
+            dialers = set_alpha_for_material(material, value, viewport=viewport)
+            if dialers:
+                for dialer in dialers:
+                    insert_keyframe(dialer, 'default_value', frame)
+                    
+            
 
 
 # Geometry nodes
@@ -6317,7 +6331,7 @@ def change_shader_value(b_object, node, input, initial_value=0, final_value=1, f
     insert_keyframe(node.inputs[input], 'default_value', frame + frame_duration)
 
 
-def fade_out(b_obj, frame, frame_duration, alpha=0, handwriting=False, **kwargs):
+def fade_out(b_obj, frame, frame_duration, alpha=0, handwriting=False,slot=None, **kwargs):
     """
     fade out b_object and hide it from scene
     it is recursively applied to all the children
@@ -6333,7 +6347,7 @@ def fade_out(b_obj, frame, frame_duration, alpha=0, handwriting=False, **kwargs)
 
     recursive_fade_out(obj, frame, frame_duration, handwriting=handwriting, alpha=alpha, **kwargs)
 
-    if alpha == 0:
+    if alpha == 0 and slot is None: # only hide when all slots are zeroed
         hide_frm(b_obj, frame + frame_duration)
 
 
@@ -6349,19 +6363,20 @@ def fade_out_quickly(obj, frame, frame_duration, viewport="material"):
     set_alpha_and_keyframe(obj, 0, frame + frame_duration, viewport=viewport)
 
 
-def recursive_fade_out(obj, frame, frame_duration, handwriting=False, alpha=0, slot=0, viewport="material"):
+def recursive_fade_out(obj, frame, frame_duration, handwriting=False, alpha=0, slot=None, viewport="material"):
     # retrieve current alpha state  to fade out from the current state
     if not "hand_written" in obj.name or handwriting:
-        alpha0 = get_alpha_at_current_keyframe(obj, frame, slot)
-        set_alpha_and_keyframe(obj, alpha0, frame, viewport=viewport)
-        set_alpha_and_keyframe(obj, alpha, frame + frame_duration, viewport=viewport)
+        alpha0 = get_alpha_at_current_keyframe(obj, frame, slot=slot)
+        set_alpha_and_keyframe(obj, alpha0, frame, viewport=viewport,slot=slot)
+        set_alpha_and_keyframe(obj, alpha, frame + frame_duration, viewport=viewport,slot=slot)
 
     for child in obj.children:
-        recursive_fade_out(child, frame, frame_duration, alpha=alpha)
+        recursive_fade_out(child, frame, frame_duration, alpha=alpha,slot=slot)
 
-    if alpha == 0:
+    if alpha == 0 and slot is None: # only hide if all slots are zeroed
         obj.hide_render = True
         obj.keyframe_insert(data_path="hide_render", frame=frame + frame_duration)
+        
 
 
 def move(b_obj, direction, begin_frame, frame_duration):

@@ -377,7 +377,7 @@ class Node:
             return ReRoute(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="FRAME":
             location=parse_location(attributes["location"])
-            return Frame(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+            return Frame(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=1000,node_width=1000)
 
         if type=="GROUP_OUTPUT":
             return GroupOutput(tree,location,name=name,label=label,hide=hide,mute=mute,node_height=200)
