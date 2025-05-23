@@ -3640,10 +3640,10 @@ def billiards_ball_material(**kwargs):
 
     noise = nodes.new(type='ShaderNodeTexNoise')
     noise.location=(-500,0)
-    noise.inputs['Scale'].default_value = 5
+    noise.inputs['Scale'].default_value = 10
     noise.inputs['Detail'].default_value = 2
     noise.inputs['Roughness'].default_value = 0.5
-    links.new(tex_coords.outputs['Object'], noise.inputs["Vector"])
+    links.new(tex_coords.outputs['Generated'], noise.inputs["Vector"])
 
     ramp = nodes.new(type='ShaderNodeValToRGB')
     ramp.location=(-300,-300)

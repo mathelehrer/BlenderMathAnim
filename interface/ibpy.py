@@ -6345,7 +6345,7 @@ def fade_out(b_obj, frame, frame_duration, alpha=0, handwriting=False,slot=None,
     """
     obj = get_obj(b_obj)
 
-    recursive_fade_out(obj, frame, frame_duration, handwriting=handwriting, alpha=alpha, **kwargs)
+    recursive_fade_out(obj, frame, frame_duration, handwriting=handwriting, alpha=alpha, slot=slot,**kwargs)
 
     if alpha == 0 and slot is None: # only hide when all slots are zeroed
         hide_frm(b_obj, frame + frame_duration)
