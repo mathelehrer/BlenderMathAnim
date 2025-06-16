@@ -1622,12 +1622,12 @@ class RotateInstances(GreenNode):
             else:
                 self.tree.links.new(selection,self.node.inputs["Selection"])
         if rotation:
-            if isinstance(rotation,Vector):
+            if isinstance(rotation,(Vector,list)):
                 self.node.inputs["Rotation"].default_value=rotation
             else:
                 self.tree.links.new(rotation,self.node.inputs["Rotation"])
         if pivot_point:
-            if isinstance(pivot_point,Vector):
+            if isinstance(pivot_point,(Vector,list)):
                 self.node.inputs["Pivot Point"].default_value=pivot_point
             else:
                 self.tree.links.new(pivot_point,self.node.inputs["Pivot Point"])
