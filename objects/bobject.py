@@ -503,7 +503,7 @@ class BObject(object):
         bcopy.appeared = False
         bcopy.transformation_state = self.transformation_state
 
-        if self.color:
+        if hasattr(self,"color") and self.color:
             # This is important to create an own material for the copy if possible
             # otherwise the material will have the same actions for the copy and the original
             # (alpha changes and so on)

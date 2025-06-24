@@ -65,6 +65,8 @@ def get_texture(material, **kwargs):
             material = make_hue_material(**kwargs)
         elif material == 'gold':
             material = make_gold_material(**kwargs)
+        elif material =="billiards_cloth_material":
+            material = billiards_cloth_material(**kwargs)
         else:
             if material not in bpy.data.materials:
                 # return default drawing material
