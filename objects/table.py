@@ -119,7 +119,7 @@ class Table(BObject):
             if row==rows-2:
                 current_height-=foot_sep
         # make the container appear
-        self.appear(begin_time=0,transition_time=0)
+        self.appear(begin_time=0,transition_time=0,children=False)
 
     def write_all(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
         for row in self.array:
@@ -128,11 +128,13 @@ class Table(BObject):
                     bob.write(begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
 
-    def write_row(self,row,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def write_row(self,row,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,verbose=False):
         real_bobs=[bob for bob in self.array[row] if bob is not None]
         dt = transition_time/len(real_bobs)
         t0 = begin_time
-        for bob in real_bobs:
+        for i,bob in enumerate(real_bobs):
+            if verbose:
+                print("write entry "+str(i)+" of row "+str(row)+" at time "+str(t0)+" with transition time "+str(dt))
             t0=bob.write(begin_time=t0,transition_time=dt)
         return begin_time+transition_time
 
