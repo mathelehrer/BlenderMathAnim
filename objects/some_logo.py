@@ -56,7 +56,7 @@ class SoME(BObject):
                              **kwargs)
 
     def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, clear_data=False, silent=False):
-        super().appear(begin_time=begin_time,transition_time=transition_time)
+        super().appear(begin_time=begin_time,transition_time=transition_time,children=False)
 
         dt1 = 2*transition_time/3
         dt2 = 1*transition_time/3

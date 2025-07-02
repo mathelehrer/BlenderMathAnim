@@ -255,6 +255,7 @@ def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_
 
     bpy.ops.font.open(filepath=os.path.join(FONT_DIR, "Symbola/Symbola.ttf"))
     bpy.ops.font.open(filepath=os.path.join(FONT_DIR, "arial/ARIBLK.TTF"))
+    bpy.ops.font.open(filepath=os.path.join(FONT_DIR, "Engineering_Plot/Engplot.TTF"))
 
 def get_total_duration(scenes):
     # scenes is a list of (name, object) pairs

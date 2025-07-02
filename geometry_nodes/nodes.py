@@ -255,6 +255,8 @@ class Node:
             return CubeMesh(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type=="MESH_PRIMITIVE_ICO_SPHERE":
             return IcoSphere(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
+        if type=="MESH_PRIMITIVE_UV_SPHERE":
+            return UVSphere(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type=="MESH_PRIMITIVE_GRID":
             return Grid(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="MESH_PRIMITIVE_CYLINDER":
@@ -1119,7 +1121,7 @@ class CurveQuadrilateral(GreenNode):
 
 class StringToCurves(GreenNode):
     def __init__(self, tree, location=(0, 0),
-                 font="Symbola Regular",
+                 font="Symbola Regular", # fonts have to be loaded in scene.py
                  overflow='OVERFLOW',
                  align_x="CENTER",
                  align_y="MIDDLE",

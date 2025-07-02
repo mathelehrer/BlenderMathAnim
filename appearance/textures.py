@@ -67,6 +67,8 @@ def get_texture(material, **kwargs):
             material = make_gold_material(**kwargs)
         elif material =="billiards_cloth_material":
             material = billiards_cloth_material(**kwargs)
+        elif material =="billiard_ball_material":
+            material = real_billiard_ball_material(**kwargs)
         else:
             if material not in bpy.data.materials:
                 # return default drawing material
@@ -3586,6 +3588,59 @@ def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('draw
             links.new(mixers[-1].std_out, bsdf.inputs[EMISSION])
 
     return mixers
+
+def real_billiard_ball_material(**kwargs):
+    color_name = get_from_kwargs(kwargs,"color", 'white')
+    if color_name == 'white':
+        color = [1, 1, 1, 1]
+    elif color_name == 'black':
+        color = [0, 0, 0, 1]
+    elif color_name=="blue":
+        color = [0.1, 0.1, 0.8, 1]
+    elif color_name=="red":
+        color = [0.8, 0.1, 0.1, 1]
+    elif color_name=="green":
+        color = [0.1, 0.8, 0.1, 1]
+    elif color_name=="yellow":
+        color = [0.8, 0.8, 0.1, 1]
+    elif color_name=="orange":
+        color = [0.8, 0.4, 0.1, 1]
+    elif color_name=="purple":
+        color = [0.4, 0.1, 0.8, 1]
+    elif color_name=="cyan":
+        color = [0.1, 0.8, 0.8, 1]
+    else:
+        color = [0.5,0.5,0.5,1]
+
+    material = bpy.data.materials.new(name='BilliardBall')
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    bsdf = nodes['Principled BSDF']
+    # nodes.remove(nodes.get('Principled BSDF'))
+    mat = nodes["Material Output"]
+
+    bsdf.inputs['Base Color'].default_value = color
+    bsdf.inputs['Roughness'].default_value = 0.3
+
+    # mix_shader=  nodes.new("ShaderNodeMixShader")
+    # mix_shader.location = (-200, 0)
+    # mix_shader.inputs[0].default_value = 0.7
+    # links.new(mix_shader.outputs[0], mat.inputs[0])
+    #
+    # diffuse_shader = nodes.new("ShaderNodeBsdfDiffuse")
+    # diffuse_shader.location = (-400, 200)
+    # diffuse_shader.inputs['Color'].default_value = color
+    # links.new(diffuse_shader.outputs[0], mix_shader.inputs[1])
+    #
+    # glossy_shader = nodes.new("ShaderNodeBsdfGlossy")
+    # glossy_shader.location = (-400, -200)
+    # glossy_shader.inputs['Roughness'].default_value = 0.1
+    # glossy_shader.inputs["Color"].default_value = color
+    # links.new(glossy_shader.outputs[0], mix_shader.inputs[2])
+
+
+    return material
 
 def billiards_cloth_material(**kwargs):
     color = bpy.data.materials.new(name='BilliardCloth')
