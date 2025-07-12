@@ -2395,12 +2395,29 @@ def get_node_with_label(bob, label):
         if n.label == label:
             return n
 
+##################################
+## Geometry nodes ################
+##################################
+
+def get_geometry_nodes_modifier(bob):
+    obj = get_obj(bob)
+    gnmod = None
+    for gnmod in obj.modifiers:
+        if gnmod.type == "NODES":
+            break
+    return gnmod
 
 def get_geometry_node_from_modifier(modifier, label):
     for n in modifier.nodes:
         if label in n.label or label in n.name:
             return n
     return None
+
+
+def get_socket_names_from_modifier(modifier):
+    socket_names = {item.name: f"{item.identifier}" for item in modifier.node_group.interface.items_tree
+                    if item.in_out == "INPUT"}
+    return socket_names
 
 
 def get_shader_node_from_material(material, label):

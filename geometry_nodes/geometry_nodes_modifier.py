@@ -2103,7 +2103,6 @@ class NumberLineModifier(GeometryNodesModifier):
                     rounded_val = str(round((x0+dx * i) * p) / p)
                 tic_labels[rounded_val] = [x0+dx * i]
 
-        tic_label_aligned = get_from_kwargs(kwargs,"tic_label_aligned","center")
         tic_labels, axis_label = generate_labels(tic_labels,axis_label, **kwargs)
         downshift=-5
         in_min = InputValue(tree,location=(left,downshift), name='Minimum', value=domain[0])
@@ -2817,11 +2816,12 @@ class UnfoldModifier(GeometryNodesModifier):
 
 def generate_labels(tic_labels,axis_label, **kwargs):
     aligned = get_from_kwargs(kwargs, 'aligned', 'left')
+    suffix = get_from_kwargs(kwargs,"tic_label_suffix","")
     imported_svg_data = {}  # Build dictionary of imported svgs to use
 
     # shape keys later and to avoid duplicate
     for key, val in tic_labels.items():
-        path = get_file_path(key)
+        path = get_file_path(key+suffix)
         if isinstance(val,(float,int)):
             val=[val]
         tic_labels[key] = val + [path]

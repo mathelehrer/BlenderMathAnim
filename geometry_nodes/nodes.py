@@ -114,7 +114,8 @@ class Node:
             return InputInteger(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,integer=integer)
         if type=="INPUT_STRING":
             string = attributes["string"]
-            return InputString(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,string=string)
+            return InputString(tree,location=location,name=name,label=label,hide=hide,mute=mute,
+                               node_height=200,string=string)
         if type=="INPUT_BOOL":
             boolean = bool(attributes["boolean"])
             return InputBoolean(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,boolean=boolean)
@@ -204,11 +205,16 @@ class Node:
 
 
         # instances
+        if type=="GEOMETRY_TO_INSTANCE":
+            return GeometryToInstance(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="INSTANCE_ON_POINTS":
             return InstanceOnPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="ROTATE_INSTANCES":
             return RotateInstances(tree, location=location, name=name, label=label, hide=hide, mute=mute,
                                     node_height=200)
+        if type=="SCALE_INSTANCES":
+            return ScaleInstances(tree, location=location, name=name, label=label, hide=hide, mute=mute)
+
         # attribute nodes
         if type=="STORE_NAMED_ATTRIBUTE":
             data_type = attributes["data_type"]
@@ -264,7 +270,12 @@ class Node:
                             label=label, hide=hide, mute=mute, node_height=200,
                             )
 
-        # curves
+        # curves and strings
+        if type=="VALUE_TO_STRING":
+            data_type = attributes["data_type"]
+            return ValueToString(tree,location=location,name=name,label=label,
+                                 hide=hide,mute=mute,node_height=200,
+                                 data_type=data_type)
         if type=="STRING_TO_CURVES":
             font = attributes["font"]
             overflow=attributes["overflow"]
@@ -273,6 +284,8 @@ class Node:
             pivot_mode=attributes["pivot_mode"]
             return StringToCurves(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,
                                   font=font,overflow=overflow,align_x=align_x,align_y=align_y,pivot_mode=pivot_mode)
+        if type=="STRING_JOIN":
+            return StringJoin(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="CURVE_PRIMITIVE_CIRCLE":
             mode=attributes["mode"]
             return CurveCircle(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
@@ -1117,6 +1130,7 @@ class CurveQuadrilateral(GreenNode):
             else:
                 self.tree.links.new(height, self.node.inputs["Height"])
 
+
 class StringToCurves(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  font="Symbola Regular",
@@ -1211,11 +1225,28 @@ class ValueToString(BlueNode):
         self.std_out = self.node.outputs["String"]
         self.node.data_type = data_type
 
-
         if isinstance(value, (int, float)):
             self.node.inputs["Value"].default_value = value
         else:
             self.tree.links.new(value,self.node.inputs["Value"])
+
+class StringJoin(BlueNode):
+    def __init__(self,tree,location=(0,0),delimiter="",strings = None,**kwargs):
+        self.node=tree.nodes.new(type="GeometryNodeStringJoin")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.std_out = self.node.outputs["String"]
+
+
+        if isinstance(delimiter, str):
+            self.node.inputs["Delimiter"].default_value = delimiter
+        else:
+            self.tree.links.new(delimiter,self.node.inputs["Delimiter"])
+
+        if strings:
+            self.tree.links.new(strings,self.node.inputs["Strings"])
+
+
 
 # default meshes
 
@@ -3116,6 +3147,8 @@ class SimulationOutput(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeSimulationOutput")
         super().__init__(tree,location=location,**kwargs)
     def add_socket(self,socket_type,socket_name):
+        if socket_type=="VALUE":
+            socket_type="FLOAT"
         self.node.state_items.new(socket_type,socket_name)
 
 
@@ -4225,7 +4258,7 @@ def get_attributes(line):
             if not tag_label_ended:
                 pass # part of the tag label, can be ignored
             else:
-                if letter=='=':
+                if letter=='=' and not value_started:
                     leftside=False
                     value_started=False
                 else:
