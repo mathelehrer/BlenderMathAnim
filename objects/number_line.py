@@ -34,6 +34,7 @@ class NumberLine2(BObject):
                auto_smooth=True,
                axis_label='x',
                direction="HORIZONTAL|VERTICAL|DEEP|NONE"
+               tic_label_suffix=""
                )--
            """
 

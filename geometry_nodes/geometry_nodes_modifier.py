@@ -2819,8 +2819,9 @@ def generate_labels(tic_labels,axis_label, **kwargs):
     imported_svg_data = {}  # Build dictionary of imported svgs to use
 
     # shape keys later and to avoid duplicate
+    tic_label_suffix = get_from_kwargs(kwargs, 'tic_label_suffix', '')
     for key, val in tic_labels.items():
-        path = get_file_path(key)
+        path = get_file_path(key+tic_label_suffix)
         if isinstance(val,(float,int)):
             val=[val]
         tic_labels[key] = val + [path]
