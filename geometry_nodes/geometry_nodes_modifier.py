@@ -2816,12 +2816,11 @@ class UnfoldModifier(GeometryNodesModifier):
 
 def generate_labels(tic_labels,axis_label, **kwargs):
     aligned = get_from_kwargs(kwargs, 'aligned', 'left')
-    suffix = get_from_kwargs(kwargs,"tic_label_suffix","")
     imported_svg_data = {}  # Build dictionary of imported svgs to use
 
     # shape keys later and to avoid duplicate
     for key, val in tic_labels.items():
-        path = get_file_path(key+suffix)
+        path = get_file_path(key)
         if isinstance(val,(float,int)):
             val=[val]
         tic_labels[key] = val + [path]

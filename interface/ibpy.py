@@ -2407,6 +2407,19 @@ def get_geometry_nodes_modifier(bob):
             break
     return gnmod
 
+def get_socket_names_from_modifier(modifier):
+    """ Return sockets that receive custom values during setup """
+    return {item.name: f"{item.identifier}" for item in modifier.node_group.interface.items_tree
+                    if item.in_out == "INPUT"}
+
+def get_geometry_nodes_modifier(bob):
+    """ Extract geometry nodes modifier from bob """
+    gnmod = None
+    for gnmod in get_obj(bob).modifiers:
+        if gnmod.type == "NODES":
+            break
+    return gnmod
+
 def get_geometry_node_from_modifier(modifier, label):
     for n in modifier.nodes:
         if label in n.label or label in n.name:
@@ -5491,12 +5504,12 @@ def get_new_curve(name, num_points, data=None,**kwargs):
     curve.dimensions = '3D'
     curve.resolution_u = 10
 
-    for i in range(len(data)):
-        data[i]=to_vector(data[i])
-
     if data is None:
         add_bezier_spline(curve.splines, num_points, data=data, cyclic=False)
     else:
+        for i in range(len(data)):
+            data[i] = to_vector(data[i])
+
         if make_pieces:
             data_pieces = separate_pieces(data)
         else:
