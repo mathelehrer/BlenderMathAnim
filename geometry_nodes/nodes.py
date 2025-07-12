@@ -271,7 +271,12 @@ class Node:
                             label=label, hide=hide, mute=mute, node_height=200,
                             )
 
-        # curves
+        # curves and strings
+        if type=="VALUE_TO_STRING":
+            data_type = attributes["data_type"]
+            return ValueToString(tree,location=location,name=name,label=label,
+                                 hide=hide,mute=mute,node_height=200,
+                                 data_type=data_type)
         if type=="STRING_TO_CURVES":
             font = attributes["font"]
             overflow=attributes["overflow"]
@@ -280,6 +285,8 @@ class Node:
             pivot_mode=attributes["pivot_mode"]
             return StringToCurves(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,
                                   font=font,overflow=overflow,align_x=align_x,align_y=align_y,pivot_mode=pivot_mode)
+        if type=="STRING_JOIN":
+            return StringJoin(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="CURVE_PRIMITIVE_CIRCLE":
             mode=attributes["mode"]
             return CurveCircle(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
@@ -1218,11 +1225,28 @@ class ValueToString(BlueNode):
         self.std_out = self.node.outputs["String"]
         self.node.data_type = data_type
 
-
         if isinstance(value, (int, float)):
             self.node.inputs["Value"].default_value = value
         else:
             self.tree.links.new(value,self.node.inputs["Value"])
+
+class StringJoin(BlueNode):
+    def __init__(self,tree,location=(0,0),delimiter="",strings = None,**kwargs):
+        self.node=tree.nodes.new(type="GeometryNodeStringJoin")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.std_out = self.node.outputs["String"]
+
+
+        if isinstance(delimiter, str):
+            self.node.inputs["Delimiter"].default_value = delimiter
+        else:
+            self.tree.links.new(delimiter,self.node.inputs["Delimiter"])
+
+        if strings:
+            self.tree.links.new(strings,self.node.inputs["Strings"])
+
+
 
 # default meshes
 
@@ -4234,7 +4258,7 @@ def get_attributes(line):
             if not tag_label_ended:
                 pass # part of the tag label, can be ignored
             else:
-                if letter=='=':
+                if letter=='=' and not value_started:
                     leftside=False
                     value_started=False
                 else:
