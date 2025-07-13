@@ -662,7 +662,7 @@ class BObject(object):
         self.hide=not self.hide
         ibpy.set_hide(self,self.hide,frame=begin_time*FRAME_RATE)
 
-    def disappear(self, alpha=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, slot=None, **kwargs):
+    def disappear(self, alpha=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, slot=None,children=True, **kwargs):
         """
         :param alpha:
         :param transition_time:
@@ -678,9 +678,9 @@ class BObject(object):
 
             quick=get_from_kwargs(kwargs,"quick",False)
             if quick:
-                ibpy.fade_out_quickly(self, disappear_frame, transition_frames, **kwargs)
+                ibpy.fade_out_quickly(self, disappear_frame, transition_frames,cildren=children, **kwargs)
             else:
-                ibpy.fade_out(self, disappear_frame, transition_frames, slot =slot, alpha=alpha, **kwargs)
+                ibpy.fade_out(self, disappear_frame, transition_frames, slot =slot, alpha=alpha,children=children, **kwargs)
         if alpha == 0 and slot is None: # only disappear, when all slots have been zeroed.
             self.appeared = False
         return begin_time + transition_time

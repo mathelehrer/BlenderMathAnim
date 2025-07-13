@@ -6361,7 +6361,7 @@ def change_shader_value(b_object, node, input, initial_value=0, final_value=1, f
     insert_keyframe(node.inputs[input], 'default_value', frame + frame_duration)
 
 
-def fade_out(b_obj, frame, frame_duration, alpha=0, handwriting=False,slot=None, **kwargs):
+def fade_out(b_obj, frame, frame_duration, alpha=0, handwriting=False,slot=None,children=True, **kwargs):
     """
     fade out b_object and hide it from scene
     it is recursively applied to all the children
@@ -6375,7 +6375,7 @@ def fade_out(b_obj, frame, frame_duration, alpha=0, handwriting=False,slot=None,
     """
     obj = get_obj(b_obj)
 
-    recursive_fade_out(obj, frame, frame_duration, handwriting=handwriting, alpha=alpha, slot=slot,**kwargs)
+    recursive_fade_out(obj, frame, frame_duration, handwriting=handwriting, alpha=alpha, slot=slot,children=children,**kwargs)
 
     if alpha == 0 and slot is None: # only hide when all slots are zeroed
         hide_frm(b_obj, frame + frame_duration)
@@ -6393,15 +6393,16 @@ def fade_out_quickly(obj, frame, frame_duration, viewport="material"):
     set_alpha_and_keyframe(obj, 0, frame + frame_duration, viewport=viewport)
 
 
-def recursive_fade_out(obj, frame, frame_duration, handwriting=False, alpha=0, slot=None, viewport="material"):
+def recursive_fade_out(obj, frame, frame_duration, handwriting=False, alpha=0, slot=None,children=True, viewport="material"):
     # retrieve current alpha state  to fade out from the current state
     if not "hand_written" in obj.name or handwriting:
         alpha0 = get_alpha_at_current_keyframe(obj, frame, slot=slot)
         set_alpha_and_keyframe(obj, alpha0, frame, viewport=viewport,slot=slot)
         set_alpha_and_keyframe(obj, alpha, frame + frame_duration, viewport=viewport,slot=slot)
 
-    for child in obj.children:
-        recursive_fade_out(child, frame, frame_duration, alpha=alpha,slot=slot)
+    if children:
+        for child in obj.children:
+            recursive_fade_out(child, frame, frame_duration, alpha=alpha,slot=slot)
 
     if alpha == 0 and slot is None: # only hide if all slots are zeroed
         obj.hide_render = True
