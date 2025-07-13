@@ -4946,6 +4946,14 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.out = new_node_math.outputs["Value"]
                 unary = True
+            elif next_element == "sinh":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "SINH"
+                new_node_math.label = "sinh"
+                new_node_structure = Structure()
+                new_node_structure.left = new_node_math.inputs[0]
+                new_node_structure.out = new_node_math.outputs["Value"]
+                unary = True
             elif next_element == "lg":
                 new_node_math = tree.nodes.new(type="ShaderNodeMath")
                 new_node_math.operation = "LOGARITHM"
@@ -4967,6 +4975,14 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                 new_node_math = tree.nodes.new(type="ShaderNodeMath")
                 new_node_math.operation = "COSINE"
                 new_node_math.label = "cos"
+                new_node_structure = Structure()
+                new_node_structure.left = new_node_math.inputs[0]
+                new_node_structure.out = new_node_math.outputs["Value"]
+                unary = True
+            elif next_element == "cosh":
+                new_node_math = tree.nodes.new(type="ShaderNodeMath")
+                new_node_math.operation = "COSH"
+                new_node_math.label = "cosh"
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
                 new_node_structure.out = new_node_math.outputs["Value"]
