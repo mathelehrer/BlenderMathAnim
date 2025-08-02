@@ -518,8 +518,7 @@ class MeshLine(GreenNode):
                  count_mode="TOTAL",  # alternative is "RESOLUTION"
                  count=10,
                  start_location=Vector([0, 0, 0]),
-                 end_location=None,
-                 offset=Vector([0,0,1]), **kwargs):
+                 end_location=None, **kwargs):
 
         self.node = tree.nodes.new(type="GeometryNodeMeshLine")
         super().__init__(tree, location=location, **kwargs)
@@ -542,10 +541,6 @@ class MeshLine(GreenNode):
                 self.node.inputs["Offset"].default_value = end_location
             else:
                 self.tree.links.new(end_location, self.node.inputs["Offset"])
-        if isinstance(offset,(list,Vector)):
-            self.node.inputs["Offset"].default_value = offset
-        else:
-            self.tree.links.new(offset, self.node.inputs["Offset"])
 
 
 # mesh operations
