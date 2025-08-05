@@ -11,7 +11,7 @@ from sympy import false
 from grandalf.graphs import Vertex, Edge, Graph
 from grandalf.layouts import SugiyamaLayout, DigcoLayout
 from interface import ibpy
-from interface.ibpy import get_material, make_new_socket, OPERATORS
+from interface.ibpy import get_material, make_new_socket, OPERATORS, get_obj
 from interface.interface_constants import blender_version
 from mathematics.groups.e8 import E8Lattice
 from utils.color_conversion import get_color
@@ -2143,12 +2143,12 @@ class ObjectInfo(GreenNode):
 
 
         if object is not None:
-            self.node.inputs["Object"].default_value = object
+            self.node.inputs["Object"].default_value = get_obj(object)
 
         self.geometry_out = self.node.outputs["Geometry"]
 
         if isinstance(as_instance,bool):
-            self.node.inputs["As Instance"].default_value = True
+            self.node.inputs["As Instance"].default_value = as_instance
         else:
             tree.links.new(as_instance,self.node.inputs["As Instance"])
 

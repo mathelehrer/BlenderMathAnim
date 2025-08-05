@@ -2491,6 +2491,42 @@ def make_plastic_material(rgb=None, name=None):
     bsdf.inputs['Roughness'].default_value = 0.1
     # bsdf.inputs['Specular Tint'].default_value=0.
 
+def make_eevee_glass_material(rgb=None, name=None):
+    if rgb is None or name is None:
+        raise Warning('Need rgb and name to make basic color')
+    for i in range(3):
+        # Range exactly 3 so a fourth component (alpha) isn't affected
+        rgb[i] /= 255
+
+    color = bpy.data.materials.new(name=name)
+    color.use_nodes = True
+    nodes = color.node_tree.nodes
+    bsdf = nodes['Principled BSDF']
+    out = nodes.get("Material Output")
+    bsdf.inputs['Base Color'].default_value = rgb
+    bsdf.inputs['Roughness'].default_value = 0
+    bsdf.inputs[TRANSMISSION].default_value = 1
+    color.use_raytrace_refraction=True
+    color.thickness_mode="SLAB"
+
+    # frenel and transparent bsdf
+
+    mix_shader = nodes.new(type='ShaderNodeMixShader')
+    mix_shader.location = (400, 400)
+    links = color.node_tree.links
+    links.new(mix_shader.outputs['Shader'], out.inputs['Surface'])
+    links.new(bsdf.outputs['BSDF'], mix_shader.inputs[2])
+
+    trans_bsdf = nodes.new(type='ShaderNodeBsdfTransparent')
+    trans_bsdf.location = (200, 400)
+    links.new(trans_bsdf.outputs['BSDF'], mix_shader.inputs[1])
+
+    fresnel = nodes.new(type='ShaderNodeFresnel')
+    fresnel.location = (200, 600)
+    fresnel.inputs['IOR'].default_value = 1.3
+    links.new(fresnel.outputs['Fac'], mix_shader.inputs['Fac'])
+
+
 def make_checker_material():
     color = bpy.data.materials.new(name='checker')
     color.use_nodes = True
