@@ -631,7 +631,8 @@ class Curve(GeoBObject):
             # if the growing is continued, it would cause flickering
             super().appear(begin_time=begin_time, transition_time=0)
             ibpy.set_use_path(self, True)
-        # TODO: Create parameter for thickness
+
+        # if bevel doesn't work you have to give the curve a unique name
         ibpy.set_bevel(self, self.bevel_depth, caps=self.bevel_caps, res=self.bevel_res)
         ibpy.set_extrude(self, self.extrude)
         ibpy.set_bevel_factor_mapping(self,self.bevel_factor_mapping_end)

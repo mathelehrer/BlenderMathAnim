@@ -202,7 +202,9 @@ class Node:
                                    label=label,hide=hide,mute=mute,
                                    node_height=200,
                                    mode=mode)
-
+        if type=="OBJECT_INFO":
+            transform_space=attributes["transform_space"]
+            return ObjectInfo(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=400,transform_space=transform_space)
 
         # instances
         if type=="SCALE_INSTANCES":
@@ -814,6 +816,28 @@ class CornersOfFace(RedNode):
         self.std_out=self.node.outputs[std_out]
 
 # curves
+class CurveLine(GreenNode):
+    def  __init__(self, tree, location=(0, 0),
+                  mode="POINTS",
+                  start=Vector(),
+                  end=Vector([0,0,1]),
+                  **kwargs
+                  ):
+        self.node = tree.nodes.new(type="GeometryNodeCurvePrimitiveLine")
+        super().__init__(tree, location=location, **kwargs)
+        self.node.mode = mode
+        self.geometry_out = self.node.outputs["Curve"]
+
+        if isinstance(start, (list,Vector)):
+            self.node.inputs["Start"].default_value = start
+        else:
+            self.tree.links.new(width, self.node.inputs["Start"])
+        if isinstance(end, (list,Vector)):
+            self.node.inputs["End"].default_value = end
+        else:
+            self.tree.links.new(end, self.node.inputs["End"])
+
+
 class Quadrilateral(GreenNode):
     def  __init__(self, tree, location=(0, 0),
                   mode="RECTANGLE",
@@ -3200,21 +3224,29 @@ class ForEachZone(GreenNode):
         self.geometry_out = self.foreach_output.outputs[2]
         # tree.links.new(self.foreach_input.outputs["Element"], self.foreach_output.inputs["Geometry"])
         super().__init__(tree, location=location, **kwargs)
-
+        self.tree = tree
         if geometry is not None:
             tree.links.new(geometry, self.foreach_input.inputs["Geometry"])
 
         if selection is not None:
             tree.links.new(selection,self.foreach_input.inputs["Selection"])
 
-    def add_socket(self, socket_type="GEOMETRY", name="socket", value=0):
+    def add_socket(self, socket_type="GEOMETRY", name="socket", value=None,for_input=False):
         """
         :param socket_type: "FLOAT", "INT", "BOOLEAN", "VECTOR", "ROTATION", "STRING", "RGBA", "OBJECT", "IMAGE", "GEOMETRY", "COLLECTION", "TEXTURE", "MATERIAL"
         :param name:
         :return:
         """
         self.foreach_output.input_items.new(socket_type, name)
-        self.foreach_input.outputs[name].default_value = value
+
+        if value is not None:
+            if isinstance(value,(int,float)):
+                self.foreach_input.outputs[name].default_value = value
+            else:
+                if for_input:
+                    self.tree.links.new(value,self.foreach_input.inputs[name])
+                else:
+                    self.tree.links.new(self.foreach_input.outputs[name],value)
 
     def create_geometry_line(self, nodes):
         last = nodes.pop()

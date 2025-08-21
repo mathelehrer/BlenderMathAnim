@@ -3627,24 +3627,27 @@ def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('draw
 
 def real_billiard_ball_material(**kwargs):
     color_name = get_from_kwargs(kwargs,"color", 'white')
-    if color_name == 'white':
-        color = [1, 1, 1, 1]
-    elif color_name == 'black':
-        color = [0, 0, 0, 1]
-    elif color_name=="blue":
-        color = [0.1, 0.1, 0.8, 1]
-    elif color_name=="red":
-        color = [0.8, 0.1, 0.1, 1]
-    elif color_name=="green":
-        color = [0.1, 0.8, 0.1, 1]
-    elif color_name=="yellow":
-        color = [0.8, 0.8, 0.1, 1]
-    elif color_name=="orange":
-        color = [0.8, 0.4, 0.1, 1]
-    elif color_name=="purple":
-        color = [0.4, 0.1, 0.8, 1]
-    elif color_name=="cyan":
-        color = [0.1, 0.8, 0.8, 1]
+    if isinstance(color_name,list):
+        color =color_name
+    elif isinstance(color_name,str):
+        if color_name == 'white':
+            color = [1, 1, 1, 1]
+        elif color_name == 'black':
+            color = [0, 0, 0, 1]
+        elif color_name=="blue":
+            color = [0.1, 0.1, 0.8, 1]
+        elif color_name=="red":
+            color = [0.8, 0.1, 0.1, 1]
+        elif color_name=="green":
+            color = [0.1, 0.8, 0.1, 1]
+        elif color_name=="yellow":
+            color = [0.8, 0.8, 0.1, 1]
+        elif color_name=="orange":
+            color = [0.8, 0.4, 0.1, 1]
+        elif color_name=="purple":
+            color = [0.4, 0.1, 0.8, 1]
+        elif color_name=="cyan":
+            color = [0.1, 0.8, 0.8, 1]
     else:
         color = [0.5,0.5,0.5,1]
 

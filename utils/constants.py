@@ -130,7 +130,16 @@ COLOR_NAMES = [
     'mega10',
     'mega11',
     'mega12',
-    'gray_1',
+    'billiard_1',
+    'billiard_2',
+    'billiard_3',
+    'billiard_4',
+    'billiard_5',
+    'billiard_6',
+    'billiard_7',
+    'billiard_8',
+    'billiard_0',
+    'gray_1', # gray always has to stay last in this list
     'gray_2',
     'gray_3',
     'gray_4',
@@ -162,6 +171,7 @@ if color_scheme == -1:
         [250, 200, 190, 1],  # custom 2
         [236, 93, 96, 1],  # custom 3
         [245, 167, 158, 1],  # custom 4
+
         [241, 132, 125, 1],  # custom 5
         [int(80*255/100),int(47.2*255/100),int(12.4*255/100),1],  # code_builtin
         [int(49.8*255/100),int(50.9*255/100),int(75.4*255/100),1],  # code_builtin
@@ -172,6 +182,7 @@ if color_scheme == -1:
         [int(95.2*255/100),int(74.6*255/100),int(37.5*255/100),1],  # code_function
         [int(67.5*255/100),int(27.7*255/100),int(9.5*255/100),1],  # code_keyword
         [int(141),int(171),int(127),1],  # some_logo_green
+
         [int(88),int(123),int(127),1],  # some_logo_blue
         [158,1,66,1],#x12
         [50, 136, 189, 1],#x13
@@ -182,6 +193,7 @@ if color_scheme == -1:
         [230,245,152,1],#x25
         [254,224,139,1],# X34
         [253,174,97,1],#x35
+
         [102,194,165,1],#x45
         [0,255,0,1],#green
         [70,0,0,1],# red
@@ -192,6 +204,7 @@ if color_scheme == -1:
         [0,255,255,1], # cyan
         [187,220,126,1],# mega1
         [251,107,-12,1],# mega2
+
         [194,194,194,1],# mega3
         [241,157,192,1],# mega4
         [255,251,158,1],# mega5
@@ -202,10 +215,17 @@ if color_scheme == -1:
         [250,196,-15,1],# mega10
         [2,56,187,1],# mega11
         [220,31,22,1],# mega12
+
+        [242, 211, 0, 1],# billiard 1
+        [0, 92, 171, 1],# billiard 2
+        [205, 32, 44, 1],# billiard 3
+        [112, 48, 160, 1], # billiard 4
+        [241, 101, 34, 1], # billiard 5
+        [0, 132, 70, 1], # billiard 6
+        [125, 60, 43, 1],# billiard 7
+        [0, 0, 0, 1], # billiard 8
+        [255,255,255,0],# billiard 0
     ]
-
-
-
 
 # add gray values
 for i in range(1, 10):

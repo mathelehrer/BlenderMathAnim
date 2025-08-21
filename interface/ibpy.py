@@ -5618,9 +5618,10 @@ def set_use_path(bob, is_used):
 
 
 def set_bevel(bob, depth, caps=True, res=4):
-    get_curve_for_b_object(bob).bevel_depth = depth
-    get_curve_for_b_object(bob).use_fill_caps = caps
-    get_curve_for_b_object(bob).bevel_resolution = res
+    curve  = get_curve_for_b_object(bob)
+    curve.bevel_depth = depth
+    curve.use_fill_caps = caps
+    curve.bevel_resolution = res
 
 
 def change_bevel(bob, old_depth, new_depth, begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME * FRAME_RATE):
