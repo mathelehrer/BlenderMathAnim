@@ -205,6 +205,8 @@ class Node:
         if type=="OBJECT_INFO":
             transform_space=attributes["transform_space"]
             return ObjectInfo(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=400,transform_space=transform_space)
+        if type=="GeometryNodeImportCSV":
+            return ImportCSV(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         # instances
         if type=="SCALE_INSTANCES":
@@ -266,6 +268,8 @@ class Node:
             return UVSphere(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type=="MESH_PRIMITIVE_GRID":
             return Grid(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+        if type=="MESH_PRIMITIVE_LINE":
+            return MeshLine(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="MESH_PRIMITIVE_CYLINDER":
             return CylinderMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type == "MESH_PRIMITIVE_CONE":
@@ -289,6 +293,8 @@ class Node:
                                   font=font,overflow=overflow,align_x=align_x,align_y=align_y,pivot_mode=pivot_mode)
         if type=="STRING_JOIN":
             return StringJoin(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+        if type=="SLICE_STRING":
+            return SliceString(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type=="CURVE_PRIMITIVE_CIRCLE":
             mode=attributes["mode"]
             return CurveCircle(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
@@ -301,6 +307,7 @@ class Node:
             return CurveArc(tree,location=location,name=name,
                             label=label,hide=hide,mute=mute,node_height=200,
                             mode=mode)
+
         # if type=="CURVE_TO_POINTS":
         #     mode = attributes["mode"]
         #     return CurveToPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
@@ -470,7 +477,6 @@ class Frame(Node):
         else:
             node.parent=self.node
 
-
 class GreenNode(Node):
     """
     Super class for "green" geometry nodes.
@@ -485,7 +491,6 @@ class GreenNode(Node):
         # to automatically build a chain of geometry nodes
         self.inputs = self.node.inputs
         self.outputs = self.node.outputs
-
 
 class RedNode(Node):
     """
@@ -1265,7 +1270,30 @@ class StringJoin(BlueNode):
         if strings:
             self.tree.links.new(strings,self.node.inputs["Strings"])
 
+class SliceString(BlueNode):
+    def __init__(self,tree,location=(0,0),value=0,string = None, position=None,length=None,**kwargs):
+        self.node=tree.nodes.new(type="FunctionNodeSliceString")
+        super().__init__(tree,location=location,**kwargs)
 
+        self.std_out = self.node.outputs["String"]
+
+        if position is not None:
+            if isinstance(position, (int)):
+                self.node.inputs["Position"].default_value = position
+            else:
+                self.tree.links.new(position,self.node.inputs["Position"])
+
+        if length is not None:
+            if isinstance(length, (int)):
+                self.node.inputs["Length"].default_value = length
+            else:
+                self.tree.links.new(length,self.node.inputs["Length"])
+
+        if string is not None:
+            if isinstance(string,str):
+                self.node.inputs["String"].default_value = string
+            else:
+                self.tree.links.new(string,self.node.inputs["String"])
 
 # default meshes
 
@@ -1711,7 +1739,6 @@ class TranslateInstances(GreenNode):
         else:
             self.tree.links.new(local_space, self.node.inputs["Local Space"])
 
-
 class JoinGeometry(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  geometry=None, **kwargs
@@ -2155,26 +2182,6 @@ class TransformGeometry(GreenNode):
         else:
             self.tree.links.new(scale, self.inputs["Scale"])
 
-class ObjectInfo(GreenNode):
-    def __init__(self, tree, location=(0, 0),
-                 transform_space="RELATIVE",
-                 as_instance=False,
-                 object=None, **kwargs
-                 ):
-        self.node = tree.nodes.new(type="GeometryNodeObjectInfo")
-        super().__init__(tree, location=location, **kwargs)
-        self.node.transform_space = transform_space
-
-
-        if object is not None:
-            self.node.inputs["Object"].default_value = get_obj(object)
-
-        self.geometry_out = self.node.outputs["Geometry"]
-
-        if isinstance(as_instance,bool):
-            self.node.inputs["As Instance"].default_value = as_instance
-        else:
-            tree.links.new(as_instance,self.node.inputs["As Instance"])
 
 class DomainSize(GreenNode):
     """
@@ -2346,6 +2353,7 @@ class EdgeVertices(RedNode):
 
         self.std_out = self.node.outputs["Vertex Index 1"]
 
+# input nodes
 class InputValue(RedNode):
     def __init__(self, tree, location=(0, 0), value=0, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeValue")
@@ -2370,23 +2378,6 @@ class InputString(RedNode):
         self.std_out = self.node.outputs["String"]
         self.node.string=string
 
-class InputString(RedNode):
-    def __init__(self, tree, location=(0, 0), string="", **kwargs):
-        self.node = tree.nodes.new(type="FunctionNodeInputString")
-        super().__init__(tree, location=location, **kwargs)
-
-        self.std_out = self.node.outputs["String"]
-        self.node.string = string
-
-
-class SceneTime(RedNode):
-    def __init__(self, tree, location=(0, 0), std_out="Seconds", **kwargs):
-        self.node = tree.nodes.new(type="GeometryNodeInputSceneTime")
-        super().__init__(tree, location=location, **kwargs)
-
-        self.std_out = self.node.outputs[std_out]
-
-# Function Nodes #
 class InputBoolean(RedNode):
     def __init__(self, tree, location=(0, 0), value=True, **kwargs):
         self.node = tree.nodes.new(type="FunctionNodeInputBool")
@@ -2412,6 +2403,54 @@ class InputRotation(RedNode):
 
         self.std_out = self.node.outputs["Rotation"]
         self.node.rotation_euler = rotation
+
+class ObjectInfo(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 transform_space="RELATIVE",
+                 as_instance=False,
+                 object=None, **kwargs
+                 ):
+        self.node = tree.nodes.new(type="GeometryNodeObjectInfo")
+        super().__init__(tree, location=location, **kwargs)
+        self.node.transform_space = transform_space
+
+        if object is not None:
+            self.node.inputs["Object"].default_value = get_obj(object)
+
+        self.geometry_out = self.node.outputs["Geometry"]
+
+        if isinstance(as_instance,bool):
+            self.node.inputs["As Instance"].default_value = as_instance
+        else:
+            tree.links.new(as_instance,self.node.inputs["As Instance"])
+
+class ImportCSV(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 delimiter=",",
+                 path=None, **kwargs
+                 ):
+        self.node = tree.nodes.new(type="GeometryNodeImportCSV")
+        super().__init__(tree, location=location, **kwargs)
+
+
+        self.geometry_out = self.node.outputs["Point Cloud"]
+
+        if isinstance(delimiter,str):
+            self.node.inputs["Delimiter"].default_value =delimiter
+        else:
+            tree.links.new(delimiter,self.node.inputs["Delimiter"])
+
+        if path is not None:
+            self.node.inputs["Path"].default_value = path
+
+class SceneTime(RedNode):
+    def __init__(self, tree, location=(0, 0), std_out="Seconds", **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeInputSceneTime")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs[std_out]
+
+# Function Nodes #
 
 class InvertRotation(RedNode):
     def __init__(self, tree, location=(0, 0), in_rotation=Vector()
@@ -2886,11 +2925,15 @@ class CompareNode(BlueNode):
             else:
                 tree.links.new(inputs1,self.node.inputs[7])
         elif data_type=="STRING":
-            if isinstance(inputs0,(list,Vector)):
+            if inputs0==0:
+                self.node.inputs[8].default_value=""
+            elif isinstance(inputs0,str):
                 self.node.inputs[8].default_value=inputs0
             else:
                 tree.links.new(inputs0,self.node.inputs[8])
-            if isinstance(inputs1,(list,Vector)):
+            if inputs1==0:
+                self.node.inputs[9].default_value=""
+            elif isinstance(inputs1,str):
                 self.node.inputs[9].default_value=inputs1
             else:
                 tree.links.new(inputs1,self.node.inputs[9])
@@ -3143,14 +3186,23 @@ class RepeatZone(GreenNode):
         if out_socket_name:
             self.tree.links.new(join.geometry_out, self.repeat_output.inputs[out_socket_name])
 
-    def create_geometry_line(self, nodes):
-        last = nodes.pop()
-        self.tree.links.new(last.geometry_out, self.repeat_output.inputs["Geometry"])
-        while len(nodes) > 0:
-            current = nodes.pop()
-            self.tree.links.new(current.geometry_out, last.geometry_in)
-            last = current
-        self.tree.links.new(self.repeat_input.outputs["Geometry"], last.geometry_in)
+    def create_geometry_line(self, nodes,out=None):
+        if len(nodes)==0:
+            # just connect repeat zone
+            self.tree.links.new(self.repeat_input.outputs["Geometry"],self.repeat_output.inputs["Geometry"])
+        else:
+            last = nodes.pop()
+            if out is None:
+                self.tree.links.new(last.geometry_out, self.repeat_output.inputs["Geometry"])
+            else:
+                self.tree.links.new(last.geometry_out, out)
+            while len(nodes) > 0:
+                current = nodes.pop()
+                self.tree.links.new(current.geometry_out, last.geometry_in)
+                last = current
+
+            self.tree.links.new(self.repeat_input.outputs["Geometry"], last.geometry_in)
+
 
 class SimulationInput(GreenNode):
     def __init__(self,tree,location=(0,0),**kwargs):
@@ -3222,6 +3274,7 @@ class ForEachZone(GreenNode):
         self.index = self.foreach_input.outputs[0]
         self.geometry_in = self.foreach_input.inputs["Geometry"]
         self.geometry_out = self.foreach_output.outputs[2]
+        self.element=self.foreach_input.outputs["Element"]
         # tree.links.new(self.foreach_input.outputs["Element"], self.foreach_output.inputs["Geometry"])
         super().__init__(tree, location=location, **kwargs)
         self.tree = tree
@@ -3248,14 +3301,22 @@ class ForEachZone(GreenNode):
                 else:
                     self.tree.links.new(self.foreach_input.outputs[name],value)
 
-    def create_geometry_line(self, nodes):
-        last = nodes.pop()
-        self.tree.links.new(last.geometry_out, self.foreach_output.inputs["Geometry"])
-        while len(nodes) > 0:
-            current = nodes.pop()
-            self.tree.links.new(current.geometry_out, last.geometry_in)
-            last = current
-        self.tree.links.new(self.foreach_input.outputs["Element"], last.geometry_in)
+    def create_geometry_line(self, nodes,ins=None):
+        if len(nodes)==0:
+            # just pipe through the geometry line
+            self.tree.links.new(self.foreach_input.outputs["Geometry"], self.foreach_output.inputs["Geometry"])
+        else:
+            last = nodes.pop()
+            self.tree.links.new(last.geometry_out, self.foreach_output.inputs["Geometry"])
+            while len(nodes) > 0:
+                current = nodes.pop()
+                self.tree.links.new(current.geometry_out, last.geometry_in)
+                last = current
+            if ins is None:
+                self.tree.links.new(self.foreach_input.outputs["Element"], last.geometry_in)
+            else:
+                self.tree.links.new(ins, last.geometry_in)
+
 
 class ForEachInput(GreenNode):
     def __init__(self, tree, location=(0, 0),

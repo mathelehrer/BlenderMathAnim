@@ -86,7 +86,7 @@ def create_glow_composition(threshold=1,type='BLOOM',size=4):
 
     links.new(layers.outputs["Image"],glare.inputs["Image"])
     links.new(glare.outputs["Image"],composite.inputs["Image"])
-    links.new(layers.outputs["Alpha"],composite.inputs["Alpha"])
+#    links.new(layers.outputs["Alpha"],composite.inputs["Alpha"])
     return glare
 
 def create_bloom_and_streak_composition():
@@ -101,7 +101,7 @@ def create_bloom_and_streak_composition():
 
     composite = nodes["Composite"]
     layers = nodes["Render Layers"]
-    alpha = nodes["Alpha Convert"]
+    alpha = nodes.new(type="CompositorNodeSetAlpha")
     glare = nodes.new(type='CompositorNodeGlare')
     glare.glare_type = "BLOOM"
     glare.quality='HIGH'
@@ -120,6 +120,7 @@ def create_bloom_and_streak_composition():
 
     links.new(layers.outputs["Image"],glare.inputs["Image"])
     links.new(layers.outputs["Image"],glare2.inputs["Image"])
+    links.new(layers.outputs["Alpha"],alpha.inputs["Image"])
     links.new(mix.outputs["Image"],composite.inputs["Image"])
-    links.new(alpha.outputs["Image"],composite.inputs["Alpha"])
+    # links.new(alpha.outputs["Image"],composite.inputs["Alpha"])
     return glare

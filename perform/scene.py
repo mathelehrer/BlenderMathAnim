@@ -17,6 +17,7 @@ from utils.constants import DEFAULT_SCENE_BUFFER, LIGHT_TYPE, CAMERA_LOCATION, C
     BLEND_FRM_RATE_DIR, COLOR_NAMES, COLORS, FONT_DIR
 from utils.kwargs import get_from_kwargs
 
+OLDSCHOOL = "AcPlus IBM VGA 8x16 Regular"
 
 class Scene(object):
     def __init__(self, **kwargs):
@@ -256,6 +257,8 @@ def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_
     bpy.ops.font.open(filepath=os.path.join(FONT_DIR, "Symbola/Symbola.ttf"))
     bpy.ops.font.open(filepath=os.path.join(FONT_DIR, "arial/ARIBLK.TTF"))
     bpy.ops.font.open(filepath=os.path.join(FONT_DIR, "Engineering_Plot/Engplot.TTF"))
+    bpy.ops.font.open(filepath=os.path.join(FONT_DIR, "OldSchool/OldSchool.ttf"))
+
 
 def get_total_duration(scenes):
     # scenes is a list of (name, object) pairs

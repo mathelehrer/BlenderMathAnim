@@ -19,6 +19,7 @@ else:
     SPECULAR = 'Specular IOR Level'
     EMISSION = 'Emission Color'
 
+CYCLES="CYCLES"
 if blender_version()<(4,2):
     BLENDER_EEVEE='BLENDER_EEVEE'
 else:

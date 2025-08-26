@@ -139,6 +139,7 @@ COLOR_NAMES = [
     'billiard_7',
     'billiard_8',
     'billiard_0',
+    'terminal_green',
     'gray_1', # gray always has to stay last in this list
     'gray_2',
     'gray_3',
@@ -225,6 +226,8 @@ if color_scheme == -1:
         [125, 60, 43, 1],# billiard 7
         [0, 0, 0, 1], # billiard 8
         [255,255,255,0],# billiard 0
+
+        [78, 154, 6,1], # terminal_green
     ]
 
 # add gray values

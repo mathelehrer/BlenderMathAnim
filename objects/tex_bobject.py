@@ -12,7 +12,8 @@ from numpy import sort
 
 from appearance.textures import apply_material
 from interface import ibpy
-from interface.ibpy import link, set_bevel_factor_and_keyframe, set_alpha_and_keyframe, fade_out, get_location
+from interface.ibpy import link, set_bevel_factor_and_keyframe, set_alpha_and_keyframe, fade_out, get_location, \
+    get_world_location2
 from objects.bobject import BObject
 from objects.empties import EmptyCube
 from objects.svg_bobject import SVGBObject, equalize_spline_count, new_null_curve
@@ -411,11 +412,12 @@ class SimpleTexBObject(SVGBObject):
         return copies
 
     def copy(self, letter_range=None):
+        location = get_world_location2(self)
         if 'name' in self.kwargs_copy:
             name = "Copy_of_" + self.kwargs_copy.pop('name')
         else:
             name = "Copy_of_" + self.name
-        c = SimpleTexBObject(self.expression_copy, name=name, **self.kwargs_copy)
+        c = SimpleTexBObject(self.expression_copy, name=name, location=location,**self.kwargs_copy)
         return c
 
     def remove_letter(self, letter, ipby=None):
@@ -804,6 +806,7 @@ class SimpleTexBObject(SVGBObject):
         else:
             for i in range(src_letter_range[0], src_letter_range[1]):
                 self.letters[i].disappear(begin_time=begin_time + transition_time, transition_time=0)
+        return begin_time + transition_time
 
     def grow_letter(self, index, final_scale=1, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
         letter = self.letters[index]

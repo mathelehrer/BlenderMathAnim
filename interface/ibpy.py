@@ -289,7 +289,6 @@ def camera_zoom(lens=50, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
     cam = get_camera()
     frame = int(begin_time * FRAME_RATE)
     set_frame(frame)
-    lens_old = cam.data.lens
     insert_keyframe(cam.data, 'lens', frame)
     cam.data.lens = lens
     insert_keyframe(cam.data, 'lens', begin_time * FRAME_RATE + np.maximum(1, transition_time * FRAME_RATE))
@@ -1162,7 +1161,11 @@ def create_composition(denoising=None):
         links.new(denoise.outputs["Image"], composite.inputs["Image"])
 
     alpha_convert = nodes.new(type="CompositorNodePremulKey")
-    links.new(alpha_convert.outputs["Image"], composite.inputs["Alpha"])
+    if blender_version()>(4,4):
+        set_alpha_node=nodes.new(type="CompositorNodeSetAlpha")
+        links.new(alpha_convert.outputs["Image"], set_alpha_node.inputs["Alpha"])
+    else:
+        links.new(alpha_convert.outputs["Image"], composite.inputs["Alpha"])
 
 
 #######################
@@ -1868,8 +1871,14 @@ def customize_material(material, **kwargs):
         links = material.node_tree.links
         mat_out = nodes['Material Output']
         vol_scatter = nodes.new(type='ShaderNodeVolumeScatter')
-        vol_scatter.inputs['Density'].default_value = scatter
+        scatter_value=nodes.new(type="ShaderNodeValue")
+        scatter_value.label="ScatterValue"
+        scatter_value.outputs[0].default_value=scatter
+        links.new(scatter_value.outputs[0],vol_scatter.inputs["Density"])
         links.new(vol_scatter.outputs['Volume'], mat_out.inputs['Volume'])
+
+        if bsdf:
+            vol_scatter.inputs["Color"].default_value=bsdf.inputs["Base Color"].default_value
 
     return material
 
@@ -2426,6 +2435,10 @@ def get_geometry_node_from_modifier(modifier, label):
             return n
     return None
 
+def get_node_from_shader(shader,label):
+    for n in shader.node_tree.nodes:
+        if label in n.label or label in n.name:
+            return n
 
 def get_socket_names_from_modifier(modifier):
     socket_names = {item.name: f"{item.identifier}" for item in modifier.node_group.interface.items_tree
@@ -3142,7 +3155,7 @@ def change_value(value, from_value, to_value, begin_time=None, transition_time=N
     return begin_time + transition_time
 
 
-def add_item_to_switch(switch_node,idx,socket_or_value,tree):
+def add_item_to_switch(switch_node,idx,socket_or_value,tree=None):
     """
      only use this function, when you add switch items,
      it assumes that you wire the index socket independently
@@ -3164,7 +3177,7 @@ def add_item_to_switch(switch_node,idx,socket_or_value,tree):
     while idx > len(slots) - 3:
         switch_node.index_switch_items.new()
     if socket_or_value is not None:
-        if isinstance(socket_or_value, int):
+        if isinstance(socket_or_value, (int,float,str)):
             slots[idx+1].default_value = socket_or_value
         else:
             tree.links.new(socket_or_value, slots[idx+1])
@@ -6978,6 +6991,10 @@ def get_world_location(b_obj):
     matrix = parent.matrix_world
     return matrix @ obj.location
 
+
+def get_world_location2(b_obj):
+    obj = get_obj(b_obj)
+    return obj.matrix_world.translation
 
 def get_world_matrix(bob):
     return bob.ref_obj.matrix_world
