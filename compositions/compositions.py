@@ -61,7 +61,11 @@ def create_star_glow_composition():
     glare.threshold = 0.01
 
     links.new(layers.outputs["Image"],glare.inputs["Image"])
-    links.new(glare.outputs["Image"],composite.inputs["Image"])
+    set_alpha = nodes.new(type="CompositorNodeSetAlpha")
+    set_alpha.mode = "REPLACE_ALPHA"
+    links.new(glare.outputs["Image"], set_alpha.inputs["Image"])
+    links.new(set_alpha.outputs["Image"], composite.inputs["Alpha"])
+    return glare
 
     return glare
 
@@ -85,8 +89,12 @@ def create_glow_composition(threshold=1,type='BLOOM',size=4):
     glare.threshold =threshold
 
     links.new(layers.outputs["Image"],glare.inputs["Image"])
-    links.new(glare.outputs["Image"],composite.inputs["Image"])
-#    links.new(layers.outputs["Alpha"],composite.inputs["Alpha"])
+
+
+    set_alpha=nodes.new(type="CompositorNodeSetAlpha")
+    set_alpha.mode="REPLACE_ALPHA"
+    links.new(glare.outputs["Image"],set_alpha.inputs["Image"])
+    links.new(set_alpha.outputs["Image"],composite.inputs["Alpha"])
     return glare
 
 def create_bloom_and_streak_composition():
@@ -122,5 +130,10 @@ def create_bloom_and_streak_composition():
     links.new(layers.outputs["Image"],glare2.inputs["Image"])
     links.new(layers.outputs["Alpha"],alpha.inputs["Image"])
     links.new(mix.outputs["Image"],composite.inputs["Image"])
-    # links.new(alpha.outputs["Image"],composite.inputs["Alpha"])
+    set_alpha = nodes.new(type="CompositorNodeSetAlpha")
+    set_alpha.mode = "REPLACE"
+    links.new(mix.outputs["Image"], set_alpha.inputs["Image"])
+    links.new(set_alpha.outputs["Image"], composite.inputs["Alpha"])
+    return glare
+
     return glare
