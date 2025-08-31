@@ -17,6 +17,7 @@ from mathematics.groups.e8 import E8Lattice
 from utils.color_conversion import get_color
 from utils.constants import RES_XML
 from utils.kwargs import get_from_kwargs
+from utils.string_utils import parse_vector
 
 pi = np.pi
 
@@ -40,12 +41,6 @@ def parse_location(location):
     location = location.replace(")", "")
     coords = location.split(",")
     return (float(coords[0]), float(coords[1]))
-
-def parse_vector(vector_str):
-    vector_str = vector_str.replace("[", "")
-    vector_str = vector_str.replace("]", "")
-    coords = vector_str.split(",")
-    return [float(coords[0]), float(coords[1]),float(coords[2])]
 
 class Node:
     def __init__(self, tree, location=(0, 0), node_width=200, node_height=100, offset_y=0, **kwargs):

@@ -5,7 +5,7 @@ from random import random
 
 import bpy
 import numpy as np
-from sympy import Symbol, re, im, sqrt, factorial, simplify, factor
+from sympy import Symbol, re, im, sqrt, factorial, simplify, factor, false
 
 from extended_math_nodes.generic_nodes import SphericalHarmonics200, SphericalHarmonicsRekursive, CMBNode
 from geometry_nodes.nodes import make_function
@@ -18,9 +18,9 @@ from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics, AssociatedLegendre
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import TextureCoordinate, Mapping, ColorRamp, AttributeNode, HueSaturationValueNode, \
-    MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ, Displacement
+    MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ, Displacement, ShaderNode
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
-from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, COLOR_PREFIXES
+from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, COLOR_PREFIXES, SHADER_XML
 from utils.kwargs import get_from_kwargs
 
 
@@ -69,6 +69,8 @@ def get_texture(material, **kwargs):
             material = billiards_cloth_material(**kwargs)
         elif material =="billiard_ball_material":
             material = real_billiard_ball_material(**kwargs)
+        elif material =="old_paper":
+            material = create_from_xml("old_paper")
         else:
             if material not in bpy.data.materials:
                 # return default drawing material
@@ -79,6 +81,317 @@ def get_texture(material, **kwargs):
         material = customize_material(material, **kwargs)
 
         return material
+
+def create_from_xml(filename):
+    """
+    import a shader node setup created in blender and stored as xml file
+
+    """
+    mat = bpy.data.materials.new(name=filename)
+    mat.use_nodes = True
+    tree = mat.node_tree
+
+    nodes = tree.nodes
+    # remove old bsdf and material output node
+    nodes.remove(nodes[0])
+    nodes.remove(nodes[0])
+    node_dir = {}
+    name_dir = {}
+    parent_dir = {}
+    # create a node structure tree {0: {"inputs":{1,2,3}, "outputs":{4,5,6}}, ...}
+    node_structure = {}
+
+    socket_count = 0
+
+    if filename:
+        path = os.path.join(SHADER_XML, filename + ".xml")
+        with open(path) as f:
+            # find node range and link range in xml file
+            xml_string = f.read()
+            nodes_range = []
+            links_range = []
+            xml_text = xml_string.splitlines()
+            for i, line in enumerate(xml_text):
+                line = line.strip()
+                if line.startswith("<NODES>"):
+                    nodes_range.append(i + 1)
+                if line.startswith("</NODES>"):
+                    nodes_range.append(i)
+                if line.startswith("<LINKS>"):
+                    links_range.append(i + 1)
+                if line.startswith("</LINKS>"):
+                    links_range.append(i)
+
+            # parse node data
+            for i in range(*nodes_range):
+                line = xml_text[i].strip()
+                if line.startswith("<NODE"):
+                    node_attributes = get_attributes(line)
+                    node = ShaderNode.from_attributes(tree, node_attributes)
+                    node_id = int(node_attributes["id"])
+                    if node_id == 22:
+                        pass
+                    node_name = node_attributes["name"]
+                    node_structure[node_id] = {"name": node_name, "inputs": dict(), "outputs": dict()}
+                    if node is None:
+                        raise "The node " + line + " could not be created"
+                    node_dir[node_id] = node
+                    name_dir[node_name] = node_id
+                    if node_attributes["parent"] != "None":
+                        parent_dir[node_id] = node_attributes["parent"]
+
+                    while True:
+                        i = i + 1
+                        line = xml_text[i].strip()
+                        if line.startswith("</NODE>"):
+                            break
+                        elif line.startswith("<INPUTS>"):
+                            input_count = 0
+                            if node_attributes["type"] in {'REPEAT_INPUT', 'FOREACH_GEOMETRY_ELEMENT_INPUT',
+                                                           "SIMULATION_INPUT"}:
+                                save_for_after_pairing[node_id] = {"inputs": [], "outputs": []}
+                        elif line.startswith("<OUTPUTS>"):
+                            output_count = 0
+                        elif line.startswith("</INPUTS>"):
+                            pass
+                        elif line.startswith("</OUTPUTS>"):
+                            pass
+                        elif line.startswith("<INPUT "):
+                            if node_id == 16:
+                                pass
+                            input_attributes = get_attributes(line)
+                            input_id = int(input_attributes["id"])
+
+                            if len(node.inputs) > input_count and node.inputs[
+                                input_count].name != "":  # avoid virtual socket
+                                node_structure[node_id]["inputs"][input_id] = input_count
+                                node.inputs[input_count].name = input_attributes['name']
+                                if 'default_value' in input_attributes:
+                                    node.inputs[input_count].default_value = get_default_value_for_socket(
+                                        input_attributes)
+                                input_count += 1
+                            else:
+                                if input_attributes[
+                                    "type"] != "CUSTOM":  # FOREACH_GEOMETRY_ELEMENT_INPUT has a custom socket inbetween proper sockets
+                                    result = create_socket(tree, node, node_attributes, input_attributes)
+                                    if result:
+                                        node_structure[node_id]["inputs"][input_id] = input_count
+                                        input_count += 1
+                                    else:
+                                        print("Something went wrong with socket creation for node ", node_id)
+                                else:
+                                    # print("Warning: unrecognized socket in ", node_id, socket_count,input_attributes["type"])
+                                    node_structure[node_id]["inputs"][
+                                        input_id] = -1  # take last slot (this dynamically generates new sockets for Group Input and Group Output
+                                    input_count += 1  # also increase input_count, since the custom socket can between real sockets
+                            socket_count += 1
+                        elif line.startswith("<OUTPUT "):
+                            output_attributes = get_attributes(line)
+                            output_id = int(output_attributes["id"])
+
+                            if node_attributes["type"] in {'REPEAT_INPUT', 'FOREACH_GEOMETRY_ELEMENT_INPUT',
+                                                           "SIMULATION_INPUT"}:
+                                # repeat inputs can only be initiated after pairing
+                                save_for_after_pairing[node_id]["outputs"].append(output_attributes)
+
+                            elif len(node.outputs) > output_count and node.outputs[
+                                output_count].name != "":  # avoid virtual socket
+                                node.outputs[output_count].name = output_attributes["name"]
+                                node_structure[node_id]["outputs"][output_id] = output_count
+                                if 'default_value' in output_attributes:
+                                    node.outputs[output_count].default_value = get_default_value_for_socket(
+                                        output_attributes)
+                                output_count += 1
+                            else:
+                                if output_attributes[
+                                    "type"] != "CUSTOM":  # FOREACH_GEOMETRY_ELEMENT_OUTPUT has a custom socket in between proper sockets
+                                    result = create_socket(tree, node, node_attributes, output_attributes)
+                                    if result:
+                                        node_structure[node_id]["outputs"][output_id] = output_count
+                                        output_count += 1
+                                    else:
+                                        print("Something went wrong with creating sockets for ", node_id)
+                                else:
+                                    # print("Warning: unrecognized socket in ",node_id,socket_count,output_attributes["type"])
+                                    node_structure[node_id]["outputs"][
+                                        output_id] = -1  # take last slot (this dynamically generates new sockets for Grou
+                                    output_count += 1  # also increase output_count, since the custom socket can be between real sockets
+                            socket_count += 1
+
+            # establish parent relations
+            for key, val in parent_dir.items():
+                if node_dir[key] is not None:
+                    node_dir[key].set_parent(node_dir[name_dir[val]])
+
+            # check for zone pairing
+            for key, val in node_dir.items():
+                name = node_structure[key]["name"]
+                # print(name)
+                key = int(key)
+                # the input sockets are only created after pairing with the output node
+                # therefore the links can only be created after pairing
+                if "ForEachGeometryElementInput" in name or "For Each Geometry Element Input" in name:
+                    # find the corresponding output node from name
+                    out_name = name.replace("Input", "Output")
+                    node_dir[key].pair_with_output(node_dir[name_dir[out_name]])
+                    input_count = 0
+                    for attributes in save_for_after_pairing[key]["inputs"]:
+                        input_id = int(attributes['id'])
+                        node_structure[key]["inputs"][input_id] = input_count
+                        input_count += 1
+                    output_count = 0
+                    for attributes in save_for_after_pairing[key]["outputs"]:
+                        output_id = int(attributes['id'])
+                        node_structure[key]["outputs"][output_id] = output_count
+                        output_count += 1
+                if "RepeatInput" in name:
+                    # find the corresponding output node from name
+                    out_name = name.replace("Input", "Output")
+                    node_dir[key].pair_with_output(node_dir[name_dir[out_name]])
+                    input_count = 0
+                    for attributes in save_for_after_pairing[key]["inputs"]:
+                        input_id = int(attributes['id'])
+                        node_structure[key]["inputs"][input_id] = input_count
+                        input_count += 1
+                    output_count = 0
+                    for attributes in save_for_after_pairing[key]["outputs"]:
+                        output_id = int(attributes['id'])
+                        node_structure[key]["outputs"][output_id] = output_count
+                        output_count += 1
+                if "Simulation Input" in name:
+                    # find the corresponding output node from name
+                    out_name = name.replace("Input", "Output")
+                    node_dir[key].pair_with_output(node_dir[name_dir[out_name]])
+                    input_count = 0
+                    for attributes in save_for_after_pairing[key]["inputs"]:
+                        input_id = int(attributes['id'])
+                        node_structure[key]["inputs"][input_id] = input_count
+                        input_count += 1
+                    output_count = 0
+                    for attributes in save_for_after_pairing[key]["outputs"]:
+                        output_id = int(attributes['id'])
+                        node_structure[key]["outputs"][output_id] = output_count
+                        output_count += 1
+
+            # parse link data
+            for i in range(*links_range):
+                node_attributes = get_attributes(xml_text[i])
+                from_socket = int(node_attributes["from_socket"])
+                to_socket = int(node_attributes["to_socket"])
+                from_node = int(node_attributes["from_node"])
+                to_node = int(node_attributes["to_node"])
+
+                output_id = node_structure[from_node]["outputs"][from_socket]
+                if to_socket == 85:
+                    pass
+                input_id = node_structure[to_node]["inputs"][to_socket]
+
+                # print("link ",node_dir[from_node],": ",str(from_socket),"->",str(to_socket),": ",node_dir[to_node])
+                if output_id < len(node_dir[from_node].outputs):
+                    if input_id < len(node_dir[to_node].inputs) and output_id < len(node_dir[from_node].outputs):
+                        # check for virtual ports
+                        if node_dir[to_node].inputs[input_id].type == "CUSTOM":
+                            node = node_dir[to_node]
+                            from_socket = node_dir[from_node].outputs[output_id]
+                            pair_node = node.pair_node
+                            pair_node.add_socket(from_socket.type, from_socket.name)
+                            pass
+                        tree.links.new(node_dir[from_node].outputs[output_id], node_dir[to_node].inputs[input_id])
+                    else:
+                        if not input_id < len(node_dir[to_node].inputs):
+                            print("Failed to connect to input " + str(input_id) + " of node " + str(to_node))
+                        if not output_id < len(node_dir[from_node].outputs):
+                            print("Failed to connect from output " + str(output_id) + " of node " + str(from_node))
+
+    return mat
+
+def get_attributes(line):
+    tag_label_ended=false
+    leftside = True
+    keys = []
+    values = []
+    key=""
+    val=""
+    value_started=False
+    for letter in line:
+        if letter=='<':
+            pass
+        elif letter=='>':
+            break # ignore anything after the end
+        elif letter==' ' and not value_started: # only use spaces outside of String expressions as tag separator
+            if not tag_label_ended:
+                tag_label_ended=True
+        else:
+            if not tag_label_ended:
+                pass # part of the tag label, can be ignored
+            else:
+                if letter=='=' and not value_started:
+                    leftside=False
+                    value_started=False
+                else:
+                    if leftside:
+                        key+=letter
+                    else:
+                        if letter=='"':
+                            if value_started:
+                                value_started=False
+                                keys.append(key)
+                                values.append(val)
+                                key=""
+                                val=""
+                                leftside=True
+                            else:
+                                value_started=True
+                        else:
+                            val+=letter
+    attributes={}
+    for key,val in zip(keys,values):
+        attributes[key]=val
+    return attributes
+
+def parse_default_attribute(attribute):
+    """
+    unfortunately, we have capture some invalid data
+    math nodes like Compare have VECTOR sockets that are not used but are filled with <bpy_float[3]...> stuff that cannot be parsed
+    """
+    if (attribute.startswith("(") and attribute.endswith(")")) or (attribute.startswith("[") and attribute.endswith("]")):
+        attribute = attribute[1:-1]
+        parts = attribute.split(",")
+        comps = [float(part) for part in parts]
+        return tuple(comps)
+
+def get_default_value_for_socket(attributes):
+    socket_type = attributes['type']
+    if socket_type == 'INT':
+        return int(attributes['default_value'])
+    elif socket_type == 'BOOLEAN':
+        attr = attributes['default_value']
+        if attr == 'True':
+            attr = True
+        else:
+            attr = False
+        return attr
+    elif socket_type == 'VALUE':
+        return float(attributes['default_value'])
+    elif socket_type == 'VECTOR':
+        parsed = parse_default_attribute(attributes['default_value'])
+        # print("vector: ",parsed)
+        return Vector(parsed)
+    elif socket_type == 'STRING':
+        return str(attributes['default_value'])
+    elif socket_type =='RGBA':
+        parsed = parse_default_attribute(attributes['default_value'])
+        # print("color: ",list(parsed))
+        return list(parsed)
+    elif socket_type=='ROTATION':
+        parsed = parse_default_attribute(attributes['default_value'])
+        # print("rotation: ",list(parsed))
+        return list(parsed)
+    elif socket_type=='MATERIAL':
+        color = attributes['default_value']
+        if color=='None' or len(color)==0:
+            return None
+        return ibpy.get_material(color)
 
 
 def apply_material(obj, col, shading=None, recursive=False, type_req=None, intensity=None, **kwargs):
@@ -102,13 +415,13 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
                 if 'colors' in kwargs:
                     colors = kwargs.pop('colors')
                     for col, slot in zip(colors, obj.material_slots):
-                        slot.material = ibpy.get_material(col, **kwargs)
+                        slot.material = get_texture(col, **kwargs)
 
                     material = obj.material_slots[0].material  # only the first material can be customized further
                 else:
                     material = get_default_material().copy()
             elif isinstance(col, str):
-                material = ibpy.get_material(col, **kwargs)
+                material = get_texture(col, **kwargs)
             elif callable(col):
                 material = col(**kwargs)
             else: # assuming that the color is already a material
@@ -167,7 +480,6 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
     if 'volume_scatter' in kwargs:
         ibpy.set_volume_scatter_of_material(material, value=kwargs.pop('volume_scatter'))
 
-
 def vertex_color_material():
     vertex_color = bpy.data.materials.new(name="Vertex_Color")
     vertex_color.use_nodes = True
@@ -179,10 +491,8 @@ def vertex_color_material():
     links.new(col_att.outputs['Alpha'], bsdf.inputs[TRANSMISSION])
     return vertex_color
 
-
 def get_default_material():
     return bpy.data.materials['text']
-
 
 def color2rgb(color):
     rgb = deepcopy(color)
@@ -190,12 +500,10 @@ def color2rgb(color):
         rgb[i] /= 255
     return rgb
 
-
 def phase2rgb2(phase):
     hue = phase / 2 / np.pi % 1
     col = colorsys.hsv_to_rgb(hue, 1, 1)
     return col[0], col[1], col[2], 1
-
 
 def phase2rgb(phase, v=1, s=1):
     '''
@@ -241,7 +549,6 @@ def phase2rgb(phase, v=1, s=1):
     map = linear_to_srgb(rp + m, gp + m, bp + m)
     return *map, 1
 
-
 def linear_to_srgb(r, g, b):
     def srgb(c):
         a = .055
@@ -251,7 +558,6 @@ def linear_to_srgb(r, g, b):
             return (1 + a) * c ** (1 / 2.4) - a
 
     return tuple(srgb(c) for c in (r, g, b))
-
 
 def srgb_to_linear(r, g, b):
     def srgb(c):
@@ -263,12 +569,10 @@ def srgb_to_linear(r, g, b):
 
     return tuple(srgb(c) for c in (r, g, b))
 
-
 def clear_material(material):
     if material.node_tree:
         material.node_tree.links.clear()
         material.node_tree.nodes.clear()
-
 
 def shade_material(material, shading):
     if isinstance(material, str):
@@ -313,7 +617,6 @@ def shade_material(material, shading):
     bsdf.inputs['Base Color'].default_value = color
     return mat
 
-
 def light_up_material(material, brighter):
     if isinstance(material, str):
         mat = ibpy.get_material().copy()
@@ -343,7 +646,6 @@ def light_up_material(material, brighter):
     bsdf.inputs['Base Color'].default_value = color
     return mat
 
-
 def make_colorscript_bezier_curve(bob, osl_script, scale=[1, 1, 1], emission_strength=0.3):
     """
        create a material, where the coloring converts the (x,y) - position of the object into a hue-value
@@ -364,7 +666,6 @@ def make_colorscript_bezier_curve(bob, osl_script, scale=[1, 1, 1], emission_str
                                    scale=scale, emission_strength=emission_strength)
     # assign material
     ibpy.set_material(bob, material)
-
 
 def make_voronoi_bezier_curve(bob, colors, emission_strength=0.3, scale=[1, 1, 1]):
     """
@@ -392,7 +693,6 @@ def make_voronoi_bezier_curve(bob, colors, emission_strength=0.3, scale=[1, 1, 1
     ibpy.set_material(bob, material)
     return dialer
 
-
 def make_colorful_bezier_curve(bob, hue_functions, emission_strength=0.3, scale=[1, 1, 1], input='geometry_position'):
     """
     create a material, where the coloring converts the (x,y) - position of the object into a hue-value
@@ -418,7 +718,6 @@ def make_colorful_bezier_curve(bob, hue_functions, emission_strength=0.3, scale=
     ibpy.set_material(bob, material)
     return dialer
 
-
 def pie_checker_material(colors=['drawing', 'joker'], name='PieChecker', **kwargs):
     """
     :param colors:
@@ -442,7 +741,6 @@ def pie_checker_material(colors=['drawing', 'joker'], name='PieChecker', **kwarg
     mixer.location = (-200, 200)
     links.new(mixer.outputs[0], bsdf.inputs['Base Color'])
     return mat
-
 
 def gradient_from_attribute(name="AngleDisplacement", **kwargs):
     """
@@ -501,7 +799,6 @@ def gradient_from_attribute(name="AngleDisplacement", **kwargs):
         links.new(trafo.outputs["alpha"], bsdf.inputs["Alpha"])
     return mat
 
-
 def z_gradient(name="zGradient", **kwargs):
     """
     create a color gradient
@@ -535,7 +832,6 @@ def z_gradient(name="zGradient", **kwargs):
     links.new(ramp.std_out, bsdf.inputs[EMISSION])
     return mat
 
-
 def x_gradient(name="xGradient", **kwargs):
     """
     create a color gradient
@@ -568,7 +864,6 @@ def x_gradient(name="xGradient", **kwargs):
     links.new(ramp.std_out, bsdf.inputs["Base Color"])
     links.new(ramp.std_out, bsdf.inputs[EMISSION])
     return mat
-
 
 def camera_gradient_rainbow(name="Rainbow", **kwargs):
     """
@@ -634,7 +929,6 @@ def image_over_text(name="ImageOverText", **kwargs):
         links.new(image_texture.std_out, bsdf.inputs[EMISSION])
     return mat
 
-
 def polar_grid(**kwargs):
     mat = bpy.data.materials.new(name="PolarGridLines")
     mat.use_nodes = True
@@ -661,7 +955,6 @@ def polar_grid(**kwargs):
 
     links.new(color_ramp.std_out, bsdf.inputs["Base Color"])
     return mat
-
 
 def multipole_texture(l_max=5, **kwargs):
     """
@@ -790,7 +1083,6 @@ def multipole_texture(l_max=5, **kwargs):
 
     customize_material(mat, **kwargs)
     return mat
-
 
 def double_gradient(functions={"uv":["uv_x","uv_y","0"],"abs_uv":["uv_x,abs","uv_y,abs","uv_z,abs"]},name="DoubleGradient",direction='x', **kwargs):
     """
@@ -2526,7 +2818,6 @@ def make_eevee_glass_material(rgb=None, name=None):
     fresnel.inputs['IOR'].default_value = 1.3
     links.new(fresnel.outputs['Fac'], mix_shader.inputs['Fac'])
 
-
 def make_checker_material():
     color = bpy.data.materials.new(name='checker')
     color.use_nodes = True
@@ -2993,7 +3284,6 @@ def make_six_color_ramp_material(**kwargs):
     div.inputs[1].default_value = 5
     links.new(attr.outputs['Fac'], div.inputs[0])
     links.new(div.outputs['Value'], ramp.inputs['Fac'])
-
 
 def make_metal_material(gray=0.5):
     color = bpy.data.materials.new(name='metal_' + str(gray))

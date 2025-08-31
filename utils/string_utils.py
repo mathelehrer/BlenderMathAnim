@@ -89,5 +89,11 @@ def remove_punctuation(name):
     pattern = r'[.!?]'
     return re.sub(pattern, '', name)
 
+def parse_vector(vector_str):
+    vector_str = vector_str.replace("[", "")
+    vector_str = vector_str.replace("]", "")
+    coords = vector_str.split(",")
+    return [float(coord) for coord in coords]
+
 if __name__ == '__main__':
     print(list(find_all('spam spam spam spam', 'spam')))
