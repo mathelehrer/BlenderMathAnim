@@ -1154,18 +1154,19 @@ def create_composition(denoising=None):
     composite = nodes["Composite"]
     composite.use_alpha=False
     layers = nodes["Render Layers"]
+    set_alpha_node = nodes.new(type="CompositorNodeSetAlpha")
+    set_alpha_node.mode = "REPLACE_ALPHA"
     if denoising:
         denoise = nodes.new(type="CompositorNodeDenoise")
-
         links.new(layers.outputs["Image"], denoise.inputs["Image"])
         links.new(denoise.outputs["Image"], composite.inputs["Image"])
 
-    alpha_convert = nodes.new(type="CompositorNodePremulKey")
-    if blender_version()>(4,4):
-        set_alpha_node=nodes.new(type="CompositorNodeSetAlpha")
-        links.new(alpha_convert.outputs["Image"], set_alpha_node.inputs["Alpha"])
+        links.new(denoise.outputs["Image"], set_alpha_node.inputs["Image"])
+        links.new(set_alpha_node.outputs["Image"], composite.inputs["Image"])
     else:
-        links.new(alpha_convert.outputs["Image"], composite.inputs["Alpha"])
+        links.new(layers.outputs["Image"], set_alpha_node.inputs["Image"])
+        links.new(set_alpha_node.outputs["Image"], composite.inputs["Image"])
+
 
 
 #######################
