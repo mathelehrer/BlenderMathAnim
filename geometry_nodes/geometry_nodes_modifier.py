@@ -5,7 +5,7 @@ from copy import deepcopy
 
 import numpy as np
 
-from appearance.textures import phase2hue_material, gradient_from_attribute, z_gradient, double_gradient
+from appearance.textures import phase2hue_material, gradient_from_attribute, z_gradient, double_gradient, get_texture
 from extended_math_nodes.generic_nodes import AssociatedLegendrePolynomial, \
     SphericalHarmonicsRekursive, SphericalHarmonics200
 from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, InstanceOnPoints, JoinGeometry, \
@@ -16,7 +16,11 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch, MeshToPoints, \
     SubdivideMesh, CollectionInfo, CylinderMesh, ConeMesh, InputRotation, InvertRotation, RotateRotation, \
     Frame, SeparateXYZ, DualMesh, WireFrameRectangle, SplitEdges, VectorRotate, EvaluateOnDomain, InputNormal, \
-    create_from_xml
+    create_from_xml, ForEachZone, AxesToRotation, UnfoldMeshNode, Quadrilateral, InputInteger, ResampleCurve, TrimCurve, \
+    SeparateGeometry, CurveWireFrame, AlignRotationToVector, ScaleInstances, ValueToString, StringToCurves, IndexSwitch, \
+    CycleNode, FillCurve, AttributeStatistic, CoxeterReflectionNode, QuaternionToRotation, RotateVector, \
+    SubdivisionSurface, FilletCurve, FaceArea, SortElements, InputBoolean, BeveledCubeNode, CompareNode, \
+    GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -30,6 +34,58 @@ pi = np.pi
 tau = 2 * pi
 r2 = np.sqrt(2)
 r3 = np.sqrt(3)
+
+
+face_color_dict = {
+    1: "white",
+    2: "white",
+    3: "white",
+    4: "white",
+    5: "white",
+    6: "white",
+    7: "white",
+    8: "white",
+    9: "orange",
+    10: "orange",
+    11: "orange",
+    12: "orange",
+    13: "orange",
+    14: "orange",
+    15: "orange",
+    16: "orange",
+    17: "green",
+    18: "green",
+    19: "green",
+    20: "green",
+    21: "green",
+    22: "green",
+    23: "green",
+    24: "green",
+    25: "red",
+    26: "red",
+    27: "red",
+    28: "red",
+    29: "red",
+    30: "red",
+    31: "red",
+    32: "red",
+    33: "blue",
+    34: "blue",
+    35: "blue",
+    36: "blue",
+    37: "blue",
+    38: "blue",
+    39: "blue",
+    40: "blue",
+    41: "yellow",
+    42: "yellow",
+    43: "yellow",
+    44: "yellow",
+    45: "yellow",
+    46: "yellow",
+    47: "yellow",
+    48: "yellow"
+}
 
 
 ############################
@@ -922,6 +978,7 @@ class LorentzAttractorNode(GeometryNodesModifier):
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
 
+# Penrose videos
 class Penrose2DIntro(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
         super().__init__(name)
@@ -1587,6 +1644,7 @@ class ConvexHull2D(GeometryNodesModifier):
         # voronoi zone
         create_geometry_line(tree, [projection_line, product_geometry, realize, hull_hull, zone_mat, join2])
 
+# CMB video
 class SphericalHarmonicsNode(GeometryNodesModifier):
     def __init__(self, l=0, m=0, name='SphericalHarmonics', resolution=5, **kwargs):
         """
@@ -2810,6 +2868,2240 @@ class UnfoldModifier(GeometryNodesModifier):
 
     def create_node(self,tree,**kwargs):
         create_from_xml(tree,"unfolding_node",**kwargs)
+
+# Rubik's cube videos
+
+class RubiksCubeModifier(GeometryNodesModifier):
+    def __init__(self, name="RubiksCubeModifier", **kwargs):
+        super().__init__(name, automatic_layout=False, **kwargs)
+
+    def loc(self, block_x=0, block_y=0, x=0, y=0, absolute=False):
+        block_width = 7
+        block_height = 5
+        if absolute:
+            return (200 * (block_x * block_width + x), 200 * (block_y * block_height + y))
+        else:
+            return (block_x * block_width + x, block_y * block_height + y)
+
+    def create_node(self, tree, **kwargs):
+        '''
+        we need to create the following structure
+
+        labels for cubies (0,5)
+
+
+
+        3x3x3 grid (-1,2)
+
+        beveled cube (-1,1)     selected faces (0,1)          selection for animation(1,1)
+
+        beveled face (-1,0)     face coloring  (0,0)          transformation (1,0)            output (2,0)
+
+                                labels for cubies (0,-2)
+
+                                labels for faces (0,-3)
+        '''
+        # output block
+        out = self.group_outputs
+        out.location = self.loc(2, 0, 0, 0, absolute=True)
+        links = tree.links
+
+        # 3x3x3 block
+        separation = InputValue(tree, name="Separation", value=1, location=self.loc(-1, 2, 0, 0), hide=False)
+        size = InputValue(tree, name="Cube Size", value=0.89, location=self.loc(-1, 2, 0, -1), hide=False)
+        line_function = make_function(tree, name="LineFunction",
+                                      functions={
+                                          "start": ["0", "0", "-1,separation,*"],
+                                          "offset": ["0", "0", "1,separation,*"]
+                                      }, inputs=["separation"], outputs=["start", "offset"],
+                                      scalars=["separation"], vectors=["start", "offset"],
+                                      location=self.loc(-1, 2, 1, 0), hide=False)
+        links.new(separation.std_out, line_function.inputs["separation"])
+        mesh_line = MeshLine(tree, size=size.std_out, mode='OFFSET', count_mode="TOTAL", count=3,
+                             start_location=line_function.outputs["start"],
+                             offset=line_function.outputs["offset"], location=self.loc(-1, 2, 2, 0), hide=False
+                             )
+        grid = Grid(tree, size_x=2, size_y=2, vertices_y=3, vertices_x=3, location=self.loc(-1, 2, 2, -1.5), hide=False)
+        iop = InstanceOnPoints(tree, instance=grid.geometry_out, scale=separation.std_out, hide=False,
+                               location=self.loc(-1, 2, 3, 0))
+        realize_instance = RealizeInstances(tree, location=self.loc(-1, 2, 4, 0), hide=False)
+        index = Index(tree, location=self.loc(-1, 2, 4, -1.5), hide=False)
+        # increase index by one, since index 0 cannot be selected (bug, probably)
+        inc = make_function(tree, name="Function",
+                            functions={
+                                "idx": "idx,1,+"
+                            }, inputs=["idx"], outputs=["idx"],
+                            scalars=["idx"])
+        links.new(index.std_out, inc.inputs["idx"])
+        pos = Position(tree, location=self.loc(-1, 2, 5, -2), hide=False)
+        cubie_index = StoredNamedAttribute(tree, domain='POINT', data_type='INT',
+                                           name="CubieIndex", value=inc.outputs["idx"], hide=False,
+                                           location=self.loc(-1, 2, 5, 0))
+        cubie_pos = StoredNamedAttribute(tree, domain='POINT', data_type='FLOAT_VECTOR',
+                                         name="CubiePosition", value=pos.std_out, hide=False,
+                                         location=self.loc(-1, 2, 6, 0))
+        create_geometry_line(tree, [mesh_line, iop, realize_instance, cubie_index, cubie_pos])
+
+        # beveled cube
+        bevel = InputValue(tree, name="Bevel", value=6.3, location=self.loc(-1, 1, -0.5, 1), hide=False)
+        bevel_function = make_function(tree, name="BevelFunction", location=self.loc(-1, 1, 0, 0),
+                                       functions={
+                                           "bevel": "size,bevel,/"
+                                       }, inputs=["size", "bevel"], outputs=["bevel"],
+                                       scalars=["size", "bevel"], hide=False)
+        links.new(size.std_out, bevel_function.inputs["size"])
+        links.new(bevel.std_out, bevel_function.inputs["bevel"])
+
+        cube = CubeMesh(tree, size=size.std_out, location=self.loc(-1, 1, 1, 0), hide=False)
+        cube2 = CubeMesh(tree, size=bevel_function.outputs["bevel"], location=self.loc(-1, 1, 1, -2), hide=False)
+        subsurf = SubdivisionSurface(tree, level=3, mesh=cube2.geometry_out, hide=False,
+                                     location=self.loc(-1, 1, 2, -2))
+        iop2 = InstanceOnPoints(tree, scale=size.std_out, instance=subsurf.geometry_out, hide=False,
+                                location=self.loc(-1, 1, 3, 0))
+        realize_instance2 = RealizeInstances(tree, location=self.loc(-1, 1, 4, 0), hide=False)
+        convex_hull = ConvexHull(tree, location=self.loc(-1, 1, 5, -1), hide=False)
+
+        create_geometry_line(tree, [cube, iop2, realize_instance2, convex_hull])
+
+        # beveled face(-1, 0)
+
+        quadri = Quadrilateral(tree, location=self.loc(-1, 0, 0, 0),
+                               width=size.std_out, height=size.std_out, hide=False)
+        fillet_curve = FilletCurve(tree, radius=bevel_function.outputs["bevel"], count=10,
+                                   location=self.loc(-1, 0, 1, 0), hide=False)
+        fill_cuve = FillCurve(tree, mode='NGONS', location=self.loc(-1, 0, 2, 0), hide=False)
+        extrude_face = ExtrudeMesh(tree, mode='FACES', offset_scale=0.01, offset=None, location=self.loc(-1, 0, 3, 0),
+                                   hide=False)
+        create_geometry_line(tree, [quadri, fillet_curve, fill_cuve, extrude_face])
+
+        # selected faces(0, 0)
+        block_y = 2.5
+        iop3 = InstanceOnPoints(tree, instance=convex_hull.geometry_out, hide=False,
+                                location=self.loc(0, block_y, 0, 0))
+        realize_cube = RealizeInstances(tree, location=self.loc(0, block_y, 1, 0), hide=False)
+        cube_material = SetMaterial(tree, location=self.loc(0, block_y, 2, 0), material="plastic_background")
+        shade_smooth = SetShadeSmooth(tree, location=self.loc(0, block_y, 3, 0))
+        create_geometry_line(tree, [cubie_pos, iop3, realize_cube, cube_material, shade_smooth])
+
+        face_area = FaceArea(tree, location=self.loc(0, block_y, 0, -3.5), hide=False)
+        position2 = Position(tree, location=self.loc(0, block_y, 0, -4.5), hide=False)
+        abs = VectorMath(tree, operation="ABSOLUTE", inputs0=position2.std_out, location=self.loc(0, block_y, 1, -4),
+                         hide=False)
+
+        # the basic algorithm behind the face selection is the following
+        # for faces where the x coordinate is absolutely the largest coordinate, we only select the face
+        # when the x>0.5*cubesize+spacing or x<-(0.5*cubesize+spacing)
+        # additionally only faces with an area larger than 0.5*cubesize**2 are selected
+
+        outside_faces = make_function(tree, name="OutSideFaces",
+                                      functions={
+                                          "select": "pos_x,pos_y,>,pos_x,pos_z,>,and,pos_x,0.5,size,*,spc,+,>,and,"
+                                                    "pos_y,pos_x,>,pos_y,pos_z,>,and,pos_y,0.5,size,*,spc,+,>,and,or,"
+                                                    "pos_z,pos_x,>,pos_z,pos_y,>,and,pos_z,0.5,size,*,spc,+,>,and,or,"
+                                                    "area,0.5,size,2,**,*,>,and"
+                                      }, inputs=["pos", "area", "size", "spc"], outputs=["select"],
+                                      scalars=["area", "select", "size", "spc"], vectors=["pos"], hide=False,
+                                      location=self.loc(0, block_y, 1, -1.75))
+
+        links.new(abs.std_out, outside_faces.inputs["pos"])
+        links.new(face_area.std_out, outside_faces.inputs["area"])
+        links.new(size.std_out, outside_faces.inputs["size"])
+        links.new(separation.std_out, outside_faces.inputs["spc"])
+
+        # set cubie faces
+
+        sep_geo = SeparateGeometry(tree, location=self.loc(0, 1, 0, 0), domain='FACE', hide=False,
+                                   selection=outside_faces.outputs["select"])
+        attr_cubie_index = NamedAttribute(tree, location=self.loc(0, 1, -1, -1), name="CubieIndex",
+                                          data_type='INT', hide=False)
+        normal = InputNormal(tree, location=self.loc(0, 1, -1, -2), hide=False)
+        store_cubie_index_at_face = StoredNamedAttribute(tree, location=self.loc(0, 1, 1, 0), data_type='INT',
+                                                         domain='FACE', name="CubieIndexAtFace",
+                                                         value=attr_cubie_index.std_out,
+                                                         hide=False)
+        store_face_normal = StoredNamedAttribute(tree, location=self.loc(0, 1, 2, 0), data_type='FLOAT_VECTOR',
+                                                 domain='FACE', name="FaceNormal", value=normal.std_out, hide=False)
+        dual_mesh = DualMesh(tree, location=self.loc(0, 1, 3, 0), hide=False)
+        position3 = Position(tree, location=self.loc(0, 1, -1, -3), hide=False)
+        abs_2 = VectorMath(tree, operation="ABSOLUTE", inputs0=position3.std_out,
+                           location=self.loc(0, 1, 0, -3))
+        index3 = Index(tree, location=self.loc(0, 1, -1, -5), hide=False)
+
+        # the aim of this function is to re-arrange the indices of the faces,
+        # such that a side of the Rubik's cube
+        # has nine faces with con secutive index values
+        index_function = make_function(tree, name="IndexFunction",
+                                       functions={
+                                           "weight": "apos_x,apos_y,>,apos_x,apos_z,>,and,10,*,pos_x,sgn,*,"
+                                                     "apos_y,apos_x,>,apos_y,apos_z,>,and,5,*,pos_y,sgn,*,+,"
+                                                     "apos_z,apos_x,>,apos_z,apos_y,>,and,1,*,pos_z,sgn,*,+,"
+                                                     "index,100,/,+"
+                                       }, inputs=["index", "pos", "apos"], outputs=["weight"],
+                                       scalars=["index", "weight"], vectors=["pos", "apos"],
+                                       location=self.loc(0, 1, 3, -1),
+                                       hide=False)
+
+        links.new(index3.std_out, index_function.inputs["index"])
+        links.new(abs_2.std_out, index_function.inputs["apos"])
+        links.new(position3.std_out, index_function.inputs["pos"])
+
+        sort = SortElements(tree, location=self.loc(0, 1, 4, 0), hide=False, domain='POINT',
+                            sort_weight=index_function.outputs["weight"])
+
+        attr_face_normal = NamedAttribute(tree, location=self.loc(0, 1, -1, -4),
+                                          name="FaceNormal", data_type='FLOAT_VECTOR', hide=False)
+
+        store_face_index = StoredNamedAttribute(tree, location=self.loc(0, 1, 5, 0), hide=False,
+                                                domain='POINT', data_type='INT', name="FaceIndex", value=index3.std_out)
+        align_rotation = AxesToRotation(tree, location=self.loc(0, 1, 5, -2), hide=False,
+                                        primary_axis='Z', secondary_axis='Y',
+                                        primary_direction=attr_face_normal.std_out,
+                                        secondary_direction=Vector([0, 0, 1]))
+        # align_rotation=AlignRotationToVector(tree,location=self.loc(0,1,5,-2),hide=False,
+        #                                      vector=attr_face_normal.std_out)
+        # pipe in beveled cubie face
+        iop4 = InstanceOnPoints(tree, instance=extrude_face.geometry_out, hide=False,
+                                rotation=align_rotation.std_out, location=self.loc(0, 1, 6, 0))
+
+        realize_faces = RealizeInstances(tree, location=self.loc(0, 1, 7, 0), hide=False)
+        create_geometry_line(tree, [realize_cube, sep_geo, store_cubie_index_at_face,
+                                    store_face_normal, dual_mesh, sort, store_face_index, iop4, realize_faces])
+
+        # face coloring
+        block_y = -0.25
+        block_x = -0.25
+        attr_face_index = NamedAttribute(tree, location=self.loc(block_x, block_y, 0, -3), name="FaceIndex", hide=False)
+
+        red_selector = make_function(tree, name="RedSelector", location=self.loc(block_x, block_y, 1, -1.5),
+                                     functions={
+                                         "select": "face_index,44,>,face_index,54,<,and,switch,and"
+                                     }, inputs=["switch", "face_index"], outputs=["select"],
+                                     scalars=["switch", "face_index", "select"], hide=False)
+        red_selector_switch = InputBoolean(tree, name="RedSelectorSwitch", value=True,
+                                           location=self.loc(block_x, block_y, 1, -2.5), hide=False)
+
+        blue_selector = make_function(tree, name="BlueSelector", location=self.loc(block_x, block_y, 2, -1.5),
+                                      functions={
+                                          "select": "face_index,35,>,face_index,45,<,and,switch,and"
+                                      }, inputs=["switch", "face_index"], outputs=["select"],
+                                      scalars=["switch", "face_index", "select"], hide=False)
+        blue_selector_switch = InputBoolean(tree, name="BlueSelectorSwitch", value=True,
+                                            location=self.loc(block_x, block_y, 2, -2.5), hide=False)
+
+        yellow_selector = make_function(tree, name="YellowSelector", location=self.loc(block_x, block_y, 3, -1.5),
+                                        functions={
+                                            "select": "face_index,17,>,face_index,27,<,and,switch,and"
+                                        }, inputs=["switch", "face_index"], outputs=["select"],
+                                        scalars=["switch", "face_index", "select"], hide=False)
+        yellow_selector_switch = InputBoolean(tree, name="YellowSelectorSwitch", value=True,
+                                              location=self.loc(block_x, block_y, 3, -2.5), hide=False)
+
+        orange_selector = make_function(tree, name="OrangeSelector", location=self.loc(block_x, block_y, 4, -1.5),
+                                        functions={
+                                            "select": "face_index,-1,>,face_index,9,<,and,switch,and"
+                                        }, inputs=["switch", "face_index"], outputs=["select"],
+                                        scalars=["switch", "face_index", "select"], hide=False)
+        orange_selector_switch = InputBoolean(tree, name="OrangeSelectorSwitch", value=True,
+                                              location=self.loc(block_x, block_y, 4, -2.5), hide=False)
+
+        green_selector = make_function(tree, name="GreenSelector", location=self.loc(block_x, block_y, 5, -1.5),
+                                       functions={
+                                           "select": "face_index,8,>,face_index,18,<,and,switch,and"
+                                       }, inputs=["switch", "face_index"], outputs=["select"],
+                                       scalars=["switch", "face_index", "select"], hide=False)
+        green_selector_switch = InputBoolean(tree, name="GreenSelectorSwitch", value=True,
+                                             location=self.loc(block_x, block_y, 5, -2.5), hide=False)
+
+        white_selector = make_function(tree, name="WhiteSelector", location=self.loc(block_x, block_y, 6, -1.5),
+                                       functions={
+                                           "select": "face_index,26,>,face_index,36,<,and,switch,and"
+                                       }, inputs=["switch", "face_index"], outputs=["select"],
+                                       scalars=["switch", "face_index", "select"], hide=False)
+        white_selector_switch = InputBoolean(tree, name="WhiteSelectorSwitch", value=True,
+                                             location=self.loc(block_x, block_y, 6, -2.5), hide=False)
+
+        edge_selector = make_function(tree, name="EdgeSelector", location=self.loc(block_x, block_y, 7, -1.5),
+                                      functions={
+                                          "select": "idx,19,=,idx,21,=,or,idx,23,=,or,"
+                                                    "idx,25,=,or,idx,34,=,or,idx,28,=,or,idx,39,=,or,"
+                                                    "idx,41,=,or,idx,12,=,or,idx,14,=,or,idx,30,=,or,idx,32,=,or,switch,and"
+                                      }, inputs=["switch", "idx"], outputs=["select"],
+                                      scalars=["switch", "idx", "select"], hide=False)
+
+        edge_selector_switch = InputBoolean(tree, name="EdgeSelectorSwitch", value=False,
+                                            location=self.loc(block_x, block_y, 7, -2.5), hide=False)
+
+        corner_selector = make_function(tree, name="CornerSelector", location=self.loc(block_x, block_y, 8, -1.5),
+                                        functions={
+                                            "select": "idx,15,=,idx,17,=,or,idx,11,=,or,"
+                                                      "idx,9,=,or,idx,44,=,or,idx,42,=,or,idx,38,=,or,"
+                                                      "idx,36,=,or,switch,and"
+                                        }, inputs=["switch", "idx"], outputs=["select"],
+                                        scalars=["switch", "idx", "select"], hide=False)
+
+        corner_selector_switch = InputBoolean(tree, name="CornerSelectorSwitch", value=False,
+                                              location=self.loc(block_x, block_y, 8, -2.5), hide=False)
+
+        links.new(attr_face_index.std_out, red_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, blue_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, yellow_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, orange_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, green_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, white_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, edge_selector.inputs["idx"])
+        links.new(attr_face_index.std_out, corner_selector.inputs["idx"])
+        links.new(red_selector_switch.std_out, red_selector.inputs["switch"])
+        links.new(white_selector_switch.std_out, white_selector.inputs["switch"])
+        links.new(green_selector_switch.std_out, green_selector.inputs["switch"])
+        links.new(blue_selector_switch.std_out, blue_selector.inputs["switch"])
+        links.new(orange_selector_switch.std_out, orange_selector.inputs["switch"])
+        links.new(yellow_selector_switch.std_out, yellow_selector.inputs["switch"])
+        links.new(edge_selector_switch.std_out, edge_selector.inputs["switch"])
+        links.new(corner_selector_switch.std_out, corner_selector.inputs["switch"])
+
+        material_black = SetMaterial(tree, location=self.loc(block_x, block_y, 0, 0), material="plastic_gray_1")
+
+        material_red = SetMaterial(tree, location=self.loc(block_x, block_y, 1, 0),
+                                   selection=red_selector.outputs["select"], material="plastic_red",
+                                   hide=False)
+        material_blue = SetMaterial(tree, location=self.loc(block_x, block_y, 2, 0),
+                                    selection=blue_selector.outputs["select"], material="plastic_blue",
+                                    hide=False)
+        material_yellow = SetMaterial(tree, location=self.loc(block_x, block_y, 3, 0),
+                                      selection=yellow_selector.outputs["select"], material="plastic_yellow",
+                                      hide=False)
+        material_orange = SetMaterial(tree, location=self.loc(block_x, block_y, 4, 0),
+                                      selection=orange_selector.outputs["select"], material="plastic_orange",
+                                      hide=False)
+        material_green = SetMaterial(tree, location=self.loc(block_x, block_y, 5, 0),
+                                     selection=green_selector.outputs["select"], material="plastic_green",
+                                     hide=False)
+        material_white = SetMaterial(tree, location=self.loc(block_x, block_y, 6, 0),
+                                     selection=white_selector.outputs["select"], material="plastic_text",
+                                     hide=False)
+
+        material_edge = SetMaterial(tree, location=self.loc(block_x, block_y, 7, 0),
+                                    selection=edge_selector.outputs["select"], material="plastic_joker",
+                                    hide=False)
+
+        material_corner = SetMaterial(tree, location=self.loc(block_x, block_y, 8, 0),
+                                      selection=corner_selector.outputs["select"],
+                                      material="plastic_custom1", hide=False)
+
+        last_material = material_corner
+        create_geometry_line(tree, [realize_faces, material_black, material_red, material_blue, material_yellow,
+                                    material_orange, material_green, material_white, material_edge, material_corner])
+
+        # selection block
+        block_y = 2
+        block_x = 1.1
+        join = JoinGeometry(tree, location=self.loc(block_x, block_y, 0, 0), hide=False)
+        create_geometry_line(tree, [last_material, join])
+        create_geometry_line(tree, [shade_smooth, join])
+        attr_cubie_index2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 0, -1), name="CubieIndex",
+                                           hide=False, data_type="INT")
+        attr_face_index2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 0, -2),
+                                          name="CubieIndexAtFace", data_type="INT", hide=False)
+
+        # now we need to separate each cubie and prepare its own transformation panel.
+
+        join2 = JoinGeometry(tree, location=self.loc(block_x, block_y, 4, 0), hide=False)
+
+        # the index for the cubies had to be artificially ranged from 1 to 27, since index 0 caused trouble
+        # in the geometry selection process. For the rest of the python interface the labels are ranging from 0 to 26 again
+        for i in range(1, 28):
+            cubie_selection = make_function(tree, name="CubieSelection" + str(i - 1),
+                                            location=self.loc(block_x, block_y, 1, -i + 1), hide=True,
+                                            functions={
+                                                "select": "idx1," + str(i) + ",=,idx2," + str(i) + ",=,or"
+                                            }, inputs=["idx1", "idx2"], outputs=["select"],
+                                            scalars=["idx1", "idx2", "select"])
+            links.new(attr_cubie_index2.std_out, cubie_selection.inputs["idx1"])
+            links.new(attr_face_index2.std_out, cubie_selection.inputs["idx2"])
+
+            sep_geo = SeparateGeometry(tree, location=self.loc(block_x, block_y, 2, -i + 1), domain='FACE',
+                                       hide=True, selection=cubie_selection.outputs["select"], geometry_out="Selection")
+
+            rotation = QuaternionToRotation(tree, name="CubieRotation_" + str(i - 1),
+                                            location=self.loc(block_x, block_y, 2, -i), hide=False)
+
+            transform = TransformGeometry(tree, location=self.loc(block_x, block_y, 3, -i),
+                                          rotation=rotation.std_out,
+                                          hide=True)
+            create_geometry_line(tree, [join, sep_geo, transform, join2], out=out.inputs[0])
+
+        # the labels for the orientation
+        block_x = 0
+        block_y = 4
+
+        size_function = make_function(tree, name="SizeFunction", location=self.loc(block_x, block_y, -1, 0), hide=True,
+                                      functions={"size": "3,size,*"},
+                                      inputs=["size"], outputs=["size"], scalars=["size"])
+
+        links.new(separation.std_out, size_function.inputs["size"])
+
+        edge_centers = CubeMesh(tree, location=self.loc(block_x, block_y, 0, 0),
+                                vertices_x=4, vertices_y=4, vertices_z=4, size=size_function.outputs["size"])
+        normal2 = InputNormal(tree, location=self.loc(block_x, block_y, 1, -1))
+        store_face_normal2 = StoredNamedAttribute(tree, location=self.loc(block_x, block_y, 1, 0),
+                                                  name="FaceNormal2", value=normal2.std_out, domain='FACE',
+                                                  data_type="FLOAT_VECTOR", hide=False)
+        dual_mesh = DualMesh(tree, location=self.loc(block_x, block_y, 2, 0), )
+        mesh_to_points = MeshToPoints(tree, location=self.loc(block_x, block_y, 3, 0), hide=True)
+
+        # create the selection function, depending on the index of the face
+        idx = Index(tree, location=self.loc(block_x, block_y, 1, 1), hide=True)
+        edges = InputBoolean(tree, name="EdgeSwitch", location=self.loc(block_x, block_y, 1, 1.5), value=False,
+                             hide=True)
+        corners = InputBoolean(tree, name="CornerSwitch", location=self.loc(block_x, block_y, 1, 2), value=False,
+                               hide=True)
+        index_function = make_function(tree, name="index_function",
+                                       functions={
+                                           "zero": "idx,19,=,idx,25,=,or,idx,21,=,or,idx,23,=,or,idx,1,=,or,idx,3,=,or,"
+                                                   "idx,5,=,or,idx,7,=,or,idx,12,=,or,idx,14,=,or,idx,30,=,or,idx,32,=,or,edges,and,"
+                                                   "idx,15,=,idx,17,=,or,idx,9,=,or,idx,11,=,or,idx,35,=,or,idx,33,=,or,idx,29,=,or,idx,27,=,or,corners,and,or",
+                                           "one": "idx,46,=,idx,48,=,or,idx,50,=,or,idx,52,=,or,idx,37,=,or,idx,39,=,or,idx,41,=,or,idx,43,=,or,"
+                                                  "idx,10,=,or,idx,16,=,or,idx,28,=,or,idx,34,=,or,edges,and,"
+                                                  "idx,42,=,idx,20,=,or,idx,45,=,or,idx,0,=,or,idx,53,=,or,idx,24,=,or,idx,38,=,or,idx,8,=,or,corners,and,or",
+                                           "two": "idx,18,=,idx,51,=,or,idx,2,=,or,idx,36,=,or,idx,26,=,or,idx,44,=,or,idx,6,=,or,idx,47,=,or,corners,and"
+                                       }, inputs=["idx", "edges", "corners"], outputs=["zero", "one", "two"],
+                                       scalars=["idx", "zero", "one", "two", "edges", "corners"],
+                                       vectors=[], location=self.loc(block_x, block_y, 2, 1), hide=True)
+        links.new(idx.std_out, index_function.inputs["idx"])
+        links.new(edges.std_out, index_function.inputs["edges"])
+        links.new(corners.std_out, index_function.inputs["corners"])
+
+        # align font to face normal
+        attr_face_normal2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 2, -1), name="FaceNormal2",
+                                           data_type="FLOAT_VECTOR", hide=False)
+        align_rotation2 = AxesToRotation(tree, location=self.loc(block_x, block_y, 3, -1),
+                                         primary_axis='Z', secondary_axis='Y',
+                                         primary_direction=attr_face_normal2.std_out,
+                                         secondary_direction=Vector([0, 0, 1]), hide=False)
+
+        # create three geometry lines for the numbers 0, 1, 2
+        create_geometry_line(tree, [edge_centers, store_face_normal2, dual_mesh, mesh_to_points])
+        for i in range(3):
+            text = StringToCurves(tree, location=self.loc(block_x, block_y, 2, 4 - i), string=str(i), hide=True)
+            iop = InstanceOnPoints(tree, location=self.loc(block_x, block_y, 4, 4 - i), hide=True,
+                                   instance=text.geometry_out, rotation=align_rotation2.std_out,
+                                   selection=index_function.outputs[i])
+            fill_curve = FillCurve(tree, location=self.loc(block_x, block_y, 5, 4 - i), hide=True)
+            extrude = ExtrudeMesh(tree, location=self.loc(block_x, block_y, 6, 4 - i), mode='FACES', offset=None,
+                                  hide=True, offset_scale=0.03)
+            create_geometry_line(tree, [mesh_to_points, iop, fill_curve, extrude, join2])
+
+        # the labels for cubies
+        block_x = -0.5
+        block_y = -2
+
+        cubie_label = InputBoolean(tree, name="CubieSwitch", location=self.loc(block_x, block_y, 0, 1), value=False,
+                                   hide=True)
+
+        for_each_cubie = ForEachZone(tree, location=self.loc(block_x, block_y, 0, -2), hide=True,
+                                     geometry=sort.geometry_out)
+
+        cubie_index = make_function(tree, name="CubieIndexFunction",
+                                    functions={
+                                        "idx": "idx,15,=,idx,6,=,or,idx,27,=,or,1,*,"
+                                               "idx,16,=,idx,30,=,or,2,*,+,"
+                                               "idx,17,=,idx,33,=,or,idx,51,=,or,3,*,+,"
+                                               "idx,3,=,idx,12,=,or,4,*,+,"
+                                               "idx,13,=,5,*,+,"
+                                               "idx,14,=,idx,48,=,or,6,*,+,"
+                                               "idx,0,=,idx,9,=,or,idx,18,=,or,7,*,+,"
+                                               "idx,10,=,idx,21,=,or,8,*,+,"
+                                               "idx,11,=,idx,24,=,or,idx,45,=,or,9,*,+,"
+                                               "idx,28,=,idx,7,=,or,10,*,+,"
+                                               "idx,31,=,11,*,+,"
+                                               "idx,34,=,idx,52,=,or,12,*,+,"
+                                               "idx,29,=,idx,42,=,or,idx,8,=,or,13,*,+,"
+                                               "idx,32,=,idx,43,=,or,14,*,+,"
+                                               "idx,44,=,idx,35,=,or,idx,53,=,or,15,*,+,"
+
+                                               "idx,49,=,17,*,+,"
+                                               "idx,50,=,idx,41,=,or,16,*,+,"
+                                               "idx,46,=,idx,25,=,or,18,*,+,"
+                                               "idx,47,=,idx,38,=,or,idx,26,=,or,19,*,+,"
+                                               "idx,40,=,20,*,+,"
+                                               "idx,37,=,idx,23,=,or,26,*,+,"
+
+                                               "idx,4,=,23,*,+,"
+                                               "idx,5,=,idx,39,=,or,22,*,+,"
+                                               "idx,1,=,idx,19,=,or,24,*,+,"
+                                               "idx,2,=,idx,20,=,or,idx,36,=,or,25,*,+,"
+                                               "idx,22,=,21,*,+"
+
+                                    }, inputs=["idx"], outputs=["idx"], scalars=["idx"],
+                                    location=self.loc(block_x, block_y, 0, -1), hide=True)
+        links.new(for_each_cubie.outputs["Index"], cubie_index.inputs["idx"])
+        val_to_string = ValueToString(tree, value=cubie_index.outputs["idx"], location=self.loc(block_x, block_y, 0, 0),
+                                      hide=True)
+
+        strings_to_curve2 = StringToCurves(tree, string=val_to_string.std_out,
+                                           location=self.loc(block_x, block_y, 1, 0))
+        fil_curve2 = FillCurve(tree, location=self.loc(block_x, block_y, 2, -1))
+        extrude2 = ExtrudeMesh(tree, location=self.loc(block_x, block_y, 2, 0), mode='FACES', offset=None, hide=True,
+                               offset_scale=0.03)
+        label_on_points = InstanceOnPoints(tree, location=self.loc(block_x, block_y, 3, 0),
+                                           rotation=align_rotation.std_out, scale=[0.5] * 3, hide=False,
+                                           selection=cubie_label.std_out, instance=extrude2.geometry_out)
+        string_attr = StoredNamedAttribute(tree, location=self.loc(block_x, block_y, 4, 0),
+                                           name="CubieIndexString", data_type="INT", domain="POINT",
+                                           value=cubie_index.outputs["idx"], hide=False)
+        for_each_cubie.create_geometry_line([label_on_points, string_attr])
+        create_geometry_line(tree, [strings_to_curve2, fil_curve2, extrude2])
+        realize_fonts = RealizeInstances(tree, location=self.loc(block_x, block_y, 6, 0), hide=True)
+        cubie_font_idx = NamedAttribute(tree, location=self.loc(block_x, block_y, 7, -2), data_type="INT",
+                                        name="CubieIndexString", hide=False)
+        edge_filter = make_function(tree, name="EdgeFilter",
+                                    functions={
+                                        "selection": "idx,2,%,0,="
+                                    }, inputs=["idx"], outputs=["selection"],
+                                    scalars=["idx", "selection"], location=self.loc(block_x, block_y, 7, -1), hide=True)
+        links.new(cubie_font_idx.std_out, edge_filter.inputs["idx"])
+        material_edge_font = SetMaterial(tree, material="plastic_joker", location=self.loc(block_x, block_y, 8, 0),
+                                         hide=True)
+        material_corner_font = SetMaterial(tree, material="plastic_custom1", location=self.loc(block_x, block_y, 8, -1),
+                                           hide=True)
+        separate_geo = SeparateGeometry(tree, location=self.loc(block_x, block_y, 7, 0),
+                                        selection=edge_filter.outputs["selection"], hide=True)
+        create_geometry_line(tree, [for_each_cubie, realize_fonts, separate_geo])
+        links.new(separate_geo.outputs["Selection"], material_edge_font.geometry_in)
+        links.new(separate_geo.outputs["Inverted"], material_corner_font.geometry_in)
+        create_geometry_line(tree, [material_edge_font, join])
+        create_geometry_line(tree, [material_corner_font, join])
+
+        # the labels for faces
+        block_x = -0.5
+        block_y = -3.5
+
+        face_label = InputBoolean(tree, name="FaceSwitch", location=self.loc(block_x, block_y, 0, 1), value=False,
+                                  hide=True)
+
+        for_each_face = ForEachZone(tree, location=self.loc(block_x, block_y, 0, -2), hide=True,
+                                    geometry=store_face_index.geometry_out)
+
+        face_index = make_function(tree, name="FaceIndexFunction",
+                                   functions={
+                                       "idx":
+                                           "idx,29,=,1,*,idx,32,=,2,*,+,idx,35,=,3,*,+,idx,28,=,4,*,+,idx,34,=,6,*,+,idx,27,=,5,*,+,idx,30,=,8,*,+,idx,33,=,7,*,+,"
+                                           "idx,8,=,9,*,+,idx,7,=,10,*,+,idx,6,=,11,*,+,idx,5,=,12,*,+,idx,3,=,14,*,+,idx,2,=,13,*,+,idx,1,=,16,*,+,idx,0,=,15,*,+,"
+                                           "idx,51,=,25,*,+,idx,52,=,26,*,+,idx,53,=,27,*,+,idx,48,=,28,*,+,idx,50,=,30,*,+,idx,45,=,29,*,+,idx,46,=,32,*,+,idx,47,=,31,*,+,"
+                                           "idx,15,=,17,*,+,idx,16,=,18,*,+,idx,17,=,19,*,+,idx,12,=,20,*,+,idx,14,=,22,*,+,idx,9,=,21,*,+,idx,10,=,24,*,+,idx,11,=,23,*,+,"
+                                           "idx,44,=,33,*,+,idx,43,=,34,*,+,idx,42,=,35,*,+,idx,41,=,36,*,+,idx,39,=,38,*,+,idx,38,=,37,*,+,idx,37,=,40,*,+,idx,36,=,39,*,+,"
+                                           "idx,18,=,41,*,+,idx,21,=,42,*,+,idx,24,=,43,*,+,idx,19,=,44,*,+,idx,25,=,46,*,+,idx,20,=,45,*,+,idx,23,=,48,*,+,idx,26,=,47,*,+"
+                                   }, inputs=["idx"], outputs=["idx"], scalars=["idx"],
+                                   location=self.loc(block_x, block_y, 0, -1), hide=True)
+        links.new(for_each_face.outputs["Index"], face_index.inputs["idx"])
+        val_to_string = ValueToString(tree, value=face_index.outputs["idx"], location=self.loc(block_x, block_y, 0, 0),
+                                      hide=True)
+
+        strings_to_curve3 = StringToCurves(tree, string=val_to_string.std_out,
+                                           location=self.loc(block_x, block_y, 1, 0))
+        fil_curve3 = FillCurve(tree, location=self.loc(block_x, block_y, 2, -1))
+        extrude3 = ExtrudeMesh(tree, location=self.loc(block_x, block_y, 2, 0), mode='FACES', offset=None, hide=True,
+                               offset_scale=0.03)
+        label_on_points2 = InstanceOnPoints(tree, location=self.loc(block_x, block_y, 3, 0),
+                                            rotation=align_rotation.std_out, scale=[0.5] * 3, hide=False,
+                                            selection=face_label.std_out, instance=extrude3.geometry_out)
+        string_attr2 = StoredNamedAttribute(tree, location=self.loc(block_x, block_y, 4, 0),
+                                            name="FaceIndexString", data_type="INT", domain="POINT",
+                                            value=face_index.outputs["idx"], hide=False)
+        for_each_face.create_geometry_line([label_on_points2, string_attr2])
+        create_geometry_line(tree, [strings_to_curve3, fil_curve3, extrude3])
+        realize_fonts2 = RealizeInstances(tree, location=self.loc(block_x, block_y, 6, 0), hide=True)
+        face_font_idx = NamedAttribute(tree, location=self.loc(block_x, block_y, 7, -2), data_type="INT",
+                                       name="FaceIndexString", hide=False)
+        edge_filter2 = make_function(tree, name="FaceFilter",
+                                     functions={
+                                         "selection": "idx,2,%,0,="
+                                     }, inputs=["idx"], outputs=["selection"],
+                                     scalars=["idx", "selection"], location=self.loc(block_x, block_y, 7, -1),
+                                     hide=True)
+        links.new(face_font_idx.std_out, edge_filter2.inputs["idx"])
+        material_edge_font2 = SetMaterial(tree, material="plastic_joker", location=self.loc(block_x, block_y, 8, 0),
+                                          hide=True)
+        material_corner_font2 = SetMaterial(tree, material="plastic_custom1",
+                                            location=self.loc(block_x, block_y, 8, -1),
+                                            hide=True)
+        separate_geo2 = SeparateGeometry(tree, location=self.loc(block_x, block_y, 7, 0),
+                                         selection=edge_filter2.outputs["selection"], hide=True)
+        create_geometry_line(tree, [for_each_face, realize_fonts2, separate_geo2])
+        # don't display face labels with zero index
+        separate_geo3 = SeparateGeometry(tree, selection=face_font_idx.std_out,
+                                         location=self.loc(block_x, block_y, 8, 0), hide=True)
+        links.new(separate_geo2.outputs["Selection"], separate_geo3.geometry_in)
+        links.new(separate_geo3.outputs["Selection"], material_edge_font2.geometry_in)
+        links.new(separate_geo2.outputs["Inverted"], material_corner_font2.geometry_in)
+        create_geometry_line(tree, [material_edge_font2, join])
+        create_geometry_line(tree, [material_corner_font2, join])
+
+class RubiksCubeUnfolded(GeometryNodesModifier):
+    def __init__(self, name="RubiksCubeUnfolded", **kwargs):
+        # define a mapping between geometry indices and face indices at are used in permutations
+        indices = [37, 36, 33, 40, 0, 34, 39, 38, 35, 43, 46, 47, 42, 0, 48, 41, 44, 45, 21, 20, 17, 24, 0, 18, 23, 22,
+                   19, 5, 4, 1, 8, 0, 2, 7, 6, 3, 15, 16, 13, 14, 0, 12, 11, 10, 9, 25, 26, 27, 28, 0, 30, 29, 32, 31,
+                   54]
+        self.index_to_face_index = {i: indices[i] for i in range(55)}
+
+        super().__init__(name, automatic_layout=True, group_output=True, group_input=False, **kwargs)
+
+    def loc(self, block_x=0, block_y=0, x=0, y=0, absolute=False):
+        block_width = 7
+        block_height = 5
+        if absolute:
+            return (200 * (block_x * block_width + x), 200 * (block_y * block_height + y))
+        else:
+            return (block_x * block_width + x, block_y * block_height + y)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+
+        links = tree.links
+        size = InputValue(tree, name="Size", value=3)
+        cube1 = CubeMesh(tree, size=size.std_out, vertices_x=2, vertices_y=2, vertices_z=2)
+        r2_factor = MathNode(tree, operation="MULTIPLY", inputs0=size.std_out, inputs1=2 / 3)
+
+        unfold_node = UnfoldMeshNode(tree, progression=1.3, root_index=2, **kwargs)
+
+        dual_mesh = DualMesh(tree)
+        grid = Grid(tree, size_x=size.std_out, size_y=size.std_out, vertices_x=4, vertices_y=4)
+        split_edges = SplitEdges(tree)
+
+        face_rotations = NamedAttribute(tree, data_type='FLOAT_VECTOR', name='FRot')
+        iop = InstanceOnPoints(tree, rotation=face_rotations.std_out)
+        realize_instances = RealizeInstances(tree)
+        normal = InputNormal(tree)
+        store_normal = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", domain="FACE", name="FaceNormal",
+                                            value=normal.std_out)
+        dual_mesh2 = DualMesh(tree)
+        index = Index(tree)
+        store_face_index = StoredNamedAttribute(tree, data_type="INT", domain="POINT", name="FaceIndex",
+                                                value=index.std_out)
+
+        create_geometry_line(tree, [grid, split_edges], out=iop.inputs["Instance"])
+        create_geometry_line(tree, [cube1, unfold_node, dual_mesh, iop])
+
+        # add faces
+        size = InputValue(tree, name="FaceSize", value=0.89, location=self.loc(-1, 2, 0, -1), hide=False)
+        bevel = InputValue(tree, name="Bevel", value=6.3, location=self.loc(-1, 1, -0.5, 1), hide=False)
+        bevel_function = make_function(tree, name="BevelFunction", location=self.loc(-1, 1, 0, 0),
+                                       functions={
+                                           "bevel": "size,bevel,/"
+                                       }, inputs=["size", "bevel"], outputs=["bevel"],
+                                       scalars=["size", "bevel"], hide=False)
+        links.new(size.std_out, bevel_function.inputs["size"])
+        links.new(bevel.std_out, bevel_function.inputs["bevel"])
+        quadri = Quadrilateral(tree, location=self.loc(-1, 0, 0, 0),
+                               width=size.std_out, height=size.std_out, hide=False)
+        fillet_curve = FilletCurve(tree, radius=bevel_function.outputs["bevel"], count=10,
+                                   location=self.loc(-1, 0, 1, 0), hide=False)
+        fill_cuve = FillCurve(tree, mode='NGONS', location=self.loc(-1, 0, 2, 0), hide=False)
+        extrude_face = ExtrudeMesh(tree, mode='FACES', offset_scale=1, offset=Vector([0, 0, 0.05]),
+                                   location=self.loc(-1, 0, 3, 0),
+                                   hide=False)
+        create_geometry_line(tree, [quadri, fillet_curve, fill_cuve, extrude_face])
+
+        # instance faces on dual mesh
+        face_normal = NamedAttribute(tree, data_type="FLOAT_VECTOR", name="FaceNormal")
+        align = AlignRotationToVector(tree, vector=face_normal.std_out)
+        face_selector = IndexSwitch(tree, index=index.std_out, name="FaceSelectorSwitch", data_type="INT", hide=False)
+        for i in range(55):
+            face_selector.add_item(socket=1)
+        iop2 = InstanceOnPoints(tree, name="FaceInstances", selection=face_selector.std_out,
+                                instance=extrude_face.geometry_out, rotation=align.std_out)
+        ri2 = RealizeInstances(tree)
+
+        # add face colors
+
+        # face coloring
+        block_y = -0.25
+        block_x = -0.25
+        attr_face_index = NamedAttribute(tree, location=self.loc(block_x, block_y, 0, -3), name="FaceIndex", hide=False)
+
+        red_selector = make_function(tree, name="RedSelector", location=self.loc(block_x, block_y, 1, -1.5),
+                                     functions={
+                                         "select": "face_index,44,>,face_index,54,<,and,switch,and"
+                                     }, inputs=["switch", "face_index"], outputs=["select"],
+                                     scalars=["switch", "face_index", "select"], hide=False)
+        red_selector_switch = InputBoolean(tree, name="RedSelectorSwitch", value=True,
+                                           location=self.loc(block_x, block_y, 1, -2.5), hide=False)
+
+        orange_selector = make_function(tree, name="OrangeSelector", location=self.loc(block_x, block_y, 2, -1.5),
+                                        functions={
+                                            "select": "face_index,35,>,face_index,45,<,and,switch,and"
+                                        }, inputs=["switch", "face_index"], outputs=["select"],
+                                        scalars=["switch", "face_index", "select"], hide=False)
+        orange_selector_switch = InputBoolean(tree, name="OrangeSelectorSwitch", value=True,
+                                              location=self.loc(block_x, block_y, 2, -2.5), hide=False)
+
+        green_selector = make_function(tree, name="GreenSelector", location=self.loc(block_x, block_y, 3, -1.5),
+                                       functions={
+                                           "select": "face_index,17,>,face_index,27,<,and,switch,and"
+                                       }, inputs=["switch", "face_index"], outputs=["select"],
+                                       scalars=["switch", "face_index", "select"], hide=False)
+        green_selector_switch = InputBoolean(tree, name="GreenSelectorSwitch", value=True,
+                                             location=self.loc(block_x, block_y, 3, -2.5), hide=False)
+
+        blue_selector = make_function(tree, name="BlueSelector", location=self.loc(block_x, block_y, 4, -1.5),
+                                      functions={
+                                          "select": "face_index,-1,>,face_index,9,<,and,switch,and"
+                                      }, inputs=["switch", "face_index"], outputs=["select"],
+                                      scalars=["switch", "face_index", "select"], hide=False)
+        blue_selector_switch = InputBoolean(tree, name="BlueSelectorSwitch", value=True,
+                                            location=self.loc(block_x, block_y, 4, -2.5), hide=False)
+
+        yellow_selector = make_function(tree, name="YellowSelector", location=self.loc(block_x, block_y, 5, -1.5),
+                                        functions={
+                                            "select": "face_index,8,>,face_index,18,<,and,switch,and"
+                                        }, inputs=["switch", "face_index"], outputs=["select"],
+                                        scalars=["switch", "face_index", "select"], hide=False)
+        yellow_selector_switch = InputBoolean(tree, name="YellowSelectorSwitch", value=True,
+                                              location=self.loc(block_x, block_y, 5, -2.5), hide=False)
+
+        white_selector = make_function(tree, name="WhiteSelector", location=self.loc(block_x, block_y, 6, -1.5),
+                                       functions={
+                                           "select": "face_index,26,>,face_index,36,<,and,switch,and"
+                                       }, inputs=["switch", "face_index"], outputs=["select"],
+                                       scalars=["switch", "face_index", "select"], hide=False)
+        white_selector_switch = InputBoolean(tree, name="WhiteSelectorSwitch", value=True,
+                                             location=self.loc(block_x, block_y, 6, -2.5), hide=False)
+
+        edge_selector = make_function(tree, name="EdgeSelector", location=self.loc(block_x, block_y, 7, -1.5),
+                                      functions={
+                                          "select": "idx,1,=,idx,7,=,or,idx,10,=,or,idx,12,=,or,idx,14,=,or,idx,16,=,or,"
+                                                    "idx,19,=,or,idx,25,=,or,idx,28,=,or,idx,30,=,or,idx,32,=,or,idx,34,=,or,switch,and",
+                                      }, inputs=["switch", "idx"], outputs=["select"],
+                                      scalars=["switch", "idx", "select"], hide=False)
+
+        edge_selector_switch = InputBoolean(tree, name="EdgeSelectorSwitch", value=False,
+                                            location=self.loc(block_x, block_y, 7, -2.5), hide=False)
+
+        corner_selector = make_function(tree, name="CornerSelector", location=self.loc(block_x, block_y, 8, -1.5),
+                                        functions={
+                                            "select": "idx,20,=,idx,26,=,or,idx,18,=,or,"
+                                                      "idx,24,=,or,idx,6,=,or,idx,0,=,or,idx,8,=,or,"
+                                                      "idx,2,=,or,switch,and"
+                                        }, inputs=["switch", "idx"], outputs=["select"],
+                                        scalars=["switch", "idx", "select"], hide=False)
+
+        corner_selector_switch = InputBoolean(tree, name="CornerSelectorSwitch", value=False,
+                                              location=self.loc(block_x, block_y, 8, -2.5), hide=False)
+
+        links.new(attr_face_index.std_out, red_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, blue_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, yellow_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, orange_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, green_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, white_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, edge_selector.inputs["idx"])
+        links.new(attr_face_index.std_out, corner_selector.inputs["idx"])
+        links.new(red_selector_switch.std_out, red_selector.inputs["switch"])
+        links.new(white_selector_switch.std_out, white_selector.inputs["switch"])
+        links.new(green_selector_switch.std_out, green_selector.inputs["switch"])
+        links.new(blue_selector_switch.std_out, blue_selector.inputs["switch"])
+        links.new(orange_selector_switch.std_out, orange_selector.inputs["switch"])
+        links.new(yellow_selector_switch.std_out, yellow_selector.inputs["switch"])
+        links.new(edge_selector_switch.std_out, edge_selector.inputs["switch"])
+        links.new(corner_selector_switch.std_out, corner_selector.inputs["switch"])
+
+        material_black = SetMaterial(tree, location=self.loc(block_x, block_y, 0, 0), material="gray_1")
+
+        material_red = SetMaterial(tree, location=self.loc(block_x, block_y, 1, 0),
+                                   selection=red_selector.outputs["select"], material="red",
+                                   hide=False)
+        material_blue = SetMaterial(tree, location=self.loc(block_x, block_y, 2, 0),
+                                    selection=blue_selector.outputs["select"], material="blue",
+                                    hide=False)
+        material_yellow = SetMaterial(tree, location=self.loc(block_x, block_y, 3, 0),
+                                      selection=yellow_selector.outputs["select"], material="yellow",
+                                      hide=False)
+        material_orange = SetMaterial(tree, location=self.loc(block_x, block_y, 4, 0),
+                                      selection=orange_selector.outputs["select"], material="orange",
+                                      hide=False)
+        material_green = SetMaterial(tree, location=self.loc(block_x, block_y, 5, 0),
+                                     selection=green_selector.outputs["select"], material="green",
+                                     hide=False)
+        material_white = SetMaterial(tree, location=self.loc(block_x, block_y, 6, 0),
+                                     selection=white_selector.outputs["select"], material="text",
+                                     hide=False)
+        material_edge = SetMaterial(tree, location=self.loc(block_x, block_y, 7, 0),
+                                    selection=edge_selector.outputs["select"], material="joker",
+                                    hide=False)
+
+        material_corner = SetMaterial(tree, location=self.loc(block_x, block_y, 8, 0),
+                                      selection=corner_selector.outputs["select"],
+                                      material="custom1", hide=False)
+        mat_nodes = [material_corner, material_edge, material_green, material_orange, material_red, material_white,
+                     material_black, material_blue, material_yellow, material_blue]
+        [self.materials.append(mat_node.material) for mat_node in mat_nodes]
+
+        last_color = material_corner
+        join_before_transformation = JoinGeometry(tree, name="FaceGeometry")
+        create_geometry_line(tree, [last_color, join_before_transformation])
+
+        # join geometry
+        join = JoinGeometry(tree, label="JoinGeometry")
+
+        # cubie branch
+        # create a smooth cubies
+        show_cubies = InputBoolean(tree, value=True, label="ShowCubiesFlag")
+        cube2 = CubeMesh(tree, size=r2_factor.std_out, vertices_x=3, vertices_y=3, vertices_z=3)
+        store_cubie_index = StoredNamedAttribute(tree, name="CubieIndex", data_type="INT", domain="POINT")
+        # position cubies to the instances
+        cube_size = InputValue(tree, value=1, label="CubeSize")
+        cubie = BeveledCubeNode(tree, size=cube_size.std_out, bevel=6.03)
+        iop_cubies = InstanceOnPoints(tree, instance=cubie.geometry_out, selection=show_cubies.std_out)
+        black = SetMaterial(tree, material="background")
+        create_geometry_line(tree, [cube2, store_cubie_index, iop_cubies, black, join])
+
+        create_geometry_line(tree, [iop, realize_instances, store_normal, dual_mesh2, store_face_index, iop2, ri2,
+                                    material_black, material_red, material_blue, material_yellow, material_orange,
+                                    material_green,
+                                    material_white, material_edge, material_corner])
+
+        # prepare selection for each face make index offset by 1
+
+        attr_face_index2 = NamedAttribute(tree, data_type="INT", name="FaceIndex")
+        add_one = MathNode(tree, operation="ADD", inputs0=attr_face_index2.std_out, inputs1=1)
+
+        # convert face geometry to instances
+        for i in range(1, 55):
+            compare = CompareNode(tree, operation="EQUAL", inputs0=add_one.std_out, inputs1=i)
+            select_face = SeparateGeometry(tree, selection=compare.std_out, label="Face" + str(i))
+            geo_to_instance = GeometryToInstance(tree, label="InstanceOfFace" + str(i))
+            create_geometry_line(tree, [join_before_transformation, select_face, geo_to_instance, join])
+
+        # add fonts
+
+        # create the selection function, depending on the index of the face
+        idx = Index(tree, location=self.loc(block_x, block_y, 1, 1), hide=True)
+        edges = InputBoolean(tree, name="EdgeSwitch", location=self.loc(block_x, block_y, 1, 1.5), value=False,
+                             hide=True)
+        corners = InputBoolean(tree, name="CornerSwitch", location=self.loc(block_x, block_y, 1, 2), value=False,
+                               hide=True)
+        index_function = make_function(tree, name="index_function",
+                                       functions={
+                                           "zero": "idx,1,=,idx,7,=,or,idx,10,=,or,idx,12,=,or,idx,14,=,or,idx,16,=,or,"
+                                                   "idx,19,=,or,idx,25,=,or,idx,28,=,or,idx,30,=,or,idx,32,=,or,idx,34,=,or,edges,and,"
+                                                   "idx,20,=,idx,26,=,or,idx,18,=,or,idx,24,=,or,idx,6,=,or,idx,0,=,or,idx,8,=,or,idx,2,=,or,corners,and,or",
+                                           "one": "idx,3,=,idx,5,=,or,idx,21,=,or,idx,23,=,or,idx,37,=,or,idx,39,=,or,idx,41,=,or,idx,43,=,or,"
+                                                  "idx,46,=,or,idx,48,=,or,idx,50,=,or,idx,52,=,or,edges,and,"
+                                                  "idx,42,=,idx,33,=,or,idx,51,=,or,idx,15,=,or,idx,38,=,or,idx,11,=,or,idx,29,=,or,idx,47,=,or,corners,and,or",
+                                           "two": "idx,36,=,idx,27,=,or,idx,9,=,or,idx,45,=,or,idx,53,=,or,idx,17,=,or,idx,44,=,or,idx,35,=,or,corners,and"
+                                       }, inputs=["idx", "edges", "corners"], outputs=["zero", "one", "two"],
+                                       scalars=["idx", "zero", "one", "two", "edges", "corners"],
+                                       vectors=[], location=self.loc(block_x, block_y, 2, 1), hide=True)
+        links.new(idx.std_out, index_function.inputs["idx"])
+        links.new(edges.std_out, index_function.inputs["edges"])
+        links.new(corners.std_out, index_function.inputs["corners"])
+
+        # create three geometry lines for the numbers 0, 1, 2
+        dual_mesh3 = DualMesh(tree)
+        for i in range(3):
+            text = StringToCurves(tree, string=str(i), hide=True)
+            iop = InstanceOnPoints(tree, hide=True,
+                                   instance=text.geometry_out, selection=index_function.outputs[i])
+            set_label = SetPosition(tree, offset=Vector([0, 0, 0.05]))
+            fill_curve = FillCurve(tree, hide=True)
+            extrude = ExtrudeMesh(tree, mode='FACES', offset=None, hide=True, offset_scale=0.03)
+            create_geometry_line(tree, [store_normal, dual_mesh3, iop, set_label, fill_curve, extrude, join])
+
+        # create face indices
+
+        # prepare number color and outline color depending on the parity of the number
+
+        number_colors = get_from_kwargs(kwargs, "number_colors", ["joker", "custom1"])
+        number_outline_colors = get_from_kwargs(kwargs, "number_outline_colors", ["joker", "custom1"])
+        material_number_even = get_material(number_colors[0])
+        material_number_odd = get_material(number_colors[1])
+        material_outline_even = get_material(number_outline_colors[0])
+        material_outline_odd = get_material(number_outline_colors[1])
+        mats = [material_number_odd, material_number_even, material_outline_even, material_outline_odd]
+        labels = ["MaterialNumberOdd", "MaterialNumberEven", "MaterialOutlineOdd", "MaterialOutlineEven"]
+
+        [mat_number_odd, mat_number_even, mat_outline_odd, mat_outline_even] = \
+            [InputMaterial(tree, material=m, name=l) for m, l in zip(mats, labels)]
+
+        dual_mesh4 = DualMesh(tree)
+        index = Index(tree)
+        store_face_index2 = StoredNamedAttribute(tree, name="FaceIndex", data_type="INT", domain="POINT",
+                                                 value=index.std_out)
+        face_switch = InputBoolean(tree, name="FaceSwitch", value=True)
+        for_each_index = ForEachZone(tree, name="ForEachFace", hide=True)
+        switch_index = IndexSwitch(tree, name="FaceLabelSwitch", data_type="INT", index=for_each_index.outputs["Index"],
+                                   hide=False)
+
+        indices = list(self.index_to_face_index.values())
+        selected_face_indices = get_from_kwargs(kwargs, "selected_face_indices", list(range(1, 49)))
+        for i in range(len(indices)):
+            if indices[i] not in selected_face_indices:
+                indices[i] = 0
+
+        for i in range(0, 55):
+            switch_index.add_item(socket=indices[i])
+
+        value_to_string = ValueToString(tree, value=switch_index.std_out, hide=True)
+        string_to_curve = StringToCurves(tree, font="Arial Black", string=value_to_string.outputs["String"], size=0.7,
+                                         hide=True)
+        fill_curve = FillCurve(tree, mode="NGONS", hide=True)
+        extrude_face = ExtrudeMesh(tree, mode="FACES", offset=None, hide=True, offset_scale=0.07)
+        iop_face = InstanceOnPoints(tree, hide=True, instance=string_to_curve.geometry_out,
+                                    selection=face_switch.std_out
+                                    )
+
+        parity_selector = make_function(tree, functions={
+            "even": "idx,2,%,0,="
+        }, inputs=["idx"], outputs=["even"], scalars=["even", "idx"], name="ParitySelector", hide=True)
+        links.new(switch_index.std_out, parity_selector.inputs["idx"])
+
+        # outline of the face label
+        join_string = JoinGeometry(tree, name="FaceLabelJoin", hide=True)
+
+        curve_wire_frame = CurveWireFrame(tree, radius=0.02, resolution=8)
+        set_pos = SetPosition(tree, offset=[0, 0, 0.05], hide=True)
+        mat_outline_switch = Switch(tree, input_type="MATERIAL", name="FontOutlineSwitch", hide=True,
+                                    switch=parity_selector.outputs["even"], true=mat_outline_even.std_out,
+                                    false=mat_outline_odd.std_out)
+        mat_outline = SetMaterial(tree, name="LabelOutlineMaterial", material=mat_outline_switch.std_out)
+        create_geometry_line(tree, [string_to_curve, curve_wire_frame, set_pos, mat_outline, join_string])
+
+        # inside of the face label
+        material_switch = Switch(tree, name="FontMaterialSwitch", input_type="MATERIAL", hide=True,
+                                 switch=parity_selector.outputs["even"],
+                                 false=mat_number_even.std_out, true=mat_number_odd.std_out)
+        set_material_font = SetMaterial(tree, material=material_switch.std_out, name="LabelMaterial")
+
+        store_face_index_string = StoredNamedAttribute(tree, name="FaceIndexString", data_type="INT", domain="POINT",
+                                                       value=switch_index.std_out, hide=True)
+
+        for_each_index.create_geometry_line([iop_face, store_face_index_string])
+        create_geometry_line(tree, [string_to_curve, fill_curve, extrude_face, set_material_font, join_string],
+                             out=iop_face.inputs["Instance"])
+        realize_face_indices = RealizeInstances(tree, hide=True)
+        attribute_face_index = NamedAttribute(tree, data_type="INT", name="FaceIndexString", hide=True)
+
+        even_face_selector = make_function(tree, name="EvenFaceSelector", hide=True,
+                                           functions={
+                                               "selection": "idx,2,%,0,="
+                                           }, inputs=["idx"], outputs=["selection"],
+                                           scalars=["idx", "selection"], vectors=[])
+        tree.links.new(attribute_face_index.std_out, even_face_selector.inputs["idx"])
+        sep_geo = SeparateGeometry(tree, selection=even_face_selector.outputs["selection"], hide=True)
+        select_non_zero = SeparateGeometry(tree, selection=attribute_face_index.std_out, hide=True)
+
+        self.materials += mats
+
+        create_geometry_line(tree, [join_before_transformation], ins=sep_geo.outputs["Inverted"])
+        create_geometry_line(tree, [store_normal, dual_mesh4, store_face_index2, for_each_index,
+                                    realize_face_indices, sep_geo, select_non_zero, join_before_transformation])
+
+        # create global rotation
+        gl_rotation = InputVector(tree, name="FinalRotation", value=[0, 0, 0], hide=True)
+        gl_pivot = InputVector(tree, name="FinalPivot", value=[0, 0, 0], hide=True)
+        global_transform = RotateInstances(tree, name="FinalRotation", local_space=False, rotation=gl_rotation.std_out,
+                                           pivot_point=gl_pivot.std_out, hide=True)
+
+        # connect to output
+        create_geometry_line(tree, [join, global_transform], out=out.inputs["Geometry"])
+
+class RubiksCubeTower(GeometryNodesModifier):
+    def __init__(self, name="RubiksCubeTower", **kwargs):
+        super().__init__(name, automatic_layout=True, group_output=True, group_input=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+        # show points
+
+        count = InputInteger(tree, label="NumberOfCubes", integer=2500)
+        visible_count = InputInteger(tree, label="Visible", integer=0)
+        index = Index(tree)
+
+        greater_than = CompareNode(tree, operation="GREATER_THAN", data_type="INT",
+                                   inputs0=index.std_out, inputs1=visible_count.std_out)
+
+        del_geo = DeleteGeometry(tree, selection=greater_than.std_out)
+
+        size = InputValue(tree, label="Size", value=1.54)
+
+        points = Points(tree, count=count.std_out)
+        foreachzone = ForEachZone(tree, geometry=points.geometry_out)
+
+        position_function = make_function(tree, name="PositionFunction",
+                                          functions={
+                                              "offset": ["0", "0", "size,2,*,value,*"]},
+                                          inputs=["size", "value"], outputs=["offset"],
+                                          scalars=["size", "value"], vectors=["offset"])
+        links.new(size.std_out, position_function.inputs["size"])
+        links.new(foreachzone.index, position_function.inputs["value"])
+
+        simpleCube = SimpleRubiksCubeNode(tree, seed=foreachzone.index,
+                                          hide=True)
+        set_pos = SetPosition(tree,
+                              offset=position_function.outputs["offset"])
+        iop = InstanceOnPoints(tree, instance=simpleCube.geometry_out)
+        join = JoinGeometry(tree)
+        foreachzone.create_geometry_line([set_pos, iop, join])
+        join2 = JoinGeometry(tree)
+        create_geometry_line(tree, [points, del_geo, foreachzone, join2], out=out.inputs["Geometry"])
+
+class RubiksSphereModifier(GeometryNodesModifier):
+    def __init__(self, name="RubiksSphereModifier", **kwargs):
+        super().__init__(name, automatic_layout=False, **kwargs)
+
+    def loc(self, block_x=0, block_y=0, x=0, y=0, absolute=False):
+        block_width = 7
+        block_height = 5
+        if absolute:
+            return (200 * (block_x * block_width + x), 200 * (block_y * block_height + y))
+        else:
+            return (block_x * block_width + x, block_y * block_height + y)
+
+    def create_node(self, tree, **kwargs):
+        '''
+        we need to create the following structure
+
+        3x3x3 grid (-1,2)
+
+                                selected faces (0,1)          selection for animation(1,1)
+
+        beveled face (-1,0)     face coloring  (0,0)          transformation (1,0)            output (2,0)
+
+        '''
+        # output block
+        out = self.group_outputs
+        out.location = self.loc(2, 0, 0, 0, absolute=True)
+        links = tree.links
+
+        # 3x3x3 block
+        separation = InputValue(tree, name="Separation", value=1, location=self.loc(-1, 2, 0, 0), hide=False)
+        size = InputValue(tree, name="Cube Size", value=0.9, location=self.loc(-1, 2, 0, -1), hide=False)
+        line_function = make_function(tree, name="LineFunction",
+                                      functions={
+                                          "start": ["0", "0", "-1,separation,*"],
+                                          "offset": ["0", "0", "1,separation,*"]
+                                      }, inputs=["separation"], outputs=["start", "offset"],
+                                      scalars=["separation"], vectors=["start", "offset"],
+                                      location=self.loc(-1, 2, 1, 0), hide=False)
+        links.new(separation.std_out, line_function.inputs["separation"])
+        mesh_line = MeshLine(tree, size=size.std_out, mode='OFFSET', count_mode="TOTAL", count=3,
+                             start_location=line_function.outputs["start"],
+                             offset=line_function.outputs["offset"], location=self.loc(-1, 2, 2, 0), hide=False
+                             )
+        grid = Grid(tree, size_x=2, size_y=2, vertices_y=3, vertices_x=3, location=self.loc(-1, 2, 2, -1.5), hide=False)
+        iop = InstanceOnPoints(tree, instance=grid.geometry_out, scale=separation.std_out, hide=False,
+                               location=self.loc(-1, 2, 3, 0))
+        realize_instance = RealizeInstances(tree, location=self.loc(-1, 2, 4, 0), hide=False)
+        index = Index(tree, location=self.loc(-1, 2, 4, -1.5), hide=False)
+        # increase index by one, since index 0 cannot be selected (bug, probably)
+        inc = make_function(tree, name="Function",
+                            functions={
+                                "idx": "idx,1,+"
+                            }, inputs=["idx"], outputs=["idx"],
+                            scalars=["idx"])
+        links.new(index.std_out, inc.inputs["idx"])
+        pos = Position(tree, location=self.loc(-1, 2, 5, -2), hide=False)
+        cubie_index = StoredNamedAttribute(tree, domain='POINT', data_type='INT',
+                                           name="CubieIndex", value=inc.outputs["idx"], hide=False,
+                                           location=self.loc(-1, 2, 5, 0))
+        cubie_pos = StoredNamedAttribute(tree, domain='POINT', data_type='FLOAT_VECTOR',
+                                         name="CubiePosition", value=pos.std_out, hide=False,
+                                         location=self.loc(-1, 2, 6, 0))
+        create_geometry_line(tree, [mesh_line, iop, realize_instance, cubie_index, cubie_pos])
+
+        # beveled cube
+        bevel = InputValue(tree, name="Bevel", value=12.6, location=self.loc(-1, 1, -0.5, 1), hide=False)
+        bevel_function = make_function(tree, name="BevelFunction", location=self.loc(-1, 1, 0, 0),
+                                       functions={
+                                           "bevel": "size,bevel,/"
+                                       }, inputs=["size", "bevel"], outputs=["bevel"],
+                                       scalars=["size", "bevel"], hide=False)
+        links.new(size.std_out, bevel_function.inputs["size"])
+        links.new(bevel.std_out, bevel_function.inputs["bevel"])
+
+        # beveled face(-1, 0)
+
+        quadri = Quadrilateral(tree, location=self.loc(-1, 0, 0, 0),
+                               width=size.std_out, height=size.std_out, hide=False)
+        fillet_curve = FilletCurve(tree, radius=bevel_function.outputs["bevel"], count=10,
+                                   location=self.loc(-1, 0, 1, 0), hide=False)
+        fill_curve = FillCurve(tree, mode='NGONS', location=self.loc(-1, 0, 2, 0), hide=False)
+
+        # make sphere
+        block_x = -1
+        block_y = -0.5
+        pos_sphere = Position(tree, location=self.loc(block_x, block_y, 0, -2), hide=False)
+
+        radius = InputValue(tree, location=self.loc(block_x, block_y, -1, -1.5), hide=False, name="Radius", value=1)
+        mul = MathNode(tree, operation="MULTIPLY", location=self.loc(block_x, block_y, -1, 0),
+                       inputs0=radius.std_out, inputs1=0.95, hide=True)
+        projection = make_function(tree, name="Projection",
+                                   functions={
+                                       "pos": "pos,radius,pos,length,/,scale"
+                                   }, inputs=["pos", "radius"], outputs=["pos"],
+                                   scalars=["radius"], vectors=["pos"],
+                                   location=self.loc(block_x, block_y, 0, 0),
+                                   hide=False)
+        links.new(pos_sphere.std_out, projection.inputs["pos"])
+        links.new(mul.std_out, projection.inputs["radius"])
+        make_round = SetPosition(tree, location=self.loc(block_x, block_y, 1, 0), position=projection.outputs["pos"],
+                                 hide=False)
+        shade_smooth_face = SetShadeSmooth(tree, location=self.loc(block_x, block_y, 2, 0), hide=False)
+        extrude_face = ExtrudeMesh(tree, mode='FACES', offset_scale=0.06, offset=None,
+                                   location=self.loc(block_x, block_y, 3, 0), hide=False)
+        create_geometry_line(tree, [quadri, fillet_curve, fill_curve])
+
+        # selected faces(0, 0)
+        block_y = 2.5
+        cube = CubeMesh(tree, size=[0.97] * 3, location=self.loc(0, block_y, -1, 0), hide=False)
+        iop3 = InstanceOnPoints(tree, instance=cube.geometry_out, hide=False, location=self.loc(0, block_y, 0, 0))
+        realize_cube = RealizeInstances(tree, location=self.loc(0, block_y, 1, 0), hide=False)
+
+        # extract all vertices larger than 0.9 to make them round
+        pos_sphere_cubie = Position(tree, location=self.loc(0, block_y + 0.5, 0, -1), hide=False)
+
+        projection_cubie = make_function(tree, name="Projection",
+                                         functions={
+                                             "pos": "pos,radius,pos,length,/,scale",
+                                             "sel": "pos,length,0.9,>"
+                                         }, inputs=["pos", "radius"], outputs=["pos", "sel"],
+                                         scalars=["radius", "sel"], vectors=["pos"],
+                                         location=self.loc(0, block_y, 1, 1),
+                                         hide=False)
+        links.new(pos_sphere_cubie.std_out, projection_cubie.inputs["pos"])
+        links.new(radius.std_out, projection_cubie.inputs["radius"])
+        make_round_cubie = SetPosition(tree, location=self.loc(0, block_y + 0.5, 2, 1),
+                                       selection=projection_cubie.outputs["sel"],
+                                       position=projection_cubie.outputs["pos"],
+                                       hide=False)
+        cube_material = SetMaterial(tree, location=self.loc(0, block_y, 2, 0), material="background")
+        create_geometry_line(tree, [cubie_pos, iop3, realize_cube, make_round_cubie, cube_material])
+
+        face_area = FaceArea(tree, location=self.loc(0, block_y, 0, -3.5), hide=False)
+        position2 = Position(tree, location=self.loc(0, block_y, 0, -4.5), hide=False)
+        abs = VectorMath(tree, operation="ABSOLUTE", inputs0=position2.std_out, location=self.loc(0, block_y, 1, -4),
+                         hide=False)
+
+        # the basic algorithm behind the face selection is the following
+        # for faces where the x coordinate is absolutely the largest coordinate, we only select the face
+        # when the x>0.5*cubesize+spacing or x<-(0.5*cubesize+spacing)
+        # additionally only faces with an area larger than 0.5*cubesize**2 are selected
+
+        outside_faces = make_function(tree, name="OutSideFaces",
+                                      functions={
+                                          "select": "pos_x,pos_y,>,pos_x,pos_z,>,and,pos_x,0.5,size,*,spc,+,>,and,"
+                                                    "pos_y,pos_x,>,pos_y,pos_z,>,and,pos_y,0.5,size,*,spc,+,>,and,or,"
+                                                    "pos_z,pos_x,>,pos_z,pos_y,>,and,pos_z,0.5,size,*,spc,+,>,and,or,"
+                                                    "area,0.5,size,2,**,*,>,and"
+                                      }, inputs=["pos", "area", "size", "spc"], outputs=["select"],
+                                      scalars=["area", "select", "size", "spc"], vectors=["pos"], hide=False,
+                                      location=self.loc(0, block_y, 1, -1.75))
+
+        links.new(abs.std_out, outside_faces.inputs["pos"])
+        links.new(face_area.std_out, outside_faces.inputs["area"])
+        links.new(size.std_out, outside_faces.inputs["size"])
+        links.new(separation.std_out, outside_faces.inputs["spc"])
+
+        # set cubie faces
+
+        sep_geo = SeparateGeometry(tree, location=self.loc(0, 1, 0, 0), domain='FACE', hide=False,
+                                   selection=outside_faces.outputs["select"])
+        attr_cubie_index = NamedAttribute(tree, location=self.loc(0, 1, -1, -1), name="CubieIndex",
+                                          data_type='INT', hide=False)
+        normal = InputNormal(tree, location=self.loc(0, 1, -1, -2), hide=False)
+        store_cubie_index_at_face = StoredNamedAttribute(tree, location=self.loc(0, 1, 1, 0), data_type='INT',
+                                                         domain='FACE', name="CubieIndexAtFace",
+                                                         value=attr_cubie_index.std_out,
+                                                         hide=False)
+        store_face_normal = StoredNamedAttribute(tree, location=self.loc(0, 1, 2, 0), data_type='FLOAT_VECTOR',
+                                                 domain='FACE', name="FaceNormal", value=normal.std_out, hide=False)
+        dual_mesh = DualMesh(tree, location=self.loc(0, 1, 3, 0), hide=False)
+        position3 = Position(tree, location=self.loc(0, 1, -1, -3), hide=False)
+        abs_2 = VectorMath(tree, operation="ABSOLUTE", inputs0=position3.std_out,
+                           location=self.loc(0, 1, 0, -3))
+        index3 = Index(tree, location=self.loc(0, 1, -1, -5), hide=False)
+
+        # the aim of this function is to re-arrange the indices of the faces,
+        # such that a side of the Rubik's cube
+        # has nine faces with con secutive index values
+        index_function = make_function(tree, name="IndexFunction",
+                                       functions={
+                                           "weight": "apos_x,apos_y,>,apos_x,apos_z,>,and,10,*,pos_x,sgn,*,"
+                                                     "apos_y,apos_x,>,apos_y,apos_z,>,and,5,*,pos_y,sgn,*,+,"
+                                                     "apos_z,apos_x,>,apos_z,apos_y,>,and,1,*,pos_z,sgn,*,+,"
+                                                     "index,100,/,+"
+                                       }, inputs=["index", "pos", "apos"], outputs=["weight"],
+                                       scalars=["index", "weight"], vectors=["pos", "apos"],
+                                       location=self.loc(0, 1, 3, -1),
+                                       hide=False)
+
+        links.new(index3.std_out, index_function.inputs["index"])
+        links.new(abs_2.std_out, index_function.inputs["apos"])
+        links.new(position3.std_out, index_function.inputs["pos"])
+
+        sort = SortElements(tree, location=self.loc(0, 1, 4, 0), hide=False, domain='POINT',
+                            sort_weight=index_function.outputs["weight"])
+
+        attr_face_normal = NamedAttribute(tree, location=self.loc(0, 1, -1, -4),
+                                          name="FaceNormal", data_type='FLOAT_VECTOR', hide=False)
+
+        store_face_index = StoredNamedAttribute(tree, location=self.loc(0, 1, 5, 0), hide=False,
+                                                domain='POINT', data_type='INT', name="FaceIndex", value=index3.std_out)
+        align_rotation = AxesToRotation(tree, location=self.loc(0, 1, 5, -2), hide=False,
+                                        primary_axis='Z', secondary_axis='Y',
+                                        primary_direction=attr_face_normal.std_out,
+                                        secondary_direction=Vector([0, 0, 1]))
+        # align_rotation=AlignRotationToVector(tree,location=self.loc(0,1,5,-2),hide=False,
+        #                                      vector=attr_face_normal.std_out)
+        # pipe in beveled cubie face
+        iop4 = InstanceOnPoints(tree, instance=fill_curve.geometry_out, hide=False,
+                                rotation=align_rotation.std_out, location=self.loc(0, 1, 6, 0))
+
+        realize_faces = RealizeInstances(tree, location=self.loc(0, 1, 7, 0), hide=False)
+        create_geometry_line(tree, [realize_cube, sep_geo, store_cubie_index_at_face,
+                                    store_face_normal, dual_mesh, sort, store_face_index, iop4, realize_faces])
+
+        # face coloring
+        block_y = -0.25
+        block_x = -0.25
+        attr_face_index = NamedAttribute(tree, location=self.loc(block_x, block_y, 0, -3), name="FaceIndex", hide=False)
+
+        red_selector = make_function(tree, name="RedSelector", location=self.loc(block_x, block_y, 1, -1.5),
+                                     functions={
+                                         "select": "face_index,44,>,face_index,54,<,and,switch,and"
+                                     }, inputs=["switch", "face_index"], outputs=["select"],
+                                     scalars=["switch", "face_index", "select"], hide=False)
+        red_selector_switch = InputBoolean(tree, name="RedSelectorSwitch", value=True,
+                                           location=self.loc(block_x, block_y, 1, -2.5), hide=False)
+
+        blue_selector = make_function(tree, name="BlueSelector", location=self.loc(block_x, block_y, 2, -1.5),
+                                      functions={
+                                          "select": "face_index,35,>,face_index,45,<,and,switch,and"
+                                      }, inputs=["switch", "face_index"], outputs=["select"],
+                                      scalars=["switch", "face_index", "select"], hide=False)
+        blue_selector_switch = InputBoolean(tree, name="BlueSelectorSwitch", value=True,
+                                            location=self.loc(block_x, block_y, 2, -2.5), hide=False)
+
+        yellow_selector = make_function(tree, name="YellowSelector", location=self.loc(block_x, block_y, 3, -1.5),
+                                        functions={
+                                            "select": "face_index,17,>,face_index,27,<,and,switch,and"
+                                        }, inputs=["switch", "face_index"], outputs=["select"],
+                                        scalars=["switch", "face_index", "select"], hide=False)
+        yellow_selector_switch = InputBoolean(tree, name="YellowSelectorSwitch", value=True,
+                                              location=self.loc(block_x, block_y, 3, -2.5), hide=False)
+
+        orange_selector = make_function(tree, name="OrangeSelector", location=self.loc(block_x, block_y, 4, -1.5),
+                                        functions={
+                                            "select": "face_index,-1,>,face_index,9,<,and,switch,and"
+                                        }, inputs=["switch", "face_index"], outputs=["select"],
+                                        scalars=["switch", "face_index", "select"], hide=False)
+        orange_selector_switch = InputBoolean(tree, name="OrangeSelectorSwitch", value=True,
+                                              location=self.loc(block_x, block_y, 4, -2.5), hide=False)
+
+        green_selector = make_function(tree, name="GreenSelector", location=self.loc(block_x, block_y, 5, -1.5),
+                                       functions={
+                                           "select": "face_index,8,>,face_index,18,<,and,switch,and"
+                                       }, inputs=["switch", "face_index"], outputs=["select"],
+                                       scalars=["switch", "face_index", "select"], hide=False)
+        green_selector_switch = InputBoolean(tree, name="GreenSelectorSwitch", value=True,
+                                             location=self.loc(block_x, block_y, 5, -2.5), hide=False)
+
+        white_selector = make_function(tree, name="WhiteSelector", location=self.loc(block_x, block_y, 6, -1.5),
+                                       functions={
+                                           "select": "face_index,26,>,face_index,36,<,and,switch,and"
+                                       }, inputs=["switch", "face_index"], outputs=["select"],
+                                       scalars=["switch", "face_index", "select"], hide=False)
+        white_selector_switch = InputBoolean(tree, name="WhiteSelectorSwitch", value=True,
+                                             location=self.loc(block_x, block_y, 6, -2.5), hide=False)
+
+        links.new(attr_face_index.std_out, red_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, blue_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, yellow_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, orange_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, green_selector.inputs["face_index"])
+        links.new(attr_face_index.std_out, white_selector.inputs["face_index"])
+        links.new(red_selector_switch.std_out, red_selector.inputs["switch"])
+        links.new(white_selector_switch.std_out, white_selector.inputs["switch"])
+        links.new(green_selector_switch.std_out, green_selector.inputs["switch"])
+        links.new(blue_selector_switch.std_out, blue_selector.inputs["switch"])
+        links.new(orange_selector_switch.std_out, orange_selector.inputs["switch"])
+        links.new(yellow_selector_switch.std_out, yellow_selector.inputs["switch"])
+
+        emissions = get_from_kwargs(kwargs, "emissions", {})
+
+        material_black = SetMaterial(tree, location=self.loc(block_x, block_y, 0, 0), material="gray_1")
+
+        material_red = SetMaterial(tree, location=self.loc(block_x, block_y, 1, 0),
+                                   selection=red_selector.outputs["select"], material="red",
+                                   hide=False)
+
+        emission_blue = emissions.get("blue", 0)
+        blue = get_material("blue", emission=emission_blue, **kwargs)
+        self.materials.append(blue)
+        material_blue = SetMaterial(tree, location=self.loc(block_x, block_y, 2, 0),
+                                    selection=blue_selector.outputs["select"], material=blue,
+                                    hide=False, emission=emission_blue)
+        material_yellow = SetMaterial(tree, location=self.loc(block_x, block_y, 3, 0),
+                                      selection=yellow_selector.outputs["select"], material="yellow",
+                                      hide=False)
+        emission_orange = emissions.get("orange", 0)
+        orange = get_material("orange", emission=emission_orange, **kwargs)
+        self.materials.append(orange)
+        material_orange = SetMaterial(tree, location=self.loc(block_x, block_y, 4, 0),
+                                      selection=orange_selector.outputs["select"], material=orange,
+                                      hide=False, emission=emission_orange)
+        emission_green = emissions.get("green", 0)
+        green = get_material("green", emission=emission_green, **kwargs)
+        self.materials.append(green)
+        material_green = SetMaterial(tree, location=self.loc(block_x, block_y, 5, 0),
+                                     selection=green_selector.outputs["select"], material=green,
+                                     hide=False, emission=emissions.get("green", 0))
+        material_white = SetMaterial(tree, location=self.loc(block_x, block_y, 6, 0),
+                                     selection=white_selector.outputs["select"], material="text",
+                                     hide=False)
+
+        last_material = material_white
+        create_geometry_line(tree, [realize_faces, make_round, shade_smooth_face, extrude_face,
+                                    material_black, material_red, material_blue, material_yellow, material_orange,
+                                    material_green, material_white])
+
+        # selection block
+        block_y = 2
+        block_x = 1.1
+        join = JoinGeometry(tree, location=self.loc(block_x, block_y, 0, 0), hide=False)
+        create_geometry_line(tree, [last_material, join])
+        create_geometry_line(tree, [cube_material, join])
+        attr_cubie_index2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 0, -1), name="CubieIndex",
+                                           hide=False, data_type="INT")
+        attr_face_index2 = NamedAttribute(tree, location=self.loc(block_x, block_y, 0, -2),
+                                          name="CubieIndexAtFace", data_type="INT", hide=False)
+
+        # now we need to separate each cubie and prepare its own transformation panel.
+
+        join2 = JoinGeometry(tree, location=self.loc(block_x, block_y, 4, 0), hide=False)
+
+        # the index for the cubies had to be artificially ranged from 1 to 27, since index 0 caused trouble
+        # in the geometry selection process. For the rest of the python interface the labels are ranging from 0 to 26 again
+        for i in range(1, 28):
+            cubie_selection = make_function(tree, name="CubieSelection" + str(i - 1),
+                                            location=self.loc(block_x, block_y, 1, -i + 1), hide=True,
+                                            functions={
+                                                "select": "idx1," + str(i) + ",=,idx2," + str(i) + ",=,or"
+                                            }, inputs=["idx1", "idx2"], outputs=["select"],
+                                            scalars=["idx1", "idx2", "select"])
+            links.new(attr_cubie_index2.std_out, cubie_selection.inputs["idx1"])
+            links.new(attr_face_index2.std_out, cubie_selection.inputs["idx2"])
+
+            sep_geo = SeparateGeometry(tree, location=self.loc(block_x, block_y, 2, -i + 1), domain='FACE',
+                                       hide=True, selection=cubie_selection.outputs["select"], geometry_out="Selection")
+
+            rotation = QuaternionToRotation(tree, name="CubieRotation_" + str(i - 1),
+                                            location=self.loc(block_x, block_y, 2, -i), hide=False)
+
+            transform = TransformGeometry(tree, location=self.loc(block_x, block_y, 3, -i),
+                                          rotation=rotation.std_out,
+                                          hide=True)
+            create_geometry_line(tree, [join, sep_geo, transform, join2], out=out.inputs[0])
+
+class RubiksCubeGroupStabChain(GeometryNodesModifier):
+    def __init__(self, name="RubiksCubeGroupStabChainModifier", **kwargs):
+        super().__init__(name, automatic_layout=True, group_input=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        """
+        Creates a geometry node setup in a Blender node tree.
+
+        The final result is a graphical representation of the stabilizer chain for the Rubik's cube group.
+
+
+        """
+        # output block
+        out = self.group_outputs
+        ins = self.group_inputs
+        links = tree.links
+
+        # extract first element of each orbit from the y-coordiate of the stab chain
+        pos = Position(tree)
+        index = Index(tree)
+        first_orbit_element = make_function(tree, name="FirstOrbitElement",
+                                            functions={
+                                                "first": "pos_y",
+                                                "clean_position": ["pos_x", "0", "pos_z"]
+                                            }, inputs=["pos"], outputs=["first", "clean_position"],
+                                            scalars=["first"], vectors=["pos", "clean_position"], hide=True)
+        links.new(pos.std_out, first_orbit_element.inputs["pos"])
+        store_attr_pos = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", name="PrimaryPosition", value=pos.std_out,
+                                              hide=True)
+        store_attr_idx = StoredNamedAttribute(tree, data_type="INT", name="ElementIndex", value=index.std_out,
+                                              hide=True)
+
+        store_attr_first = StoredNamedAttribute(tree, data_type="BOOLEAN", name="First",
+                                                value=first_orbit_element.outputs["first"], hide=True)
+        in_geometry = SetPosition(tree, position=first_orbit_element.outputs["clean_position"], hide=True)
+
+        # do the coloring
+        material_red = get_material("red")
+        material_blue = get_material("blue")
+        material_yellow = get_material("yellow")
+        material_orange = get_material("orange")
+        material_green = get_material("green")
+        material_white = get_material("text")
+
+        number_colors = get_from_kwargs(kwargs, "number_colors", ["background", "text"])
+        number_outline_colors = get_from_kwargs(kwargs, "number_outline_colors", ["text", "background"])
+        material_number_even = get_material(number_colors[0])
+        material_number_odd = get_material(number_colors[1])
+        material_outline_even = get_material(number_outline_colors[0])
+        material_outline_odd = get_material(number_outline_colors[1])
+
+        labels = ["MaterialRed", "MaterialBlue", "MaterialYellow", "MaterialGreen", "MaterialWhite", "MaterialOrange",
+                  "MaterialNumberEven", "MaterialNumberOdd", "MaterialOutlineEven", "MaterialOutlineOdd"]
+
+        self.materials = [material_red, material_blue, material_yellow, material_green, material_orange, material_white]
+        self.materials.append(material_number_even)
+        self.materials.append(material_number_odd)
+        self.materials.append(material_outline_even)
+        self.materials.append(material_outline_odd)
+
+        input_mats = [InputMaterial(tree, material=m, name=l) for m, l in zip(self.materials, labels)]
+        material_dict = {"red": input_mats[0],
+                         "blue": input_mats[1],
+                         "yellow": input_mats[2],
+                         "green": input_mats[3],
+                         "orange": input_mats[4],
+                         "white": input_mats[5]
+                         }
+
+        mat_number_odd = input_mats[6]
+        mat_number_even = input_mats[7]
+        mat_outline_odd = input_mats[8]
+        mat_outline_even = input_mats[9]
+
+        material_first_frame = get_material("custom1")
+        self.materials.append(material_first_frame)
+
+        # add faces
+        size = InputValue(tree, name="FaceSize", value=0.89, hide=False)
+        bevel = InputValue(tree, name="Bevel", value=6.3, hide=False)
+        bevel_function = make_function(tree, name="BevelFunction", functions={
+            "bevel": "size,bevel,/"
+        }, inputs=["size", "bevel"], outputs=["bevel"],
+                                       scalars=["size", "bevel"], hide=False)
+        links.new(size.std_out, bevel_function.inputs["size"])
+        links.new(bevel.std_out, bevel_function.inputs["bevel"])
+        quadri = Quadrilateral(tree, width=size.std_out, height=size.std_out, hide=False)
+        fillet_curve = FilletCurve(tree, radius=bevel_function.outputs["bevel"], count=10, hide=False)
+        fill_cuve = FillCurve(tree, mode='NGONS', hide=False)
+        extrude_face = ExtrudeMesh(tree, mode='FACES', offset_scale=1, offset=Vector([0, 0, 0.05]),
+                                   hide=False)
+        create_geometry_line(tree, [quadri, fillet_curve, fill_cuve, extrude_face])
+
+        # instance faces on dual mesh
+        iop = InstanceOnPoints(tree, instance=extrude_face.geometry_out, rotation=[pi / 2, 0, 0])
+        ri = RealizeInstances(tree)
+
+        # show label
+        pos = Position(tree)
+        sep_xyz = SeparateXYZ(tree, vector=pos.std_out)
+
+        range_min = InputInteger(tree, name="DisplayRangeMin", value=-1)
+        range_max = InputInteger(tree, name="DisplayRangeMax", value=-1)
+        selection_function = make_function(tree, name="SelectionFunction", functions={
+            "selection": "idx,rangemax,<,idx,rangemin,>,*"
+        }, inputs=["idx", "rangemin", "rangemax"], outputs=["selection"],
+                                           scalars=["idx", "rangemax", "rangemin", "selection"], hide=True)
+        tree.links.new(index.std_out, selection_function.inputs["idx"])
+        tree.links.new(range_max.std_out, selection_function.inputs["rangemax"])
+        tree.links.new(range_min.std_out, selection_function.inputs["rangemin"])
+
+        select_geo = SeparateGeometry(tree, selection=selection_function.outputs["selection"])
+        foreach_number = ForEachZone(tree, domain="POINT", name="ForEachNumber", hide=False)
+        stat = AttributeStatistic(tree, attribute=sep_xyz.std_out, std_out="Max",
+                                  geometry=foreach_number.outputs["Element"])
+
+        value2string = ValueToString(tree, value=stat.std_out, hide=True)
+        string2curves = StringToCurves(tree, font="Arial Black", string=value2string.std_out, size=0.85, hide=True)
+        iop2 = InstanceOnPoints(tree, instance=string2curves.geometry_out, rotation=[pi / 2, 0, 0], hide=True)
+        normal = InputNormal(tree)
+        fill = FillCurve(tree, mode="NGONS")
+        extrude = ExtrudeMesh(tree, offset=normal.std_out, offset_scale=0.1, mode="FACES")
+
+        parity_function = make_function(tree, name="ParityFunction",
+                                        functions={
+                                            "odd": "idx,2,%"
+                                        }, inputs=["idx"], outputs=["odd"],
+                                        scalars=["idx", "odd"], vectors=[], hide=True)
+        links.new(stat.std_out, parity_function.inputs["idx"])
+
+        material_number = Switch(tree, input_type="MATERIAL", switch=parity_function.outputs["odd"],
+                                 true=mat_number_odd.std_out, false=mat_number_even.std_out, hide=True)
+        set_mat_number = SetMaterial(tree, material=material_number.std_out, hide=True)
+        join = JoinGeometry(tree)
+        foreach_number.create_geometry_line([iop2, fill, extrude, set_mat_number, join])
+
+        wireframe = CurveWireFrame(tree, radius=0.02, resolution=8)
+        set_pos = SetPosition(tree, offset=Vector([0, -0.09, 0]))
+        material_outline = Switch(tree, input_type="MATERIAL", switch=parity_function.outputs["odd"],
+                                  true=mat_outline_odd.std_out, false=mat_outline_even.std_out)
+        set_mat_outline = SetMaterial(tree, material=material_outline.std_out, hide=True)
+        create_geometry_line(tree, [iop2, wireframe, set_pos, set_mat_outline, join])
+
+        minus_one = MathNode(tree, name="MinusOne", operation="SUBTRACT", inputs0=stat.std_out, inputs1=1, hide=False)
+        index_switch = IndexSwitch(tree, data_type="MATERIAL", index=minus_one.std_out)
+        for idx, color in face_color_dict.items():
+            index_switch.add_item(socket=material_dict[color].std_out)
+
+        set_material = SetMaterial(tree, material=index_switch.std_out, hide=False)
+        to_instance = GeometryToInstance(tree)
+        foreach_number.create_geometry_line([iop, ri, set_material, join, to_instance])
+
+        # create geometry for first element frames
+        first = NamedAttribute(tree, name="First", data_type="BOOLEAN", hide=True)
+        frame = Quadrilateral(tree, width=1.25, height=1.25, hide=True)
+        frame_wire = CurveWireFrame(tree, radius=0.12, resolution=8, hide=True)
+        iop_first = InstanceOnPoints(tree, selection=first.std_out, rotation=[pi / 2, 0, 0], hide=True)
+        set_frame_material = SetMaterial(tree, material=material_first_frame, hide=True)
+
+        create_geometry_line(tree, [frame, frame_wire], out=iop_first.inputs["Instance"])
+        create_geometry_line(tree, [iop_first, set_frame_material, join], ins=foreach_number.outputs["Element"])
+
+        # include rotation of individual element
+
+        attr_idx = NamedAttribute(tree, name="ElementIndex", data_type="INT", hide=True)
+        attr_pos = NamedAttribute(tree, name="PrimaryPosition", data_type="FLOAT_VECTOR", hide=True)
+        select_element = InputInteger(tree, name="ElementIndexSelector", value=-1)
+        rot_angle = InputValue(tree, name="RotationAngle", data_type="FLOAT", hide=True)
+        combine_xyz = CombineXYZ(tree, z=rot_angle.std_out, hide=True)
+
+        selection_and_pivot_function = make_function(tree, name="SelectionPivotFunction",
+                                                     functions={
+                                                         "selection": "elemIdx,idx,=",
+                                                         "pivot": ["prim_x,0.5,-", "prim_y", "prim_z"]
+                                                     }, inputs=["prim", "elemIdx", "idx"],
+                                                     outputs=["selection", "pivot"],
+                                                     scalars=["elemIdx", "idx", "selection"], vectors=["pivot", "prim"],
+                                                     hide=True)
+        tree.links.new(attr_idx.std_out, selection_and_pivot_function.inputs["elemIdx"])
+        tree.links.new(attr_pos.std_out, selection_and_pivot_function.inputs["prim"])
+        tree.links.new(select_element.std_out, selection_and_pivot_function.inputs["idx"])
+
+        rot_instance = RotateInstances(tree, selection=selection_and_pivot_function.outputs["selection"],
+                                       hide=True, pivot_point=selection_and_pivot_function.outputs["pivot"],
+                                       rotation=combine_xyz.std_out)
+
+        translate = TranslateToCenterNode(tree)
+        links.new(in_geometry.outputs["Geometry"], translate.inputs["SourceGeometry"])
+        create_geometry_line(tree,
+                             [store_attr_first, in_geometry, store_attr_pos, store_attr_idx, select_geo, foreach_number,
+                              rot_instance, translate], ins=ins.outputs["Geometry"], out=out.inputs[0])
+
+class TransformationModifier(GeometryNodesModifier):
+    def __init__(self, name="TransformationModifier", label=None, **kwargs):
+        """
+        A geometry node setup that visualizes the isometries of a cube
+
+        """
+        self.label = label
+        super().__init__(name, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        # setup basic geometry
+        cube_node = CubeMesh(tree)
+
+        wireframe = WireFrame(tree)
+        edge_color = get_from_kwargs(kwargs, 'edge_material', 'drawing')
+        edge_material = get_material(edge_color, **kwargs)
+        self.materials.append(edge_material)
+        set_edge_material = SetMaterial(tree, material=edge_material)
+        pos = Position(tree)
+
+        join = JoinGeometry(tree)
+
+        # setup vertex labels
+        selected_corners = get_from_kwargs(kwargs, 'selected_corners', None)
+        rotate_corners = get_from_kwargs(kwargs, 'corner_rotation_euler', [0, 0, 0])
+        corner_rotation = InputVector(tree, name="CornerRotation", value=rotate_corners, hide=True)
+
+        if selected_corners is not None:
+            index = Index(tree)
+            index_switch = IndexSwitch(tree, data_type="INT", index=index.std_out, name="LabelSwitch")
+            for i in range(8):
+                if i + 1 in selected_corners:
+                    index_switch.add_item(socket=1)
+                else:
+                    index_switch.add_item(socket=0)
+
+            foreach = ForEachZone(tree, geometry=cube_node.geometry_out, selection=index_switch.std_out, hide=True)
+        else:
+            foreach = ForEachZone(tree, geometry=cube_node.geometry_out, hide=True)
+
+        addOne = MathNode(tree, operation="ADD", inputs0=foreach.outputs["Index"], inputs1=1, hide=True)
+        value2String = ValueToString(tree, value=addOne.std_out, hide=True)
+        string2Curves = StringToCurves(tree, name="CornerLabels", string=value2String.std_out, size=0.3, hide=True)
+        fill_curve = FillCurve(tree, mode="NGONS", hide=True)
+        normal = InputNormal(tree, hide=True)
+        extrude = ExtrudeMesh(tree, mode="FACES", offset=normal.std_out, offset_scale=0.05)
+
+        axes2Rotation = AxesToRotation(tree, primary_axis='Y', secondary_axis='X',
+                                       primary_direction=[0, 0, 1], secondary_direction=[1, 0, 0],
+                                       hide=True)  # make fonts up and from left  to right
+        join_string_mesh = JoinGeometry(tree, hide=True)
+        font_color = get_from_kwargs(kwargs, 'font_material', 'text')
+        font_material = get_material(font_color, **kwargs)
+        self.materials.append(font_material)
+        set_font_material = SetMaterial(tree, material=font_material)
+
+        join_string_and_backplate = JoinGeometry(tree, hide=True)
+        iop = InstanceOnPoints(tree, rotation=axes2Rotation.std_out, hide=True)
+        create_geometry_line(tree, [join_string_mesh, set_font_material, join_string_and_backplate],
+                             out=iop.inputs["Instance"])
+        create_geometry_line(tree, [fill_curve, join_string_mesh])
+        create_geometry_line(tree, [string2Curves, fill_curve, extrude, join_string_mesh])
+
+        circle = CurveCircle(tree, radius=0.15, resolution=16, hide=True)
+        fill_circle = FillCurve(tree, mode="NGONS", hide=True)
+        circle_material = get_material("gray_1", **kwargs)
+        self.materials.append(circle_material)
+        set_circle_material = SetMaterial(tree, material=circle_material)
+        create_geometry_line(tree, [circle, fill_circle, set_circle_material, join_string_and_backplate])
+
+        scale_value = InputValue(tree, name="LabelPos", value=1.25, hide=True)
+        scale = VectorMath(tree, operation="SCALE", inputs0=pos.std_out, float_input=scale_value.std_out, hide=True)
+        set_pos = SetPosition(tree, position=scale.std_out, hide=True)
+        rotate_instance = RotateInstances(tree, pivot_point=scale.std_out, hide=True, rotation=corner_rotation.std_out,
+                                          local_space=False)
+        foreach.create_geometry_line([iop, set_pos, rotate_instance])
+        create_geometry_line(tree, [foreach, join])
+
+        # create faces
+        index = Index(tree)
+        store_face_index = StoredNamedAttribute(tree, data_type="INT", domain="FACE", name="FaceIndex",
+                                                value=index.std_out, hide=True)
+        face_color = get_from_kwargs(kwargs, 'face_material', 'drawing')
+        face_material = get_material(face_color, **kwargs)
+        set_face_material = SetMaterial(tree, material=face_material)
+        self.materials.append(face_material)
+        create_geometry_line(tree, [cube_node, store_face_index, set_face_material, join])
+
+        # transformation
+        # 10 reflections
+        last_pos = pos.std_out
+        for r in range(10):
+            normal = InputVector(tree, value=[0, 0, 0], name="Normal" + str(r), hide=True)
+            coxeter = CoxeterReflectionNode(tree, position=last_pos, normal=normal.std_out,
+                                            name="CoxeterReflection" + str(r), hide=True)
+            last_pos = coxeter.std_out
+
+        # 10 rotations
+        for r in range(10):
+            quaternion = QuaternionToRotation(tree, name="Rotation" + str(r), hide=True)
+            rotateVector = RotateVector(tree, vector=last_pos, rotation=quaternion.std_out,
+                                        name="RotateVector" + str(r), hide=True)
+            last_pos = rotateVector.std_out
+
+        set_pos = SetPosition(tree, position=last_pos)
+        create_geometry_line(tree, [cube_node, wireframe, set_edge_material, join])
+        join2 = JoinGeometry(tree, hide=True)  # additional join for labels that are added after transformation
+        create_geometry_line(tree, [join, set_pos, join2])
+
+        # create mirror grid
+        radius = InputValue(tree, name="Radius", value=0, hide=True)
+        grid = Grid(tree, size_x=1.75, size_y=1.75, vertices_x=15, vertices_y=15)
+        grid_color = get_from_kwargs(kwargs, 'grid_material', 'custom1')
+        grid_material = get_material(grid_color, **kwargs)
+        self.materials.append(grid_material)
+        wireframe2 = WireFrame(tree, radius=radius.std_out)
+        set_grid_material = SetMaterial(tree, material=grid_material)
+        grid_rotation = InputVector(tree, name="GridRotation", value=Vector())
+        grid_transform = TransformGeometry(tree, name="GridTransformation",
+                                           geometry=cube_node.geometry_out,
+                                           rotation=grid_rotation.std_out, hide=False)
+        create_geometry_line(tree, [grid, wireframe2, set_grid_material, grid_transform, join])
+
+        # allow global transformation
+        rotation = InputVector(tree, name="GlobalRotation", value=Vector(), hide=True)
+        rotation_transform = TransformGeometry(tree, name="RotationTransformation", rotation=rotation.std_out,
+                                               hide=False)
+        rotation_join = JoinGeometry(tree, hide=True)
+
+        # create label
+        label_sep = get_from_kwargs(kwargs, "label_separation", -0.9)
+        if self.label is not None:
+            label_info = ObjectInfo(tree, name="Label", object=self.label, hide=True)
+            set_label_pos = SetPosition(tree, name="LabelPosition", offset=[0, 0, label_sep], hide=True)
+            create_geometry_line(tree, [label_info, set_label_pos, rotation_join])
+
+        create_geometry_line(tree, [join2, rotation_transform, rotation_join], out=out.inputs[0])
+
+class TransformationSphereModifier(GeometryNodesModifier):
+    def __init__(self, name="TransformationSphereModifier", label=None, **kwargs):
+        """
+        A geometry node setup that visualizes the isometries of a cube blown up to a sphere
+
+        """
+        self.label = label
+        super().__init__(name, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        # setup basic geometry
+        cube_node = CubeMesh(tree)
+        pos = Position(tree)
+
+        # create faces
+        index = Index(tree)
+        store_face_index = StoredNamedAttribute(tree, data_type="INT", domain="FACE", name="FaceIndex",
+                                                value=index.std_out, hide=True)
+        face_color = get_from_kwargs(kwargs, 'face_material', 'drawing')
+        face_material = get_material(face_color, **kwargs)
+        set_face_material = SetMaterial(tree, material=face_material)
+        self.materials.append(face_material)
+
+        # turn into sphere
+
+        sub_div = SubdivideMesh(tree, level=4)
+        blow_function = make_function(tree, functions={
+            "Position": "pos,1,pos,length,/,scale"
+        }, inputs=["pos"], outputs=["Position"], vectors=["pos", "Position"], hide=True, name="BlowUp")
+        tree.links.new(pos.std_out, blow_function.inputs["pos"])
+
+        set_pos2 = SetPosition(tree, position=blow_function.outputs["Position"])
+
+        # transformation
+        # 10 reflections
+        last_pos = pos.std_out
+        for r in range(10):
+            normal = InputVector(tree, value=[0, 0, 0], name="Normal" + str(r), hide=True)
+            coxeter = CoxeterReflectionNode(tree, position=last_pos, normal=normal.std_out,
+                                            name="CoxeterReflection" + str(r), hide=True)
+            last_pos = coxeter.std_out
+
+        # 10 rotations
+        for r in range(10):
+            quaternion = QuaternionToRotation(tree, name="Rotation" + str(r), hide=True)
+            rotateVector = RotateVector(tree, vector=last_pos, rotation=quaternion.std_out,
+                                        name="RotateVector" + str(r), hide=True)
+            last_pos = rotateVector.std_out
+
+        set_pos = SetPosition(tree, position=last_pos)
+
+        # allow global transformation
+        rotation = InputVector(tree, name="GlobalRotation", value=Vector(), hide=True)
+        rotation_transform = TransformGeometry(tree, name="RotationTransformation", rotation=rotation.std_out,
+                                               hide=False)
+        smooth = SetShadeSmooth(tree)
+
+        create_geometry_line(tree, [cube_node, store_face_index, set_face_material,
+                                    sub_div, set_pos2, set_pos, rotation_transform, smooth], out=out.inputs[0])
+
+class WordTreeModifier(GeometryNodesModifier):
+    def __init__(self, name="TreeModifier", words=[], instances=[], **kwargs):
+        """
+        A geometry node setup that visualizes the structure of a group tree
+
+        """
+        self.words = words
+        self.instances = instances
+        super().__init__(name, automatic_layout=True, group_input=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        input = self.group_inputs
+        links = tree.links
+
+        # setup basic geometry
+        join = JoinGeometry(tree, hide=True)
+
+        # create the edges
+        index = Index(tree)
+        edge_vertices = EdgeVertices(tree, hide=True)
+        edge_length = InputValue(tree, name="EdgeLength", value=0.5, hide=True)
+        edge_radius = InputValue(tree, name="EdgeRadius", value=0.25, hide=True)
+        transform_edges = make_function(tree, name="TransformEdges",
+                                        functions={
+                                            "start": "p1,p2,add,0.5,scale,p1,p2,sub,l,2,/,scale,sub",
+                                            "end": "p1,p2,sub,l,2,/,scale,p1,p2,add,0.5,scale,add",
+                                            "switch": "idx,2,%"
+                                        }, inputs=["p1", "p2", "l", "idx"], outputs=["start", "end", "switch"],
+                                        scalars=["switch", "l", "idx"], vectors=["p1", "p2", "start", "end"], hide=True)
+        links.new(index.std_out, transform_edges.inputs["idx"])
+        links.new(edge_length.std_out, transform_edges.inputs["l"])
+        links.new(edge_vertices.outputs["Position 1"], transform_edges.inputs["p1"])
+        links.new(edge_vertices.outputs["Position 2"], transform_edges.inputs["p2"])
+
+        for_each_edge = ForEachZone(tree, domain="EDGE", name="ForEachEdge")
+        switch = Switch(tree, name="EdgeSwitch", input_type="VECTOR", switch=transform_edges.outputs["switch"],
+                        true=transform_edges.outputs["start"], false=transform_edges.outputs["end"])
+        set_edge_pos = SetPosition(tree, position=switch.std_out)
+        for_each_edge.create_geometry_line([set_edge_pos])
+        subdiv_mesh = SubdivideMesh(tree, level=4)  # increase resolution for smooth growing of the edges
+        wireframe = WireFrame(tree, radius=edge_radius.std_out, resolution=10)
+
+        # delete geometry depending on the progress
+        position = Position(tree, name="MaxPosition")
+        statistics = AttributeStatistic(tree, data_type="FLOAT_VECTOR", domain="POINT", name="MaxPosition",
+                                        std_out="Max",
+                                        geometry=input.outputs[0],
+                                        attribute=position.std_out, hide=True)
+        progress = InputValue(tree, name="Progress", value=0, hide=True)
+        progress_selection = make_function(tree, name="ProgressSelector",
+                                           functions={
+                                               "selection": "pos_x,p,max_x,*,<,not"
+                                           }, inputs=["p", "pos", "max"], outputs=["selection"],
+                                           scalars=["p", "selection"], vectors=["pos", "max"])
+        del_geo = DeleteGeometry(tree, selection=progress_selection.outputs["selection"], hide=True)
+        links.new(position.std_out, progress_selection.inputs["pos"])
+        links.new(statistics.std_out, progress_selection.inputs["max"])
+        links.new(progress.std_out, progress_selection.inputs["p"])
+
+        create_geometry_line(tree, [for_each_edge, subdiv_mesh, wireframe, del_geo, join], ins=input.outputs[0])
+
+        # create instances and selector function
+        object_infos = []
+        for word, instance in zip(self.words, self.instances):
+            object_infos.append(ObjectInfo(tree, name=word, object=instance.ref_obj))
+
+        # create for each zone
+        rotation = InputVector(tree, name="Rotation", value=Vector())
+        for_each_point = ForEachZone(tree, domain="POINT", name="InstanceSelector")
+        outs = ["p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10", "p11", "p12", "p13", "p14", "p15",
+                "p16", "p17", "p18",
+                "p19", "p20", "p21", "p22", "p23", "p24", "p25", "p26", "p27", "p28", "p29", "p30", "p31", "p32", "p33",
+                "p34", "p35", "p36",
+                "p37", "p38", "p39", "p40", "p41", "p42", "p43", "p44", "p45", "p46", "p47"]
+        instance_selection = make_function(tree, name="InstanceSelection",
+                                           functions={
+                                               "p0": "idx,0,=", "p1": "idx,1,=", "p2": "idx,2,=", "p3": "idx,3,=",
+                                               "p4": "idx,4,=", "p5": "idx,5,=", "p6": "idx,6,=", "p7": "idx,7,=",
+                                               "p8": "idx,8,=", "p9": "idx,9,=", "p10": "idx,10,=", "p11": "idx,11,=",
+                                               "p12": "idx,12,=", "p13": "idx,13,=", "p14": "idx,14,=",
+                                               "p15": "idx,15,=",
+                                               "p16": "idx,16,=", "p17": "idx,17,=", "p18": "idx,18,=",
+                                               "p19": "idx,19,=", "p20": "idx,20,=", "p21": "idx,21,=",
+                                               "p22": "idx,22,=", "p23": "idx,23,=",
+                                               "p24": "idx,24,=", "p25": "idx,25,=", "p26": "idx,26,=",
+                                               "p27": "idx,27,=", "p28": "idx,28,=", "p29": "idx,29,=",
+                                               "p30": "idx,30,=", "p31": "idx,31,=",
+                                               "p32": "idx,32,=", "p33": "idx,33,=", "p34": "idx,34,=",
+                                               "p35": "idx,35,=", "p36": "idx,36,=", "p37": "idx,37,=",
+                                               "p38": "idx,38,=", "p39": "idx,39,=",
+                                               "p40": "idx,40,=", "p41": "idx,41,=", "p42": "idx,42,=",
+                                               "p43": "idx,43,=", "p44": "idx,44,=", "p45": "idx,45,=",
+                                               "p46": "idx,46,=", "p47": "idx,47,="
+                                           }, inputs=["idx"], outputs=outs,
+                                           scalars=["idx"] + outs)
+
+        last_out = None
+        for i in range(0, len(object_infos)):
+            switch = Switch(tree, name="InstanceSwitch" + str(i), input_type="GEOMETRY",
+                            switch=instance_selection.outputs["p" + str(i)],
+                            false=last_out, true=object_infos[i].geometry_out)
+            last_out = switch.std_out
+
+        iop2 = InstanceOnPoints(tree, instance=last_out,
+                                rotation=rotation.std_out, scale=[8] * 3, hide=False)
+        for_each_point.create_geometry_line([iop2])
+        links.new(for_each_point.outputs["Index"], instance_selection.inputs["idx"])
+        location = get_from_kwargs(kwargs, "location", Vector())
+
+        # create progress selector for instances
+
+        max_instance = InputInteger(tree, name="MaxInstance", value=0, hide=True)
+        index = Index(tree)
+        instance_selection = make_function(tree, name="InstanceSelector",
+                                           functions={
+                                               "selection": "idx,mx,<,not"
+                                           }, inputs=["idx", "mx"], outputs=["selection"],
+                                           scalars=["idx", "mx", "selection"])
+        links.new(max_instance.std_out, instance_selection.inputs["mx"])
+        links.new(index.std_out, instance_selection.inputs["idx"])
+        del_instance_geo = DeleteGeometry(tree, domain="INSTANCE", selection=instance_selection.outputs["selection"],
+                                          hide=True)
+
+        global_transform = TransformGeometry(tree, name="GlobalTransform", translation=location, hide=False)
+        create_geometry_line(tree, [for_each_point, del_instance_geo, join, global_transform], out=out.inputs[0],
+                             ins=input.outputs[0])
+
+class PermutationModifier(GeometryNodesModifier):
+    def __init__(self, name="PermutationModifier", n=8, number_of_cycles=5, **kwargs):
+        """
+        A geometry node setup that visualizes the structure of a permutation for up to 9 elements
+        """
+        self.n = n
+        self.number_of_cycles = number_of_cycles
+        super().__init__(name, automatic_layout=True, group_input=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        # join geometry
+        join = JoinGeometry(tree, hide=True)
+
+        # start from n points
+
+        points = Points(tree, count=self.n, hide=True)
+
+        # create boxes
+
+        foreach_points = ForEachZone(tree, domain="POINT", name="ForEachPointBoxes", hide=False)
+
+        box = Quadrilateral(tree, mode="RECTANGLE", width=1, height=1, hide=True)
+        iop = InstanceOnPoints(tree, instance=box.geometry_out, hide=True)
+        scale = ScaleInstances(tree, scale=[0.9] * 3, hide=True)
+        box_pos = SetPosition(tree, offset=[0, 0, 0.05], hide=True)
+        quad = Quadrilateral(tree, mode="RECTANGLE", width=0.1, height=0.1, hide=True)
+        curve_to_mesh = CurveToMesh(tree, profile_curve=quad.geometry_out, hide=True)
+
+        combine_xyz = CombineXYZ(tree, x=foreach_points.index, hide=True)
+        transform_boxes = TransformGeometry(tree, name="TransformBoxes", translation=combine_xyz.std_out,
+                                            rotation=[pi / 2, 0, 0], hide=True)
+        foreach_points.create_geometry_line([iop, scale, box_pos, curve_to_mesh, transform_boxes])
+        frame_color = get_from_kwargs(kwargs, "frame_color", 'drawing')
+        frame_material = get_material(frame_color, **kwargs)
+        self.materials.append(frame_material)
+        frame_material_node = SetMaterial(tree, material=frame_material)
+        create_geometry_line(tree, [points, foreach_points, frame_material_node, join])
+
+        # create numbers and attributes
+
+        foreach_number = ForEachZone(tree, domain="POINT", name="ForEachNumber", hide=False)
+        inc = MathNode(tree, operation="ADD", inputs0=foreach_number.index, inputs1=1, hide=True)
+        value2string = ValueToString(tree, value=inc.std_out, hide=True)
+        string2curves = StringToCurves(tree, string=value2string.std_out, size=1, hide=True)
+        iop2 = InstanceOnPoints(tree, instance=string2curves.geometry_out, hide=True)
+        attr_idx = StoredNamedAttribute(tree, data_type="INT", domain="INSTANCE", name="Index", value=inc.std_out,
+                                        hide=False)
+
+        # create a unique prime identifier for each number
+        primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]
+        value_nodes = [InputInteger(tree, integer=primes[i]) for i in range(self.n)]
+
+        index_switch = IndexSwitch(tree, data_type="INT", index=foreach_number.index, hide=False)
+        [index_switch.add_item(value_node.std_out) for value_node in value_nodes]
+
+        attr_prime = StoredNamedAttribute(tree, data_type="INT", domain="INSTANCE", name="Prime",
+                                          value=index_switch.std_out, hide=False)
+
+        combine_xyz2 = CombineXYZ(tree, x=foreach_number.index, hide=True)
+        transform_numbers = TransformGeometry(tree, name="TransformNumbers", rotation=[pi / 2, 0, 0],
+                                              translation=combine_xyz2.std_out, hide=True)
+        position = Position(tree, name="Position", hide=True)
+        attr_position = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", domain="INSTANCE", name="Position",
+                                             value=position.std_out, hide=False)
+        foreach_number.create_geometry_line([iop2, attr_idx, attr_prime, transform_numbers, attr_position])
+
+        create_geometry_line(tree, [points, foreach_number])
+
+        # create cycles
+        cycles = []
+        for i in range(self.number_of_cycles):
+            cycle = InputInteger(tree, name="Cycle" + str(i + 1), integer=0, hide=True)
+            cycle_length = InputInteger(tree, name="CycleLength" + str(i + 1), integer=0, hide=True)
+            displacement = InputValue(tree, name="Displacement" + str(i + 1), value=0, hide=True)
+            up_mover = InputInteger(tree, name="UpMover" + str(i + 1), integer=0, hide=True)
+            down_mover = InputInteger(tree, name="DownMover" + str(i + 1), integer=0, hide=True)
+            movers = []
+            for j in range(self.n):
+                movers.append(InputValue(tree, name="Mover" + str(i + 1) + "_" + str(j + 1), value=0, hide=True))
+
+            cycles.append(CycleNode(tree, name="Cycle" + str(i + 1), max_length=self.n, hide=True))
+            links.new(cycle.std_out, cycles[i].inputs["Cycle"])
+            links.new(cycle_length.std_out, cycles[i].inputs["CycleLength"])
+            links.new(displacement.std_out, cycles[i].inputs["Displacement"])
+            links.new(up_mover.std_out, cycles[i].inputs["UpMover"])
+            links.new(down_mover.std_out, cycles[i].inputs["DownMover"])
+            for j in range(self.n):
+                links.new(movers[j].std_out, cycles[i].inputs["Mover" + str(j + 1)])
+
+        # extrude letters
+        fill_curve = FillCurve(tree, mode="NGONS", hide=True)
+        combine_xyz = CombineXYZ(tree, z=0.1, hide=True)
+        extrude = ExtrudeMesh(tree, mode="FACES", offset=combine_xyz.std_out, offset_scale=1, hide=True)
+        extrude_join = JoinGeometry(tree, hide=True)
+        create_geometry_line(tree, [foreach_number] + cycles + [fill_curve, extrude_join])
+        number_color = get_from_kwargs(kwargs, 'number_color', 'text')
+        material = get_material(number_color, **kwargs)
+        self.materials.append(material)
+        number_material_node = SetMaterial(tree, material=material)
+        centering = TransformGeometry(tree, translation=Vector([(-self.n + 1) / 2, 0, 0]))
+
+        create_geometry_line(tree, [fill_curve, extrude, extrude_join, number_material_node,
+                                    join, centering],
+                             out=out.inputs[0])
+
+class QuadModifier(GeometryNodesModifier):
+    def __init__(self, name="QuadrialateralModifier", mode="RECTANGLE", **kwargs):
+        """
+        A geometry node setup that visualizes a quadrilateral
+        """
+        self.mode = mode
+        super().__init__(name, automatic_layout=True, group_input=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        # join geometry
+        join = JoinGeometry(tree, hide=True)
+
+        width = get_from_kwargs(kwargs, "width", 2)
+        height = get_from_kwargs(kwargs, "height", 2)
+        quad_node = Quadrilateral(tree, mode=self.mode, width=width, height=height, hide=True)
+
+        resolution = get_from_kwargs(kwargs, "resolution", 100)
+        res_node = InputInteger(tree, name="Resolution", integer=resolution, hide=True)
+        idx = Index(tree)
+
+        grow = InputValue(tree, name="Grow", value=0, hide=True)
+
+        grow_function = make_function(tree, name="GrowFunction",
+                                      functions={
+                                          "selection": "idx,res,/,grow,>,not"
+                                      }, inputs=["res", "idx", "grow"], outputs=["selection"],
+                                      scalars=["res", "idx", "grow", "selection"], vectors=[], hide=True)
+        links.new(res_node.std_out, grow_function.inputs["res"])
+        links.new(idx.std_out, grow_function.inputs["idx"])
+        links.new(grow.std_out, grow_function.inputs["grow"])
+
+        resample = ResampleCurve(tree, count=resolution, hide=True)
+        trim = TrimCurve(tree, hide=True)
+        select_geo = SeparateGeometry(tree, selection=grow_function.outputs["selection"], hide=True)
+
+        thickness = get_from_kwargs(kwargs, "thickness", 1)
+        wireframe = CurveWireFrame(tree, radius=thickness * 0.02, hide=True)
+
+        geo_location = get_from_kwargs(kwargs, "geo_location", Vector())
+        normal = get_from_kwargs(kwargs, "normal", [0, 0, 0])
+        material = get_material(get_from_kwargs(kwargs, "color", 'drawing'), **kwargs)
+        self.materials.append(material)
+        quad_material_node = SetMaterial(tree, material=material)
+        from_normal = AlignRotationToVector(tree, vector=normal, hide=True)
+        global_transform = TransformGeometry(tree, name="GlobalTransform", translation=geo_location,
+                                             rotation=from_normal.std_out, hide=False)
+
+        create_geometry_line(tree, [quad_node, resample, trim, select_geo, wireframe, join, quad_material_node,
+                                    global_transform], out=out.inputs[0])
+
+class SingmasterDisplayModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(get_from_kwargs(kwargs, 'name', "SingmasterDisplayModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "singmaster_display_node", **kwargs)
+
+# Billiard video
+
+class BilliardsTableModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsTableModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "GeoBilliardsTable_node", **kwargs)
+
+class BilliardsBallModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        self.subdivisions = get_from_kwargs(kwargs, "subdivisions", 5)
+        super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsBallModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "GeoBilliardsBall_node", **kwargs)
+        subdivisions_node = ibpy.get_geometry_node_from_modifier(self, label="SubdivisionsValue")
+        ibpy.change_default_integer(subdivisions_node, from_value=5, to_value=self.subdivisions,
+                                    begin_time=0, transition_time=0)
+
+class BilliardBallRealModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        self.subdivisions = get_from_kwargs(kwargs, "subdivisions", 5)
+        super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsBallModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "GeoBilliardsBallReal_node", **kwargs)
+
+class IlluminationModifier(GeometryNodesModifier):
+    def __init__(self, light_instance, **kwargs):
+        self.light_instance = light_instance
+        super().__init__(get_from_kwargs(kwargs, 'name', "IlluminationModifier"),
+                         group_input=True, group_output=True, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        ins = self.group_inputs
+        out = self.group_outputs
+
+        light = ObjectInfo(tree, transform_space="ORIGINAL",
+                           as_instance=True,
+                           object=self.light_instance)
+
+        for_each = ForEachZone(tree)
+        normal = InputNormal(tree)
+        axes_to_rotation = AxesToRotation(tree, primary_axis='Z', secondary_axis='X', primary_direction=normal.std_out)
+        iop = InstanceOnPoints(tree, instance=light.geometry_out, rotation=axes_to_rotation.std_out)
+
+        for_each.create_geometry_line([iop])
+
+        join = JoinGeometry(tree)
+        tree.links.new(for_each.foreach_output.outputs[0], join.geometry_in)
+        create_geometry_line(tree, [for_each, join], ins=ins.outputs[0], out=out.inputs[0])
+
+class ScoreTableModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+
+        super().__init__(get_from_kwargs(kwargs, 'name', "ScoreTableModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "GeoBilliardsScoreTable_node", **kwargs)
+
+        background = get_from_kwargs(kwargs, "background_material", "background")
+        background_material_node = ibpy.get_geometry_node_from_modifier(self, label="MaterialBackground")
+        background_material = get_material(background, **kwargs)
+        background_material_node.material = background_material
+        self.materials.append(background_material)
+
+        materials = ["background_material", "ur_material", "ul_material", "br_material", "font_material"]
+        defaults = ["background", "example", "joker", "br_material", "important", "background"]
+        slots = ["MaterialBackground", "MaterialUR", "MaterialUL", "MaterialBR", "MaterialFont"]
+        for mat, default, slot in zip(materials, defaults, slots):
+            material_string = get_from_kwargs(kwargs, mat, default)
+            material_node = ibpy.get_geometry_node_from_modifier(self, label=slot)
+            material = get_material(material_string, **kwargs)
+            material_node.material = material
+            self.materials.append(material)
+
+        index_selector_node = ibpy.get_geometry_node_from_modifier(self, label="IndexSelector")
+
+        width = get_from_kwargs(kwargs, "width", 3)
+        height = get_from_kwargs(kwargs, "height", 3)
+        for w in range(0, width):
+            for h in range(0, height):
+                ibpy.add_item_to_switch(index_selector_node, w * height + h, False, tree)
+
+class ReflectableBilliardPaperModifier(GeometryNodesModifier):
+    def __init__(self, width=10, height=10, **kwargs):
+        self.width = width
+        self.height = height
+        super().__init__(get_from_kwargs(kwargs, "name", "BilliardPaperModifier"),
+                         group_input=False, group_output=True, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+
+        next = -10
+
+        paper = Grid(tree, location=[next, 0],
+                     size_x=self.width, size_y=self.height, vertices_x=self.width + 1, vertices_y=self.height + 1)
+        next += 1
+        wireframe = WireFrame(tree, location=[next, 1])
+        next += 1
+        grid_color = get_from_kwargs(kwargs, "grid_color", "example")
+        grid_material = get_texture(grid_color, emission=0.5, **kwargs)
+        self.materials.append(grid_material)
+        grid_material_node = SetMaterial(tree, label="MaterialGrid", material=grid_material,
+                                         location=[next, 1], hide=True)
+        next += 1
+        join = JoinGeometry(tree, location=[next, 0])
+        next += 1
+        geo_to_instance = GeometryToInstance(tree, location=[next, 1], hide=True)
+        next -= 2
+        paper_color = get_from_kwargs(kwargs, "paper_color", "gray_1")
+        material = get_texture(paper_color, **kwargs)
+        self.materials.append(material)
+        material_node = SetMaterial(tree, material=material, location=[next, 0], hide=True)
+        next += 1
+
+        create_geometry_line(tree, [paper, material_node, join])
+        create_geometry_line(tree, [paper, wireframe, grid_material_node, join, geo_to_instance])
+
+        # create target squares
+        target_square_scale = get_from_kwargs(kwargs, "target_square_scale", 1)
+        join_squares = JoinGeometry(tree, location=[next, 3], hide=True)
+        create_geometry_line(tree, [join_squares, join])
+        colors = ["custom1", "joker", "important"]
+        position = [
+            [self.width / 2 - 0.5 * target_square_scale, self.height / 2 - 0.5 * target_square_scale, 0.0125],
+            [-self.width / 2 + 0.5 * target_square_scale, self.height / 2 - 0.5 * target_square_scale, 0.0125],
+            [self.width / 2 - 0.5 * target_square_scale, -self.height / 2 + 0.5 * target_square_scale, 0.0125],
+        ]
+
+        for i in range(3):
+            inext = next - 5
+            square = Grid(tree, location=[inext, 2 + i], size_x=target_square_scale, size_y=target_square_scale,
+                          vertices_x=2, vertices_y=2)
+            inext += 1
+            square_material = get_texture(colors[i])
+            self.materials.append(square_material)
+            square_material_node = SetMaterial(tree, label="MaterialSquare" + str(i), material=square_material,
+                                               location=[inext, 2 + i], hide=True)
+            inext += 1
+            square_pos = SetPosition(tree, location=[inext, 2 + i], offset=position[i], hide=True)
+            inext += 1
+            square_extrude = ExtrudeMesh(tree, location=[inext, 2 + i], mode="FACES",
+                                         offset=Vector([0, 0, -0.025]), hide=True)
+            inext += 1
+            create_geometry_line(tree, [square, square_material_node, square_pos, square_extrude, join_squares])
+            create_geometry_line(tree, [square_pos, join_squares])
+
+        # final join
+        join2 = JoinGeometry(tree, location=[-next - 1, 0])
+        create_geometry_line(tree, [join, join2], out=self.group_outputs.inputs["Geometry"])
+        self.group_outputs.location = (-next, 0)
+
+        # create reflections
+        minimum = min(self.width, self.height)
+        maximum = max(self.width, self.height)
+        progress = minimum
+        lcm = np.lcm(self.width, self.height)
+        nw = self.width
+        nh = self.height
+        last = geo_to_instance
+        delta = maximum - minimum  # delta captures the largest possible distance that can be moved in the next move
+        # print(progress,delta,minimum)
+
+        counter = 0
+        while progress < lcm:
+            inext = next + counter
+            angle = InputValue(tree, value=0, label="Rotation" + str(counter), location=[inext, counter + 1.5],
+                               hide=True)
+            inext += 1
+            counter += 1
+            if nh < nw:  # reflect horizontally
+                combine = CombineXYZ(tree, location=[inext, counter + 1], x=angle.std_out, y=0, z=0, hide=True)
+                inext += 1
+                rotate_instance = RotateInstances(tree, location=[inext, counter + 1.5], rotation=combine.std_out,
+                                                  pivot_point=[0, nh - self.height / 2, 0], local_space=False)
+                inext += 1
+                nh += self.height
+                step = min(minimum, delta)
+                progress += step
+                delta = max(delta - minimum, self.height - step)  # maximum travel distance in the next step
+
+            else:  # reflect vertically
+                neg = MathNode(tree, operation="MULTIPLY", inputs0=angle.std_out, inputs1=-1,
+                               location=[inext, counter + 0.5])
+                combine = CombineXYZ(tree, location=[inext, counter + 1], x=0, y=neg.std_out, z=0, hide=True)
+                inext += 1
+                rotate_instance = RotateInstances(tree, location=[inext, counter + 1.5], rotation=combine.std_out,
+                                                  pivot_point=[nw - self.width / 2, 0, 0], local_space=False)
+                inext += 1
+                nw += self.width
+                step = min(minimum, delta)
+                progress += step
+                delta = max(delta - minimum, self.width - step)  # maximum travel distance in the next step
+
+            # print(progress,delta,step,nw,nh)
+
+            create_geometry_line(tree, [last, rotate_instance, join2])
+            last = rotate_instance
 
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes

@@ -54,20 +54,22 @@ def create_star_glow_composition():
 
     composite = nodes["Composite"]
     layers = nodes["Render Layers"]
+    set_alpha = nodes["Set Alpha"]
+    viewer = nodes["Viewer"]
+    nodes.remove(viewer)
 
     glare = nodes.new(type='CompositorNodeGlare')
     glare.glare_type='SIMPLE_STAR'
     glare.quality='HIGH'
     glare.threshold = 0.01
 
-    links.new(layers.outputs["Image"],glare.inputs["Image"])
-    set_alpha = nodes.new(type="CompositorNodeSetAlpha")
+    links.new(layers.outputs["Image"], glare.inputs["Image"])
+    links.new(layers.outputs["Alpha"], set_alpha.inputs["Alpha"])
     set_alpha.mode = "REPLACE_ALPHA"
-    links.new(glare.outputs["Image"], set_alpha.inputs["Image"])
-    links.new(set_alpha.outputs["Image"], composite.inputs["Alpha"])
+    links.new(glare.outputs["Image"],set_alpha.inputs["Image"])
+    links.new(set_alpha.outputs["Image"], composite.inputs["Image"])
     return glare
 
-    return glare
 
 def create_glow_composition(threshold=1,type='BLOOM',size=4):
     """
@@ -81,20 +83,21 @@ def create_glow_composition(threshold=1,type='BLOOM',size=4):
 
     composite = nodes["Composite"]
     layers = nodes["Render Layers"]
+    set_alpha = nodes["Set Alpha"]
+    viewer = nodes["Viewer"]
+    nodes.remove(viewer)
 
     glare = nodes.new(type='CompositorNodeGlare')
     glare.glare_type = type
     glare.quality='HIGH'
-    glare.size=size
+    glare.size=size*1000
     glare.threshold =threshold
 
     links.new(layers.outputs["Image"],glare.inputs["Image"])
-
-
-    set_alpha=nodes.new(type="CompositorNodeSetAlpha")
+    links.new(layers.outputs["Alpha"],set_alpha.inputs["Alpha"])
     set_alpha.mode="REPLACE_ALPHA"
     links.new(glare.outputs["Image"],set_alpha.inputs["Image"])
-    # links.new(set_alpha.outputs["Image"],composite.inputs["Alpha"])
+    links.new(set_alpha.outputs["Image"],composite.inputs["Image"])
     return glare
 
 def create_bloom_and_streak_composition():

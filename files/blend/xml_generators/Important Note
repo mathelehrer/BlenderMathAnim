@@ -1,0 +1,2 @@
+Keep value at zero to get Bounding Box transfered properly.
+The initial value decides under which condition attributes are evaluated

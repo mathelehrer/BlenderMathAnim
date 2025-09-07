@@ -1,0 +1,2694 @@
+<NODE_XML>
+	<NODES>
+		<NODE id="0" type="GROUP_OUTPUT" name="Group Output" label="" location="(19.2,10.6)" hide="False" mute="False" parent="Frame.009">
+			<INPUTS>
+				<INPUT id="0" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="1" name="" type="CUSTOM" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="1" type="CURVE_PRIMITIVE_CIRCLE" name="Curve Circle" label="" location="(-2.6,0.9)" hide="False" mode="RADIUS" mute="False" parent="Frame">
+			<INPUTS>
+				<INPUT id="2" name="Resolution" type="INT" is_linked="False" default_value="48"/>
+				<INPUT id="3" name="Point 1" type="VECTOR" is_linked="False" default_value="[-1.0, 0.0, 0.0]"/>
+				<INPUT id="4" name="Point 2" type="VECTOR" is_linked="False" default_value="[0.0, 1.0, 0.0]"/>
+				<INPUT id="5" name="Point 3" type="VECTOR" is_linked="False" default_value="[1.0, 0.0, 0.0]"/>
+				<INPUT id="6" name="Radius" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="7" name="Curve" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="8" name="Center" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="2" type="SET_POSITION" name="Set Position" label="" location="(-1.7,0.9)" hide="True" mute="False" parent="Frame">
+			<INPUTS>
+				<INPUT id="9" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="10" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="11" name="Position" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="12" name="Offset" type="VECTOR" is_linked="False" default_value="[-0.5, 0.5, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="13" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="3" type="SET_POSITION" name="Set Position.001" label="" location="(-1.7,0.7)" hide="True" mute="False" parent="Frame">
+			<INPUTS>
+				<INPUT id="14" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="15" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="16" name="Position" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="17" name="Offset" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="18" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="4" type="JOIN_GEOMETRY" name="Join Geometry" label="" location="(-0.4,0.9)" hide="False" mute="False" parent="Frame">
+			<INPUTS>
+				<INPUT id="19" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="20" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="5" type="CURVE_PRIMITIVE_QUADRILATERAL" name="Quadrilateral" label="" location="(-1.6,0.4)" hide="True" mode="POINTS" mute="False" parent="Frame">
+			<INPUTS>
+				<INPUT id="21" name="Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="22" name="Height" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="23" name="Bottom Width" type="VALUE" is_linked="False" default_value="4.0"/>
+				<INPUT id="24" name="Top Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="25" name="Offset" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="26" name="Bottom Height" type="VALUE" is_linked="False" default_value="3.0"/>
+				<INPUT id="27" name="Top Height" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="28" name="Point 1" type="VECTOR" is_linked="False" default_value="[0.0, 1.5, 0.0]"/>
+				<INPUT id="29" name="Point 2" type="VECTOR" is_linked="False" default_value="[-1.5, 0.0, 0.0]"/>
+				<INPUT id="30" name="Point 3" type="VECTOR" is_linked="False" default_value="[-0.5, -1.0, 0.0]"/>
+				<INPUT id="31" name="Point 4" type="VECTOR" is_linked="False" default_value="[1.0, 0.5, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="32" name="Curve" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="6" type="CURVE_PRIMITIVE_QUADRILATERAL" name="Quadrilateral.001" label="" location="(-1.6,0.2)" hide="True" mode="POINTS" mute="False" parent="Frame">
+			<INPUTS>
+				<INPUT id="33" name="Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="34" name="Height" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="35" name="Bottom Width" type="VALUE" is_linked="False" default_value="4.0"/>
+				<INPUT id="36" name="Top Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="37" name="Offset" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="38" name="Bottom Height" type="VALUE" is_linked="False" default_value="3.0"/>
+				<INPUT id="39" name="Top Height" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="40" name="Point 1" type="VECTOR" is_linked="False" default_value="[0.0, 1.5, 0.0]"/>
+				<INPUT id="41" name="Point 2" type="VECTOR" is_linked="False" default_value="[-0.5, 1.5, 0.0]"/>
+				<INPUT id="42" name="Point 3" type="VECTOR" is_linked="False" default_value="[-0.5, -1.0, 0.0]"/>
+				<INPUT id="43" name="Point 4" type="VECTOR" is_linked="False" default_value="[0.0, -1.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="44" name="Curve" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="7" type="CURVE_PRIMITIVE_QUADRILATERAL" name="Quadrilateral.002" label="" location="(-1.7,0.0)" hide="True" mode="POINTS" mute="False" parent="Frame">
+			<INPUTS>
+				<INPUT id="45" name="Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="46" name="Height" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="47" name="Bottom Width" type="VALUE" is_linked="False" default_value="4.0"/>
+				<INPUT id="48" name="Top Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="49" name="Offset" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="50" name="Bottom Height" type="VALUE" is_linked="False" default_value="3.0"/>
+				<INPUT id="51" name="Top Height" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="52" name="Point 1" type="VECTOR" is_linked="False" default_value="[1.0, 0.0, 0.0]"/>
+				<INPUT id="53" name="Point 2" type="VECTOR" is_linked="False" default_value="[1.0, 0.5, 0.0]"/>
+				<INPUT id="54" name="Point 3" type="VECTOR" is_linked="False" default_value="[-1.5, 0.5, 0.0]"/>
+				<INPUT id="55" name="Point 4" type="VECTOR" is_linked="False" default_value="[-1.5, 0.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="56" name="Curve" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="8" type="CONVEX_HULL" name="Convex Hull" label="" location="(0.6,1.1)" hide="False" mute="False" parent="Frame">
+			<INPUTS>
+				<INPUT id="57" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="58" name="Convex Hull" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="9" type="FRAME" name="Frame" label="PocketGeometry" location="(-0.8,12.6)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="10" type="MATH" name="Math" label="" location="(-3.5,0.7)" hide="False" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame">
+			<INPUTS>
+				<INPUT id="59" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="60" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="61" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="62" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="11" type="MATH" name="Math.001" label="" location="(-4.9,-0.9)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="63" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="64" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="65" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="66" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="12" type="MATH" name="Math.002" label="" location="(-4.0,-1.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="67" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="68" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="69" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="70" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="13" type="MATH" name="Math.003" label="" location="(-4.0,-1.4)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="71" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="72" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="73" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="74" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="14" type="MESH_PRIMITIVE_GRID" name="Grid" label="" location="(-3.1,-1.1)" hide="False" mute="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="75" name="Size X" type="VALUE" is_linked="True"/>
+				<INPUT id="76" name="Size Y" type="VALUE" is_linked="True"/>
+				<INPUT id="77" name="Vertices X" type="INT" is_linked="True"/>
+				<INPUT id="78" name="Vertices Y" type="INT" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="79" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="80" name="UV Map" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="15" type="JOIN_GEOMETRY" name="Join Geometry.001" label="" location="(18.4,10.6)" hide="False" mute="False" parent="Frame.009">
+			<INPUTS>
+				<INPUT id="81" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="82" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="16" type="MESH_TO_CURVE" name="Mesh to Curve" label="" location="(-1.8,-1.1)" hide="False" mute="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="83" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="84" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="85" name="Curve" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="17" type="CURVE_TO_MESH" name="Curve to Mesh" label="" location="(-0.9,-1.1)" hide="False" mute="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="86" name="Curve" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="87" name="Profile Curve" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="88" name="Fill Caps" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="89" name="Mesh" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="18" type="CURVE_PRIMITIVE_CIRCLE" name="Curve Circle.001" label="" location="(-1.8,-1.7)" hide="False" mode="RADIUS" mute="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="90" name="Resolution" type="INT" is_linked="False" default_value="6"/>
+				<INPUT id="91" name="Point 1" type="VECTOR" is_linked="False" default_value="[-1.0, 0.0, 0.0]"/>
+				<INPUT id="92" name="Point 2" type="VECTOR" is_linked="False" default_value="[0.0, 1.0, 0.0]"/>
+				<INPUT id="93" name="Point 3" type="VECTOR" is_linked="False" default_value="[1.0, 0.0, 0.0]"/>
+				<INPUT id="94" name="Radius" type="VALUE" is_linked="False" default_value="0.10000000149011612"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="95" name="Curve" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="96" name="Center" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="19" type="MATH" name="Math.004" label="" location="(-4.2,-1.8)" hide="True" mute="False" operation="ADD" use_clamp="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="97" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="98" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="99" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="100" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="20" type="MATH" name="Math.005" label="" location="(-4.1,-1.6)" hide="True" mute="False" operation="ADD" use_clamp="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="101" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="102" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="103" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="104" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="21" type="GROUP_INPUT" name="Group Input.001" label="" location="(-5.7,-1.2)" hide="False" mute="False" parent="Frame.001">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="105" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="106" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="107" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="108" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="109" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="110" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="111" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="112" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="22" type="FRAME" name="Frame.001" label="Grid" location="(15.3,9.5)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="23" type="MESH_PRIMITIVE_GRID" name="Grid.001" label="" location="(0.7,-2.6)" hide="False" mute="False" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="113" name="Size X" type="VALUE" is_linked="True"/>
+				<INPUT id="114" name="Size Y" type="VALUE" is_linked="True"/>
+				<INPUT id="115" name="Vertices X" type="INT" is_linked="True"/>
+				<INPUT id="116" name="Vertices Y" type="INT" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="117" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="118" name="UV Map" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="24" type="MATH" name="Math.006" label="" location="(-1.2,-3.0)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="119" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="120" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="121" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="122" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="25" type="MATH" name="Math.007" label="" location="(-0.1,-2.8)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="123" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="124" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="125" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="126" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="26" type="MATH" name="Math.008" label="" location="(-0.1,-3.1)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="127" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="128" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="129" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="130" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="27" type="MATH" name="Math.009" label="" location="(-0.3,-3.7)" hide="True" mute="False" operation="ADD" use_clamp="False" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="131" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="132" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="133" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="134" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="28" type="MATH" name="Math.010" label="" location="(-0.3,-3.5)" hide="True" mute="False" operation="ADD" use_clamp="False" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="135" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="136" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="137" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="138" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="29" type="GROUP_INPUT" name="Group Input.002" label="" location="(-2.1,-3.3)" hide="False" mute="False" parent="Frame.003">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="139" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="140" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="141" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="142" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="143" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="144" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="145" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="146" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="30" type="MATH" name="Math.011" label="1.5*r" location="(-1.2,-3.2)" hide="False" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="147" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="148" name="Value" type="VALUE" is_linked="False" default_value="3.0"/>
+				<INPUT id="149" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="150" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="31" type="TRANSFORM_GEOMETRY" name="Transform Geometry.001" label="" location="(5.9,1.7)" hide="True" mode="COMPONENTS" mute="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="151" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="152" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="153" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, -1.5707963705062866]"/>
+				<INPUT id="154" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="155" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="156" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="32" type="GROUP_INPUT" name="Group Input.003" label="" location="(1.6,1.1)" hide="True" mute="False" parent="Frame.002">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="157" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="158" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="159" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="160" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="161" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="162" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="163" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="164" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="33" type="MATH" name="Math.013" label="" location="(4.0,1.8)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="165" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="166" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="167" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="168" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="34" type="COMBXYZ" name="Combine XYZ" label="" location="(4.9,1.6)" hide="True" mute="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="169" name="X" type="VALUE" is_linked="True"/>
+				<INPUT id="170" name="Y" type="VALUE" is_linked="True"/>
+				<INPUT id="171" name="Z" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="172" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="35" type="MATH" name="Math.014" label="" location="(3.0,1.8)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="173" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="174" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="175" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="176" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="36" type="MATH" name="Math.015" label="" location="(3.0,1.6)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="177" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="178" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="179" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="180" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="37" type="MATH" name="Math.016" label="" location="(3.9,1.4)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="181" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="182" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="183" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="184" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="38" type="MATH" name="Math.017" label="" location="(3.0,1.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="185" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="186" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="187" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="188" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="39" type="MATH" name="Math.018" label="" location="(3.0,0.9)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="189" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="190" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="191" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="192" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="40" type="TRANSFORM_GEOMETRY" name="Transform Geometry.002" label="" location="(5.9,2.7)" hide="True" mode="COMPONENTS" mute="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="193" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="194" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="195" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="196" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="197" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="198" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="41" type="GROUP_INPUT" name="Group Input.004" label="" location="(1.5,2.2)" hide="True" mute="False" parent="Frame.002">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="199" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="200" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="201" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="202" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="203" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="204" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="205" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="206" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="42" type="MATH" name="Math.019" label="" location="(3.4,3.0)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="207" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="208" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="209" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="210" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="43" type="COMBXYZ" name="Combine XYZ.001" label="" location="(5.1,2.5)" hide="True" mute="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="211" name="X" type="VALUE" is_linked="True"/>
+				<INPUT id="212" name="Y" type="VALUE" is_linked="True"/>
+				<INPUT id="213" name="Z" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="214" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="44" type="MATH" name="Math.020" label="" location="(2.5,3.0)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="215" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="216" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="217" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="218" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="45" type="MATH" name="Math.021" label="" location="(2.5,2.8)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="219" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="220" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="221" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="222" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="46" type="MATH" name="Math.022" label="" location="(4.1,2.4)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="223" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="224" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="225" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="226" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="47" type="MATH" name="Math.023" label="" location="(3.1,2.4)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="227" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="228" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="229" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="230" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="48" type="MATH" name="Math.024" label="" location="(3.1,2.2)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="231" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="232" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="233" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="234" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="49" type="MATH" name="Math.025" label="" location="(4.1,2.8)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="235" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="236" name="Value" type="VALUE" is_linked="False" default_value="-1.0"/>
+				<INPUT id="237" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="238" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="50" type="JOIN_GEOMETRY" name="Join Geometry.002" label="" location="(6.9,3.4)" hide="False" mute="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="239" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="240" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="51" type="TRANSFORM_GEOMETRY" name="Transform Geometry.003" label="" location="(5.9,3.8)" hide="True" mode="COMPONENTS" mute="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="241" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="242" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="243" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, -3.1415927410125732]"/>
+				<INPUT id="244" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="245" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="246" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="52" type="GROUP_INPUT" name="Group Input.005" label="" location="(1.6,3.8)" hide="True" mute="False" parent="Frame.002">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="247" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="248" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="249" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="250" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="251" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="252" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="253" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="254" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="53" type="MATH" name="Math.026" label="" location="(4.1,4.2)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="255" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="256" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="257" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="258" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="54" type="COMBXYZ" name="Combine XYZ.002" label="" location="(5.1,4.0)" hide="True" mute="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="259" name="X" type="VALUE" is_linked="True"/>
+				<INPUT id="260" name="Y" type="VALUE" is_linked="True"/>
+				<INPUT id="261" name="Z" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="262" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="55" type="MATH" name="Math.027" label="" location="(3.3,4.3)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="263" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="264" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="265" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="266" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="56" type="MATH" name="Math.028" label="" location="(3.3,4.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="267" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="268" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="269" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="270" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="57" type="MATH" name="Math.029" label="" location="(3.3,3.7)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="271" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="272" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="273" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="274" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="58" type="MATH" name="Math.030" label="" location="(2.5,3.6)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="275" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="276" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="277" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="278" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="59" type="MATH" name="Math.031" label="" location="(2.5,3.4)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="279" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="280" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="281" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="282" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="60" type="MATH" name="Math.032" label="" location="(4.2,3.9)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.002">
+			<INPUTS>
+				<INPUT id="283" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="284" name="Value" type="VALUE" is_linked="False" default_value="-1.0"/>
+				<INPUT id="285" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="286" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="61" type="FRAME" name="Frame.002" label="Pockets" location="(-4.6,13.9)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="62" type="GROUP_INPUT" name="Group Input.006" label="" location="(-4.4,1.2)" hide="False" mute="False" parent="Frame">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="287" name="Width" type="INT" is_linked="False" default_value="0"/>
+				<OUTPUT id="288" name="Height" type="INT" is_linked="False" default_value="0"/>
+				<OUTPUT id="289" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="290" name="GridRadiusRatio" type="INT" is_linked="False" default_value="0"/>
+				<OUTPUT id="291" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="292" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="293" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="294" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="63" type="FRAME" name="Frame.003" label="TablePlate" location="(6.4,20.4)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="64" type="MESH_BOOLEAN" name="Mesh Boolean" label="" location="(2.9,-2.3)" hide="False" mute="False" operation="DIFFERENCE" solver="FLOAT" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="295" name="Mesh 1" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="296" name="Mesh 2" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="297" name="Self Intersection" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<INPUT id="298" name="Hole Tolerant" type="BOOLEAN" is_linked="False" default_value="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="299" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="300" name="Intersecting Edges" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="65" type="CURVE_PRIMITIVE_QUADRILATERAL" name="Quadrilateral.003" label="" location="(4.9,7.7)" hide="False" mode="TRAPEZOID" mute="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="301" name="Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="302" name="Height" type="VALUE" is_linked="True"/>
+				<INPUT id="303" name="Bottom Width" type="VALUE" is_linked="True"/>
+				<INPUT id="304" name="Top Width" type="VALUE" is_linked="True"/>
+				<INPUT id="305" name="Offset" type="VALUE" is_linked="True"/>
+				<INPUT id="306" name="Bottom Height" type="VALUE" is_linked="False" default_value="3.0"/>
+				<INPUT id="307" name="Top Height" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="308" name="Point 1" type="VECTOR" is_linked="False" default_value="[-1.0, -1.0, 0.0]"/>
+				<INPUT id="309" name="Point 2" type="VECTOR" is_linked="False" default_value="[1.0, -1.0, 0.0]"/>
+				<INPUT id="310" name="Point 3" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 0.0]"/>
+				<INPUT id="311" name="Point 4" type="VECTOR" is_linked="False" default_value="[-1.0, 1.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="312" name="Curve" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="66" type="GROUP_INPUT" name="Group Input" label="" location="(1.7,7.3)" hide="True" mute="False" parent="Frame.004">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="313" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="314" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="315" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="316" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="317" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="318" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="319" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="320" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="67" type="MATH" name="Math.012" label="" location="(2.3,6.4)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="321" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="322" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="323" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="324" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="68" type="MATH" name="Math.033" label="" location="(3.2,7.6)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="325" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="326" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="327" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="328" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="69" type="MATH" name="Math.034" label="" location="(3.2,7.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="329" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="330" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="331" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="332" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="70" type="MATH" name="Math.035" label="" location="(4.1,7.6)" hide="True" mute="False" operation="SUBTRACT" use_clamp="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="333" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="334" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="335" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="336" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="71" type="MATH" name="Math.036" label="" location="(3.2,6.6)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="337" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="338" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="339" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="340" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="72" type="MATH" name="Math.037" label="" location="(3.2,7.4)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="341" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="342" name="Value" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="343" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="344" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="73" type="MATH" name="Math.038" label="" location="(4.0,6.8)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="345" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="346" name="Value" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="347" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="348" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="74" type="MATH" name="Math.039" label="" location="(6.7,6.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="349" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="350" name="Value" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="351" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="352" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="75" type="JOIN_GEOMETRY" name="Join Geometry.003" label="" location="(10.3,10.7)" hide="False" mute="False" parent="Frame.011">
+			<INPUTS>
+				<INPUT id="353" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="354" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="76" type="TRANSFORM_GEOMETRY" name="Transform Geometry" label="" location="(5.9,7.5)" hide="False" mode="COMPONENTS" mute="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="355" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="356" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="357" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="358" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="359" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="360" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="77" type="MATH" name="Math.040" label="" location="(4.0,6.2)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="361" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="362" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="363" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="364" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="78" type="COMBXYZ" name="Combine XYZ.003" label="" location="(4.9,6.5)" hide="False" mute="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="365" name="X" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="366" name="Y" type="VALUE" is_linked="True"/>
+				<INPUT id="367" name="Z" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="368" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="79" type="GROUP_INPUT" name="Group Input.007" label="" location="(16.2,10.4)" hide="True" mute="False" parent="Frame.009">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="369" name="Width" type="INT" is_linked="False" default_value="0"/>
+				<OUTPUT id="370" name="Height" type="INT" is_linked="False" default_value="0"/>
+				<OUTPUT id="371" name="Radius" type="VALUE" is_linked="False" default_value="0.0"/>
+				<OUTPUT id="372" name="GridRadiusRatio" type="INT" is_linked="False" default_value="0"/>
+				<OUTPUT id="373" name="TableClothMaterial" type="MATERIAL" is_linked="True" default_value="None"/>
+				<OUTPUT id="374" name="TableRimMaterial" type="MATERIAL" is_linked="True" default_value="None"/>
+				<OUTPUT id="375" name="GridMaterial" type="MATERIAL" is_linked="True" default_value="None"/>
+				<OUTPUT id="376" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="80" type="MATH" name="Math.043" label="" location="(3.3,5.9)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="377" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="378" name="Value" type="VALUE" is_linked="False" default_value="1.25"/>
+				<INPUT id="379" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="380" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="81" type="EXTRUDE_MESH" name="Extrude Mesh.001" label="" location="(7.7,7.9)" hide="False" mode="FACES" mute="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="381" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="382" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="383" name="Offset" type="VECTOR" is_linked="True"/>
+				<INPUT id="384" name="Offset Scale" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="385" name="Individual" type="BOOLEAN" is_linked="False" default_value="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="386" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="387" name="Top" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="388" name="Side" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="82" type="COMBXYZ" name="Combine XYZ.004" label="" location="(6.9,6.8)" hide="False" mute="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="389" name="X" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="390" name="Y" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="391" name="Z" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="392" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="83" type="FILL_CURVE" name="Fill Curve" label="" location="(6.8,7.6)" hide="False" mode="NGONS" mute="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="393" name="Curve" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="394" name="Group ID" type="INT" is_linked="False" default_value="0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="395" name="Mesh" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="84" type="FRAME" name="Frame.004" label="TopBoundary" location="(0.3,-1.5)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="85" type="CURVE_PRIMITIVE_QUADRILATERAL" name="Quadrilateral.004" label="" location="(4.9,7.7)" hide="False" mode="TRAPEZOID" mute="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="396" name="Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="397" name="Height" type="VALUE" is_linked="True"/>
+				<INPUT id="398" name="Bottom Width" type="VALUE" is_linked="True"/>
+				<INPUT id="399" name="Top Width" type="VALUE" is_linked="True"/>
+				<INPUT id="400" name="Offset" type="VALUE" is_linked="True"/>
+				<INPUT id="401" name="Bottom Height" type="VALUE" is_linked="False" default_value="3.0"/>
+				<INPUT id="402" name="Top Height" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="403" name="Point 1" type="VECTOR" is_linked="False" default_value="[-1.0, -1.0, 0.0]"/>
+				<INPUT id="404" name="Point 2" type="VECTOR" is_linked="False" default_value="[1.0, -1.0, 0.0]"/>
+				<INPUT id="405" name="Point 3" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 0.0]"/>
+				<INPUT id="406" name="Point 4" type="VECTOR" is_linked="False" default_value="[-1.0, 1.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="407" name="Curve" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="86" type="GROUP_INPUT" name="Group Input.008" label="" location="(2.0,7.0)" hide="False" mute="False" parent="Frame.005">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="408" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="409" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="410" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="411" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="412" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="413" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="414" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="415" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="87" type="MATH" name="Math.041" label="" location="(2.1,5.8)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="416" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="417" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="418" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="419" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="88" type="MATH" name="Math.042" label="" location="(3.2,7.9)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="420" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="421" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="422" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="423" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="89" type="MATH" name="Math.044" label="" location="(3.2,7.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="424" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="425" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="426" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="427" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="90" type="MATH" name="Math.045" label="" location="(3.9,7.6)" hide="True" mute="False" operation="SUBTRACT" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="428" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="429" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="430" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="431" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="91" type="MATH" name="Math.046" label="" location="(3.2,6.6)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="432" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="433" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="434" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="435" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="92" type="MATH" name="Math.047" label="" location="(3.2,7.4)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="436" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="437" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="438" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="439" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="93" type="MATH" name="Math.048" label="" location="(4.0,6.8)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="440" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="441" name="Value" type="VALUE" is_linked="False" default_value="-0.5"/>
+				<INPUT id="442" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="443" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="94" type="TRANSFORM_GEOMETRY" name="Transform Geometry.005" label="" location="(5.9,7.5)" hide="False" mode="COMPONENTS" mute="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="444" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="445" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="446" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="447" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="448" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="449" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="95" type="MATH" name="Math.049" label="" location="(4.0,6.4)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="450" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="451" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="452" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="453" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="96" type="COMBXYZ" name="Combine XYZ.005" label="" location="(4.9,6.5)" hide="True" mute="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="454" name="X" type="VALUE" is_linked="True"/>
+				<INPUT id="455" name="Y" type="VALUE" is_linked="True"/>
+				<INPUT id="456" name="Z" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="457" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="97" type="MATH" name="Math.050" label="" location="(3.2,6.0)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="458" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="459" name="Value" type="VALUE" is_linked="False" default_value="1.25"/>
+				<INPUT id="460" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="461" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="98" type="EXTRUDE_MESH" name="Extrude Mesh.002" label="" location="(7.7,7.9)" hide="False" mode="FACES" mute="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="462" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="463" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="464" name="Offset" type="VECTOR" is_linked="True"/>
+				<INPUT id="465" name="Offset Scale" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="466" name="Individual" type="BOOLEAN" is_linked="False" default_value="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="467" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="468" name="Top" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="469" name="Side" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="99" type="COMBXYZ" name="Combine XYZ.006" label="" location="(6.9,6.8)" hide="False" mute="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="470" name="X" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="471" name="Y" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="472" name="Z" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="473" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="100" type="FILL_CURVE" name="Fill Curve.001" label="" location="(6.8,7.6)" hide="False" mode="NGONS" mute="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="474" name="Curve" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="475" name="Group ID" type="INT" is_linked="False" default_value="0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="476" name="Mesh" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="101" type="FRAME" name="Frame.005" label="BottomBoundary" location="(-6.8,-1.9)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="102" type="MATH" name="Math.051" label="" location="(4.9,6.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="477" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="478" name="Value" type="VALUE" is_linked="False" default_value="-1.0"/>
+				<INPUT id="479" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="480" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="103" type="MATH" name="Math.052" label="" location="(4.0,6.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="481" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="482" name="Value" type="VALUE" is_linked="False" default_value="-0.5"/>
+				<INPUT id="483" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="484" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="104" type="CURVE_PRIMITIVE_QUADRILATERAL" name="Quadrilateral.005" label="" location="(4.9,7.7)" hide="False" mode="TRAPEZOID" mute="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="485" name="Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="486" name="Height" type="VALUE" is_linked="True"/>
+				<INPUT id="487" name="Bottom Width" type="VALUE" is_linked="True"/>
+				<INPUT id="488" name="Top Width" type="VALUE" is_linked="True"/>
+				<INPUT id="489" name="Offset" type="VALUE" is_linked="True"/>
+				<INPUT id="490" name="Bottom Height" type="VALUE" is_linked="False" default_value="3.0"/>
+				<INPUT id="491" name="Top Height" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="492" name="Point 1" type="VECTOR" is_linked="False" default_value="[-1.0, -1.0, 0.0]"/>
+				<INPUT id="493" name="Point 2" type="VECTOR" is_linked="False" default_value="[1.0, -1.0, 0.0]"/>
+				<INPUT id="494" name="Point 3" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 0.0]"/>
+				<INPUT id="495" name="Point 4" type="VECTOR" is_linked="False" default_value="[-1.0, 1.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="496" name="Curve" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="105" type="GROUP_INPUT" name="Group Input.009" label="" location="(1.9,7.2)" hide="False" mute="False" parent="Frame.006">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="497" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="498" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="499" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="500" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="501" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="502" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="503" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="504" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="106" type="MATH" name="Math.053" label="" location="(2.1,5.8)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="505" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="506" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="507" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="508" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="107" type="MATH" name="Math.054" label="" location="(3.2,7.6)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="509" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="510" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="511" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="512" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="108" type="MATH" name="Math.055" label="" location="(3.2,7.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="513" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="514" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="515" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="516" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="109" type="MATH" name="Math.056" label="" location="(4.1,7.6)" hide="True" mute="False" operation="SUBTRACT" use_clamp="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="517" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="518" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="519" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="520" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="110" type="MATH" name="Math.057" label="" location="(3.2,6.6)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="521" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="522" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="523" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="524" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="111" type="MATH" name="Math.058" label="" location="(3.2,7.4)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="525" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="526" name="Value" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="527" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="528" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="112" type="MATH" name="Math.059" label="" location="(4.0,6.8)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="529" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="530" name="Value" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="531" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="532" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="113" type="TRANSFORM_GEOMETRY" name="Transform Geometry.006" label="" location="(5.9,7.5)" hide="False" mode="COMPONENTS" mute="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="533" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="534" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="535" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 1.5707963705062866]"/>
+				<INPUT id="536" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="537" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="538" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="114" type="MATH" name="Math.060" label="" location="(4.0,6.2)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="539" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="540" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="541" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="542" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="115" type="COMBXYZ" name="Combine XYZ.007" label="" location="(4.9,6.5)" hide="False" mute="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="543" name="X" type="VALUE" is_linked="True"/>
+				<INPUT id="544" name="Y" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="545" name="Z" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="546" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="116" type="MATH" name="Math.061" label="" location="(3.3,5.9)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="547" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="548" name="Value" type="VALUE" is_linked="False" default_value="1.25"/>
+				<INPUT id="549" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="550" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="117" type="EXTRUDE_MESH" name="Extrude Mesh.003" label="" location="(7.7,7.9)" hide="False" mode="FACES" mute="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="551" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="552" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="553" name="Offset" type="VECTOR" is_linked="True"/>
+				<INPUT id="554" name="Offset Scale" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="555" name="Individual" type="BOOLEAN" is_linked="False" default_value="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="556" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="557" name="Top" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="558" name="Side" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="118" type="COMBXYZ" name="Combine XYZ.008" label="" location="(6.8,6.9)" hide="False" mute="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="559" name="X" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="560" name="Y" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="561" name="Z" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="562" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="119" type="FILL_CURVE" name="Fill Curve.002" label="" location="(6.8,7.6)" hide="False" mode="NGONS" mute="False" parent="Frame.006">
+			<INPUTS>
+				<INPUT id="563" name="Curve" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="564" name="Group ID" type="INT" is_linked="False" default_value="0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="565" name="Mesh" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="120" type="FRAME" name="Frame.006" label="RightBoundary" location="(0.4,1.0)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="121" type="MATH" name="Math.062" label="" location="(6.9,6.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="566" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="567" name="Value" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="568" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="569" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="122" type="MATH" name="Math.063" label="" location="(6.8,6.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.004">
+			<INPUTS>
+				<INPUT id="570" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="571" name="Value" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="572" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="573" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="123" type="EXTRUDE_MESH" name="Extrude Mesh.004" label="" location="(4.0,-3.0)" hide="False" mode="FACES" mute="False" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="574" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="575" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="576" name="Offset" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="577" name="Offset Scale" type="VALUE" is_linked="False" default_value="-0.25"/>
+				<INPUT id="578" name="Individual" type="BOOLEAN" is_linked="False" default_value="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="579" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="580" name="Top" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="581" name="Side" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="124" type="JOIN_GEOMETRY" name="Join Geometry.004" label="" location="(5.1,-2.8)" hide="False" mute="False" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="582" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="583" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="125" type="MATH" name="Math.064" label="" location="(6.7,6.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="584" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="585" name="Value" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="586" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="587" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="126" type="CURVE_PRIMITIVE_QUADRILATERAL" name="Quadrilateral.006" label="" location="(5.0,7.6)" hide="False" mode="TRAPEZOID" mute="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="588" name="Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="589" name="Height" type="VALUE" is_linked="True"/>
+				<INPUT id="590" name="Bottom Width" type="VALUE" is_linked="True"/>
+				<INPUT id="591" name="Top Width" type="VALUE" is_linked="True"/>
+				<INPUT id="592" name="Offset" type="VALUE" is_linked="True"/>
+				<INPUT id="593" name="Bottom Height" type="VALUE" is_linked="False" default_value="3.0"/>
+				<INPUT id="594" name="Top Height" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="595" name="Point 1" type="VECTOR" is_linked="False" default_value="[-1.0, -1.0, 0.0]"/>
+				<INPUT id="596" name="Point 2" type="VECTOR" is_linked="False" default_value="[1.0, -1.0, 0.0]"/>
+				<INPUT id="597" name="Point 3" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 0.0]"/>
+				<INPUT id="598" name="Point 4" type="VECTOR" is_linked="False" default_value="[-1.0, 1.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="599" name="Curve" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="127" type="GROUP_INPUT" name="Group Input.010" label="" location="(1.8,7.0)" hide="False" mute="False" parent="Frame.007">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="600" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="601" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="602" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="603" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="604" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="605" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="606" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="607" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="128" type="MATH" name="Math.065" label="" location="(2.1,5.8)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="608" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="609" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="610" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="611" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="129" type="MATH" name="Math.066" label="" location="(3.2,7.9)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="612" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="613" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="614" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="615" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="130" type="MATH" name="Math.067" label="" location="(3.2,7.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="616" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="617" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="618" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="619" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="131" type="MATH" name="Math.068" label="" location="(4.1,7.6)" hide="True" mute="False" operation="SUBTRACT" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="620" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="621" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="622" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="623" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="132" type="MATH" name="Math.069" label="" location="(3.2,6.7)" hide="False" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="624" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="625" name="Value" type="VALUE" is_linked="False" default_value="-0.5"/>
+				<INPUT id="626" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="627" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="133" type="MATH" name="Math.070" label="" location="(3.2,7.4)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="628" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="629" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="630" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="631" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="134" type="MATH" name="Math.071" label="" location="(4.2,6.8)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="632" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="633" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="634" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="635" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="135" type="TRANSFORM_GEOMETRY" name="Transform Geometry.007" label="" location="(5.9,7.5)" hide="False" mode="COMPONENTS" mute="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="636" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="637" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="638" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 1.5707963705062866]"/>
+				<INPUT id="639" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="640" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="641" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="136" type="MATH" name="Math.072" label="" location="(4.0,6.2)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="642" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="643" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="644" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="645" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="137" type="COMBXYZ" name="Combine XYZ.009" label="" location="(5.0,6.5)" hide="False" mute="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="646" name="X" type="VALUE" is_linked="True"/>
+				<INPUT id="647" name="Y" type="VALUE" is_linked="True"/>
+				<INPUT id="648" name="Z" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="649" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="138" type="MATH" name="Math.073" label="" location="(3.3,5.9)" hide="False" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="650" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="651" name="Value" type="VALUE" is_linked="False" default_value="-1.25"/>
+				<INPUT id="652" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="653" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="139" type="EXTRUDE_MESH" name="Extrude Mesh.005" label="" location="(7.7,7.9)" hide="False" mode="FACES" mute="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="654" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="655" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="656" name="Offset" type="VECTOR" is_linked="True"/>
+				<INPUT id="657" name="Offset Scale" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="658" name="Individual" type="BOOLEAN" is_linked="False" default_value="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="659" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="660" name="Top" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="661" name="Side" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="140" type="COMBXYZ" name="Combine XYZ.010" label="" location="(6.8,6.9)" hide="False" mute="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="662" name="X" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="663" name="Y" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="664" name="Z" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="665" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="141" type="FILL_CURVE" name="Fill Curve.003" label="" location="(6.8,7.6)" hide="False" mode="NGONS" mute="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="666" name="Curve" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="667" name="Group ID" type="INT" is_linked="False" default_value="0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="668" name="Mesh" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="142" type="FRAME" name="Frame.007" label="LeftBoundary" location="(-6.8,1.3)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="143" type="MATH" name="Math.074" label="" location="(2.3,7.6)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.005">
+			<INPUTS>
+				<INPUT id="669" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="670" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="671" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="672" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="144" type="MATH" name="Math.075" label="" location="(1.9,8.0)" hide="False" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="673" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="674" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="675" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="676" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="145" type="MATH" name="Math.076" label="" location="(4.2,5.9)" hide="False" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.007">
+			<INPUTS>
+				<INPUT id="677" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="678" name="Value" type="VALUE" is_linked="False" default_value="-1.0"/>
+				<INPUT id="679" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="680" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="146" type="CURVE_PRIMITIVE_QUADRILATERAL" name="Quadrilateral.007" label="" location="(-4.1,13.8)" hide="False" mode="RECTANGLE" mute="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="681" name="Width" type="VALUE" is_linked="True"/>
+				<INPUT id="682" name="Height" type="VALUE" is_linked="True"/>
+				<INPUT id="683" name="Bottom Width" type="VALUE" is_linked="False" default_value="4.0"/>
+				<INPUT id="684" name="Top Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="685" name="Offset" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="686" name="Bottom Height" type="VALUE" is_linked="False" default_value="3.0"/>
+				<INPUT id="687" name="Top Height" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="688" name="Point 1" type="VECTOR" is_linked="False" default_value="[-1.0, -1.0, 0.0]"/>
+				<INPUT id="689" name="Point 2" type="VECTOR" is_linked="False" default_value="[1.0, -1.0, 0.0]"/>
+				<INPUT id="690" name="Point 3" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 0.0]"/>
+				<INPUT id="691" name="Point 4" type="VECTOR" is_linked="False" default_value="[-1.0, 1.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="692" name="Curve" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="147" type="GROUP_INPUT" name="Group Input.011" label="" location="(-7.0,13.5)" hide="False" mute="False" parent="Frame.008">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="693" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="694" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="695" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="696" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="697" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="698" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="699" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="700" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="148" type="MATH" name="Math.077" label="" location="(-5.0,13.8)" hide="False" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="701" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="702" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="703" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="704" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="149" type="MATH" name="Math.078" label="" location="(-2.2,12.0)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="705" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="706" name="Value" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="707" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="708" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="150" type="EXTRUDE_MESH" name="Extrude Mesh.006" label="" location="(-1.3,13.7)" hide="False" mode="FACES" mute="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="709" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="710" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="711" name="Offset" type="VECTOR" is_linked="True"/>
+				<INPUT id="712" name="Offset Scale" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="713" name="Individual" type="BOOLEAN" is_linked="False" default_value="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="714" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="715" name="Top" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="716" name="Side" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="151" type="COMBXYZ" name="Combine XYZ.011" label="" location="(-2.2,12.8)" hide="False" mute="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="717" name="X" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="718" name="Y" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="719" name="Z" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="720" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="152" type="FILL_CURVE" name="Fill Curve.004" label="" location="(-2.2,13.5)" hide="False" mode="NGONS" mute="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="721" name="Curve" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="722" name="Group ID" type="INT" is_linked="False" default_value="0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="723" name="Mesh" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="153" type="JOIN_GEOMETRY" name="Join Geometry.005" label="" location="(2.0,11.2)" hide="False" mute="False" parent="Frame.011">
+			<INPUTS>
+				<INPUT id="724" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="725" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="154" type="TRANSFORM_GEOMETRY" name="Transform Geometry.008" label="" location="(-3.1,13.4)" hide="False" mode="COMPONENTS" mute="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="726" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="727" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="728" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 1.5707963705062866]"/>
+				<INPUT id="729" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="730" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="731" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="155" type="COMBXYZ" name="Combine XYZ.012" label="" location="(-4.0,12.6)" hide="False" mute="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="732" name="X" type="VALUE" is_linked="True"/>
+				<INPUT id="733" name="Y" type="VALUE" is_linked="True"/>
+				<INPUT id="734" name="Z" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="735" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="156" type="MATH" name="Math.079" label="" location="(-6.0,12.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="736" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="737" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="738" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="739" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="157" type="MATH" name="Math.080" label="" location="(-5.9,12.7)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="740" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="741" name="Value" type="VALUE" is_linked="False" default_value="-0.5"/>
+				<INPUT id="742" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="743" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="158" type="MATH" name="Math.081" label="" location="(-5.0,12.4)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="744" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="745" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="746" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="747" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="159" type="MATH" name="Math.082" label="" location="(-6.0,12.3)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="748" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="749" name="Value" type="VALUE" is_linked="False" default_value="-1.25"/>
+				<INPUT id="750" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="751" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="160" type="MATH" name="Math.083" label="" location="(-6.0,11.9)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="752" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="753" name="Value" type="VALUE" is_linked="False" default_value="-0.5"/>
+				<INPUT id="754" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="755" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="161" type="MATH" name="Math.084" label="" location="(-5.1,12.1)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.008">
+			<INPUTS>
+				<INPUT id="756" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="757" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="758" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="759" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="162" type="MERGE_BY_DISTANCE" name="Merge by Distance" label="" location="(2.9,11.1)" hide="True" mode="ALL" mute="False" parent="Frame.011">
+			<INPUTS>
+				<INPUT id="760" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="761" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="762" name="Distance" type="VALUE" is_linked="False" default_value="0.0010000000474974513"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="763" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="163" type="FRAME" name="Frame.008" label="Joint" location="(2.2,-1.9)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="164" type="CURVE_PRIMITIVE_QUADRILATERAL" name="Quadrilateral.008" label="" location="(4.7,15.1)" hide="False" mode="RECTANGLE" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="764" name="Width" type="VALUE" is_linked="True"/>
+				<INPUT id="765" name="Height" type="VALUE" is_linked="True"/>
+				<INPUT id="766" name="Bottom Width" type="VALUE" is_linked="False" default_value="4.0"/>
+				<INPUT id="767" name="Top Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="768" name="Offset" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="769" name="Bottom Height" type="VALUE" is_linked="False" default_value="3.0"/>
+				<INPUT id="770" name="Top Height" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="771" name="Point 1" type="VECTOR" is_linked="False" default_value="[-1.0, -1.0, 0.0]"/>
+				<INPUT id="772" name="Point 2" type="VECTOR" is_linked="False" default_value="[1.0, -1.0, 0.0]"/>
+				<INPUT id="773" name="Point 3" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 0.0]"/>
+				<INPUT id="774" name="Point 4" type="VECTOR" is_linked="False" default_value="[-1.0, 1.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="775" name="Curve" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="165" type="CURVE_PRIMITIVE_QUADRILATERAL" name="Quadrilateral.009" label="" location="(4.8,14.0)" hide="False" mode="RECTANGLE" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="776" name="Width" type="VALUE" is_linked="True"/>
+				<INPUT id="777" name="Height" type="VALUE" is_linked="True"/>
+				<INPUT id="778" name="Bottom Width" type="VALUE" is_linked="False" default_value="4.0"/>
+				<INPUT id="779" name="Top Width" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="780" name="Offset" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="781" name="Bottom Height" type="VALUE" is_linked="False" default_value="3.0"/>
+				<INPUT id="782" name="Top Height" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="783" name="Point 1" type="VECTOR" is_linked="False" default_value="[-1.0, -1.0, 0.0]"/>
+				<INPUT id="784" name="Point 2" type="VECTOR" is_linked="False" default_value="[1.0, -1.0, 0.0]"/>
+				<INPUT id="785" name="Point 3" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 0.0]"/>
+				<INPUT id="786" name="Point 4" type="VECTOR" is_linked="False" default_value="[-1.0, 1.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="787" name="Curve" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="166" type="GROUP_INPUT" name="Group Input.012" label="" location="(1.6,15.0)" hide="False" mute="False" parent="Frame.010">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="788" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="789" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="790" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="791" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="792" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="793" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="794" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="795" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="167" type="MATH" name="Math.085" label="" location="(2.5,14.6)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="796" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="797" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="798" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="799" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="168" type="MATH" name="Math.086" label="" location="(2.5,14.3)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="800" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="801" name="Value" type="VALUE" is_linked="False" default_value="4.0"/>
+				<INPUT id="802" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="803" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="169" type="MATH" name="Math.087" label="" location="(3.6,15.1)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="804" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="805" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="806" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="807" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="170" type="MATH" name="Math.089" label="" location="(3.6,14.6)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="808" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="809" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="810" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="811" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="171" type="JOIN_GEOMETRY" name="Join Geometry.006" label="" location="(7.8,14.4)" hide="False" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="812" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="813" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="172" type="MATH" name="Math.090" label="" location="(2.5,14.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="814" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="815" name="Value" type="VALUE" is_linked="False" default_value="6.0"/>
+				<INPUT id="816" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="817" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="173" type="GROUP_INPUT" name="Group Input.013" label="" location="(1.7,14.0)" hide="False" mute="False" parent="Frame.010">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="818" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="819" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="820" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="821" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="822" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="823" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="824" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="825" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="174" type="MATH" name="Math.088" label="" location="(2.5,13.5)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="826" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="827" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="828" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="829" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="175" type="MATH" name="Math.091" label="" location="(2.5,13.2)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="830" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="831" name="Value" type="VALUE" is_linked="False" default_value="6.0"/>
+				<INPUT id="832" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="833" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="176" type="MATH" name="Math.092" label="" location="(3.5,14.0)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="834" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="835" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="836" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="837" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="177" type="MATH" name="Math.093" label="" location="(3.6,13.5)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="838" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="839" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="840" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="841" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="178" type="MATH" name="Math.094" label="" location="(2.5,13.0)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="842" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="843" name="Value" type="VALUE" is_linked="False" default_value="4.0"/>
+				<INPUT id="844" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="845" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="179" type="CURVE_PRIMITIVE_CIRCLE" name="Curve Circle.002" label="" location="(5.6,12.6)" hide="False" mode="RADIUS" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="846" name="Resolution" type="INT" is_linked="False" default_value="32"/>
+				<INPUT id="847" name="Point 1" type="VECTOR" is_linked="False" default_value="[-1.0, 0.0, 0.0]"/>
+				<INPUT id="848" name="Point 2" type="VECTOR" is_linked="False" default_value="[0.0, 1.0, 0.0]"/>
+				<INPUT id="849" name="Point 3" type="VECTOR" is_linked="False" default_value="[1.0, 0.0, 0.0]"/>
+				<INPUT id="850" name="Radius" type="VALUE" is_linked="False" default_value="1.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="851" name="Curve" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="852" name="Center" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="180" type="COMBXYZ" name="Combine XYZ.013" label="" location="(5.7,13.2)" hide="False" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="853" name="X" type="VALUE" is_linked="True"/>
+				<INPUT id="854" name="Y" type="VALUE" is_linked="True"/>
+				<INPUT id="855" name="Z" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="856" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="181" type="TRANSFORM_GEOMETRY" name="Transform Geometry.009" label="" location="(6.7,13.5)" hide="True" mode="COMPONENTS" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="857" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="858" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="859" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="860" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="861" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="862" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="182" type="GROUP_INPUT" name="Group Input.014" label="" location="(1.7,12.9)" hide="False" mute="False" parent="Frame.010">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="863" name="Width" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="864" name="Height" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="865" name="Radius" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="866" name="GridRadiusRatio" type="INT" is_linked="True" default_value="0"/>
+				<OUTPUT id="867" name="TableClothMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="868" name="TableRimMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="869" name="GridMaterial" type="MATERIAL" is_linked="False" default_value="None"/>
+				<OUTPUT id="870" name="" type="CUSTOM" is_linked="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="183" type="MATH" name="Math.095" label="" location="(2.6,12.6)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="871" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="872" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="873" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="874" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="184" type="MATH" name="Math.096" label="" location="(2.7,12.3)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="875" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="876" name="Value" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="877" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="878" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="185" type="MATH" name="Math.097" label="" location="(4.7,13.1)" hide="True" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="879" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="880" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="881" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="882" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="186" type="MATH" name="Math.098" label="" location="(4.6,12.9)" hide="False" mute="False" operation="MULTIPLY_ADD" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="883" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="884" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="885" name="Value" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="886" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="187" type="MATH" name="Math.099" label="" location="(2.7,12.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="887" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="888" name="Value" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="889" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="890" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="188" type="MATH" name="Math.100" label="" location="(3.6,13.1)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="891" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="892" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="893" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="894" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="189" type="MATH" name="Math.101" label="" location="(3.6,12.6)" hide="True" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="895" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="896" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="897" name="Value" type="VALUE" is_linked="False" default_value="0.25"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="898" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="190" type="TRANSFORM_GEOMETRY" name="Transform Geometry.010" label="" location="(6.8,13.3)" hide="True" mode="COMPONENTS" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="899" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="900" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="901" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="902" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="903" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="904" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="191" type="VECT_MATH" name="Vector Math" label="" location="(6.8,13.1)" hide="True" mute="False" operation="MULTIPLY" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="905" name="Vector" type="VECTOR" is_linked="False" default_value="[-1.0, 1.0, 0.0]"/>
+				<INPUT id="906" name="Vector" type="VECTOR" is_linked="True"/>
+				<INPUT id="907" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="908" name="Scale" type="VALUE" is_linked="False" default_value="1.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="909" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="910" name="Value" type="VALUE" is_linked="False" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="192" type="TRANSFORM_GEOMETRY" name="Transform Geometry.011" label="" location="(6.7,12.8)" hide="True" mode="COMPONENTS" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="911" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="912" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="913" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="914" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="915" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="916" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="193" type="VECT_MATH" name="Vector Math.001" label="" location="(6.8,12.6)" hide="True" mute="False" operation="MULTIPLY" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="917" name="Vector" type="VECTOR" is_linked="False" default_value="[-1.0, -1.0, 0.0]"/>
+				<INPUT id="918" name="Vector" type="VECTOR" is_linked="True"/>
+				<INPUT id="919" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="920" name="Scale" type="VALUE" is_linked="False" default_value="1.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="921" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="922" name="Value" type="VALUE" is_linked="False" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="194" type="TRANSFORM_GEOMETRY" name="Transform Geometry.012" label="" location="(6.8,12.3)" hide="True" mode="COMPONENTS" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="923" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="924" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="925" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="926" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="927" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="928" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="195" type="VECT_MATH" name="Vector Math.002" label="" location="(6.8,12.1)" hide="True" mute="False" operation="MULTIPLY" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="929" name="Vector" type="VECTOR" is_linked="False" default_value="[1.0, -1.0, 0.0]"/>
+				<INPUT id="930" name="Vector" type="VECTOR" is_linked="True"/>
+				<INPUT id="931" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="932" name="Scale" type="VALUE" is_linked="False" default_value="1.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="933" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="934" name="Value" type="VALUE" is_linked="False" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="196" type="MESH_BOOLEAN" name="Mesh Boolean.001" label="" location="(9.5,14.9)" hide="False" mute="False" operation="DIFFERENCE" solver="EXACT" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="935" name="Mesh 1" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="936" name="Mesh 2" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="937" name="Self Intersection" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<INPUT id="938" name="Hole Tolerant" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="939" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="940" name="Intersecting Edges" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="197" type="MESH_BOOLEAN" name="Mesh Boolean.002" label="" location="(12.5,15.0)" hide="False" mute="False" operation="DIFFERENCE" solver="FLOAT" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="941" name="Mesh 1" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="942" name="Mesh 2" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="943" name="Self Intersection" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<INPUT id="944" name="Hole Tolerant" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="945" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="946" name="Intersecting Edges" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="198" type="FRAME" name="Frame.010" label="Frame" location="(1.8,0.1)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="199" type="EXTRUDE_MESH" name="Extrude Mesh.009" label="" location="(10.5,15.0)" hide="False" mode="FACES" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="947" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="948" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="949" name="Offset" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="950" name="Offset Scale" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="951" name="Individual" type="BOOLEAN" is_linked="False" default_value="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="952" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="953" name="Top" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="954" name="Side" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="200" type="JOIN_GEOMETRY" name="Join Geometry.009" label="" location="(11.4,15.0)" hide="False" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="955" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="956" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="201" type="CONVEX_HULL" name="Convex Hull.003" label="" location="(8.6,14.4)" hide="False" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="957" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="958" name="Convex Hull" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="202" type="EXTRUDE_MESH" name="Extrude Mesh.007" label="" location="(3.9,-4.5)" hide="True" mode="FACES" mute="False" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="959" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="960" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="961" name="Offset" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="962" name="Offset Scale" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="963" name="Individual" type="BOOLEAN" is_linked="False" default_value="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="964" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="965" name="Top" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="966" name="Side" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="203" type="MESH_BOOLEAN" name="Mesh Boolean.003" label="" location="(2.7,-3.6)" hide="False" mute="False" operation="UNION" solver="EXACT" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="967" name="Mesh 1" type="GEOMETRY" is_linked="False"/>
+				<INPUT id="968" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="969" name="Self Intersection" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<INPUT id="970" name="Hole Tolerant" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="971" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="972" name="Intersecting Edges" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="204" type="EXTRUDE_MESH" name="Extrude Mesh" label="" location="(1.8,-3.1)" hide="False" mode="FACES" mute="False" parent="Frame.003">
+			<INPUTS>
+				<INPUT id="973" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="974" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="975" name="Offset" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="976" name="Offset Scale" type="VALUE" is_linked="False" default_value="0.10000000149011612"/>
+				<INPUT id="977" name="Individual" type="BOOLEAN" is_linked="False" default_value="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="978" name="Mesh" type="GEOMETRY" is_linked="True"/>
+				<OUTPUT id="979" name="Top" type="BOOLEAN" is_linked="False" default_value="False"/>
+				<OUTPUT id="980" name="Side" type="BOOLEAN" is_linked="False" default_value="False"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="205" type="SET_MATERIAL" name="Set Material" label="" location="(17.3,9.6)" hide="False" mute="False" parent="Frame.009">
+			<INPUTS>
+				<INPUT id="981" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="982" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="983" name="Material" type="MATERIAL" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="984" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="206" type="SET_MATERIAL" name="Set Material.002" label="" location="(17.4,10.2)" hide="False" mute="False" parent="Frame.009">
+			<INPUTS>
+				<INPUT id="985" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="986" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="987" name="Material" type="MATERIAL" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="988" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="207" type="SET_MATERIAL" name="Set Material.003" label="" location="(17.4,10.9)" hide="False" mute="False" parent="Frame.009">
+			<INPUTS>
+				<INPUT id="989" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="990" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="991" name="Material" type="MATERIAL" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="992" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="208" type="SET_MATERIAL" name="Set Material.004" label="" location="(17.4,11.5)" hide="False" mute="False" parent="Frame.009">
+			<INPUTS>
+				<INPUT id="993" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="994" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="995" name="Material" type="MATERIAL" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="996" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="209" type="TRANSFORM_GEOMETRY" name="Transform Geometry.013" label="" location="(0.1,-0.9)" hide="False" mode="COMPONENTS" mute="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="997" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="998" name="Translation" type="VECTOR" is_linked="True"/>
+				<INPUT id="999" name="Rotation" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="1000" name="Scale" type="VECTOR" is_linked="False" default_value="[1.0, 1.0, 1.0]"/>
+				<INPUT id="1001" name="Transform" type="MATRIX" is_linked="False"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="1002" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="210" type="COMBXYZ" name="Combine XYZ.014" label="" location="(-0.8,-1.8)" hide="False" mute="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="1003" name="X" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="1004" name="Y" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="1005" name="Z" type="VALUE" is_linked="False" default_value="-0.07500000298023224"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="1006" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="211" type="REALIZE_INSTANCES" name="Realize Instances" label="" location="(13.4,14.9)" hide="False" mute="False" parent="Frame.010">
+			<INPUTS>
+				<INPUT id="1007" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="1008" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="1009" name="Realize All" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="1010" name="Depth" type="INT" is_linked="False" default_value="0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="1011" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="212" type="GROUP" name="Group.001" label="BevelNode" location="(9.4,10.3)" hide="False" mute="False" parent="Frame.011">
+			<INPUTS>
+				<INPUT id="1012" name="Points" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="1013" name="Radius" type="VALUE" is_linked="False" default_value="0.10000000149011612"/>
+				<INPUT id="1014" name="Subdivisions" type="INT" is_linked="False" default_value="3"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="1015" name="Bevelled Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="213" type="GROUP" name="Group.003" label="BevelNode" location="(9.4,11.2)" hide="False" mute="False" parent="Frame.011">
+			<INPUTS>
+				<INPUT id="1016" name="Points" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="1017" name="Radius" type="VALUE" is_linked="False" default_value="0.10000000149011612"/>
+				<INPUT id="1018" name="Subdivisions" type="INT" is_linked="False" default_value="3"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="1019" name="Bevelled Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="214" type="GROUP" name="Group.004" label="BevelNode" location="(4.2,10.4)" hide="False" mute="False" parent="Frame.011">
+			<INPUTS>
+				<INPUT id="1020" name="Points" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="1021" name="Radius" type="VALUE" is_linked="False" default_value="0.10000000149011612"/>
+				<INPUT id="1022" name="Subdivisions" type="INT" is_linked="False" default_value="3"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="1023" name="Bevelled Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="215" type="JOIN_GEOMETRY" name="Join Geometry.007" label="" location="(5.3,10.7)" hide="False" mute="False" parent="Frame.011">
+			<INPUTS>
+				<INPUT id="1024" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="1025" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="216" type="GROUP" name="Group.007" label="BevelNode" location="(4.2,11.2)" hide="False" mute="False" parent="Frame.011">
+			<INPUTS>
+				<INPUT id="1026" name="Points" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="1027" name="Radius" type="VALUE" is_linked="False" default_value="0.10000000149011612"/>
+				<INPUT id="1028" name="Subdivisions" type="INT" is_linked="False" default_value="3"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="1029" name="Bevelled Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="217" type="JOIN_GEOMETRY" name="Join Geometry.008" label="" location="(2.1,10.1)" hide="False" mute="False" parent="Frame.011">
+			<INPUTS>
+				<INPUT id="1030" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="1031" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="218" type="MERGE_BY_DISTANCE" name="Merge by Distance.001" label="" location="(3.0,10.0)" hide="True" mode="ALL" mute="False" parent="Frame.011">
+			<INPUTS>
+				<INPUT id="1032" name="Geometry" type="GEOMETRY" is_linked="True"/>
+				<INPUT id="1033" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
+				<INPUT id="1034" name="Distance" type="VALUE" is_linked="False" default_value="0.0010000000474974513"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="1035" name="Geometry" type="GEOMETRY" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="219" type="FRAME" name="Frame.009" label="Materials" location="(-0.8,0.0)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="220" type="FRAME" name="Frame.011" label="Bevel" location="(3.9,0.0)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+	</NODES>
+	<LINKS>
+		<LINK from_node="1" from_socket="7" to_node="2" to_socket="9"/>
+		<LINK from_node="1" from_socket="7" to_node="3" to_socket="14"/>
+		<LINK from_node="2" from_socket="13" to_node="4" to_socket="19"/>
+		<LINK from_node="3" from_socket="18" to_node="4" to_socket="19"/>
+		<LINK from_node="15" from_socket="82" to_node="0" to_socket="0"/>
+		<LINK from_node="5" from_socket="32" to_node="4" to_socket="19"/>
+		<LINK from_node="6" from_socket="44" to_node="4" to_socket="19"/>
+		<LINK from_node="7" from_socket="56" to_node="4" to_socket="19"/>
+		<LINK from_node="4" from_socket="20" to_node="8" to_socket="57"/>
+		<LINK from_node="10" from_socket="62" to_node="1" to_socket="6"/>
+		<LINK from_node="11" from_socket="66" to_node="12" to_socket="67"/>
+		<LINK from_node="11" from_socket="66" to_node="13" to_socket="71"/>
+		<LINK from_node="12" from_socket="70" to_node="14" to_socket="75"/>
+		<LINK from_node="13" from_socket="74" to_node="14" to_socket="76"/>
+		<LINK from_node="20" from_socket="104" to_node="14" to_socket="77"/>
+		<LINK from_node="19" from_socket="100" to_node="14" to_socket="78"/>
+		<LINK from_node="14" from_socket="79" to_node="16" to_socket="83"/>
+		<LINK from_node="16" from_socket="85" to_node="17" to_socket="86"/>
+		<LINK from_node="18" from_socket="95" to_node="17" to_socket="87"/>
+		<LINK from_node="21" from_socket="106" to_node="19" to_socket="97"/>
+		<LINK from_node="21" from_socket="105" to_node="20" to_socket="101"/>
+		<LINK from_node="21" from_socket="105" to_node="12" to_socket="68"/>
+		<LINK from_node="21" from_socket="106" to_node="13" to_socket="72"/>
+		<LINK from_node="24" from_socket="122" to_node="25" to_socket="123"/>
+		<LINK from_node="24" from_socket="122" to_node="26" to_socket="127"/>
+		<LINK from_node="29" from_socket="140" to_node="27" to_socket="131"/>
+		<LINK from_node="29" from_socket="139" to_node="28" to_socket="135"/>
+		<LINK from_node="29" from_socket="139" to_node="25" to_socket="124"/>
+		<LINK from_node="29" from_socket="140" to_node="26" to_socket="128"/>
+		<LINK from_node="25" from_socket="126" to_node="23" to_socket="113"/>
+		<LINK from_node="26" from_socket="130" to_node="23" to_socket="114"/>
+		<LINK from_node="28" from_socket="138" to_node="23" to_socket="115"/>
+		<LINK from_node="27" from_socket="134" to_node="23" to_socket="116"/>
+		<LINK from_node="29" from_socket="141" to_node="30" to_socket="147"/>
+		<LINK from_node="30" from_socket="150" to_node="25" to_socket="125"/>
+		<LINK from_node="30" from_socket="150" to_node="26" to_socket="129"/>
+		<LINK from_node="8" from_socket="58" to_node="31" to_socket="151"/>
+		<LINK from_node="29" from_socket="142" to_node="24" to_socket="120"/>
+		<LINK from_node="29" from_socket="141" to_node="24" to_socket="119"/>
+		<LINK from_node="32" from_socket="160" to_node="33" to_socket="166"/>
+		<LINK from_node="34" from_socket="172" to_node="31" to_socket="152"/>
+		<LINK from_node="33" from_socket="168" to_node="34" to_socket="169"/>
+		<LINK from_node="32" from_socket="157" to_node="35" to_socket="173"/>
+		<LINK from_node="32" from_socket="159" to_node="36" to_socket="177"/>
+		<LINK from_node="35" from_socket="176" to_node="33" to_socket="165"/>
+		<LINK from_node="36" from_socket="180" to_node="33" to_socket="167"/>
+		<LINK from_node="38" from_socket="188" to_node="37" to_socket="181"/>
+		<LINK from_node="39" from_socket="192" to_node="37" to_socket="183"/>
+		<LINK from_node="32" from_socket="158" to_node="38" to_socket="185"/>
+		<LINK from_node="32" from_socket="159" to_node="39" to_socket="189"/>
+		<LINK from_node="37" from_socket="184" to_node="34" to_socket="170"/>
+		<LINK from_node="32" from_socket="160" to_node="37" to_socket="182"/>
+		<LINK from_node="41" from_socket="202" to_node="42" to_socket="208"/>
+		<LINK from_node="43" from_socket="214" to_node="40" to_socket="194"/>
+		<LINK from_node="49" from_socket="238" to_node="43" to_socket="211"/>
+		<LINK from_node="41" from_socket="199" to_node="44" to_socket="215"/>
+		<LINK from_node="41" from_socket="201" to_node="45" to_socket="219"/>
+		<LINK from_node="44" from_socket="218" to_node="42" to_socket="207"/>
+		<LINK from_node="45" from_socket="222" to_node="42" to_socket="209"/>
+		<LINK from_node="47" from_socket="230" to_node="46" to_socket="223"/>
+		<LINK from_node="48" from_socket="234" to_node="46" to_socket="225"/>
+		<LINK from_node="41" from_socket="200" to_node="47" to_socket="227"/>
+		<LINK from_node="41" from_socket="201" to_node="48" to_socket="231"/>
+		<LINK from_node="46" from_socket="226" to_node="43" to_socket="212"/>
+		<LINK from_node="41" from_socket="202" to_node="46" to_socket="224"/>
+		<LINK from_node="42" from_socket="210" to_node="49" to_socket="235"/>
+		<LINK from_node="31" from_socket="156" to_node="50" to_socket="239"/>
+		<LINK from_node="40" from_socket="198" to_node="50" to_socket="239"/>
+		<LINK from_node="8" from_socket="58" to_node="40" to_socket="193"/>
+		<LINK from_node="8" from_socket="58" to_node="51" to_socket="241"/>
+		<LINK from_node="52" from_socket="250" to_node="53" to_socket="256"/>
+		<LINK from_node="54" from_socket="262" to_node="51" to_socket="242"/>
+		<LINK from_node="53" from_socket="258" to_node="54" to_socket="259"/>
+		<LINK from_node="52" from_socket="247" to_node="55" to_socket="263"/>
+		<LINK from_node="52" from_socket="249" to_node="56" to_socket="267"/>
+		<LINK from_node="55" from_socket="266" to_node="53" to_socket="255"/>
+		<LINK from_node="56" from_socket="270" to_node="53" to_socket="257"/>
+		<LINK from_node="58" from_socket="278" to_node="57" to_socket="271"/>
+		<LINK from_node="59" from_socket="282" to_node="57" to_socket="273"/>
+		<LINK from_node="52" from_socket="248" to_node="58" to_socket="275"/>
+		<LINK from_node="52" from_socket="249" to_node="59" to_socket="279"/>
+		<LINK from_node="60" from_socket="286" to_node="54" to_socket="260"/>
+		<LINK from_node="52" from_socket="250" to_node="57" to_socket="272"/>
+		<LINK from_node="57" from_socket="274" to_node="60" to_socket="283"/>
+		<LINK from_node="51" from_socket="246" to_node="50" to_socket="239"/>
+		<LINK from_node="62" from_socket="289" to_node="10" to_socket="59"/>
+		<LINK from_node="21" from_socket="107" to_node="11" to_socket="63"/>
+		<LINK from_node="21" from_socket="108" to_node="11" to_socket="64"/>
+		<LINK from_node="23" from_socket="117" to_node="64" to_socket="295"/>
+		<LINK from_node="66" from_socket="316" to_node="67" to_socket="322"/>
+		<LINK from_node="66" from_socket="315" to_node="67" to_socket="321"/>
+		<LINK from_node="66" from_socket="313" to_node="68" to_socket="325"/>
+		<LINK from_node="67" from_socket="324" to_node="68" to_socket="326"/>
+		<LINK from_node="66" from_socket="315" to_node="69" to_socket="329"/>
+		<LINK from_node="69" from_socket="332" to_node="65" to_socket="302"/>
+		<LINK from_node="72" from_socket="344" to_node="70" to_socket="334"/>
+		<LINK from_node="68" from_socket="328" to_node="70" to_socket="333"/>
+		<LINK from_node="212" from_socket="1015" to_node="75" to_socket="353"/>
+		<LINK from_node="66" from_socket="315" to_node="73" to_socket="345"/>
+		<LINK from_node="73" from_socket="348" to_node="65" to_socket="305"/>
+		<LINK from_node="65" from_socket="312" to_node="76" to_socket="355"/>
+		<LINK from_node="71" from_socket="340" to_node="77" to_socket="361"/>
+		<LINK from_node="78" from_socket="368" to_node="76" to_socket="356"/>
+		<LINK from_node="77" from_socket="364" to_node="78" to_socket="366"/>
+		<LINK from_node="66" from_socket="314" to_node="71" to_socket="337"/>
+		<LINK from_node="68" from_socket="328" to_node="65" to_socket="304"/>
+		<LINK from_node="70" from_socket="336" to_node="65" to_socket="303"/>
+		<LINK from_node="66" from_socket="315" to_node="72" to_socket="341"/>
+		<LINK from_node="66" from_socket="315" to_node="80" to_socket="377"/>
+		<LINK from_node="80" from_socket="380" to_node="77" to_socket="363"/>
+		<LINK from_node="67" from_socket="324" to_node="77" to_socket="362"/>
+		<LINK from_node="83" from_socket="395" to_node="81" to_socket="381"/>
+		<LINK from_node="82" from_socket="392" to_node="81" to_socket="383"/>
+		<LINK from_node="76" from_socket="360" to_node="83" to_socket="393"/>
+		<LINK from_node="86" from_socket="411" to_node="87" to_socket="417"/>
+		<LINK from_node="86" from_socket="410" to_node="87" to_socket="416"/>
+		<LINK from_node="86" from_socket="408" to_node="88" to_socket="420"/>
+		<LINK from_node="87" from_socket="419" to_node="88" to_socket="421"/>
+		<LINK from_node="86" from_socket="410" to_node="89" to_socket="424"/>
+		<LINK from_node="89" from_socket="427" to_node="85" to_socket="397"/>
+		<LINK from_node="92" from_socket="439" to_node="90" to_socket="429"/>
+		<LINK from_node="88" from_socket="423" to_node="90" to_socket="428"/>
+		<LINK from_node="86" from_socket="410" to_node="93" to_socket="440"/>
+		<LINK from_node="93" from_socket="443" to_node="85" to_socket="400"/>
+		<LINK from_node="85" from_socket="407" to_node="94" to_socket="444"/>
+		<LINK from_node="91" from_socket="435" to_node="95" to_socket="450"/>
+		<LINK from_node="96" from_socket="457" to_node="94" to_socket="445"/>
+		<LINK from_node="86" from_socket="409" to_node="91" to_socket="432"/>
+		<LINK from_node="86" from_socket="410" to_node="92" to_socket="436"/>
+		<LINK from_node="86" from_socket="410" to_node="97" to_socket="458"/>
+		<LINK from_node="97" from_socket="461" to_node="95" to_socket="452"/>
+		<LINK from_node="87" from_socket="419" to_node="95" to_socket="451"/>
+		<LINK from_node="100" from_socket="476" to_node="98" to_socket="462"/>
+		<LINK from_node="99" from_socket="473" to_node="98" to_socket="464"/>
+		<LINK from_node="94" from_socket="449" to_node="100" to_socket="474"/>
+		<LINK from_node="95" from_socket="453" to_node="102" to_socket="477"/>
+		<LINK from_node="102" from_socket="480" to_node="96" to_socket="455"/>
+		<LINK from_node="90" from_socket="431" to_node="85" to_socket="399"/>
+		<LINK from_node="88" from_socket="423" to_node="85" to_socket="398"/>
+		<LINK from_node="86" from_socket="410" to_node="103" to_socket="481"/>
+		<LINK from_node="103" from_socket="484" to_node="96" to_socket="454"/>
+		<LINK from_node="105" from_socket="500" to_node="106" to_socket="506"/>
+		<LINK from_node="105" from_socket="499" to_node="106" to_socket="505"/>
+		<LINK from_node="106" from_socket="508" to_node="107" to_socket="510"/>
+		<LINK from_node="105" from_socket="499" to_node="108" to_socket="513"/>
+		<LINK from_node="108" from_socket="516" to_node="104" to_socket="486"/>
+		<LINK from_node="111" from_socket="528" to_node="109" to_socket="518"/>
+		<LINK from_node="107" from_socket="512" to_node="109" to_socket="517"/>
+		<LINK from_node="105" from_socket="499" to_node="112" to_socket="529"/>
+		<LINK from_node="112" from_socket="532" to_node="104" to_socket="489"/>
+		<LINK from_node="104" from_socket="496" to_node="113" to_socket="533"/>
+		<LINK from_node="110" from_socket="524" to_node="114" to_socket="539"/>
+		<LINK from_node="115" from_socket="546" to_node="113" to_socket="534"/>
+		<LINK from_node="105" from_socket="499" to_node="111" to_socket="525"/>
+		<LINK from_node="105" from_socket="499" to_node="116" to_socket="547"/>
+		<LINK from_node="116" from_socket="550" to_node="114" to_socket="541"/>
+		<LINK from_node="106" from_socket="508" to_node="114" to_socket="540"/>
+		<LINK from_node="119" from_socket="565" to_node="117" to_socket="551"/>
+		<LINK from_node="118" from_socket="562" to_node="117" to_socket="553"/>
+		<LINK from_node="113" from_socket="538" to_node="119" to_socket="563"/>
+		<LINK from_node="213" from_socket="1019" to_node="75" to_socket="353"/>
+		<LINK from_node="105" from_socket="497" to_node="110" to_socket="521"/>
+		<LINK from_node="105" from_socket="498" to_node="107" to_socket="509"/>
+		<LINK from_node="105" from_socket="499" to_node="74" to_socket="349"/>
+		<LINK from_node="74" from_socket="352" to_node="118" to_socket="561"/>
+		<LINK from_node="121" from_socket="569" to_node="99" to_socket="472"/>
+		<LINK from_node="86" from_socket="410" to_node="121" to_socket="566"/>
+		<LINK from_node="66" from_socket="315" to_node="122" to_socket="570"/>
+		<LINK from_node="122" from_socket="573" to_node="82" to_socket="391"/>
+		<LINK from_node="114" from_socket="542" to_node="115" to_socket="543"/>
+		<LINK from_node="107" from_socket="512" to_node="104" to_socket="487"/>
+		<LINK from_node="109" from_socket="520" to_node="104" to_socket="488"/>
+		<LINK from_node="64" from_socket="299" to_node="123" to_socket="574"/>
+		<LINK from_node="123" from_socket="579" to_node="124" to_socket="582"/>
+		<LINK from_node="64" from_socket="299" to_node="124" to_socket="582"/>
+		<LINK from_node="127" from_socket="603" to_node="128" to_socket="609"/>
+		<LINK from_node="127" from_socket="602" to_node="128" to_socket="608"/>
+		<LINK from_node="128" from_socket="611" to_node="129" to_socket="613"/>
+		<LINK from_node="127" from_socket="602" to_node="130" to_socket="616"/>
+		<LINK from_node="130" from_socket="619" to_node="126" to_socket="589"/>
+		<LINK from_node="133" from_socket="631" to_node="131" to_socket="621"/>
+		<LINK from_node="129" from_socket="615" to_node="131" to_socket="620"/>
+		<LINK from_node="127" from_socket="602" to_node="134" to_socket="632"/>
+		<LINK from_node="134" from_socket="635" to_node="126" to_socket="592"/>
+		<LINK from_node="126" from_socket="599" to_node="135" to_socket="636"/>
+		<LINK from_node="132" from_socket="627" to_node="136" to_socket="642"/>
+		<LINK from_node="137" from_socket="649" to_node="135" to_socket="637"/>
+		<LINK from_node="127" from_socket="602" to_node="133" to_socket="628"/>
+		<LINK from_node="127" from_socket="602" to_node="138" to_socket="650"/>
+		<LINK from_node="138" from_socket="653" to_node="136" to_socket="644"/>
+		<LINK from_node="128" from_socket="611" to_node="136" to_socket="643"/>
+		<LINK from_node="141" from_socket="668" to_node="139" to_socket="654"/>
+		<LINK from_node="140" from_socket="665" to_node="139" to_socket="656"/>
+		<LINK from_node="135" from_socket="641" to_node="141" to_socket="666"/>
+		<LINK from_node="127" from_socket="600" to_node="132" to_socket="624"/>
+		<LINK from_node="127" from_socket="601" to_node="129" to_socket="612"/>
+		<LINK from_node="127" from_socket="602" to_node="125" to_socket="584"/>
+		<LINK from_node="125" from_socket="587" to_node="140" to_socket="664"/>
+		<LINK from_node="136" from_socket="645" to_node="137" to_socket="646"/>
+		<LINK from_node="131" from_socket="623" to_node="126" to_socket="590"/>
+		<LINK from_node="129" from_socket="615" to_node="126" to_socket="591"/>
+		<LINK from_node="86" from_socket="410" to_node="143" to_socket="669"/>
+		<LINK from_node="143" from_socket="672" to_node="88" to_socket="422"/>
+		<LINK from_node="127" from_socket="602" to_node="144" to_socket="673"/>
+		<LINK from_node="144" from_socket="676" to_node="129" to_socket="614"/>
+		<LINK from_node="145" from_socket="680" to_node="137" to_socket="647"/>
+		<LINK from_node="144" from_socket="676" to_node="145" to_socket="677"/>
+		<LINK from_node="147" from_socket="695" to_node="148" to_socket="701"/>
+		<LINK from_node="148" from_socket="704" to_node="146" to_socket="681"/>
+		<LINK from_node="148" from_socket="704" to_node="146" to_socket="682"/>
+		<LINK from_node="152" from_socket="723" to_node="150" to_socket="709"/>
+		<LINK from_node="151" from_socket="720" to_node="150" to_socket="711"/>
+		<LINK from_node="149" from_socket="708" to_node="151" to_socket="719"/>
+		<LINK from_node="154" from_socket="731" to_node="152" to_socket="721"/>
+		<LINK from_node="147" from_socket="695" to_node="149" to_socket="705"/>
+		<LINK from_node="150" from_socket="714" to_node="153" to_socket="724"/>
+		<LINK from_node="139" from_socket="659" to_node="153" to_socket="724"/>
+		<LINK from_node="215" from_socket="1025" to_node="75" to_socket="353"/>
+		<LINK from_node="146" from_socket="692" to_node="154" to_socket="726"/>
+		<LINK from_node="155" from_socket="735" to_node="154" to_socket="727"/>
+		<LINK from_node="157" from_socket="743" to_node="158" to_socket="744"/>
+		<LINK from_node="159" from_socket="751" to_node="158" to_socket="746"/>
+		<LINK from_node="156" from_socket="739" to_node="158" to_socket="745"/>
+		<LINK from_node="147" from_socket="695" to_node="156" to_socket="736"/>
+		<LINK from_node="147" from_socket="696" to_node="156" to_socket="737"/>
+		<LINK from_node="147" from_socket="695" to_node="159" to_socket="748"/>
+		<LINK from_node="158" from_socket="747" to_node="155" to_socket="732"/>
+		<LINK from_node="160" from_socket="755" to_node="161" to_socket="756"/>
+		<LINK from_node="147" from_socket="694" to_node="160" to_socket="752"/>
+		<LINK from_node="156" from_socket="739" to_node="161" to_socket="757"/>
+		<LINK from_node="147" from_socket="693" to_node="157" to_socket="740"/>
+		<LINK from_node="159" from_socket="751" to_node="161" to_socket="758"/>
+		<LINK from_node="161" from_socket="759" to_node="155" to_socket="733"/>
+		<LINK from_node="153" from_socket="725" to_node="162" to_socket="760"/>
+		<LINK from_node="166" from_socket="790" to_node="167" to_socket="796"/>
+		<LINK from_node="166" from_socket="791" to_node="167" to_socket="797"/>
+		<LINK from_node="166" from_socket="790" to_node="168" to_socket="800"/>
+		<LINK from_node="166" from_socket="788" to_node="169" to_socket="804"/>
+		<LINK from_node="166" from_socket="789" to_node="170" to_socket="808"/>
+		<LINK from_node="167" from_socket="799" to_node="169" to_socket="805"/>
+		<LINK from_node="167" from_socket="799" to_node="170" to_socket="809"/>
+		<LINK from_node="169" from_socket="807" to_node="164" to_socket="764"/>
+		<LINK from_node="170" from_socket="811" to_node="164" to_socket="765"/>
+		<LINK from_node="208" from_socket="996" to_node="15" to_socket="81"/>
+		<LINK from_node="168" from_socket="803" to_node="169" to_socket="806"/>
+		<LINK from_node="166" from_socket="790" to_node="172" to_socket="814"/>
+		<LINK from_node="172" from_socket="817" to_node="170" to_socket="810"/>
+		<LINK from_node="173" from_socket="820" to_node="174" to_socket="826"/>
+		<LINK from_node="173" from_socket="821" to_node="174" to_socket="827"/>
+		<LINK from_node="173" from_socket="820" to_node="175" to_socket="830"/>
+		<LINK from_node="173" from_socket="818" to_node="176" to_socket="834"/>
+		<LINK from_node="173" from_socket="819" to_node="177" to_socket="838"/>
+		<LINK from_node="174" from_socket="829" to_node="176" to_socket="835"/>
+		<LINK from_node="174" from_socket="829" to_node="177" to_socket="839"/>
+		<LINK from_node="175" from_socket="833" to_node="176" to_socket="836"/>
+		<LINK from_node="173" from_socket="820" to_node="178" to_socket="842"/>
+		<LINK from_node="178" from_socket="845" to_node="177" to_socket="840"/>
+		<LINK from_node="165" from_socket="787" to_node="171" to_socket="812"/>
+		<LINK from_node="176" from_socket="837" to_node="165" to_socket="776"/>
+		<LINK from_node="164" from_socket="775" to_node="171" to_socket="812"/>
+		<LINK from_node="181" from_socket="862" to_node="171" to_socket="812"/>
+		<LINK from_node="177" from_socket="841" to_node="165" to_socket="777"/>
+		<LINK from_node="179" from_socket="851" to_node="181" to_socket="857"/>
+		<LINK from_node="180" from_socket="856" to_node="181" to_socket="858"/>
+		<LINK from_node="182" from_socket="865" to_node="183" to_socket="871"/>
+		<LINK from_node="182" from_socket="866" to_node="183" to_socket="872"/>
+		<LINK from_node="182" from_socket="865" to_node="184" to_socket="875"/>
+		<LINK from_node="188" from_socket="894" to_node="185" to_socket="879"/>
+		<LINK from_node="189" from_socket="898" to_node="186" to_socket="883"/>
+		<LINK from_node="183" from_socket="874" to_node="185" to_socket="880"/>
+		<LINK from_node="183" from_socket="874" to_node="186" to_socket="884"/>
+		<LINK from_node="184" from_socket="878" to_node="185" to_socket="881"/>
+		<LINK from_node="182" from_socket="865" to_node="187" to_socket="887"/>
+		<LINK from_node="187" from_socket="890" to_node="186" to_socket="885"/>
+		<LINK from_node="185" from_socket="882" to_node="180" to_socket="853"/>
+		<LINK from_node="186" from_socket="886" to_node="180" to_socket="854"/>
+		<LINK from_node="182" from_socket="863" to_node="188" to_socket="891"/>
+		<LINK from_node="182" from_socket="864" to_node="189" to_socket="895"/>
+		<LINK from_node="179" from_socket="851" to_node="190" to_socket="899"/>
+		<LINK from_node="180" from_socket="856" to_node="191" to_socket="906"/>
+		<LINK from_node="191" from_socket="909" to_node="190" to_socket="900"/>
+		<LINK from_node="190" from_socket="904" to_node="171" to_socket="812"/>
+		<LINK from_node="180" from_socket="856" to_node="193" to_socket="918"/>
+		<LINK from_node="193" from_socket="921" to_node="192" to_socket="912"/>
+		<LINK from_node="192" from_socket="916" to_node="171" to_socket="812"/>
+		<LINK from_node="179" from_socket="851" to_node="192" to_socket="911"/>
+		<LINK from_node="180" from_socket="856" to_node="195" to_socket="930"/>
+		<LINK from_node="195" from_socket="933" to_node="194" to_socket="924"/>
+		<LINK from_node="179" from_socket="851" to_node="194" to_socket="923"/>
+		<LINK from_node="194" from_socket="928" to_node="171" to_socket="812"/>
+		<LINK from_node="201" from_socket="958" to_node="196" to_socket="935"/>
+		<LINK from_node="202" from_socket="964" to_node="196" to_socket="936"/>
+		<LINK from_node="207" from_socket="992" to_node="15" to_socket="81"/>
+		<LINK from_node="205" from_socket="984" to_node="15" to_socket="81"/>
+		<LINK from_node="206" from_socket="988" to_node="15" to_socket="81"/>
+		<LINK from_node="50" from_socket="240" to_node="197" to_socket="942"/>
+		<LINK from_node="199" from_socket="952" to_node="200" to_socket="955"/>
+		<LINK from_node="171" from_socket="813" to_node="201" to_socket="957"/>
+		<LINK from_node="196" from_socket="939" to_node="199" to_socket="947"/>
+		<LINK from_node="200" from_socket="956" to_node="197" to_socket="941"/>
+		<LINK from_node="23" from_socket="117" to_node="203" to_socket="968"/>
+		<LINK from_node="50" from_socket="240" to_node="203" to_socket="968"/>
+		<LINK from_node="203" from_socket="971" to_node="202" to_socket="959"/>
+		<LINK from_node="203" from_socket="971" to_node="196" to_socket="936"/>
+		<LINK from_node="50" from_socket="240" to_node="204" to_socket="973"/>
+		<LINK from_node="204" from_socket="978" to_node="64" to_socket="296"/>
+		<LINK from_node="209" from_socket="1002" to_node="205" to_socket="981"/>
+		<LINK from_node="75" from_socket="354" to_node="206" to_socket="985"/>
+		<LINK from_node="124" from_socket="583" to_node="207" to_socket="989"/>
+		<LINK from_node="211" from_socket="1011" to_node="208" to_socket="993"/>
+		<LINK from_node="79" from_socket="375" to_node="205" to_socket="983"/>
+		<LINK from_node="79" from_socket="373" to_node="206" to_socket="987"/>
+		<LINK from_node="79" from_socket="374" to_node="208" to_socket="995"/>
+		<LINK from_node="79" from_socket="373" to_node="207" to_socket="991"/>
+		<LINK from_node="17" from_socket="89" to_node="209" to_socket="997"/>
+		<LINK from_node="210" from_socket="1006" to_node="209" to_socket="998"/>
+		<LINK from_node="197" from_socket="945" to_node="211" to_socket="1007"/>
+		<LINK from_node="81" from_socket="386" to_node="212" to_socket="1012"/>
+		<LINK from_node="117" from_socket="556" to_node="213" to_socket="1016"/>
+		<LINK from_node="216" from_socket="1029" to_node="215" to_socket="1024"/>
+		<LINK from_node="214" from_socket="1023" to_node="215" to_socket="1024"/>
+		<LINK from_node="162" from_socket="763" to_node="216" to_socket="1026"/>
+		<LINK from_node="217" from_socket="1031" to_node="218" to_socket="1032"/>
+		<LINK from_node="218" from_socket="1035" to_node="214" to_socket="1020"/>
+		<LINK from_node="150" from_socket="714" to_node="217" to_socket="1030"/>
+		<LINK from_node="98" from_socket="467" to_node="217" to_socket="1030"/>
+	</LINKS>
+</NODE_XML>

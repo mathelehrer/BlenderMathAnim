@@ -15,7 +15,7 @@ from interface.ibpy import get_material, make_new_socket, OPERATORS, get_obj
 from interface.interface_constants import blender_version
 from mathematics.groups.e8 import E8Lattice
 from utils.color_conversion import get_color
-from utils.constants import RES_XML
+from utils.constants import RES_XML, RES_XML2
 from utils.kwargs import get_from_kwargs
 from utils.string_utils import parse_vector
 
@@ -1916,15 +1916,16 @@ class MeshBoolean(GreenNode):
         if mesh_2:
             self.tree.links.new(mesh_2, self.node.inputs["Mesh 2"])
 
-        if isinstance(self_intersection, bool):
-            self.node.inputs["Self Intersection"].default_value = self_intersection
-        else:
-            tree.links.new(self_intersection, self.node.inputs["Self Intersection"])
+        if solver=="EXACT":
+            if isinstance(self_intersection, bool):
+                self.node.inputs["Self Intersection"].default_value = self_intersection
+            else:
+                tree.links.new(self_intersection, self.node.inputs["Self Intersection"])
 
-        if isinstance(hole_tolerant,bool):
-            self.node.inputs["Hole Tolerant"].default_value=hole_tolerant
-        else:
-            tree.links.new(hole_tolerant,self.node.inputs["Hole Tolerant"])
+            if isinstance(hole_tolerant,bool):
+                self.node.inputs["Hole Tolerant"].default_value=hole_tolerant
+            else:
+                tree.links.new(hole_tolerant,self.node.inputs["Hole Tolerant"])
 
 #################
 ## Attributes ###
@@ -4016,7 +4017,6 @@ class Rotation(GreenNode):
 
         return group
 
-
 class Matrix(GreenNode):
     """
     create a matrix node with number entries,
@@ -4062,7 +4062,6 @@ class Matrix(GreenNode):
                 vec = InputVector(tree, value=Vector(comps), location=[-2 + r, i])
                 tree_links.new(vec.std_out, group_outputs.inputs["row_" + str(r) + "_" + str(i // 3)])
         return group
-
 
 class Transpose(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -4137,7 +4136,6 @@ class Transpose(GreenNode):
             tree_links.new(trans_mat.outputs[o], group_outputs.inputs[o])
 
         return group
-
 
 class LinearMap(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -4228,7 +4226,6 @@ class LinearMap(GreenNode):
 
         return group
 
-
 class ProjectionMap(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  in_dimension=8,
@@ -4318,6 +4315,515 @@ class ProjectionMap(GreenNode):
 
         return group
 
+#auxiliary Node groups
+
+class TransformPositionNode(NodeGroup):
+    def __init__(self,tree,**kwargs):
+        self.name = get_from_kwargs(kwargs,"name",
+                                    "TransformPositionNode")
+
+        super().__init__(tree,inputs={"Position":"VECTOR","Location":"VECTOR","Rotation":"ROTATION","Scale":"VECTOR","Undo Transformation":"BOOLEAN"},
+                         outputs={"Position":"VECTOR"},name=self.name,offset_y=-400,**kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+    def fill_group_with_node(self,tree,**kwargs):
+        do_transform = make_function(tree, name="Do Transform",
+                                     functions={
+                                         "result": "position,scl,mul,rotation,rot_vec,location,add"
+                                     }, inputs=["position", "scl", "rotation", "location"], outputs=["result"],
+                                     vectors=["position", "scl",  "location", "result"],rotations=["rotation"],hide=False)
+
+        tree.links.new(self.group_inputs.outputs["Position"], do_transform.inputs["position"])
+        tree.links.new(self.group_inputs.outputs["Scale"], do_transform.inputs["scl"])
+        tree.links.new(self.group_inputs.outputs["Rotation"], do_transform.inputs["rotation"])
+        tree.links.new(self.group_inputs.outputs["Location"], do_transform.inputs["location"])
+
+        undo_transform = make_function(tree, name="Undo Transform",
+                                     functions={
+                                         "result": "position,location,sub,rotation,inv_rot,rot_vec,scl,div"
+                                     }, inputs=["position", "scl", "rotation", "location"], outputs=["result"],
+                                     vectors=["position", "scl", "location", "result"],rotations=["rotation"],hide=False)
+
+        tree.links.new(self.group_inputs.outputs["Position"], undo_transform.inputs["position"])
+        tree.links.new(self.group_inputs.outputs["Scale"], undo_transform.inputs["scl"])
+        tree.links.new(self.group_inputs.outputs["Rotation"], undo_transform.inputs["rotation"])
+        tree.links.new(self.group_inputs.outputs["Location"], undo_transform.inputs["location"])
+
+        switch = Switch(tree,input_type="VECTOR",switch=self.group_inputs.outputs["Undo Transformation"],
+                        false=do_transform.outputs["result"],true=undo_transform.outputs["result"])
+        tree.links.new(switch.outputs["Output"],self.group_outputs.inputs["Position"])
+
+class CoxeterReflectionNode(NodeGroup):
+    def __init__(self,tree,position = None,normal = None, progress = None, **kwargs):
+        """
+        a node that performs a Coxeter reflection on an object. The reflecion matrix is entered as
+        three row vectors. A parameter scales continuously from no reflection 0 to full reflection 1
+        """
+        self.name = get_from_kwargs(kwargs, "name",
+                                    "ReflectionNode")
+
+        super().__init__(tree,
+                         inputs={"position":"VECTOR", "normal": "VECTOR","progress": "FLOAT"},
+                         outputs={"position":"VECTOR"}, name=self.name, offset_y=0, **kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+        self.std_out = self.node.outputs["position"]
+
+        if position:
+            if isinstance(position,(list,Vector)):
+                self.inputs["position"].default_value = position
+            else:
+                tree.links.new(position,self.inputs["position"])
+        if normal:
+            if isinstance(normal,(list,Vector)):
+                self.inputs["normal"].default_value = normal
+            else:
+                tree.links.new(normal,self.inputs["normal"])
+        if progress:
+            if isinstance(progress,(int,float)):
+                self.inputs["progress"].default_value = progress
+            else:
+                tree.links.new(progress,self.inputs["progress"])
+
+    def fill_group_with_node(self,tree,**kwargs):
+        """
+        create tensor product 1 - 2 *n^T n
+        """
+
+        tensor = make_function(tree,name="TensorProduct",
+                    functions={
+                        "col1":["1,n_x,n_x,*,2,progress,*,*,-","0,n_x,n_y,*,2,progress,*,*,-","0,n_x,n_z,*,2,progress,*,*,-"],
+                        "col2":["0,n_y,n_x,*,2,progress,*,*,-","1,n_y,n_y,*,2,progress,*,*,-","0,n_y,n_z,*,2,progress,*,*,-"],
+                        "col3":["0,n_z,n_x,*,2,progress,*,*,-","0,n_z,n_y,*,2,progress,*,*,-","1,n_z,n_z,*,2,progress,*,*,-"]
+                    },inputs=["n","progress"],outputs=["col1","col2","col3"],scalars=["progress"],vectors=["n","col1","col2","col3"],hide=True)
+        tree.links.new(self.group_inputs.outputs["normal"],tensor.inputs["n"])
+        tree.links.new(self.group_inputs.outputs["progress"],tensor.inputs["progress"])
+
+        separate_col1 = SeparateXYZ(tree,vector=tensor.outputs["col1"])
+        separate_col2 = SeparateXYZ(tree,vector=tensor.outputs["col2"])
+        separate_col3 = SeparateXYZ(tree,vector=tensor.outputs["col3"])
+
+        combine_matrix = CombineMatrix(tree)
+
+        for out,inp in zip(["X","Y","Z"],["Row 1","Row 2","Row 3"]):
+            tree.links.new(separate_col1.outputs[out],combine_matrix.inputs["Column 1 "+inp])
+            tree.links.new(separate_col2.outputs[out],combine_matrix.inputs["Column 2 "+inp])
+            tree.links.new(separate_col3.outputs[out],combine_matrix.inputs["Column 3 "+inp])
+
+        transform_point = TransformPoint(tree,vector=self.group_inputs.outputs["position"],transform=combine_matrix.std_out)
+        tree.links.new(transform_point.std_out, self.group_outputs.inputs["position"])
+
+class BeveledCubeNode(NodeGroup):
+    def __init__(self,tree,size=1,bevel=0.01,**kwargs):
+        self.name = get_from_kwargs(kwargs,"name","BeveledCubeNode")
+        super().__init__(tree,inputs={"Size":"FLOAT","Bevel":"FLOAT"},
+                         outputs={"Mesh":"GEOMETRY"},auto_layout=True,name=self.name,**kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_out = self.node.outputs["Mesh"]
+
+        if isinstance(size,(int,float)):
+            self.node.inputs["Size"].default_value =size
+        else:
+            tree.links.new(size,self.node.inputs["Size"])
+
+        if isinstance(bevel,(int,float)):
+            self.node.inputs["Bevel"].default_value =bevel
+        else:
+            tree.links.new(bevel,self.node.inputs["Bevel"])
+
+    def fill_group_with_node(self,tree,**kwargs):
+        links = tree.links
+        bevel_function = make_function(tree, name="BevelFunction",
+                                       functions={
+                                           "bevel": "size,bevel,/"
+                                       }, inputs=["size", "bevel"], outputs=["bevel"],
+                                       scalars=["size", "bevel"], hide=False)
+
+        links.new(self.group_inputs.outputs["Bevel"], bevel_function.inputs["bevel"])
+        links.new(self.group_inputs.outputs["Size"], bevel_function.inputs["size"])
+
+
+        cube = CubeMesh(tree, size=self.group_inputs.outputs["Size"], hide=False)
+        cube2 = CubeMesh(tree, size=bevel_function.outputs["bevel"], hide=False)
+        subsurf = SubdivisionSurface(tree, level=3, mesh=cube2.geometry_out, hide=False,)
+        iop2 = InstanceOnPoints(tree, scale=self.group_inputs.outputs["Size"], instance=subsurf.geometry_out, hide=False)
+        realize_instance2 = RealizeInstances(tree, hide=False)
+        convex_hull = ConvexHull(tree, hide=False)
+
+        create_geometry_line(tree, [cube, iop2, realize_instance2, convex_hull],out=self.group_outputs.inputs["Mesh"])
+
+class UnfoldMeshNode(NodeGroup):
+    def __init__(self,tree,progression=0,range=20,root_index=0,scale_elements=0.99,**kwargs):
+        self.name = get_from_kwargs(kwargs,"name","UnfoldMeshNode")
+        super().__init__(tree,inputs={"Mesh":"GEOMETRY","Progression":"FLOAT","Range":"FLOAT","RootIndex":"INT","ScaleElements":"FLOAT"},
+                         outputs={"Mesh":"GEOMETRY"},auto_layout=False,name=self.name,**kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_in = self.node.inputs["Mesh"]
+        self.geometry_out = self.node.outputs["Mesh"]
+
+        if isinstance(range,(int,float)):
+            self.node.inputs["Range"].default_value =range
+        else:
+            tree.links.new(range,self.node.inputs["Range"])
+
+        if isinstance(progression,(int,float)):
+            self.node.inputs["Progression"].default_value =progression
+        else:
+            tree.links.new(progression,self.node.inputs["Progression"])
+
+        if isinstance(root_index,int):
+            self.node.inputs["RootIndex"].default_value =root_index
+        else:
+            tree.links.new(root_index,self.node.inputs["RootIndex"])
+
+        if isinstance(scale_elements,(int,float)):
+            self.node.inputs["ScaleElements"].default_value =scale_elements
+        else:
+            tree.links.new(scale_elements,self.node.inputs["ScaleElements"])
+
+    def fill_group_with_node(self,tree,**kwargs):
+        # remove any existing node
+        nodes = tree.nodes
+        for n in nodes:
+            nodes.remove(n)
+
+        create_from_xml(tree,"unfolding_node",**kwargs)
+
+class SimpleRubiksCubeNode(NodeGroup):
+    def __init__(self,tree,seed=0, **kwargs):
+        self.name = get_from_kwargs(kwargs, "name", "SimpleRubiksCubeNode")
+        super().__init__(tree,inputs={"Seed":"INT"},
+                         outputs={"Geometry": "GEOMETRY"}, auto_layout=False, name=self.name, **kwargs)
+
+        self.geometry_out = self.node.outputs["Geometry"]
+
+        if isinstance(seed,(int,float)):
+            self.node.inputs["Seed"].default_value =seed
+        else:
+            tree.links.new(seed,self.node.inputs["Seed"])
+
+    def fill_group_with_node(self, tree, **kwargs):
+        # remove any existing node
+        nodes = tree.nodes
+        for n in nodes:
+            nodes.remove(n)
+
+        create_from_xml(tree, "simple_rubikscube_node", **kwargs)
+
+class CycleNode(NodeGroup):
+    def __init__(self,tree,max_length=5,**kwargs):
+        self.name = get_from_kwargs(kwargs,"name","CycleNode")
+        self.max_length = max_length
+        inputs={"Geometry":"GEOMETRY","Cycle":"INT","CycleLength":"INT","UpMover":"INT",
+                "DownMover":"INT",
+                "Displacement":"FLOAT"}
+        for i in range(max_length):
+            inputs["Mover"+str(i+1)]="FLOAT"
+
+        super().__init__(tree,inputs=inputs,
+                         outputs={"Geometry":"GEOMETRY"},auto_layout=True,name=self.name,**kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_in = self.node.inputs["Geometry"]
+        self.geometry_out = self.node.outputs["Geometry"]
+
+    def fill_group_with_node(self,tree,**kwargs):
+        attr_idx = NamedAttribute(tree,name="Index",data_type="INT",hide=True)
+        outs = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+        digits = make_function(tree, name="Digits", functions={
+            "one":"cycle,10,%",
+            "two":"cycle,10,/,floor,10,%",
+            "three":"cycle,100,/,floor,10,%",
+            "four":"cycle,1000,/,floor,10,%",
+            "five":"cycle,10000,/,floor,10,%",
+            "six":"cycle,100000,/,floor,10,%",
+            "seven":"cycle,1000000,/,floor,10,%",
+            "eight":"cycle,10000000,/,floor,10,%",
+            "nine":"cycle,100000000,/,floor,10,%"
+        },inputs=["cycle"], outputs=outs,scalars=["cycle"]+outs, hide=False)
+        tree.links.new(self.group_inputs.outputs["Cycle"],digits.inputs["cycle"])
+
+        selector = make_function(tree,name="Selector",functions={
+            "selection":"idx,one,=,idx,two,=,or,idx,three,=,or,idx,four,=,or,idx,five,=,or,idx,six,=,or,idx,seven,=,or,idx,eight,=,or,idx,nine,=,or"
+        },inputs=["idx"]+outs,outputs=["selection"],scalars=["idx","selection"]+outs,hide=False)
+        tree.links.new(attr_idx.std_out,selector.inputs["idx"])
+        tree.links.new(digits.outputs["one"],selector.inputs["one"])
+        tree.links.new(digits.outputs["two"],selector.inputs["two"])
+        tree.links.new(digits.outputs["three"],selector.inputs["three"])
+        tree.links.new(digits.outputs["four"],selector.inputs["four"])
+        tree.links.new(digits.outputs["five"],selector.inputs["five"])
+        tree.links.new(digits.outputs["six"],selector.inputs["six"])
+        tree.links.new(digits.outputs["seven"],selector.inputs["seven"])
+        tree.links.new(digits.outputs["eight"],selector.inputs["eight"])
+        tree.links.new(digits.outputs["nine"],selector.inputs["nine"])
+        select_numbers = SeparateGeometry(tree,domain="INSTANCE",
+                                          selection=selector.outputs["selection"],hide=True)
+
+        # the weight is chosen such that the first number of the cycle has the highest weigth
+        # the second the lowest
+        # the third the second hightest and so on
+        sort_numbers = make_function(tree,name="SortNumbers",functions={
+            "weight":"l,2,-,idx,one,=,0,*,idx,two,=,1,*,+,idx,three,=,2,*,+,idx,four,=,3,*,+,idx,five,=,4,*,+,idx,six,=,5,*,+,idx,seven,=,6,*,+,idx,eight,=,7,*,+,idx,nine,=,8,*,+,-,l,+,l,%"
+        },inputs=["idx","l"]+outs,outputs=["weight"],scalars=["l","idx","weight"]+outs,hide=False)
+        tree.links.new(attr_idx.std_out,sort_numbers.inputs["idx"])
+        tree.links.new(self.group_inputs.outputs["CycleLength"],sort_numbers.inputs["l"])
+        tree.links.new(digits.outputs["one"],sort_numbers.inputs["one"])
+        tree.links.new(digits.outputs["two"],sort_numbers.inputs["two"])
+        tree.links.new(digits.outputs["three"],sort_numbers.inputs["three"])
+        tree.links.new(digits.outputs["four"],sort_numbers.inputs["four"])
+        tree.links.new(digits.outputs["five"],sort_numbers.inputs["five"])
+        tree.links.new(digits.outputs["six"],sort_numbers.inputs["six"])
+        tree.links.new(digits.outputs["seven"],sort_numbers.inputs["seven"])
+        tree.links.new(digits.outputs["eight"],sort_numbers.inputs["eight"])
+        tree.links.new(digits.outputs["nine"],sort_numbers.inputs["nine"])
+
+        sort_elements = SortElements(tree,domain="INSTANCE",sort_weight=sort_numbers.outputs["weight"],)
+
+        index = Index(tree)
+        attr_cycle_index = StoredNamedAttribute(tree,name="CycleIndex",domain="INSTANCE",data_type="INT",value=index.std_out,hide=False)
+
+        target_index=make_function(tree,name="TargetIndex",
+                    functions={
+                        "idx":"idx,l,+,1,-,l,%"
+                    },inputs=["idx","l"],outputs=["idx"],
+                    scalars=["idx","l"],vectors=[],hide=True)
+        tree.links.new(index.std_out,target_index.inputs["idx"])
+        tree.links.new(self.group_inputs.outputs["CycleLength"],target_index.inputs["l"])
+
+        # attr_target_pos = NamedAttribute(tree,name="Position",domain="INSTANCE",data_type="FLOAT_VECTOR",hide=True)
+        attr_target_pos = Position(tree,hide=False)
+        target_pos = EvaluateAtIndex(tree,domain="INSTANCE",data_type="FLOAT_VECTOR", index=target_index.outputs["idx"],value=attr_target_pos.std_out,hide=True)
+        attr_target_position = StoredNamedAttribute(tree, name="TargetPosition", domain="INSTANCE",
+                                                    data_type="FLOAT_VECTOR", value=target_pos.std_out, hide=False)
+
+
+        # move out
+        attr_prime = NamedAttribute(tree,name="Prime",domain="INSTANCE",data_type="INT",hide=True)
+        foreach_mover = ForEachZone(tree,domain="INSTANCE",hide=False)
+
+        move_out_function = make_function(tree,name="MoveOutFunction",
+                    functions={
+                        "pos":["0","0","up,prime,%,0,=,1,*,down,prime,%,0,=,-1,*,+,displace,*"]
+                    },inputs=["prime","up","down","displace"],outputs=["pos"],
+                    scalars=["prime","up","down","displace"],vectors=["pos"],hide=True)
+        tree.links.new(self.group_inputs.outputs["UpMover"],move_out_function.inputs["up"])
+        tree.links.new(self.group_inputs.outputs["DownMover"],move_out_function.inputs["down"])
+        tree.links.new(self.group_inputs.outputs["Displacement"],move_out_function.inputs["displace"])
+        tree.links.new(attr_prime.std_out,move_out_function.inputs["prime"])
+        mover_pos = SetPosition(tree,name="MoveOutPosition",offset=move_out_function.outputs["pos"])
+        foreach_mover.create_geometry_line([mover_pos])
+
+        #cycle implementation
+        repeat =RepeatZone(tree,iterations=self.group_inputs.outputs["CycleLength"],hide=False)
+        get_cycle_index=NamedAttribute(tree,name="CycleIndex",data_type="INT",hide=False)
+        pair_function = make_function(tree,name="PairFunction",
+                    functions={
+                    "selection":"idx,iter,=,idx,iter,l,1,-,+,l,%,=,or"
+                    },inputs=["idx","iter","l"],outputs=["selection"],
+                    scalars=["idx","iter","l","selection"],vectors=[])
+        tree.links.new(get_cycle_index.std_out,pair_function.inputs["idx"])
+        tree.links.new(self.group_inputs.outputs["CycleLength"],pair_function.inputs["l"])
+        tree.links.new(repeat.iteration,pair_function.inputs["iter"])
+        select_cycle = SeparateGeometry(tree,domain="INSTANCE",
+                                        selection=pair_function.outputs["selection"],hide=True)
+
+        mover_function = make_function(tree,name="MoverFunction",
+                    functions={
+                    "selection":"idx,iter,="
+                    },inputs=["idx","iter"],outputs=["selection"],
+                    scalars=["idx","iter","selection"],vectors=[],hide=True)
+        tree.links.new(get_cycle_index.std_out,mover_function.inputs["idx"])
+        tree.links.new(repeat.iteration,mover_function.inputs["iter"])
+
+        select_mover = SeparateGeometry(tree,domain="INSTANCE",selection=mover_function.outputs["selection"],hide=True)
+
+        #connect mover to displacement values
+        switch = IndexSwitch(tree,data_type="FLOAT",hide=False,index=repeat.iteration)
+        for i in range(self.max_length):
+            switch.add_item(self.group_inputs.outputs["Mover"+str(i+1)])
+
+        attr_target = NamedAttribute(tree,name="TargetPosition",data_type="FLOAT_VECTOR",hide=True)
+        # attr_pos = NamedAttribute(tree,name="Position",data_type="FLOAT_VECTOR",hide=True)
+        attr_pos = Position(tree,hide=True)
+
+        progress_function =make_function(tree,name="Progress",
+                    functions={
+                        "position":["target_x,p_x,-,progress,*","0","0"]
+                    },inputs=["progress","target","p"],outputs=["position"],
+                    scalars=["progress"],vectors=["target","p","position"],hide=True)
+        tree.links.new(switch.std_out,progress_function.inputs["progress"])
+        tree.links.new(attr_target.std_out,progress_function.inputs["target"])
+        tree.links.new(attr_pos.std_out,progress_function.inputs["p"])
+
+        move = SetPosition(tree,offset=progress_function.outputs["position"])
+        local_join = JoinGeometry(tree,hide=True)
+        repeat.create_geometry_line([select_cycle,select_mover,move,local_join])
+        tree.links.new(select_cycle.outputs["Inverted"],local_join.geometry_in)
+        tree.links.new(select_mover.outputs["Inverted"],local_join.geometry_in)
+
+        # update position
+        update_pos = Position(tree,hide=True)
+        store_pos = StoredNamedAttribute(tree,name="Position",data_type="FLOAT_VECTOR",
+                                         value=update_pos.std_out,hide=True)
+        final_join = JoinGeometry(tree,hide=True)
+        tree.links.new(select_numbers.outputs["Inverted"],final_join.geometry_in)
+        create_geometry_line(tree,[select_numbers,sort_elements,attr_cycle_index,attr_target_position,foreach_mover,repeat,store_pos,final_join],
+                             out=self.group_outputs.inputs["Geometry"],
+                             ins=self.group_inputs.outputs["Geometry"])
+
+class TranslateToCenterNode(NodeGroup):
+    def __init__(self,tree,max_length=5,**kwargs):
+        """
+        Geometry node that translates the center of the geometry to the origin
+
+        """
+        self.name = get_from_kwargs(kwargs,"name","CenterToOrigin")
+        super().__init__(tree,inputs={"SourceGeometry":"GEOMETRY","TargetGeometry":"GEOMETRY"},
+                         outputs={"Geometry":"GEOMETRY"},auto_layout=True,
+                         name=self.name,**kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_in = self.node.inputs["TargetGeometry"]
+        self.geometry_out = self.node.outputs["Geometry"]
+
+
+    def fill_group_with_node(self,tree,**kwargs):
+        pos = Position(tree)
+        stat = AttributeStatistic(tree,geometry=self.group_inputs.outputs["SourceGeometry"],
+                                  data_type="FLOAT_VECTOR",attribute=pos.std_out)
+        center_function = make_function(tree,name="CenterFunction",
+                                        functions = {
+                                            "center":"maximum,minimum,add,-0.5,scale"
+                                        },inputs=["maximum","minimum"],outputs=["center"],
+                                        vectors=["maximum","minimum","center"],hide=True)
+
+        tree.links.new(stat.outputs["Max"],center_function.inputs["maximum"])
+        tree.links.new(stat.outputs["Min"],center_function.inputs["minimum"])
+
+        transform = TransformGeometry(tree,translation=center_function.outputs["center"])
+        create_geometry_line(tree,[transform],out=self.group_outputs.inputs["Geometry"],ins=self.group_inputs.outputs["TargetGeometry"])
+
+class SlicerNode(NodeGroup):
+    def __init__(self,tree,scale=0.7,thickness=0.02,slicing_geometry=None,**kwargs):
+        """
+        A node that is used to build the MegaMinx
+
+        """
+        self.name = get_from_kwargs(kwargs,"name","SlicerNode")
+        super().__init__(tree,inputs={"SlicingGeometry":"GEOMETRY","Geometry":"GEOMETRY","Scale":"FLOAT","Thickness":"FLOAT"},
+                         outputs={"SlicedGeometry":"GEOMETRY"},auto_layout=True,name=self.name,**kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_in = self.node.inputs["Geometry"]
+        self.geometry_out = self.node.outputs["SlicedGeometry"]
+
+        if isinstance(scale,(int,float)):
+            self.node.inputs["Scale"].default_value =scale
+        else:
+            tree.links.new(scale,self.node.inputs["Scale"])
+
+        if isinstance(thickness,(int,float)):
+            self.node.inputs["Thickness"].default_value =thickness
+        else:
+            tree.links.new(thickness,self.node.inputs["Thickness"])
+        if slicing_geometry is not None:
+            tree.links.new(slicing_geometry,self.node.inputs["SlicingGeometry"])
+
+    def fill_group_with_node(self,tree,**kwargs):
+        transform = TransformGeometry(tree,scale=self.group_inputs.outputs["Scale"])
+        create_geometry_line(tree,[transform],ins=self.group_inputs.outputs["SlicingGeometry"])
+
+        index = Index(tree)
+        stat = AttributeStatistic(tree,geometry=self.group_inputs.outputs["Geometry"],domain="FACE",data_type="FLOAT",
+                                  attribute=index.std_out,std_out="Max")
+        add_one = MathNode(tree,operation="ADD",inputs0 = stat.std_out,inputs1=1)
+        repeat = RepeatZone(tree,iterations=add_one.outputs["Value"])
+        # inside repeat zone
+        idx = Index(tree)
+        compare = CompareNode(tree,data_type="INT",operation="EQUAL",inputs0=idx.std_out,inputs1=repeat.outputs["Iteration"])
+        sep_geo = SeparateGeometry(tree,domain="FACE",selection=compare.std_out)
+        scale_faces = ScaleElements(tree,domain="FACE",scale=2)
+        extrude = ExtrudeMesh(tree,mode="FACES",offset=None,offset_scale=self.group_inputs.outputs["Thickness"])
+        join = JoinGeometry(tree)
+        mesh_boolean = MeshBoolean(tree, operation="DIFFERENCE", solver="FLOAT",
+                                   self_intersection=True, )
+        create_geometry_line(tree,[transform,sep_geo,scale_faces,join],out=mesh_boolean.inputs["Mesh 2"])
+        create_geometry_line(tree, [scale_faces,extrude,join])
+        repeat.create_geometry_line([mesh_boolean])
+
+
+        create_geometry_line(tree,[repeat],ins=self.group_inputs.outputs["Geometry"],out=self.group_outputs.inputs["SlicedGeometry"])
+
+class BevelFaces(NodeGroup):
+    def __init__(self,tree,radius=0.01,bevel=2,
+                 preserved_attribute=None,
+                 attr_domain="FACE",
+                 attr_data_type="INT",**kwargs):
+        self.name = get_from_kwargs(kwargs,"name","BevelFaces")
+        super().__init__(tree,inputs={"Geometry":"GEOMETRY","Radius":"FLOAT","Bevel":"INT",
+                                      "preserved_attribute":attr_data_type},
+                         outputs={"Geometry":"GEOMETRY"},auto_layout=True,
+                         name=self.name,
+                         preserved_attribute=preserved_attribute,
+                        attr_domain=attr_domain,
+                         attr_data_type=attr_data_type,**kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_in = self.node.inputs["Geometry"]
+        self.geometry_out = self.node.outputs["Geometry"]
+
+        if isinstance(radius,(int,float)):
+            self.node.inputs["Radius"].default_value =radius
+        else:
+            tree.links.new(radius,self.node.inputs["Radius"])
+
+        if isinstance(bevel,int):
+            self.node.inputs["Bevel"].default_value =bevel
+        else:
+            tree.links.new(bevel,self.node.inputs["Bevel"])
+
+        if preserved_attribute is not None:
+            tree.links.new(preserved_attribute,self.node.inputs["preserved_attribute"])
+
+    def fill_group_with_node(self,tree,**kwargs):
+        icosphere=IcoSphere(tree,radius=self.group_inputs.outputs["Radius"],
+                            subdivisions=self.group_inputs.outputs["Bevel"])
+        foreachface = ForEachZone(tree,domain="FACE",hide=False)
+        foreachface.add_socket(socket_type=get_from_kwargs(kwargs,"attr_data_type","FLOAT"),
+                               name="preserved_attribute")
+        tree.links.new(self.group_inputs.outputs["preserved_attribute"],foreachface.inputs["preserved_attribute"])
+        iop = InstanceOnPoints(tree, instance=icosphere.geometry_out)
+        realize_geo = RealizeInstances(tree)
+        convex_hull = ConvexHull(tree)
+        geometry_to_instance = GeometryToInstance(tree)
+        preserved_attr = get_from_kwargs(kwargs,"preserved_attribute",None)
+        if preserved_attr is not None:
+            store_attr = StoredNamedAttribute(tree,data_type=get_from_kwargs(kwargs,"attr_data_type","FLOAT"),
+                                              domain = get_from_kwargs(kwargs,"attr_domain","FACE"),
+                                              name=get_from_kwargs(kwargs,"attr_name","attribute_name"),
+                                              value=foreachface.outputs["preserved_attribute"])
+            foreachface.create_geometry_line([iop,realize_geo,convex_hull,geometry_to_instance,store_attr])
+        else:
+            foreachface.create_geometry_line([iop,realize_geo,convex_hull,geometry_to_instance])
+
+        create_geometry_line(tree,[foreachface],ins=self.group_inputs.outputs["Geometry"],out=self.group_outputs.inputs["Geometry"])
 
 # aux functions #
 
@@ -4464,7 +4970,11 @@ def create_from_xml(tree,filename=None,**kwargs):
 
     socket_count =0
     if filename:
-        path = os.path.join(RES_XML,filename+".xml")
+        unpublished = get_from_kwargs(kwargs,"unpublished",False)
+        if unpublished:
+            path=os.path.join(RES_XML2,filename+".xml")
+        else:
+            path = os.path.join(RES_XML,filename+".xml")
         with open(path) as f:
             # find node range and link range in xml file
             xml_string = f.read()
