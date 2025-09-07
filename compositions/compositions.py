@@ -94,7 +94,7 @@ def create_glow_composition(threshold=1,type='BLOOM',size=4):
     set_alpha=nodes.new(type="CompositorNodeSetAlpha")
     set_alpha.mode="REPLACE_ALPHA"
     links.new(glare.outputs["Image"],set_alpha.inputs["Image"])
-    links.new(set_alpha.outputs["Image"],composite.inputs["Alpha"])
+    # links.new(set_alpha.outputs["Image"],composite.inputs["Alpha"])
     return glare
 
 def create_bloom_and_streak_composition():
