@@ -3034,9 +3034,9 @@ def change_default_value(slot, from_value, to_value, begin_time=None, transition
         transition_time = transition_frames / FRAME_RATE
     if from_value is not None:
         slot.default_value = from_value
-        insert_keyframe(slot, data_path, begin_frame)
+        insert_keyframe(slot, data_path, int(begin_frame))
     slot.default_value = to_value
-    insert_keyframe(slot, data_path, begin_frame + transition_frames)
+    insert_keyframe(slot, data_path, int(begin_frame) + transition_frames)
 
     return begin_time + transition_time
 
@@ -3063,14 +3063,15 @@ def change_default_boolean(slot, from_value, to_value, begin_time=None, data_pat
     return (begin_frame + 1) / FRAME_RATE
 
 def change_default_integer(slot, from_value, to_value, begin_time=None, data_path="integer",transition_time=DEFAULT_ANIMATION_TIME):
+    begin_frame = int(begin_time*FRAME_RATE)
     if from_value is not None:
         slot.integer = from_value
-        insert_keyframe(slot, data_path, begin_time*FRAME_RATE)
+        insert_keyframe(slot, data_path, begin_frame)
     slot.integer = to_value
     if transition_time==0:
-        frame = begin_time*FRAME_RATE+1 # make sure that there is at least one frame to jump
+        frame = begin_frame+1 # make sure that there is at least one frame to jump
     else:
-        frame =(begin_time+transition_time)*FRAME_RATE
+        frame =begin_frame+int(transition_time*FRAME_RATE)
     insert_keyframe(slot, data_path, frame)
     return begin_time+transition_time
 

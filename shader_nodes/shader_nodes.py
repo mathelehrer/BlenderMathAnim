@@ -66,7 +66,10 @@ class ShaderNode:
             mute = True
 
         type = attributes["type"]
-        if type=="BRIGHTCONTRAST":
+        if type=="ATTRIBUTE":
+            attribute_name= attributes["attribute_name"]
+            return AttributeNode(tree,location=location,label=label,name=name,attribute_name=attribute_name,hide=hide,mute=mute,node_height=200)
+        elif type=="BRIGHTCONTRAST":
             return BrightContrast(tree,location=location,label=label,name=name,hide=hide,mute=mute,node_height=200)
         elif type =="BSDF_PRINCIPLED":
             return PrincipledBSDF(tree,location=location,label=label,
@@ -187,6 +190,8 @@ class ColorRamp(ShaderNode):
                         key_str+=l
                     else:
                         val_str+=l
+            # add last element
+            dict[float(key_str)]=parse_vector(val_str)
             color_dictionary=dict
             values = list(color_dictionary.keys())
             colors = list(color_dictionary.values())

@@ -5,9 +5,9 @@ from random import random
 
 import bpy
 import numpy as np
-from sympy import Symbol, re, im, sqrt, factorial, simplify, factor, false
+from sympy import Symbol, re, im, false
 
-from extended_math_nodes.generic_nodes import SphericalHarmonics200, SphericalHarmonicsRekursive, CMBNode
+from extended_math_nodes.generic_nodes import SphericalHarmonics200, CMBNode
 from geometry_nodes.nodes import make_function
 from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
@@ -15,12 +15,12 @@ from interface.ibpy import customize_material, make_alpha_frame, create_group_fr
     make_gradient_material, make_dashed_material, make_mandelbrot_material, make_iteration_material, make_hue_material
 from interface.interface_constants import TRANSMISSION, SPECULAR, EMISSION, blender_version
 from mathematics.parsing.parser import ExpressionConverter
-from mathematics.spherical_harmonics import SphericalHarmonics, AssociatedLegendre
+from mathematics.spherical_harmonics import SphericalHarmonics
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import TextureCoordinate, Mapping, ColorRamp, AttributeNode, HueSaturationValueNode, \
     MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ, Displacement, ShaderNode
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
-from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, COLOR_PREFIXES, SHADER_XML
+from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML
 from utils.kwargs import get_from_kwargs
 
 
@@ -71,6 +71,8 @@ def get_texture(material, **kwargs):
             material = real_billiard_ball_material(**kwargs)
         elif material =="old_paper":
             material = create_from_xml("old_paper")
+        elif material =="c600_material":
+            material = create_from_xml("c600_material")
         else:
             if material not in bpy.data.materials:
                 # return default drawing material
@@ -189,12 +191,7 @@ def create_from_xml(filename):
                             output_attributes = get_attributes(line)
                             output_id = int(output_attributes["id"])
 
-                            if node_attributes["type"] in {'REPEAT_INPUT', 'FOREACH_GEOMETRY_ELEMENT_INPUT',
-                                                           "SIMULATION_INPUT"}:
-                                # repeat inputs can only be initiated after pairing
-                                save_for_after_pairing[node_id]["outputs"].append(output_attributes)
-
-                            elif len(node.outputs) > output_count and node.outputs[
+                            if len(node.outputs) > output_count and node.outputs[
                                 output_count].name != "":  # avoid virtual socket
                                 node.outputs[output_count].name = output_attributes["name"]
                                 node_structure[node_id]["outputs"][output_id] = output_count
@@ -203,19 +200,9 @@ def create_from_xml(filename):
                                         output_attributes)
                                 output_count += 1
                             else:
-                                if output_attributes[
-                                    "type"] != "CUSTOM":  # FOREACH_GEOMETRY_ELEMENT_OUTPUT has a custom socket in between proper sockets
-                                    result = create_socket(tree, node, node_attributes, output_attributes)
-                                    if result:
-                                        node_structure[node_id]["outputs"][output_id] = output_count
-                                        output_count += 1
-                                    else:
-                                        print("Something went wrong with creating sockets for ", node_id)
-                                else:
-                                    # print("Warning: unrecognized socket in ",node_id,socket_count,output_attributes["type"])
-                                    node_structure[node_id]["outputs"][
-                                        output_id] = -1  # take last slot (this dynamically generates new sockets for Grou
-                                    output_count += 1  # also increase output_count, since the custom socket can be between real sockets
+                                node_structure[node_id]["outputs"][
+                                    output_id] = -1  # take last slot (this dynamically generates new sockets for Grou
+                                output_count += 1  # also increase output_count, since the custom socket can be between real sockets
                             socket_count += 1
 
             # establish parent relations
@@ -228,50 +215,6 @@ def create_from_xml(filename):
                 name = node_structure[key]["name"]
                 # print(name)
                 key = int(key)
-                # the input sockets are only created after pairing with the output node
-                # therefore the links can only be created after pairing
-                if "ForEachGeometryElementInput" in name or "For Each Geometry Element Input" in name:
-                    # find the corresponding output node from name
-                    out_name = name.replace("Input", "Output")
-                    node_dir[key].pair_with_output(node_dir[name_dir[out_name]])
-                    input_count = 0
-                    for attributes in save_for_after_pairing[key]["inputs"]:
-                        input_id = int(attributes['id'])
-                        node_structure[key]["inputs"][input_id] = input_count
-                        input_count += 1
-                    output_count = 0
-                    for attributes in save_for_after_pairing[key]["outputs"]:
-                        output_id = int(attributes['id'])
-                        node_structure[key]["outputs"][output_id] = output_count
-                        output_count += 1
-                if "RepeatInput" in name:
-                    # find the corresponding output node from name
-                    out_name = name.replace("Input", "Output")
-                    node_dir[key].pair_with_output(node_dir[name_dir[out_name]])
-                    input_count = 0
-                    for attributes in save_for_after_pairing[key]["inputs"]:
-                        input_id = int(attributes['id'])
-                        node_structure[key]["inputs"][input_id] = input_count
-                        input_count += 1
-                    output_count = 0
-                    for attributes in save_for_after_pairing[key]["outputs"]:
-                        output_id = int(attributes['id'])
-                        node_structure[key]["outputs"][output_id] = output_count
-                        output_count += 1
-                if "Simulation Input" in name:
-                    # find the corresponding output node from name
-                    out_name = name.replace("Input", "Output")
-                    node_dir[key].pair_with_output(node_dir[name_dir[out_name]])
-                    input_count = 0
-                    for attributes in save_for_after_pairing[key]["inputs"]:
-                        input_id = int(attributes['id'])
-                        node_structure[key]["inputs"][input_id] = input_count
-                        input_count += 1
-                    output_count = 0
-                    for attributes in save_for_after_pairing[key]["outputs"]:
-                        output_id = int(attributes['id'])
-                        node_structure[key]["outputs"][output_id] = output_count
-                        output_count += 1
 
             # parse link data
             for i in range(*links_range):

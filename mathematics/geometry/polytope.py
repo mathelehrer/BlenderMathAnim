@@ -4,7 +4,7 @@ import numpy as np
 from numpy.linalg import matrix_rank
 
 from interface.ibpy import Vector
-from mathematics.mathematica.mathematica import partition, random_points, find_plane_equation, vector_sum
+from mathematics.mathematica.mathematica import random_points, find_plane_equation, vector_sum
 
 
 class Polytope:
