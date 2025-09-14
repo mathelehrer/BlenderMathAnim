@@ -112,11 +112,14 @@ def create_bloom_and_streak_composition():
 
     composite = nodes["Composite"]
     layers = nodes["Render Layers"]
-    alpha = nodes.new(type="CompositorNodeSetAlpha")
+    set_alpha = nodes["Set Alpha"]
+    viewer = nodes["Viewer"]
+    nodes.remove(viewer)
+
     glare = nodes.new(type='CompositorNodeGlare')
     glare.glare_type = "BLOOM"
     glare.quality='HIGH'
-    glare.size=8
+    glare.size=8000
     glare.threshold =1
 
     glare2 = nodes.new(type='CompositorNodeGlare')
@@ -131,12 +134,12 @@ def create_bloom_and_streak_composition():
 
     links.new(layers.outputs["Image"],glare.inputs["Image"])
     links.new(layers.outputs["Image"],glare2.inputs["Image"])
-    links.new(layers.outputs["Alpha"],alpha.inputs["Image"])
+
     links.new(mix.outputs["Image"],composite.inputs["Image"])
     set_alpha = nodes.new(type="CompositorNodeSetAlpha")
-    set_alpha.mode = "REPLACE"
+    set_alpha.mode = "REPLACE_ALPHA"
     links.new(mix.outputs["Image"], set_alpha.inputs["Image"])
-    links.new(set_alpha.outputs["Image"], composite.inputs["Alpha"])
+    links.new(set_alpha.outputs["Image"], composite.inputs["Image"])
     return glare
 
     return glare

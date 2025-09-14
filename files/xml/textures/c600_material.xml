@@ -3,8 +3,8 @@
 		<NODE id="0" type="BSDF_PRINCIPLED" name="Principled BSDF" label="" location="(1.3,1.4)" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="0" name="Base Color" type="RGBA" is_linked="True"/>
-				<INPUT id="1" name="Metallic" type="VALUE" is_linked="False" default_value="1.0"/>
-				<INPUT id="2" name="Roughness" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="1" name="Metallic" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="2" name="Roughness" type="VALUE" is_linked="False" default_value="0.25"/>
 				<INPUT id="3" name="IOR" type="VALUE" is_linked="False" default_value="1.5"/>
 				<INPUT id="4" name="Alpha" type="VALUE" is_linked="True"/>
 				<INPUT id="5" name="Normal" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>

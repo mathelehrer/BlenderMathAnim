@@ -73,6 +73,8 @@ def get_texture(material, **kwargs):
             material = create_from_xml("old_paper")
         elif material =="c600_material":
             material = create_from_xml("c600_material")
+        elif material == "c600_gradient":
+            material = create_from_xml("c600_gradient")
         else:
             if material not in bpy.data.materials:
                 # return default drawing material

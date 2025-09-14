@@ -15,7 +15,7 @@ class Poly600Cell(BObject):
         # the computations are performed in the file "mathematics/geometry/cell600.py"
 
         offset=get_from_kwargs(kwargs,"offset",0.1)
-        vertices,edges,faces = get_3D_geometry(offset=offset)
+        vertices,edges,faces = get_3D_geometry(offset=offset,pre_path="..")
 
         super().__init__(mesh=create_mesh(vertices, edges,faces), name=self.name, **kwargs)
 
