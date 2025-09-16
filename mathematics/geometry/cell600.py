@@ -477,6 +477,18 @@ class FVector(FTensor):
         self.dim = len(components)
         super().__init__(components)
 
+    @classmethod
+    def from_vector(cls,vector, *args):
+        components=[]
+        for v in vector:
+            if isinstance(v,int):
+                components.append(QR5.from_integers(v,1,0,1))
+            elif isinstance(v,Fraction):
+                components.append(QR5.from_integers(v.numerator,v.denominator,0,1))
+            else:
+                components.append(v)
+        return FVector(components)
+
     def dot(self,other)->QR5:
         """
         >>> a = FVector([QR5.from_integers(1,1,0,1), QR5.from_integers(1,2,2,1)])

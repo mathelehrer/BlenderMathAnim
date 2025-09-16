@@ -1,5 +1,7 @@
 # we generate the full coxeter group of type H3
 # see https://en.wikipedia.org/wiki/Coxeter_group#Table_of_all_Coxeter_groups
+from mathutils import Vector
+
 from mathematics.geometry.cell600 import QR5, FTensor, FMatrix, FVector
 
 
@@ -23,6 +25,8 @@ class CoxH3:
                    FVector([zero,one,zero]),
                    FVector([QR5.from_integers(1,2,0,1),QR5.from_integers(1,4,1,4),QR5.from_integers(-1,4,1,4)]),
                    ]
+
+        self.normals = normals
 
         # the generators of H3 are given by
         identity =  FMatrix([[one,zero,zero],[zero,one,zero],[zero,zero,one]])
@@ -54,16 +58,16 @@ class CoxH3:
             new_elements = next_elements
             # print(len(new_elements))
 
-        # try, whether the center of all normals is a good candidate to generate
-        # the truncated icosidodecahedron
 
-        center = sum(normals,FVector([zero,zero,zero]))
+        self.elements = elements
 
-        self. point_cloud = [element@center for element in elements]
+    def get_point_cloud(self,seed=Vector([1,1,1])):
+        seed = FVector.from_vector(seed)
+        point_cloud = [element@seed for element in self.elements]
+        return [p.real() for p in point_cloud]
 
-    def get_point_cloud(self):
-        return [p.real() for p in self.point_cloud]
-
+    def get_normals(self):
+        return [n.real() for n in self.normals]
 
 
 
