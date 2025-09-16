@@ -6,6 +6,8 @@ import os
 from fractions import Fraction
 
 import numpy as np
+from sympy import false
+
 from interface.ibpy import Vector, Matrix
 from sympy.combinatorics import Permutation
 
@@ -150,7 +152,21 @@ class QR5:
         return self.x==other.x and self.y==other.y
 
     def __hash__(self):
-        return hash((self.x,self.y))
+        """ custom hash function for QR5 objects
+        >>> a = QR5(Fraction(1, 2), Fraction(3, 4))
+        >>> hash(a)
+        590899387183067792
+
+        >>> b = QR5(Fraction(5, 6), Fraction(7, 8))
+        >>> hash((a,b))
+        1680000522697785275
+
+        >>> M=FTensor([a,b])
+        >>> hash(M)
+        1680000522697785275
+
+        """
+        return hash((self.x.numerator,self.x.denominator,self.y.numerator,self.y.denominator))
 
     def real(self):
         return float(self.x)+float(self.y)*np.sqrt(5)
@@ -337,7 +353,6 @@ class FTensor:
         self.rank = self.get_rank()
         self.dims = self.get_dimensions()
 
-
     def get_dimensions(self):
         """
         >>> FTensor([1,2,3]).dims
@@ -374,7 +389,6 @@ class FTensor:
             return len(components.shape)
         else:
             return 0
-
 
     def _get_dimensions(self,components):
         if isinstance(components,list):
@@ -420,6 +434,9 @@ class FTensor:
         :param other:
         :return:
         """
+        # # try to convert possible scalar into tensor
+        # if not isinstance(other,FTensor):
+        #     other = FTensor([other])
         return FTensor(np.tensordot(self.components,other.components,axes=0))
 
     def contract(self,other,axes=[]):
@@ -438,6 +455,22 @@ class FTensor:
 
     def __add__(self,other):
         return FTensor(self.components+other.components)
+
+    def __eq__(self,other):
+        return np.array_equal(self.components,other.components)
+    def __hash__(self):
+        """
+        flatten array to list and convert it to tuple to generate the default hash value of a tuple
+
+        >>> m = np.array([[[1,2],[3,4]],[[5,6],[7,8]],[[9,10],[11,12]]])
+        >>> m.shape
+        (3, 2, 2)
+        >>> hash(tuple(m.flatten().tolist()))
+        8321287486536459339
+
+        :return:
+        """
+        return hash(tuple(self.components.flatten().tolist()))
 
 class FVector(FTensor):
     def __init__(self, components:list):
@@ -467,6 +500,24 @@ class FVector(FTensor):
 
     def real(self):
         return Vector([self.components[i].real() for i in range(self.dim)])
+
+class FMatrix(FTensor):
+    def __init__(self, components:list):
+        super().__init__(components)
+
+    def __mul__(self,other):
+        """
+        >>> I = FMatrix([[0,1],[1,0]])
+        >>> I*I
+        [[1, 0], [0, 1]]
+
+        :param other:
+        :return:
+        """
+        return FMatrix(np.tensordot(self.components,other.components,axes=[[1],[0]]))
+
+    def __matmul__(self,other:FVector):
+        return FVector(np.tensordot(self.components,other.components,axes=[[1],[0]]))
 
 class EpsilonTensor(FTensor):
     def __init__(self,rank):
