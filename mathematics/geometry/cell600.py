@@ -13,7 +13,7 @@ from sympy.combinatorics import Permutation
 
 from mathematics.zeros import chop
 from utils.constants import DATA_DIR
-
+from video_600_cell.auxiliaries import FVector
 
 # for the generation of the finite group, it is best to work with
 # exact values for r5 = 5**0.5
@@ -479,7 +479,10 @@ class FVector(FTensor):
 
     @classmethod
     def from_vector(cls,vector, *args):
-        components=[]
+        if isinstance(vector,Vector):
+            vector=vector[0:3]
+
+        components = []
         for v in vector:
             if isinstance(v,int):
                 components.append(QR5.from_integers(v,1,0,1))
@@ -500,6 +503,44 @@ class FVector(FTensor):
         :return:
         """
         return np.tensordot(self.components,other.components,axes=1).tolist()
+
+    def cross(self,other: 'FVector' = None)->FVector:
+        """
+        Calculates the cross product of the current vector with another vector.
+
+        The cross product is only defined for 3D vectors. If the current vector or the
+        other vector is not in 3D, an exception will be raised.
+
+        Parameters:
+            other (FVector, optional): The other vector to calculate the cross product
+                with. Must also be a 3D vector.
+
+        Returns:
+            FVector: A new vector resulting from the cross product of the current
+            vector and the other vector.
+
+        Raises:
+            Exception: If the cross product is attempted on vectors not in 3D.
+
+        >>> one = QR5.from_integers(1,1,0,1)
+        >>> zero = QR5.from_integers(0,1,0,1)
+        >>> x = FVector([one,zero,zero])
+        >>> y = FVector([zero,one,zero])
+        >>> z = FVector([zero,zero,one])
+        >>> x.cross(y)
+        [0, 0, 1]
+        >>> y.cross(z)
+        [1, 0, 0]
+        >>> z.cross(x)
+        [0, 1, 0]
+
+        """
+        if self.dim==3:
+            return FVector([self.components[1]*other.components[2]-self.components[2]*other.components[1],
+                            self.components[2]*other.components[0]-self.components[0]*other.components[2],
+                            self.components[0]*other.components[1]-self.components[1]*other.components[0]])
+        else:
+            raise Exception("cross product only defined for 3D vectors")
 
     def norm(self):
         return self.dot(self)
