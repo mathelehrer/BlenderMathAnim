@@ -148,6 +148,7 @@ class Polyhedron(BObject):
         super().appear(begin_time=begin_time, transition_time=transition_time)
         for face in self.faces:
             face.appear(begin_time=begin_time, transition_time=transition_time)
+        return begin_time + transition_time
 
     def grow(self, index=0, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME, show_faces=True):
         super().appear(begin_time=begin_time, transition_time=0)  # needed for linking
