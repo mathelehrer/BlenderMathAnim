@@ -60,6 +60,9 @@ class CoxH3:
             # print(len(new_elements))
         self.elements = elements
 
+    def get_edge_length(self):
+        return self.edge_length
+
     def get_point_cloud(self,seed=[1,1,-1]):
         seed = FVector.from_vector(seed)
         point_cloud = [element@seed for element in self.elements]
@@ -88,7 +91,8 @@ class CoxH3:
                 dist = (point_cloud[i]-point_cloud[j]).norm()
                 if dist==min_dist:
                     edges.append([i,j])
-        print(len(edges),"edges")
+
+        self.edge_length = (point_cloud[edges[0][0]]-point_cloud[edges[0][1]]).norm().real()
         return edges
 
     def is_coplanar(self,points):
@@ -101,40 +105,65 @@ class CoxH3:
                 return False
         return True
 
-    def walk_face(self,vertices,edge_map,path):
+    def walk_face(self, vertices, edge_map, path, max_len=10):
         """
-        backtracking algorithm to find a closed loop in the graph
+        Backtracking algorithm to find all closed loops in the graph that start with `path`.
 
+        - vertices: list/array of points; vertices[i] gives coordinates of vertex i
+        - edge_map: dict {vertex: iterable_of_neighbor_vertices}
+        - path: starting vertex sequence (prefix) to be extended
+        - max_len: cap on path length during search
+        - skip_backtrack: if True, avoid immediately returning to the previous vertex
         """
-        max_len=10 # Don't walk huge paths
-        visited = set(path)
+        if not path or len(path) < 1:
+            return []
 
-        def recurse(current_path):
-            if len(current_path)>max_len:
-                return None
+        start = path[0]
+        all_cycles = []
+        seen_signatures = set()  # to deduplicate cycles (same order or reverse)
 
-            current=current_path[-1]
+        def record_cycle(cycle):
+            # Normalize representation for deduplication:
+            # All cycles start at `start`, so dedup by the ordered sequence starting at start,
+            # and also consider its reverse as the same cycle.
+            forward = tuple(cycle)
+            backward = tuple([start] + list(reversed(cycle[1:])))
+            sig = min(forward, backward)
+            if sig not in seen_signatures:
+                seen_signatures.add(sig)
+                all_cycles.append(list(forward))
+
+        def dfs(current_path):
+            if len(current_path) > max_len:
+                return
+
+            current = current_path[-1]
+
             for neighbor in edge_map[current]:
-                if neighbor == current_path[0] and len(current_path)>2:
-                    # closed loop, check coplanarity
-                    points = [vertices[i] for i in current_path]
-                    if self.is_coplanar(points):
-                        return current_path
-                if neighbor in visited:
+                # optionally avoid immediate backtrack to previous vertex
+                if len(current_path) >= 2 and neighbor == current_path[-2]:
                     continue
-                visited.add(neighbor)
-                result = recurse(current_path+[neighbor])
-                if result:
-                    return result
-                visited.remove(neighbor) # remove neighbor that didn't lead to a loop, should not be needed in our situation, since all paths are loops
-            return None
 
-        return recurse(path)
+                if neighbor == start:
+                    # Found a cycle that starts with `path[0]` and returns to start
+                    if len(current_path) >= 3:
+                        points = [vertices[i] for i in current_path]
+                        if self.is_coplanar(points):
+                            # Keep cycle as [v0, v1, ..., vk] (start not repeated at end)
+                            record_cycle(current_path[:])
+                    # Even after finding a cycle, continue exploring other neighbors
+                    continue
 
+                # Do not revisit vertices already on the current path (prevents sub-cycles)
+                if neighbor in current_path:
+                    continue
 
+                dfs(current_path + [neighbor])
+
+        dfs(path)
+        return all_cycles
 
     def find_faces(self,vertices,edges):
-
         # undirected graph
         from collections import defaultdict
         # construct a map that generates an empty list for each key as default
@@ -154,17 +183,14 @@ class CoxH3:
 
                 # attempt to walk in a cycle from (start->neighbor)
                 path = [start,neighbor]
-                print(count,". attempt",path,end=" ")
-                face = self.walk_face(vertices,edge_map,path)
-                count+=1
-                if face:
+                new_faces = self.walk_face(vertices,edge_map,path)
+                for face in new_faces:
                     real_ordering = face.copy()
                     # normalize and store
                     canonical = tuple(sorted(face))
                     if canonical not in faces:
                         faces[canonical]=real_ordering
                         success+=1
-                        print("... success: ",success);
 
                 visited.add((start,neighbor))
         print(len(faces),"faces")
