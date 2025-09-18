@@ -60,8 +60,8 @@ class CoxH3:
             # print(len(new_elements))
         self.elements = elements
 
-    def get_edge_length(self):
-        return self.edge_length
+    def get_radius(self,seed=[1,1,-1]):
+        return self.get_real_point_cloud(seed)[0].length
 
     def get_point_cloud(self,seed=[1,1,-1]):
         seed = FVector.from_vector(seed)
