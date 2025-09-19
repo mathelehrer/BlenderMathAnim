@@ -3,7 +3,7 @@
 import numpy as np
 from mathutils import Vector
 
-from mathematics.geometry.cell600 import QR5, FTensor, FMatrix, FVector
+from mathematics.geometry.field_extensions import QR5, FTensor, FMatrix, FVector
 
 
 class CoxH3:
