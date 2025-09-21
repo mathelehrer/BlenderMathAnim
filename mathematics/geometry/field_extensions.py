@@ -2,7 +2,7 @@ import itertools
 from fractions import Fraction
 
 import numpy as np
-from mathutils import Vector
+from interface.ibpy import Vector
 from sympy.combinatorics import Permutation
 
 
@@ -654,6 +654,31 @@ class FMatrix(FTensor):
 
     def __matmul__(self,other:FVector):
         return FVector(np.tensordot(self.components,other.components,axes=[[1],[0]]))
+
+    def transpose(self):
+        return FMatrix(np.transpose(self.components))
+    @classmethod
+    def identity(cls,rank=3):
+        """
+        return the identity matrix of the given rank
+        >>> FMatrix.identity(3)
+        [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+
+        >>> FMatrix.identity(4)
+        [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+
+        """
+        components = []
+        for r in range(rank):
+            row = []
+            for c in range(rank):
+                if c==r:
+                    row.append(QR5.from_integers(1,1,0,1))
+                else:
+                    row.append(QR5.from_integers(0,1,0,1))
+            components.append(row)
+
+        return cls(components)
 
 class EpsilonTensor(FTensor):
     def __init__(self,rank):

@@ -174,7 +174,7 @@ class CoxH3:
 
         faces ={} # prepare a dictionary that stores a canonical representation of a face and the proper index ordering
         visited = set()
-        count = 0
+
         success=0
         for start in range(len(vertices)):
             for neighbor in edge_map[start]:

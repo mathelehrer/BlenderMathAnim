@@ -95,5 +95,13 @@ def parse_vector(vector_str):
     coords = vector_str.split(",")
     return [float(coord) for coord in coords]
 
+def show_inline_progress_in_terminal(text,old_text = ""):
+    # erase old line
+    delete = ""
+    for i in range(len(old_text)):
+        delete += ("\b")
+    print("", end=delete)
+    print(text, end="")
+    
 if __name__ == '__main__':
     print(list(find_all('spam spam spam spam', 'spam')))
