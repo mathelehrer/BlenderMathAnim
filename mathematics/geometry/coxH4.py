@@ -17,15 +17,13 @@ two = QR5.from_integers(2,1,0,1)
 epsilon = EpsilonTensor(4)
 zero4 = FVector([zero,zero,zero,zero])
 
-MAX_VALUE =20000
-primes = read_primes(MAX_VALUE)
-
-
 class Face(list):
     """
     this is just a list of integers that is hashable, we want to make sure that
     the ording of the indices is preserved and cyclicly rotated to have the smallest index
     in the first position
+
+    However, the reverse of the list should have the same hash value as the original list
     """
 
 
@@ -34,32 +32,33 @@ class Face(list):
         hashable list that is equivalent with respect to cyclic permutations
         >>> Face([1,2,3]) == Face([3,1,2])
         True
-        >>> Face([1,2,3]) == Face([2,1,3])
-        False
+        >>> Face([1,2,3]) == Face([1,3,2])
+        True
 
         """
 
         super().__init__(elements)
         smallest_index = min(self)
-        largest_index = max(self)
-        if largest_index>MAX_VALUE or smallest_index<0:
-            raise ValueError("Face indices out of range")
 
         index = self.index(smallest_index)
 
         for i in range(index):
-            self.append(self.pop(0))
+            elements.append(elements.pop(0))
+
+        self.reverse_elements = elements.copy()
+        self.reverse_elements.reverse()
+        self.reverse_elements.insert(0,self.reverse_elements.pop())
+        self.elements = elements
 
     def __str__(self):
         """
         >>> str(Face([1,2,3]))
         'Face([1, 2, 3])'
-
         >>> str(Face([2,3,1]))
         'Face([1, 2, 3])'
-
         >>> str(Face([2,1,3]))
         'Face([1, 3, 2])'
+
         """
         return f"Face("+super().__str__()+")"
 
@@ -70,21 +69,24 @@ class Face(list):
         """
         It is assumed that the size of the elements are less than 20000
         >>> hash(Face([1,0,2]))
-        45
+        9050618495337975385
         >>> hash(Face([0,1,2]))
-        75
+        9050618495337975385
         >>> hash(Face([1,2,0]))
-        75
-
-
+        9050618495337975385
+        >>> hash(Face([0,1,2,3]))
+        -4042512932752085617
+        >>> hash(Face([3,2,1,0]))
+        -4042512932752085617
+        >>> hash(Face([1,2,3,0]))
+        -4042512932752085617
         """
-        prod =1
-        for i,index in enumerate(self):
-            prod*=primes[i]**index
+        return hash(tuple(self.elements))*hash(tuple(self.reverse_elements))
 
-
-        return prod
-
+    def __eq__(self,other):
+        first = self.elements == other.elements
+        second = self.elements == other.reverse_elements
+        return first or second
 
 class CoxH4:
     def __init__(self,path=None):
@@ -278,13 +280,17 @@ class CoxH4:
                     min_dist=dist
 
             edges = []
+            old_text = ""
             for i in range(len(point_cloud)):
-                print(i)
+                text="Find minimal edges to vertex "+str(i)
+                show_inline_progress_in_terminal(text,old_text)
+                old_text = text
                 for j in range(i+1,len(point_cloud)):
                     dist = (point_cloud[i]-point_cloud[j]).norm()
                     if dist==min_dist:
                         edges.append([i,j])
             self.save(edges,filename)
+            print()
         else:
             edges = self.read_edges(filename)
             print("edge data read from file")
@@ -347,8 +353,12 @@ class CoxH4:
         # we need at least four vertices to define a cell
         cell_normals = {}
         cell_indices = [0]
-        for first_neighbor in edge_map[0]:
+        old_text = ""
+        for i,first_neighbor in enumerate(edge_map[0]):
             cell_indices.append(first_neighbor)
+            text = "Find boundaries along the line of the "+str(i)+"/"+str(len(edge_map[0]))+" neighbors"
+            show_inline_progress_in_terminal(text,old_text)
+            old_text = text
             for second_neighbor in edge_map[first_neighbor]:
                 if second_neighbor not in cell_indices:
                     cell_indices.append(second_neighbor)
@@ -361,12 +371,17 @@ class CoxH4:
                                 if result:
                                     result.sort()
                                     index_tuple = tuple(set(result))
+                                    # make normal point away from origin
+                                    if point_cloud[index_tuple[0]].dot(normal).real()<0:
+                                        normal = -normal
                                     cell_normals[index_tuple]=normal
                                     # print("success",index_tuple)
                             # print("tested",cell_indices)
                             cell_indices=cell_indices[:-1]
                     cell_indices=cell_indices[:-1]
             cell_indices=cell_indices[:-1]
+        print()
+        print(len(cell_normals)," cells found")
 
         return cell_normals
 
@@ -392,7 +407,9 @@ class CoxH4:
 
         point_cloud = self.point_cloud(seed)
         edges = self.get_edges(seed)
+        print("Find cells at origin... ",end="")
         cells0 = self.get_cells_at_origin(point_cloud,edges)
+        print("done")
 
         for key,val in cells0.items():
             cells[key]=val
@@ -412,8 +429,14 @@ class CoxH4:
 
         # now map the cells at the origin to all other cells
         for i,(key,val) in enumerate(cells0.items()):
-            # print("map cell",i)
-            for elem in active_elements.values():
+            print("map cell",i)
+            old_text = ""
+            for i,elem in enumerate(active_elements.values()):
+
+                text = str(i)+"/"+str(len(active_elements))
+                show_inline_progress_in_terminal(text,old_text)
+                old_text = text
+
                 new_normal = elem@val
                 new_indices =[]
                 for i in key:
@@ -421,9 +444,13 @@ class CoxH4:
                 new_indices.sort()
                 index_tuple = tuple(set(new_indices))
                 if index_tuple not in cells:
+                    # make normal point away from origin
+                    if point_cloud[index_tuple[0]].dot(new_normal).real()<0:
+                        new_normal = -new_normal
                     cells[index_tuple]=new_normal
                     # print("added",index_tuple)
                     # assert((point_cloud[index_tuple[0]]-point_cloud[index_tuple[-1]]).dot(new_normal)==zero)
+            print()
 
         with open(os.path.join(self.path,filename),"w") as f:
             for key,val in cells.items():
@@ -444,7 +471,8 @@ class CoxH4:
             edge_map=self.get_edge_map(edges)
             cells = self.get_cells(seed)
 
-            for indices,cell_normal in cells.items():
+            total = str(len(cells))
+            for i,(indices,cell_normal) in enumerate(cells.items()):
                 # compute faces for each cell
                 reduced_edge_map = {}
                 index_set = set(indices)
@@ -452,9 +480,14 @@ class CoxH4:
                 for src,dest in edge_map.items():
                     if src in indices:
                         reduced_edge_map[src] = set(dest).intersection(index_set)
+                print("cell "+str(i)+"/"+total)
+                cell_faces = set(self.find_faces_of_cell(point_cloud,reduced_edge_map,cell_normal))
+                faces = faces.union(cell_faces)
 
-                cell_faces = self.find_faces_of_cell(point_cloud,reduced_edge_map,cell_normal)
-                faces+=cell_faces
+
+            with open(os.path.join(self.path,filename),"w") as f:
+                for face in faces:
+                    f.write(f"{face}\n")
         return faces
 
     def is_coplanar(self,points,normal=None):
@@ -467,7 +500,7 @@ class CoxH4:
                 test = normal.dot(points[i] - points[0]).real()
                 if test !=0:
                     return False
-            return True
+            return normal
         elif points[0].dim==4:
             if normal is None:
                 raise("Normal is required in dim>3")
@@ -476,12 +509,11 @@ class CoxH4:
             dir0 =directions[0]
             dir1 = directions[1]
             tri = dir0*dir1*normal
-            epsilon = EpsilonTensor(4)
             normal2 = epsilon.contract(tri,axes=[[1,2,3],[0,1,2]])
             for d in directions[2:]:
                 if d.dot(normal2)!=zero:
                     return False
-            return True
+            return normal2
         else:
             raise("Coplanar is not implemented in dim>4 yet")
 
@@ -501,18 +533,6 @@ class CoxH4:
 
         start = path[0]
         all_cycles = []
-        seen_signatures = set()  # to deduplicate cycles (same order or reverse)
-
-        def record_cycle(cycle):
-            # Normalize representation for deduplication:
-            # All cycles start at `start`, so dedup by the ordered sequence starting at start,
-            # and also consider its reverse as the same cycle.
-            forward = tuple(cycle)
-            backward = tuple([start] + list(reversed(cycle[1:])))
-            sig = min(forward, backward)
-            if sig not in seen_signatures:
-                seen_signatures.add(sig)
-                all_cycles.append(list(forward))
 
         def dfs(current_path):
             if len(current_path) > max_len:
@@ -527,13 +547,13 @@ class CoxH4:
 
                 if neighbor == start:
                     # Found a cycle that starts with `path[0]` and returns to start
+                    points = [vertices[i] for i in current_path]
                     if len(current_path) > 3:
-                        points = [vertices[i] for i in current_path]
-                        if self.is_coplanar(points,normal=normal):
-                            # Keep cycle as [v0, v1, ..., vk] (start not repeated at end)
-                            record_cycle(current_path[:])
+                        normal2=self.is_coplanar(points,normal=normal)
+                        if normal2 is not False:
+                            all_cycles.append(current_path)
                     else:
-                        record_cycle(current_path[:])
+                        all_cycles.append(current_path)
                     # Even after finding a cycle, continue exploring other neighbors
                     continue
 
@@ -590,11 +610,10 @@ class CoxH4:
     def find_faces_of_cell(self,point_cloud,edge_map,cell_normal):
         faces = {} # prepare a dictionary that stores a canonical representation of a face and the proper index ordering
         visited = set()
-        success=0
         oldline = ""
         indices = edge_map.keys()
-        for start in indices:
-            text = "progress: " + str(start) + " / " + str(len(indices))
+        for i,start in enumerate(indices):
+            text = "progress: " + str(i+1) + " / " + str(len(indices))
             show_inline_progress_in_terminal(text,oldline)
             oldline = text
 
@@ -611,7 +630,6 @@ class CoxH4:
                     canonical = tuple(sorted(face))
                     if canonical not in faces:
                         faces[canonical]=Face(real_ordering)
-                        success+=1
 
                 visited.add((start,neighbor))
         print() # finish progress line

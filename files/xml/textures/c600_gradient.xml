@@ -1,0 +1,113 @@
+<NODE_XML>
+	<NODES>
+		<NODE id="0" type="BSDF_PRINCIPLED" name="Principled BSDF" label="" location="(1.3,0.4)" hide="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="0" name="Base Color" type="RGBA" is_linked="True"/>
+				<INPUT id="1" name="Metallic" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="2" name="Roughness" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="3" name="IOR" type="VALUE" is_linked="False" default_value="1.5"/>
+				<INPUT id="4" name="Alpha" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="5" name="Normal" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="6" name="Weight" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="7" name="Diffuse Roughness" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="8" name="Subsurface Weight" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="9" name="Subsurface Radius" type="VECTOR" is_linked="False" default_value="[1.0, 0.20000000298023224, 0.10000000149011612]"/>
+				<INPUT id="10" name="Subsurface Scale" type="VALUE" is_linked="False" default_value="0.05000000074505806"/>
+				<INPUT id="11" name="Subsurface IOR" type="VALUE" is_linked="False" default_value="1.399999976158142"/>
+				<INPUT id="12" name="Subsurface Anisotropy" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="13" name="Specular IOR Level" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="14" name="Specular Tint" type="RGBA" is_linked="False" default_value="[1.0, 1.0, 1.0, 1.0]"/>
+				<INPUT id="15" name="Anisotropic" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="16" name="Anisotropic Rotation" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="17" name="Tangent" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="18" name="Transmission Weight" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="19" name="Coat Weight" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="20" name="Coat Roughness" type="VALUE" is_linked="False" default_value="0.029999999329447746"/>
+				<INPUT id="21" name="Coat IOR" type="VALUE" is_linked="False" default_value="1.5"/>
+				<INPUT id="22" name="Coat Tint" type="RGBA" is_linked="False" default_value="[1.0, 1.0, 1.0, 1.0]"/>
+				<INPUT id="23" name="Coat Normal" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="24" name="Sheen Weight" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="25" name="Sheen Roughness" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="26" name="Sheen Tint" type="RGBA" is_linked="False" default_value="[1.0, 1.0, 1.0, 1.0]"/>
+				<INPUT id="27" name="Emission Color" type="RGBA" is_linked="True"/>
+				<INPUT id="28" name="Emission Strength" type="VALUE" is_linked="False" default_value="0.20000000298023224"/>
+				<INPUT id="29" name="Thin Film Thickness" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="30" name="Thin Film IOR" type="VALUE" is_linked="False" default_value="1.3300000429153442"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="31" name="BSDF" type="SHADER" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="1" type="OUTPUT_MATERIAL" name="Material Output" label="" location="(2.9,0.3)" hide="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="32" name="Surface" type="SHADER" is_linked="True"/>
+				<INPUT id="33" name="Volume" type="SHADER" is_linked="False"/>
+				<INPUT id="34" name="Displacement" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="35" name="Thickness" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="2" type="VALTORGB" name="Color Ramp" label="" location="(-0.6,0.1)" hide="False" mute="False" color_ramp="{0.0: '[1.0, 0.001691908692009747, 0.0, 1.0]', 0.3499999940395355: '[0.9342221021652222, 0.010652938857674599, 0.0, 1.0]', 0.5: '[0.7515506744384766, 0.724570095539093, 0.0, 1.0]', 0.6499999761581421: '[0.007445451803505421, 0.6284429430961609, 0.0, 1.0]', 0.75: '[0.0, 0.8815253973007202, 1.0, 1.0]', 0.8999999761581421: '[0.029476843774318695, 0.0, 0.752604603767395, 1.0]', 1.0: '[0.7213795185089111, 0.0, 0.3568599224090576, 1.0]'}" color_mode="RGB" interpolation="LINEAR" parent="None">
+			<INPUTS>
+				<INPUT id="36" name="Fac" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="37" name="Color" type="RGBA" is_linked="True" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
+				<OUTPUT id="38" name="Alpha" type="VALUE" is_linked="False" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="3" type="MATH" name="Math" label="" location="(-3.1,0.0)" hide="False" mute="False" operation="ADD" use_clamp="False" parent="None">
+			<INPUTS>
+				<INPUT id="39" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="40" name="Value" type="VALUE" is_linked="False" default_value="0.20000004768371582"/>
+				<INPUT id="41" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="42" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="4" type="MATH" name="Math.001" label="" location="(-1.9,0.0)" hide="False" mute="False" operation="DIVIDE" use_clamp="False" parent="None">
+			<INPUTS>
+				<INPUT id="43" name="Value" type="VALUE" is_linked="True"/>
+				<INPUT id="44" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="45" name="Value" type="VALUE" is_linked="False" default_value="0.5"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="46" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="5" type="TEX_COORD" name="Texture Coordinate" label="" location="(-5.2,0.0)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="47" name="Generated" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="48" name="Normal" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="49" name="UV" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="50" name="Object" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="51" name="Camera" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="52" name="Window" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="53" name="Reflection" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="6" type="SEPXYZ" name="Separate XYZ" label="" location="(-4.0,-0.1)" hide="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="54" name="Vector" type="VECTOR" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="55" name="X" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="56" name="Y" type="VALUE" is_linked="False" default_value="0.0"/>
+				<OUTPUT id="57" name="Z" type="VALUE" is_linked="False" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+	</NODES>
+	<LINKS>
+		<LINK from_node="0" from_socket="31" to_node="1" to_socket="32"/>
+		<LINK from_node="4" from_socket="46" to_node="2" to_socket="36"/>
+		<LINK from_node="2" from_socket="37" to_node="0" to_socket="0"/>
+		<LINK from_node="2" from_socket="37" to_node="0" to_socket="27"/>
+		<LINK from_node="5" from_socket="49" to_node="6" to_socket="54"/>
+		<LINK from_node="3" from_socket="42" to_node="4" to_socket="43"/>
+		<LINK from_node="6" from_socket="55" to_node="3" to_socket="39"/>
+	</LINKS>
+</NODE_XML>
