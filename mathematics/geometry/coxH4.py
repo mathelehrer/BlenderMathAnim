@@ -1,12 +1,15 @@
 # we generate the full coxeter group of type H4
 # see https://en.wikipedia.org/wiki/Coxeter_group#Table_of_all_Coxeter_groups
+from __future__ import annotations
+
 import os
 from collections import defaultdict
+from functools import partial
+from multiprocessing import Pool
+
 import numpy as np
-from numpy import sort
 
 from mathematics.geometry.field_extensions import QR5, FMatrix, FVector, EpsilonTensor
-from mathematics.numbers.primes import read_primes
 from utils.string_utils import show_inline_progress_in_terminal
 
 PATH = "data/"
@@ -250,6 +253,41 @@ class CoxH4:
                     QR5.from_integers(6, 1, -4, 1),
                     QR5.from_integers(3, 1, 1, 1)
                 ])
+            elif signs ==[0,1,1,1]:
+                seed = FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(-3, 1, 1, 1),
+                    QR5.from_integers(2, 1, 0, 1),
+                    QR5.from_integers(-5, 1, 5, 1)
+                ])
+            elif signs == [0,0,0,1]:
+                seed=FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(0,1,0,1),
+                    QR5.from_integers(1,1,0,1),
+                    QR5.from_integers(-1,1,0,1)
+                ])
+            elif signs == [0, 0, 1, 0]:
+                seed = FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(5, 2, 3, 2),
+                    QR5.from_integers(-7, 2, -3, 2)
+                ])
+            elif signs == [0, 1, 0, 0]:
+                seed = FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(-1, 1, -1, 1),
+                    QR5.from_integers(-3,1 , 1, 1)
+                ])
+            elif signs == [1,0, 0, 0]:
+                seed = FVector([
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(1, 2, 1, 2),
+                    QR5.from_integers(-3,2 , -1, 2)
+                ])
 
             point_cloud = set()
             for element in self.elements:
@@ -263,34 +301,46 @@ class CoxH4:
     def get_real_point_cloud(self, seed=[1, 1, -1]):
         return [p.real() for p in self.get_point_cloud(seed)]
 
+    def find_edges_for_chunk(self,min_dist,point_cloud,rng):
+        print("Start process for range: ",rng)
+        edges=[]
+
+        for i in range(*rng):
+            for j in range(i + 1, len(point_cloud)):
+                dist = (point_cloud[i] - point_cloud[j]).norm()
+                if dist == min_dist:
+                    edges.append([i, j])
+
+        return edges
+
+
     def get_edges(self,seed=[1,1,1,1]):
         filename="coxH4_edges"+str(seed).replace(",","_")+".dat"
         if not os.path.exists(os.path.join(self.path, filename)):
             point_cloud = self.point_cloud(seed)
             # find minimum distance between two points
-            min = np.inf
+            minimum = np.inf
             min_dist = None
 
 
             for j in range(1,len(point_cloud)):
                 dist = (point_cloud[0]-point_cloud[j]).norm()
                 dist_real = dist.real()
-                if dist_real<min:
-                    min = dist_real
+                if dist_real<minimum:
+                    minimum = dist_real
                     min_dist=dist
 
             edges = []
-            old_text = ""
-            for i in range(len(point_cloud)):
-                text="Find minimal edges to vertex "+str(i)
-                show_inline_progress_in_terminal(text,old_text)
-                old_text = text
-                for j in range(i+1,len(point_cloud)):
-                    dist = (point_cloud[i]-point_cloud[j]).norm()
-                    if dist==min_dist:
-                        edges.append([i,j])
+
+            size = int(len(point_cloud)/os.cpu_count())
+            chunks = [[i,min(i+size,len(point_cloud))] for i in range(0,len(point_cloud),size)]
+
+            worker = partial(self.find_edges_for_chunk,min_dist,point_cloud)
+            with Pool(processes=os.cpu_count()) as pool:
+                for res in pool.imap_unordered(worker,chunks,chunksize=1):
+                    edges = edges + res
+
             self.save(edges,filename)
-            print()
         else:
             edges = self.read_edges(filename)
             print("edge data read from file")
@@ -458,6 +508,28 @@ class CoxH4:
 
         return cells
 
+
+    def find_faces_of_cell_chunk(self,point_cloud,edge_map,chunk):
+        """
+        function to find the faces of a cell chunk
+        intended for parallel processing
+        """
+        print("Start process for a chunk of cells...")
+        faces=set()
+        for i, (indices, cell_normal) in enumerate(chunk.items()):
+            # compute faces for each cell
+            reduced_edge_map = {}
+            index_set = set(indices)
+
+            for src, dest in edge_map.items():
+                if src in indices:
+                    reduced_edge_map[src] = set(dest).intersection(index_set)
+
+            cell_faces = set(self.find_faces_of_cell(point_cloud, reduced_edge_map, cell_normal))
+            faces = faces.union(cell_faces)
+        return faces
+        return []
+
     def get_faces(self,seed=[1,1,1,1]):
         faces = set()
         filename = "coxH4_faces" + str(seed).replace(",", "_") + ".dat"
@@ -471,24 +543,50 @@ class CoxH4:
             edge_map=self.get_edge_map(edges)
             cells = self.get_cells(seed)
 
-            total = str(len(cells))
-            for i,(indices,cell_normal) in enumerate(cells.items()):
-                # compute faces for each cell
-                reduced_edge_map = {}
-                index_set = set(indices)
+            cells=dict(sorted(cells.items())) # sort to get a balanced load on the worker threads
 
-                for src,dest in edge_map.items():
-                    if src in indices:
-                        reduced_edge_map[src] = set(dest).intersection(index_set)
-                print("cell "+str(i)+"/"+total)
-                cell_faces = set(self.find_faces_of_cell(point_cloud,reduced_edge_map,cell_normal))
-                faces = faces.union(cell_faces)
+            cpus = os.cpu_count()
+            size=int(len(cells)/cpus)
+            items = list(cells.items())
+            cell_parts = []
+            for i in range(0,len(cells),size):
+                dictionary = {}
+                for key,val in items[i:min(len(cells),i+size)]:
+                    dictionary[key] = val
+                cell_parts.append(dictionary)
 
+            worker = partial(self.find_faces_of_cell_chunk, point_cloud, edge_map)
+            faces = set()
+            with Pool(processes=cpus) as pool:
+                for res in pool.imap_unordered(worker,cell_parts, chunksize=1):
+                    faces = faces.union(res)
 
             with open(os.path.join(self.path,filename),"w") as f:
                 for face in faces:
                     f.write(f"{face}\n")
         return faces
+
+    def is_boundary(self,cell_points,face_points,face_normal):
+        """
+        check, whether all points of the cell lie on one side of the face
+
+
+        """
+        signs = set()
+        signs.add(0)
+
+        for cell_point in cell_points:
+            dot = face_normal.dot(cell_point-face_points[0]).real()
+            if dot == 0:
+                signs.add(0)
+            elif dot < 0:
+                signs.add(-1)
+            else:
+                signs.add(1)
+            if len(signs) > 2:
+                return False
+        return True
+
 
     def is_coplanar(self,points,normal=None):
         if len(points) < 4:
@@ -513,7 +611,7 @@ class CoxH4:
             for d in directions[2:]:
                 if d.dot(normal2)!=zero:
                     return False
-            return normal2
+            return FVector(normal2.components)
         else:
             raise("Coplanar is not implemented in dim>4 yet")
 
@@ -534,6 +632,9 @@ class CoxH4:
         start = path[0]
         all_cycles = []
 
+        all_indices = list(edge_map.keys())
+        cell_vertices = [vertices[i] for i in all_indices]
+
         def dfs(current_path):
             if len(current_path) > max_len:
                 return
@@ -551,7 +652,8 @@ class CoxH4:
                     if len(current_path) > 3:
                         normal2=self.is_coplanar(points,normal=normal)
                         if normal2 is not False:
-                            all_cycles.append(current_path)
+                            if self.is_boundary(cell_vertices,points,normal2):
+                                all_cycles.append(current_path)
                     else:
                         all_cycles.append(current_path)
                     # Even after finding a cycle, continue exploring other neighbors
@@ -607,15 +709,16 @@ class CoxH4:
         print() # finish progress line
         return list(faces.values())
 
-    def find_faces_of_cell(self,point_cloud,edge_map,cell_normal):
+    def find_faces_of_cell(self,point_cloud,edge_map,cell_normal,silent=True):
         faces = {} # prepare a dictionary that stores a canonical representation of a face and the proper index ordering
         visited = set()
         oldline = ""
         indices = edge_map.keys()
         for i,start in enumerate(indices):
-            text = "progress: " + str(i+1) + " / " + str(len(indices))
-            show_inline_progress_in_terminal(text,oldline)
-            oldline = text
+            if not silent:
+                text = "progress: " + str(i+1) + " / " + str(len(indices))
+                show_inline_progress_in_terminal(text,oldline)
+                oldline = text
 
             for neighbor in edge_map[start]:
                 if (start,neighbor) in visited or (neighbor,start) in visited:
@@ -632,7 +735,8 @@ class CoxH4:
                         faces[canonical]=Face(real_ordering)
 
                 visited.add((start,neighbor))
-        print() # finish progress line
+            if not silent:
+                print()
         return list(faces.values())
 
     def get_faces_old(self,seed=[1,1,-1],max_length=10):
@@ -654,7 +758,35 @@ class CoxH4:
         return [self.point_cloud(seed),self.get_edges(seed),self.get_faces(seed)]
 
 
+    def info(self,seed):
+        vertices = self.point_cloud(seed)
+        edges = self.get_edges(seed)
+        faces = self.get_faces(seed)
+        cells = self.get_cells(seed)
 
+        cell_sizes = dict()
+        for key, val in cells.items():
+            l = len(key)
+            if l in cell_sizes.keys():
+                cell_sizes[l] = cell_sizes[l] + 1
+            else:
+                cell_sizes[l] = 1
+        print("cell sizes", cell_sizes)
+
+        face_sizes = dict()
+        for face in faces:
+            l = len(face)
+            if l in face_sizes.keys():
+                face_sizes[l] = face_sizes[l] + 1
+            else:
+                face_sizes[l] = 1
+        print("face sizes: ", face_sizes)
+
+        print("edges: ",len(edges))
+        print("vertices: ",len(vertices))
+        print("faces: ",len(faces))
+        print("cells: ",len(cells))
+        print("Euler: ",len(vertices)-len(edges)+len(faces)-len(cells))
 
 
 if __name__ == '__main__':
