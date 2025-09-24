@@ -237,21 +237,29 @@ class CoxH4:
                     QR5.from_integers(5, 1, -3, 1),
                     QR5.from_integers(1, 1, 1, 1)
                 ])
-            elif signs == [-1, -1, 1, 1]:
-                #  1440 vertices
-                seed = FVector([
-                    QR5.from_integers(3, 1, -1, 1),
-                    QR5.from_integers(-3, 1, 1, 1),
-                    QR5.from_integers(5, 1, -3, 1),
-                    QR5.from_integers(1, 1, 1, 1)
-                ])
             elif signs == [0, -1, 1, 1]:
                 #   vertices
                 seed = FVector([
                     QR5.from_integers(0, 1, 0, 1),
-                    QR5.from_integers(-3, 1, 1, 1),
-                    QR5.from_integers(6, 1, -4, 1),
-                    QR5.from_integers(3, 1, 1, 1)
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(1, 2, 3, 2),
+                    QR5.from_integers(-7, 2, -3, 2)
+                ])
+            elif signs == [0, 1, -1, 1]:
+                #   vertices
+                seed = FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(-1, 1, 0, 1),
+                    QR5.from_integers(-13, 2, -7, 2),
+                    QR5.from_integers(19, 2, 7, 2)
+                ])
+            elif signs == [0, 1, 1, -1]:
+                #   vertices
+                seed = FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(9, 2, 3, 2),
+                    QR5.from_integers(-7, 2, -3, 2)
                 ])
             elif signs ==[0,1,1,1]:
                 seed = FVector([
@@ -259,6 +267,27 @@ class CoxH4:
                     QR5.from_integers(-3, 1, 1, 1),
                     QR5.from_integers(2, 1, 0, 1),
                     QR5.from_integers(-5, 1, 5, 1)
+                ])
+            elif signs ==[1,1,1,0]:
+                seed = FVector([
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(2, 1, 1, 1),
+                    QR5.from_integers(-2, 1, -1, 1)
+                ])
+            elif signs ==[1,1,0,1]:
+                seed = FVector([
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(-7, 2, -3, 2),
+                    QR5.from_integers(9, 2, 3, 2)
+                ])
+            elif signs ==[1,0,1,1]:
+                seed = FVector([
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(0, 1, 1, 1),
+                    QR5.from_integers(-2, 1, -1, 1)
                 ])
             elif signs == [0,0,0,1]:
                 seed=FVector([
@@ -288,7 +317,90 @@ class CoxH4:
                     QR5.from_integers(1, 2, 1, 2),
                     QR5.from_integers(-3,2 , -1, 2)
                 ])
-
+            elif signs == [1,1, 0, 0]:
+                seed = FVector([
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(-1, 2, -1, 2),
+                    QR5.from_integers(3,2 , 1, 2)
+                ])
+            elif signs == [1,-1, 0, 0]:
+                seed = FVector([
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(3, 2, 3, 2),
+                    QR5.from_integers(-9,2 , -3, 2)
+                ])
+            elif signs == [1,0,1, 0]:
+                seed = FVector([
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(3, 1, 2, 1),
+                    QR5.from_integers(-5,1 , -2, 1)
+                ])
+            elif signs == [1,0,-1, 0]:
+                seed = FVector([
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(-1, 1, 0, 1),
+                    QR5.from_integers(-2, 1, -1, 1),
+                    QR5.from_integers(2,1 , 1, 1)
+                ])
+            elif signs == [1,0,0, 1]:
+                seed = FVector([
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(-5, 2, -1, 2),
+                    QR5.from_integers(3,2 , 1, 2)
+                ])
+            elif signs == [1,0,0, -1]:
+                seed = FVector([
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(7, 2, 3, 2),
+                    QR5.from_integers(-9,2 , -3, 2)
+                ])
+            elif signs == [0, 1, 1, 0]:
+                seed = FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(3, 2, 1, 2),
+                    QR5.from_integers(-1, 2, -1, 2)
+                ])
+            elif signs == [0, 1, -1, 0]:
+                seed = FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(-1, 1, 0, 1),
+                    QR5.from_integers(-7, 2, -5, 2),
+                    QR5.from_integers(13, 2, 5, 2)
+                ])
+            elif signs == [0, 1, 0, 1]:
+                seed = FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(-4, 1, -2, 1),
+                    QR5.from_integers(6, 1, 2, 1)
+                ])
+            elif signs == [0, 1, 0, -1]:
+                seed = FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(2, 1, 0, 1),
+                    QR5.from_integers(0, 1, 0, 1)
+                ])
+            elif signs == [0, 0, 1, -1]:
+                seed = FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(11, 2, 5, 2),
+                    QR5.from_integers(-13, 2, -5, 2)
+                ])
+            elif signs == [0, 0, 1, 1]:
+                seed = FVector([
+                    QR5.from_integers(0, 1, 0, 1),
+                    QR5.from_integers(1, 1, 0, 1),
+                    QR5.from_integers(-1, 2, 1, 2),
+                    QR5.from_integers(-1, 2, 1, 2)
+                ])
             point_cloud = set()
             for element in self.elements:
                 point_cloud.add(element@seed)
