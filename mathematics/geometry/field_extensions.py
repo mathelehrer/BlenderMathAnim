@@ -31,8 +31,15 @@ class QR5:
         -1/2
         >>> QR5.parse("0")
         0
+        >>> QR5.parse("-2-r5")
+        (-2-1*r5)
+        >>> QR5.parse("5+2*r5")
+        (5+2*r5)
+        >>> QR5.parse("3+r5")
+        (3+1*r5)
         """
         # remove brackets
+
         if string[0]=="(":
             string=string[1:-1]
         if string[0]=="-":
@@ -59,9 +66,16 @@ class QR5:
             else:
                 a=parts[0]
                 b=1
-            parts[1]=parts[1].replace("*r5","")
-            if "/" in parts[1]:
-                c,d=parts[1].split("/")
+            if "*r5" in parts[1]:
+                parts[1]=parts[1].replace("*r5","")
+                if "/" in parts[1]:
+                    c,d=parts[1].split("/")
+                else:
+                    c=int(parts[1])
+                    d=1
+            elif "r5" in parts[1]:
+                c=1
+                d=1
             else:
                 c=parts[1]
                 d=1
@@ -524,11 +538,11 @@ class FVector(FTensor):
         """
         # remove outer brackets
         string = string[1:-1]
-        parts = string.split(", ")
+        parts = string.split(",")
 
         components = []
         for part in parts:
-            components.append(QR5.parse(part))
+            components.append(QR5.parse(part.strip()))
         return cls(components)
 
     @classmethod
