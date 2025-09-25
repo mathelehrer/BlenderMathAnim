@@ -341,6 +341,26 @@ class CoxH4:
 
         return cell_normals
 
+    def get_cells_from_chunk(self,point_cloud,key,val,chunk):
+        cells = {}
+        for i, elem in enumerate(chunk):
+
+
+            new_normal = elem @ val
+            new_indices = []
+            for i in key:
+                new_indices.append(point_cloud.index(elem @ point_cloud[i]))
+            new_indices.sort()
+            index_tuple = tuple(set(new_indices))
+            if index_tuple not in cells:
+                # make normal point away from origin
+                if point_cloud[index_tuple[0]].dot(new_normal).real() < 0:
+                    new_normal = -new_normal
+                cells[index_tuple] = new_normal
+                # print("added",index_tuple)
+                # assert((point_cloud[index_tuple[0]]-point_cloud[index_tuple[-1]]).dot(new_normal)==zero)
+        return cells
+
     def get_cells(self,seed=[1,1,1,1]):
         """
         we find the cells at the first point of the point cloud
@@ -387,26 +407,23 @@ class CoxH4:
         for i,(key,val) in enumerate(cells0.items()):
             print("map cell",i)
             old_text = ""
-            for i,elem in enumerate(active_elements.values()):
 
-                text = str(i)+"/"+str(len(active_elements))
-                show_inline_progress_in_terminal(text,old_text)
-                old_text = text
+            # parallel processing
+            active_elements = list(active_elements.values())
+            cpus = os.cpu_count()
+            size= int(len(active_elements)/cpus)
+            chunks = []
+            for i in range(0,len(active_elements),size):
+                chunks.append(active_elements[i:min(len(active_elements),i+size)])
 
-                new_normal = elem@val
-                new_indices =[]
-                for i in key:
-                    new_indices.append(point_cloud.index(elem@point_cloud[i]))
-                new_indices.sort()
-                index_tuple = tuple(set(new_indices))
-                if index_tuple not in cells:
-                    # make normal point away from origin
-                    if point_cloud[index_tuple[0]].dot(new_normal).real()<0:
-                        new_normal = -new_normal
-                    cells[index_tuple]=new_normal
-                    # print("added",index_tuple)
-                    # assert((point_cloud[index_tuple[0]]-point_cloud[index_tuple[-1]]).dot(new_normal)==zero)
-            print()
+            worker =partial(self.get_cells_from_chunk,point_cloud,key,val)
+
+            with Pool(processes=cpus) as pool:
+                for res in pool.imap_unordered(worker,chunks,chunksize=1):
+                    for key,val in res.items():
+                        if key not in cells:
+                            cells[key] = val
+                    print("done!")
 
         with open(os.path.join(self.path,filename),"w") as f:
             for key,val in cells.items():
