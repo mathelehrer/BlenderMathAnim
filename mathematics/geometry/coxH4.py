@@ -404,12 +404,13 @@ class CoxH4:
         #     print(key,"->",val)
 
         # now map the cells at the origin to all other cells
+        active_elements = list(active_elements.values())
+
         for i,(key,val) in enumerate(cells0.items()):
             print("map cell",i)
             old_text = ""
 
             # parallel processing
-            active_elements = list(active_elements.values())
             cpus = os.cpu_count()
             size= int(len(active_elements)/cpus)
             chunks = []
@@ -423,7 +424,7 @@ class CoxH4:
                     for key,val in res.items():
                         if key not in cells:
                             cells[key] = val
-                    print("done!")
+
 
         with open(os.path.join(self.path,filename),"w") as f:
             for key,val in cells.items():
