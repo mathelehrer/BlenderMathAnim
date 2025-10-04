@@ -419,7 +419,7 @@ class Node:
 
         # Custom Nodes
         if type=="GROUP":
-            if "PositionTransform" in name:
+            if "Position Transform" in name:
                 return TransformPositionNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=400)
 
     def set_parent(self,parent):
@@ -5107,7 +5107,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                         output_id = int(attributes['id'])
                         node_structure[key]["outputs"][output_id] = output_count
                         output_count += 1
-                if "RepeatInput" in name:
+                if "Repeat Input" in name:
                     # find the corresponding output node from name
                     out_name = name.replace("Input", "Output")
                     node_dir[key].pair_with_output(node_dir[name_dir[out_name]])
@@ -5145,7 +5145,7 @@ def create_from_xml(tree,filename=None,**kwargs):
                 to_node = int(node_attributes["to_node"])
 
                 output_id = node_structure[from_node]["outputs"][from_socket]
-                if  to_socket==85:
+                if  to_socket==157:
                     pass
                 input_id = node_structure[to_node]["inputs"][to_socket]
 

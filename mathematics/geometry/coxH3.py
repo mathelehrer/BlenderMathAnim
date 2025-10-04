@@ -202,6 +202,23 @@ class CoxH3:
         point_cloud = self.get_point_cloud(seed)
         edges = self.get_edges(seed)
         faces = self.find_faces(point_cloud,edges)
+        # rearrange indices for an outward pointing normal
+
+        for idx in range(len(faces)):
+            face = faces[idx]
+            # create normal from the first three points
+            # show that it is aligned with the center of the face,
+            # otherwise reverse orientation of face
+
+            normal = (point_cloud[face[1]]-point_cloud[face[0]]).cross(point_cloud[face[2]]-point_cloud[face[0]])
+            center = Vector((0,0,0))
+            for i in face:
+                center+=point_cloud[i].real()
+            center/=len(face)
+
+            if normal.real().dot(center)<0:
+                faces[idx]=face[::-1]
+
         return faces
 
 
