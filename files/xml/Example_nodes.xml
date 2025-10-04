@@ -1,6 +1,6 @@
 <NODE_XML>
 	<NODES>
-		<NODE id="0" type="GROUP_OUTPUT" name="Group Output" label="" location="(9.4,0.8)" hide="False" mute="False" parent="None">
+		<NODE id="0" type="GROUP_OUTPUT" name="Group Output" label="" location="(7.4,1.6)" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="0" name="Geometry" type="GEOMETRY" is_linked="True"/>
 				<INPUT id="1" name="" type="CUSTOM" is_linked="False"/>
@@ -8,7 +8,7 @@
 			<OUTPUTS>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="1" type="MESH_PRIMITIVE_LINE" name="Mesh Line" label="" location="(-1.8,0.8)" hide="False" mode="END_POINTS" mute="False" parent="None">
+		<NODE id="1" type="MESH_PRIMITIVE_LINE" name="Mesh Line" label="" location="(-3.3,2.4)" hide="False" mode="END_POINTS" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="2" name="Count" type="INT" is_linked="False" default_value="100"/>
 				<INPUT id="3" name="Resolution" type="VALUE" is_linked="False" default_value="1.0"/>
@@ -23,10 +23,10 @@
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
-				<OUTPUT id="7" name="Value" type="VALUE" is_linked="True" default_value="1.0"/>
+				<OUTPUT id="7" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="3" type="SET_POSITION" name="Set Position" label="" location="(6.1,0.8)" hide="False" mute="False" parent="None">
+		<NODE id="3" type="SET_POSITION" name="Set Position" label="" location="(3.4,1.4)" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="8" name="Geometry" type="GEOMETRY" is_linked="True"/>
 				<INPUT id="9" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
@@ -163,13 +163,13 @@
 				<OUTPUT id="66" name="Center" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="16" type="FRAME" name="Frame" label="Wireframe" location="(7.2,0.8)" hide="False" mute="False" parent="None">
+		<NODE id="16" type="FRAME" name="Frame" label="Wireframe" location="(4.8,1.9)" hide="False" mute="False" parent="None">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="17" type="FRAME" name="Frame.001" label="Transformation" location="(-0.1,0.4)" hide="False" mute="False" parent="None">
+		<NODE id="17" type="FRAME" name="Frame.001" label="Transformation" location="(-3.1,0.0)" hide="False" mute="False" parent="None">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
