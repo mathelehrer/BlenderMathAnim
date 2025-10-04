@@ -5103,6 +5103,26 @@ class ReflectableBilliardPaperModifier(GeometryNodesModifier):
             create_geometry_line(tree, [last, rotate_instance, join2])
             last = rotate_instance
 
+# new videos
+
+class CustomUnfoldModifier(GeometryNodesModifier):
+    def __init__(self, name="UnfoldModifier",**kwargs):
+        super().__init__(name, automatic_layout=False,group_output=False,group_input=False, **kwargs)
+
+    def create_node(self,tree,**kwargs):
+        create_from_xml(tree,"unfolding_node",**kwargs)
+        # add custom stuff here
+
+        out = tree.nodes.get("Group Output")
+        links = tree.links
+
+        last_geo_node = ibpy.get_node_from_tree(tree,label="Final Position")
+
+
+
+        print(last_geo_node)
+
+
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
 

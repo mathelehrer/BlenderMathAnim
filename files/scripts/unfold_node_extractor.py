@@ -156,6 +156,6 @@ print(filedata)
 
 # store data to file
 
-with open("/files2/xml/unfolding_node.xml", 'w') as f:
+with open("/home/jmartin/blendermathamin/files/xml/unfolding_node.xml",'w') as f:
     print("success")
     f.write(filedata)

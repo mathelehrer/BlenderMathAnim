@@ -2436,6 +2436,12 @@ def get_geometry_node_from_modifier(modifier, label):
             return n
     return None
 
+def get_node_from_tree(tree, label):
+    for n in tree.nodes:
+        if label in n.label or label in n.name:
+            return n
+    return None
+
 def get_node_from_shader(shader,label):
     for n in shader.node_tree.nodes:
         if label in n.label or label in n.name:
