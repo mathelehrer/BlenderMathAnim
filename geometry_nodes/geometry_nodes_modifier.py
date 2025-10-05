@@ -20,7 +20,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     SeparateGeometry, CurveWireFrame, AlignRotationToVector, ScaleInstances, ValueToString, StringToCurves, IndexSwitch, \
     CycleNode, FillCurve, AttributeStatistic, CoxeterReflectionNode, QuaternionToRotation, RotateVector, \
     SubdivisionSurface, FilletCurve, FaceArea, SortElements, InputBoolean, BeveledCubeNode, CompareNode, \
-    GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode
+    GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode, CornersOfFace
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -5107,21 +5107,57 @@ class ReflectableBilliardPaperModifier(GeometryNodesModifier):
 
 class CustomUnfoldModifier(GeometryNodesModifier):
     def __init__(self, name="UnfoldModifier",**kwargs):
-        super().__init__(name, automatic_layout=False,group_output=False,group_input=False, **kwargs)
+        super().__init__(name, automatic_layout=True,group_output=True,group_input=True, **kwargs)
 
     def create_node(self,tree,**kwargs):
-        create_from_xml(tree,"unfolding_node",**kwargs)
-        # add custom stuff here
-
-        out = tree.nodes.get("Group Output")
+        out = self.group_outputs
+        ins = self.group_inputs
         links = tree.links
 
-        last_geo_node = ibpy.get_node_from_tree(tree,label="Final Position")
+        # reindex faces
+        pos = Position(tree,hide=True)
+        re_index_function = make_function(tree, name="ReIndexFunction",
+                                          functions={
+                                              "weight":"pos_x,0.33,*,pos_z,+"
+                                          },hide=True,inputs=["pos"],outputs=["weight"],scalars=["weight"],vectors=["pos"])
+        links.new(pos.std_out,re_index_function.inputs["pos"])
+        sort_node = SortElements(tree,sort_weight=re_index_function.outputs["weight"],hide=True)
 
+        # prepare face selection
+        face_selector = InputInteger(tree,label="FaceSelector",integer=3,hide=True)
+        index = Index(tree,hide=True)
 
+        selector_function=make_function(tree,name="SelectorFunction",functions={
+            "selection":"idx,face_selector,<"
+        },inputs=["idx","face_selector"],outputs=["selection"],scalars=["selection","idx","face_selector"],
+                                        vectors=[],hide=True)
+        links.new(index.std_out,selector_function.inputs["idx"])
+        links.new(face_selector.std_out,selector_function.inputs["face_selector"])
 
-        print(last_geo_node)
+        select_geo = SeparateGeometry(tree,domain="FACE",selection=selector_function.outputs["selection"],hide=True)
 
+        # create unfolding
+        progress = InputValue(tree, name="Progress", value=0.0, hide=True)
+        unfold_node = UnfoldMeshNode(tree, name="UnfoldMeshNode",hide=True,progression=progress.std_out,**kwargs)
+
+        create_geometry_line(tree,[sort_node,select_geo,unfold_node],ins = ins.outputs[0])
+
+        # select types of faces
+        face_types = get_from_kwargs(kwargs,"face_types",[4,6,10])
+        face_materials = get_from_kwargs(kwargs,"face_materials",["example","important","joker"])
+        corners_of_face = CornersOfFace(tree,std_out="Total",hide=True)
+        join_geo = JoinGeometry(tree,hide=True)
+        for type,material_string in zip(face_types,face_materials):
+            compare_node = CompareNode(tree,hide=True,
+                                       data_type="INT",operation="EQUAL",inputs0=corners_of_face.std_out,inputs1=type)
+            separate_geometry = SeparateGeometry(tree,domain="FACE",selection=compare_node.outputs[0],hide=True)
+            material = get_texture(material_string,**kwargs)
+            self.materials.append(material)
+            material_node = SetMaterial(tree,material=material,hide=True)
+
+            create_geometry_line(tree,[unfold_node,separate_geometry,material_node,join_geo])
+
+        create_geometry_line(tree,[join_geo],out=out.inputs[0])
 
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
