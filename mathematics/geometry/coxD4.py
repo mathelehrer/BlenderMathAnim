@@ -690,6 +690,14 @@ class CoxH4:
         print("cells: ",len(cells))
         print("Euler: ",len(vertices)-len(edges)+len(faces)-len(cells))
 
+
+def center(key, point_cloud):
+    c = FVector([zero,zero,zero,zero])
+    for k in key:
+        c = c + point_cloud[k]
+    return c.real() / len(key)
+
+
 class CoxD4:
     def __init__(self,path=None):
         """
@@ -705,7 +713,7 @@ class CoxD4:
         half = QR5.from_integers(1,2,0,1)
         two = QR5.from_integers(2,1,0,1)
 
-        # normal vectors: Computed in CoxH4.nb
+        # normal vectors: Computed in CoxD4.nb
         normals = [
                     FVector([one,zero,zero,zero]),
                     FVector([half,half,half,half]),
@@ -715,7 +723,7 @@ class CoxD4:
 
         self.normals = normals
 
-        # the generators of H4 are given by
+        # the generators of D4 are given by
         identity =  FMatrix([[one,zero,zero,zero],[zero,one,zero,zero],[zero,zero,one,zero],[zero,zero,zero,one]])
         generators=[identity-(n*n)-(n*n) for n in normals]
         # cast to matrix for proper matrix multiplication
@@ -778,7 +786,6 @@ class CoxD4:
                         print(len(elements), end=" ")
             new_elements = next_elements
             print(len(new_elements))
-        self.save(elements, "cox4_elements.dat")
         self.save(elements, "coxD4_elements.dat")
         return elements
 
@@ -1029,6 +1036,7 @@ class CoxD4:
         with open(os.path.join(self.path,filename),"w") as f:
             for key,val in cells.items():
                 f.write(f"{key}->{val}\n")
+                print(key,val,center(key,point_cloud))
 
         return cells
 
