@@ -5138,7 +5138,7 @@ class CustomUnfoldModifier(GeometryNodesModifier):
 
         # create unfolding
         progress = InputValue(tree, name="Progress", value=0.0, hide=True)
-        unfold_node = UnfoldMeshNode(tree, name="UnfoldMeshNode",hide=True,progression=progress.std_out,**kwargs)
+        unfold_node = UnfoldMeshNode(tree, name="UnfoldMeshNode",hide=True,progression=progress.std_out,scale_elements=1,**kwargs)
 
         create_geometry_line(tree,[sort_node,select_geo,unfold_node],ins = ins.outputs[0])
 
