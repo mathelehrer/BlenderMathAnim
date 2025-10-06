@@ -1107,6 +1107,7 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
 
     if engine == BLENDER_EEVEE:
         scene.eevee.use_gtao = True
+        scene.eevee.use_raytracing = True # allow for transparency in eevee
 
         if blender_version() < (4, 3):
             scene.eevee.use_bloom = True

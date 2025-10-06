@@ -5157,7 +5157,21 @@ class CustomUnfoldModifier(GeometryNodesModifier):
 
             create_geometry_line(tree,[unfold_node,separate_geometry,material_node,join_geo])
 
-        create_geometry_line(tree,[join_geo],out=out.inputs[0])
+        edge_material_string = get_from_kwargs(kwargs,"edge_material",None)
+        if edge_material_string is not None:
+            edge_material = get_texture(edge_material_string,**kwargs)
+            self.materials.append(edge_material)
+            edge_material_node = SetMaterial(tree,material=edge_material,hide=True)
+            wire_frame = WireFrame(tree,hide=True)
+            join_wireframe=JoinGeometry(tree,hide=True)
+            create_geometry_line(tree,[join_geo,join_wireframe],out=out.inputs[0])
+            create_geometry_line(tree,[join_geo,wire_frame,edge_material_node,join_wireframe])
+        else:
+            create_geometry_line(tree,[join_geo],out=out.inputs[0])
+
+    def change_alpha(self,material_slot,from_value=1,to_value=0,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        mat = self.materials[material_slot]
+        return ibpy.change_alpha_of_material(mat,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
 
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
