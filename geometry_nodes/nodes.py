@@ -371,6 +371,8 @@ class Node:
         if type=="AXIS_ANGLE_TO_ROTATION":
             return AxisAngleToRotation(tree,location=location,name=name,label=label,hide=hide,
                                        mute=mute,node_height=200)
+        if type=="EULER_TO_ROTATION":
+            return EulerToRotation(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         # switches
         if type=="SWITCH":
@@ -391,11 +393,9 @@ class Node:
             return EvaluateAtIndex(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type,domain=domain)
 
         if type=="REROUTE":
-            location = parse_location(attributes["location"])
             return ReRoute(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="FRAME":
-            location=parse_location(attributes["location"])
-            return Frame(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=1000,node_width=1000)
+            return Frame(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,node_width=200)
 
         if type=="GROUP_OUTPUT":
             return GroupOutput(tree,location,name=name,label=label,hide=hide,mute=mute,node_height=200)
@@ -459,13 +459,14 @@ class ReRoute(Node):
         super().__init__(tree,location,**kwargs)
 
 class Frame(Node):
-    def __init__(self,tree,location=(0,0),hide=False,mute=False,**kwargs):
+    def __init__(self,tree,location=(0,0),node_width=200, node_height=200,hide=False,mute=False,**kwargs):
         self.node = tree.nodes.new(type="NodeFrame")
         self.node.hide=hide
         self.node.mute=mute
-        super().__init__(tree,location,**kwargs)
+        super().__init__(tree,location,node_width=node_width,node_height=node_height,**kwargs)
 
     def add(self,node):
+        """ make Frame parent to given node(s)  """
         if isinstance(node,list):
             for n in node:
                 n.parent=self.node
@@ -831,7 +832,7 @@ class CurveLine(GreenNode):
         if isinstance(start, (list,Vector)):
             self.node.inputs["Start"].default_value = start
         else:
-            self.tree.links.new(width, self.node.inputs["Start"])
+            self.tree.links.new(start, self.node.inputs["Start"])
         if isinstance(end, (list,Vector)):
             self.node.inputs["End"].default_value = end
         else:
@@ -2523,6 +2524,18 @@ class AxesToRotation(BlueNode):
                 self.node.inputs["Secondary Axis"].default_value=secondary_direction
             else:
                 tree.links.new(secondary_direction,self.node.inputs["Secondary Axis"])
+
+class EulerToRotation(BlueNode):
+    def __init__(self, tree, location=(0, 0),euler = Vector(), **kwargs):
+        self.node = tree.nodes.new(type="FunctionNodeEulerToRotation")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.std_out=self.node.outputs["Rotation"]
+
+        if isinstance(euler,(list,Vector)):
+            self.node.inputs["Euler"].default_value=euler
+        else:
+            tree.links.new(euler,self.node.inputs["Euler"])
 
 class AxisAngleToRotation(BlueNode):
     def __init__(self, tree, location=(0, 0),axis=None,angle=0, **kwargs):
@@ -5084,7 +5097,18 @@ def create_from_xml(tree,filename=None,**kwargs):
             # establish parent relations
             for key, val in parent_dir.items():
                 if node_dir[key] is not None:
-                    node_dir[key].set_parent(node_dir[name_dir[val]])
+                    # before parenting is established, the node needs to be shifted to the position of the parent
+                    # node_dir[key].location=(node_dir[key].location[0]+node_dir[name_dir[val]].location[0],node_dir[key].location[1]+node_dir[name_dir[val]].location[1])
+                    parent = node_dir[name_dir[val]]
+                    child = node_dir[key]
+
+                    parent_loc = parent.node.location
+                    child_loc = child.node.location
+                    child.node.location = (parent_loc[0]+child_loc[0],parent_loc[1]+child_loc[1])
+                    child.set_parent(parent)
+
+
+
 
             # check for zone pairing
             for key, val in node_dir.items():
