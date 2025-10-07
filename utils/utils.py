@@ -115,8 +115,13 @@ def quaternion_from_normal(normal):
     axis = Vector([0, 0, 1]).cross(normal)
     length = axis.length
     if length == 0:
-        raise "error: rotation axis not found"
-    axis /= length
+        if normal.length>0:
+            angle=0
+            axis = Vector([0,0,1])
+        else:
+            raise "error: rotation axis not found"
+    else:
+        axis /= length
     quaternion = Quaternion([np.cos(angle / 2), *((axis * np.sin(angle / 2))[:])])
     return quaternion
 

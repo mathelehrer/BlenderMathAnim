@@ -1089,7 +1089,7 @@ def delete(obj):
 # render engines #
 ##################
 
-def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, denoising=False,
+def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, denoising=False,shadows=True,
                       resolution_percentage=100, frame_start=0, taa_render_samples=1024, feature_set='SUPPORTED'):
     """
     @type frame_start: int
@@ -1108,6 +1108,7 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
     if engine == BLENDER_EEVEE:
         scene.eevee.use_gtao = True
         scene.eevee.use_raytracing = True # allow for transparency in eevee
+        scene.eevee.use_shadows = shadows
 
         if blender_version() < (4, 3):
             scene.eevee.use_bloom = True
