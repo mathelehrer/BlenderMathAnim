@@ -91,6 +91,12 @@ class Face(list):
         second = self.elements == other.reverse_elements
         return first or second
 
+def center(key, point_cloud):
+    c = FVector([zero,zero,zero,zero])
+    for k in key:
+        c = c + point_cloud[k]
+    return c.real() / len(key)
+
 class CoxH4:
     def __init__(self,path=None):
         """
@@ -429,7 +435,7 @@ class CoxH4:
         with open(os.path.join(self.path,filename),"w") as f:
             for key,val in cells.items():
                 f.write(f"{key}->{val}\n")
-
+                print(key, val, center(key, point_cloud))
         return cells
 
 
