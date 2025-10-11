@@ -5107,9 +5107,6 @@ def create_from_xml(tree,filename=None,**kwargs):
                     child.node.location = (parent_loc[0]+child_loc[0],parent_loc[1]+child_loc[1])
                     child.set_parent(parent)
 
-
-
-
             # check for zone pairing
             for key, val in node_dir.items():
                 name = node_structure[key]["name"]
