@@ -38,7 +38,7 @@
 				<OUTPUT id="31" name="BSDF" type="SHADER" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="1" type="OUTPUT_MATERIAL" name="Material Output" label="" location="(6.9,2.5)" hide="False" mute="False" parent="None">
+		<NODE id="1" type="OUTPUT_MATERIAL" name="Material Output" label="" location="(7.2,2.0)" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="32" name="Surface" type="SHADER" is_linked="True"/>
 				<INPUT id="33" name="Volume" type="SHADER" is_linked="False"/>
@@ -91,7 +91,7 @@
 				<OUTPUT id="60" name="Color" type="RGBA" is_linked="False" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="5" type="TEX_NOISE" name="Noise Texture.002" label="" location="(3.6,-1.9)" hide="False" mute="False" noise_dimensions="3D" noise_type="FBM" normalize="False" parent="Frame.002">
+		<NODE id="5" type="TEX_NOISE" name="Noise Texture.002" label="" location="(3.6,-1.8)" hide="False" mute="False" noise_dimensions="3D" noise_type="FBM" normalize="False" parent="Frame.002">
 			<INPUTS>
 				<INPUT id="61" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
 				<INPUT id="62" name="W" type="VALUE" is_linked="False" default_value="0.0"/>
@@ -173,7 +173,7 @@
 				<OUTPUT id="100" name="Displacement" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="12" type="MIX_SHADER" name="Mix Shader" label="" location="(5.1,-2.5)" hide="False" mute="False" parent="Frame.001">
+		<NODE id="12" type="MIX_SHADER" name="Mix Shader" label="EdgeMixing" location="(7.3,-3.5)" hide="False" mute="False" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="101" name="Fac" type="VALUE" is_linked="True"/>
 				<INPUT id="102" name="Shader" type="SHADER" is_linked="True"/>
@@ -183,7 +183,7 @@
 				<OUTPUT id="104" name="Shader" type="SHADER" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="13" type="BSDF_TRANSPARENT" name="Transparent BSDF" label="" location="(3.1,-2.7)" hide="False" mute="False" parent="Frame.001">
+		<NODE id="13" type="BSDF_TRANSPARENT" name="Transparent BSDF" label="" location="(5.3,-3.7)" hide="False" mute="False" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="105" name="Color" type="RGBA" is_linked="False" default_value="[1.0, 1.0, 1.0, 1.0]"/>
 				<INPUT id="106" name="Weight" type="VALUE" is_linked="False" default_value="0.0"/>
@@ -192,7 +192,7 @@
 				<OUTPUT id="107" name="BSDF" type="SHADER" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="14" type="TEX_COORD" name="Texture Coordinate" label="" location="(0.1,-0.6)" hide="True" mute="False" parent="Frame.001">
+		<NODE id="14" type="TEX_COORD" name="Texture Coordinate" label="" location="(0.1,-0.1)" hide="False" mute="False" parent="Frame.001">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
@@ -205,7 +205,7 @@
 				<OUTPUT id="114" name="Reflection" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="15" type="MATH" name="Math.002" label="" location="(2.2,-0.1)" hide="False" mute="False" operation="COMPARE" use_clamp="False" parent="Frame.001">
+		<NODE id="15" type="MATH" name="Math.002" label="" location="(4.4,-1.1)" hide="False" mute="False" operation="COMPARE" use_clamp="False" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="115" name="Value" type="VALUE" is_linked="True"/>
 				<INPUT id="116" name="Value" type="VALUE" is_linked="True"/>
@@ -215,7 +215,7 @@
 				<OUTPUT id="118" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="16" type="SEPXYZ" name="Separate XYZ" label="" location="(1.0,-0.1)" hide="False" mute="False" parent="Frame.001">
+		<NODE id="16" type="SEPXYZ" name="Separate XYZ" label="" location="(3.3,-1.1)" hide="False" mute="False" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="119" name="Vector" type="VECTOR" is_linked="True"/>
 			</INPUTS>
@@ -225,7 +225,7 @@
 				<OUTPUT id="122" name="Z" type="VALUE" is_linked="False" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="17" type="TEX_NOISE" name="Noise Texture.003" label="" location="(0.1,-1.2)" hide="True" mute="False" noise_dimensions="3D" noise_type="FBM" normalize="True" parent="Frame.001">
+		<NODE id="17" type="TEX_NOISE" name="Noise Texture.003" label="" location="(2.4,-2.2)" hide="False" mute="False" noise_dimensions="3D" noise_type="FBM" normalize="True" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="123" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
 				<INPUT id="124" name="W" type="VALUE" is_linked="False" default_value="0.0"/>
@@ -242,7 +242,7 @@
 				<OUTPUT id="133" name="Color" type="RGBA" is_linked="False" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="18" type="MATH" name="Math.003" label="" location="(1.1,-1.0)" hide="False" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.001">
+		<NODE id="18" type="MATH" name="Math.003" label="" location="(3.3,-2.0)" hide="False" mute="False" operation="MULTIPLY" use_clamp="False" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="134" name="Value" type="VALUE" is_linked="True"/>
 				<INPUT id="135" name="Value" type="VALUE" is_linked="True"/>
@@ -252,14 +252,14 @@
 				<OUTPUT id="137" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="19" type="VALUE" name="Value.002" label="Scale" location="(0.1,-0.4)" hide="True" mute="False" parent="Frame">
+		<NODE id="19" type="VALUE" name="Value.002" label="Wear" location="(0.1,-1.8)" hide="True" mute="False" parent="Frame">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
 				<OUTPUT id="138" name="Value" type="VALUE" is_linked="True" default_value="0.05000000074505806"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="20" type="MATH" name="Math.004" label="" location="(2.1,-1.1)" hide="False" mute="False" operation="COMPARE" use_clamp="False" parent="Frame.001">
+		<NODE id="20" type="MATH" name="Math.004" label="" location="(4.4,-2.0)" hide="False" mute="False" operation="COMPARE" use_clamp="False" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="139" name="Value" type="VALUE" is_linked="True"/>
 				<INPUT id="140" name="Value" type="VALUE" is_linked="False" default_value="0.0"/>
@@ -269,7 +269,7 @@
 				<OUTPUT id="142" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="21" type="MATH" name="Math.005" label="" location="(2.2,-2.0)" hide="False" mute="False" operation="COMPARE" use_clamp="False" parent="Frame.001">
+		<NODE id="21" type="MATH" name="Math.005" label="" location="(4.5,-2.9)" hide="False" mute="False" operation="COMPARE" use_clamp="False" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="143" name="Value" type="VALUE" is_linked="True"/>
 				<INPUT id="144" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
@@ -279,7 +279,7 @@
 				<OUTPUT id="146" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="22" type="MATH" name="Math.006" label="" location="(3.0,-0.9)" hide="False" mute="False" operation="ADD" use_clamp="False" parent="Frame.001">
+		<NODE id="22" type="MATH" name="Math.006" label="" location="(5.3,-1.9)" hide="False" mute="False" operation="ADD" use_clamp="False" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="147" name="Value" type="VALUE" is_linked="True"/>
 				<INPUT id="148" name="Value" type="VALUE" is_linked="True"/>
@@ -289,7 +289,7 @@
 				<OUTPUT id="150" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="23" type="MATH" name="Math.007" label="" location="(3.9,-1.9)" hide="False" mute="False" operation="ADD" use_clamp="False" parent="Frame.001">
+		<NODE id="23" type="MATH" name="Math.007" label="" location="(6.2,-2.9)" hide="False" mute="False" operation="ADD" use_clamp="False" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="151" name="Value" type="VALUE" is_linked="True"/>
 				<INPUT id="152" name="Value" type="VALUE" is_linked="True"/>
@@ -309,34 +309,34 @@
 				<OUTPUT id="158" name="Color" type="RGBA" is_linked="True" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="25" type="VALUE" name="Value.003" label="Brightness" location="(0.1,-0.6)" hide="True" mute="False" parent="Frame">
+		<NODE id="25" type="VALUE" name="Value.003" label="Darkness" location="(0.1,-2.1)" hide="True" mute="False" parent="Frame">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
 				<OUTPUT id="159" name="Value" type="VALUE" is_linked="True" default_value="-0.10000000149011612"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="26" type="VALUE" name="Value.004" label="BumpScale" location="(0.1,-1.0)" hide="True" mute="False" parent="Frame">
+		<NODE id="26" type="VALUE" name="Value.004" label="BumpScale" location="(0.1,-2.3)" hide="True" mute="False" parent="Frame">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
 				<OUTPUT id="160" name="Value" type="VALUE" is_linked="True" default_value="0.10000000149011612"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="27" type="VALUE" name="Value.005" label="RightSide" location="(0.1,-0.2)" hide="True" mute="False" parent="Frame">
+		<NODE id="27" type="VALUE" name="Value.005" label="RightSide" location="(0.1,-1.6)" hide="True" mute="False" parent="Frame">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
 				<OUTPUT id="161" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="28" type="FRAME" name="Frame" label="InputParamter" location="(-3.7,5.0)" hide="False" mute="False" parent="None">
+		<NODE id="28" type="FRAME" name="Frame" label="InputParamter" location="(-5.6,6.5)" hide="False" mute="False" parent="None">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="29" type="FRAME" name="Frame.001" label="EdgeWear" location="(-2.0,5.7)" hide="False" mute="False" parent="None">
+		<NODE id="29" type="FRAME" name="Frame.001" label="EdgeWear" location="(-4.2,6.7)" hide="False" mute="False" parent="None">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
@@ -354,6 +354,92 @@
 			<OUTPUTS>
 			</OUTPUTS>
 		</NODE>
+		<NODE id="32" type="VECT_MATH" name="Vector Math" label="" location="(1.1,-0.3)" hide="False" mute="False" operation="ADD" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="162" name="Vector" type="VECTOR" is_linked="True"/>
+				<INPUT id="163" name="Vector" type="VECTOR" is_linked="True"/>
+				<INPUT id="164" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="165" name="Scale" type="VALUE" is_linked="False" default_value="1.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="166" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="167" name="Value" type="VALUE" is_linked="False" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="33" type="VECT_MATH" name="Vector Math.001" label="" location="(2.0,-0.4)" hide="False" mute="False" operation="MULTIPLY" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="168" name="Vector" type="VECTOR" is_linked="True"/>
+				<INPUT id="169" name="Vector" type="VECTOR" is_linked="True"/>
+				<INPUT id="170" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="171" name="Scale" type="VALUE" is_linked="False" default_value="1.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="172" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="173" name="Value" type="VALUE" is_linked="False" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="34" type="VALUE" name="Value.006" label="UVShiftX" location="(0.1,-0.2)" hide="True" mute="False" parent="Frame">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="174" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="35" type="VALUE" name="Value.007" label="UVShiftY" location="(0.1,-0.4)" hide="True" mute="False" parent="Frame">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="175" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="36" type="VALUE" name="Value.008" label="UVShiftZ" location="(0.1,-0.7)" hide="True" mute="False" parent="Frame">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="176" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="37" type="COMBXYZ" name="Combine XYZ" label="" location="(0.1,-1.3)" hide="False" mute="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="177" name="X" type="VALUE" is_linked="True"/>
+				<INPUT id="178" name="Y" type="VALUE" is_linked="True"/>
+				<INPUT id="179" name="Z" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="180" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="38" type="VALUE" name="Value.009" label="UVScaleX" location="(0.1,-0.9)" hide="True" mute="False" parent="Frame">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="181" name="Value" type="VALUE" is_linked="True" default_value="1.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="39" type="VALUE" name="Value.010" label="UVScaleY" location="(0.1,-1.0)" hide="True" mute="False" parent="Frame">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="182" name="Value" type="VALUE" is_linked="True" default_value="1.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="40" type="VALUE" name="Value.011" label="UVScaleZ" location="(0.1,-1.3)" hide="True" mute="False" parent="Frame">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="183" name="Value" type="VALUE" is_linked="True" default_value="1.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="41" type="COMBXYZ" name="Combine XYZ.001" label="" location="(0.1,-1.9)" hide="False" mute="False" parent="Frame.001">
+			<INPUTS>
+				<INPUT id="184" name="X" type="VALUE" is_linked="True"/>
+				<INPUT id="185" name="Y" type="VALUE" is_linked="True"/>
+				<INPUT id="186" name="Z" type="VALUE" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="187" name="Vector" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
 	</NODES>
 	<LINKS>
 		<LINK from_node="24" from_socket="158" to_node="0" to_socket="0"/>
@@ -369,10 +455,8 @@
 		<LINK from_node="11" from_socket="100" to_node="1" to_socket="34"/>
 		<LINK from_node="12" from_socket="104" to_node="1" to_socket="32"/>
 		<LINK from_node="23" from_socket="154" to_node="12" to_socket="101"/>
-		<LINK from_node="14" from_socket="110" to_node="16" to_socket="119"/>
+		<LINK from_node="33" from_socket="172" to_node="16" to_socket="119"/>
 		<LINK from_node="16" from_socket="120" to_node="15" to_socket="115"/>
-		<LINK from_node="0" from_socket="31" to_node="12" to_socket="102"/>
-		<LINK from_node="13" from_socket="107" to_node="12" to_socket="103"/>
 		<LINK from_node="18" from_socket="137" to_node="15" to_socket="117"/>
 		<LINK from_node="17" from_socket="132" to_node="18" to_socket="134"/>
 		<LINK from_node="19" from_socket="138" to_node="18" to_socket="135"/>
@@ -387,6 +471,18 @@
 		<LINK from_node="3" from_socket="48" to_node="24" to_socket="155"/>
 		<LINK from_node="25" from_socket="159" to_node="24" to_socket="156"/>
 		<LINK from_node="26" from_socket="160" to_node="11" to_socket="98"/>
+		<LINK from_node="14" from_socket="110" to_node="32" to_socket="162"/>
+		<LINK from_node="32" from_socket="166" to_node="33" to_socket="168"/>
+		<LINK from_node="37" from_socket="180" to_node="32" to_socket="163"/>
+		<LINK from_node="34" from_socket="174" to_node="37" to_socket="177"/>
+		<LINK from_node="35" from_socket="175" to_node="37" to_socket="178"/>
+		<LINK from_node="36" from_socket="176" to_node="37" to_socket="179"/>
 		<LINK from_node="27" from_socket="161" to_node="15" to_socket="116"/>
+		<LINK from_node="41" from_socket="187" to_node="33" to_socket="169"/>
+		<LINK from_node="38" from_socket="181" to_node="41" to_socket="184"/>
+		<LINK from_node="39" from_socket="182" to_node="41" to_socket="185"/>
+		<LINK from_node="40" from_socket="183" to_node="41" to_socket="186"/>
+		<LINK from_node="13" from_socket="107" to_node="12" to_socket="103"/>
+		<LINK from_node="0" from_socket="31" to_node="12" to_socket="102"/>
 	</LINKS>
 </NODE_XML>

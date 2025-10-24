@@ -11,16 +11,18 @@ from extended_math_nodes.generic_nodes import SphericalHarmonics200, CMBNode
 from geometry_nodes.nodes import make_function
 from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
-    Vector, set_material, create_iterator_group, get_obj, animate_sky_background, make_image_material, \
-    make_gradient_material, make_dashed_material, make_mandelbrot_material, make_iteration_material, make_hue_material
+    Vector, set_material, create_iterator_group, get_obj, animate_sky_background, \
+    make_gradient_material, make_dashed_material, make_mandelbrot_material, make_iteration_material, make_hue_material, \
+    get_node_from_shader, change_default_value
 from interface.interface_constants import TRANSMISSION, SPECULAR, EMISSION, blender_version
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import TextureCoordinate, Mapping, ColorRamp, AttributeNode, HueSaturationValueNode, \
-    MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ, Displacement, ShaderNode
+    MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ, Displacement, ShaderNode, MixShader, \
+    BrightContrast
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
-from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML
+from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
 
 
@@ -42,6 +44,286 @@ def convert_strings_to_colors(color_names):
 def get_color_from_name(color_name):
     return COLORS_SCALED[COLOR_NAMES.index(color_name)]
 
+def copy_attributes(attributes, old_prop, new_prop):
+    """copies the list of attributes from the old to the new prop if the attribute exists"""
+
+    #check if the attribute exists and copy it
+    for attr in attributes:
+        if hasattr( new_prop, attr ):
+            try:
+                # catch attributes that are readonly
+                setattr( new_prop, attr, getattr( old_prop, attr ) )
+            except AttributeError:
+                pass
+            pass
+
+def copy_properties(old_prop,new_prop):
+    """
+    This function recursively copies all properties from the old node to the new node
+    Unfortunately the recursion doesn't work full
+    But you can set special attributes, for which the recursion is performed one level deeper
+    as for instance "image_user" for the image texture node
+    """
+    ignore_attributes = ("rna_type", "type", "dimensions", "inputs", "outputs", "internal_links", "select","asset_data","pixels")
+    attributes = []
+    for attr in old_prop.bl_rna.properties:
+        # check if the attribute should be copied and add it to the list of attributes to copy
+        if not attr.identifier in ignore_attributes and not attr.identifier.split("_")[0] == "bl":
+            attributes.append(attr.identifier)
+
+    # check if the attribute exists and copy it
+    for attr in attributes:
+        if hasattr(new_prop, attr):
+            try:
+                # make recursion for selected attributes
+                if attr=="image_user":
+                    if hasattr(getattr(old_prop, attr), "bl_rna"):
+                        copy_properties(getattr(old_prop, attr), getattr(new_prop, attr))
+
+                setattr(new_prop, attr, getattr(old_prop, attr))
+                # if the attribute itself has properties again, the process is iterated
+            except AttributeError:
+                pass
+
+
+def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0),first=True):
+    """
+    copy all nodes and links from one material to a new node_tree
+    """
+    # get the list of all selected nodes from material
+    nodes = material.node_tree.nodes
+
+    # names of old and new nodes can differ by a number, when there are the same nodes appearing in both materials
+    # create a name dictionary between old and new nodes
+    name_dictionary ={}
+    new_nodes = node_tree.nodes
+    new_links = node_tree.links
+    mat_out = new_nodes.get("Material Output")
+
+    frame_dictionary = {}
+
+    # copy all nodes from the list to the created group with all their attributes
+    for node in nodes:
+        # create a new node in the group and find and copy its attributes
+        if node.bl_idname not in exclude:
+            new_node = new_nodes.new(node.bl_idname)
+
+            name_dictionary[node.name]=new_node.name
+            if node.bl_idname == "NodeFrame":
+                frame_dictionary[node] =new_node
+
+            # add relevant properties to the old node to the new node
+            copy_properties(node,new_node)
+
+            # copy the attributes for all inputs
+            for i, inp in enumerate(node.inputs):
+                copy_attributes(("default_value","name"),inp,new_node.inputs[i])
+
+            # copy the attributes for all outputs
+            for i, out in enumerate(node.outputs):
+                copy_attributes(("default_value","name"), out, new_node.outputs[i])
+
+            #adjust location
+            new_node.location = (node.location[0]+shift[0], node.location[1]+shift[1])
+
+    # copy the links between the nodes to the created groups nodes
+    for node in nodes:
+        if node.bl_idname not in exclude:
+            # find the corresponding new node
+            new_node = new_nodes.get(name_dictionary[node.name])
+
+            # enumerate over every link in the inputs of the old node
+            for i, inp in enumerate(node.inputs):
+                for link in inp.links:
+                    # find the connected node for the link in the group
+                    connected_node = new_nodes.get(name_dictionary[link.from_node.name])
+                    # connect the group nodes
+                    new_links.new(connected_node.outputs[link.from_socket.name], new_node.inputs[i])
+        if node.bl_idname == "ShaderNodeOutputMaterial":
+
+            # find link to connect it to the mix shader
+            # for mix_textures
+            mix = new_nodes.get("Mix Shader")
+            if mix:
+                for link in node.inputs["Surface"].links:
+                    connected_node = new_nodes.get(name_dictionary[link.from_node.name])
+                    identifier=link.from_socket.identifier
+
+                    if first:
+                        mix_socket= 1
+                    else:
+                        mix_socket = 2
+                    new_links.new(connected_node.outputs[identifier], mix.inputs[mix_socket])
+                for link in node.inputs["Displacement"].links:
+                    connected_node = new_nodes.get(name_dictionary[link.from_node.name])
+                    identifier=link.from_socket.identifier
+                    new_links.new(connected_node.outputs[identifier], mat_out.inputs["Displacement"])
+
+            # deal with light sources
+            light_out =new_nodes.get("Light Output")
+            if light_out:
+                # get emission node
+                emission_node = new_nodes.get("Emission")
+                # copy the color output of the material into the emission
+                for link in node.inputs["Surface"].links:
+                    # get last shader node
+                    last_shader = nodes.get(link.from_node.name)
+                    for link in last_shader.inputs["Base Color"].links:
+                        connected_node = new_nodes.get(name_dictionary[link.from_node.name])
+                        identifier=link.from_socket.identifier
+                        new_links.new(connected_node.outputs[identifier], emission_node.inputs["Color"])
+
+                new_nodes.remove(new_nodes.get(name_dictionary[node.name]))
+                new_nodes.remove(new_nodes.get(name_dictionary[last_shader.name]))
+
+    # redo parent attributes
+    # if there are frames, the parent attributes are set to the old frames
+    if len(frame_dictionary)>0:
+        for node in new_nodes:
+            # print(node)
+            if getattr(node,"parent") is not None:
+                # print(node,": ", getattr(node,"parent"))
+                if getattr(node,"parent") in frame_dictionary:
+                    setattr(node,"parent",frame_dictionary[getattr(node,"parent")])
+                    # print(node, ": ", getattr(node, "parent"))
+
+
+def mix_texture(**kwargs):
+    material1 = get_from_kwargs(kwargs,"material1", "joker")
+    mat1 = get_texture(material1, **kwargs)
+    material2 = get_from_kwargs(kwargs,"material2", "drawing")
+    mat2 = get_texture(material2, **kwargs)
+
+    separation=get_from_kwargs(kwargs,"separation", 2)
+
+    material = bpy.data.materials.new(name='mix_' + material1 + "_" + material2)
+    material.use_nodes = True
+    tree = material.node_tree
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    out = nodes.get("Material Output")
+    out.location = (out.location[0]+(separation+1)*200,out.location[1])
+    nodes.remove(nodes.get("Principled BSDF"))
+
+    mix_shader =MixShader(tree,location=(separation,0))
+    links.new(mix_shader.outputs["Shader"],out.inputs["Surface"])
+
+    # Copy nodes and links from first material
+    copy_nodes_and_links_from_material(tree,mat1,exclude=["ShaderNodeOutputMaterial"],shift=(0,200*separation),first=True)
+    copy_nodes_and_links_from_material(tree,mat2,exclude=["ShaderNodeOutputMaterial"],shift=(0,-200*separation),first=False)
+
+    factor = get_from_kwargs(kwargs, "factor", None)
+    if factor is not None:
+        mix_shader.inputs[0].default_value=factor
+
+    return material
+
+def create_old_paper(**kwargs):
+    material = create_from_xml("old_paper")
+    uv_shift =get_from_kwargs(kwargs,"uv_shift", None)
+    if uv_shift is not None:
+        shift_x = get_node_from_shader(material,"UVShiftX")
+        change_default_value(shift_x,from_value=0,to_value=uv_shift[0],begin_time=0,transition_time=0)
+        shift_y = get_node_from_shader(material,"UVShiftY")
+        change_default_value(shift_y,from_value=0,to_value=uv_shift[1],begin_time=0,transition_time=0)
+        shift_z = get_node_from_shader(material,"UVShiftZ")
+        change_default_value(shift_z,from_value=0,to_value=uv_shift[2],begin_time=0,transition_time=0)
+
+    uv_scale = get_from_kwargs(kwargs,"uv_scale", None)
+    if uv_scale is not None:
+        scale_x = get_node_from_shader(material,"UVScaleX")
+        scale_y = get_node_from_shader(material,"UVScaleY")
+        scale_z = get_node_from_shader(material,"UVScaleZ")
+        change_default_value(scale_x,from_value=0,to_value=uv_scale[0],begin_time=0,transition_time=0)
+        change_default_value(scale_y,from_value=0,to_value=uv_scale[1],begin_time=0,transition_time=0)
+        change_default_value(scale_z,from_value=0,to_value=uv_scale[2],begin_time=0,transition_time=0)
+
+    right_side = get_from_kwargs(kwargs,"right_side", None)
+    if right_side is not None:
+        right_side_node = get_node_from_shader(material,"RightSide")
+        change_default_value(right_side_node,from_value=0,to_value=right_side,begin_time=0,transition_time=0)
+    darkness = get_from_kwargs(kwargs,"darkness", None)
+    if darkness is not None:
+        darkness_node = get_node_from_shader(material,"Darkness")
+        change_default_value(darkness_node,from_value=-0.1,to_value=-darkness)
+
+    wear = get_from_kwargs(kwargs,"wear", None)
+    if wear is not None:
+        wear_node = get_node_from_shader(material,"Wear")
+        change_default_value(wear_node,from_value=0.05,to_value=wear,begin_time=0,transition_time=0)
+    return material
+
+def create_old_paper_with_image(**kwargs):
+    material = create_from_xml("old_paper_with_image")
+    src=get_from_kwargs(kwargs,"src", None)
+    if src is not None:
+        image_node = get_node_from_shader(material,"ImageTexture")
+        image_node.image=bpy.data.images.load(os.path.join(IMG_DIR, src))
+    uv_shift =get_from_kwargs(kwargs,"uv_shift", None)
+    if uv_shift is not None:
+        shift_x = get_node_from_shader(material,"UVShiftX")
+        change_default_value(shift_x,from_value=0,to_value=uv_shift[0],begin_time=0,transition_time=0)
+        shift_y = get_node_from_shader(material,"UVShiftY")
+        change_default_value(shift_y,from_value=0,to_value=uv_shift[1],begin_time=0,transition_time=0)
+        shift_z = get_node_from_shader(material,"UVShiftZ")
+        change_default_value(shift_z,from_value=0,to_value=uv_shift[2],begin_time=0,transition_time=0)
+
+    uv_scale = get_from_kwargs(kwargs,"uv_scale", None)
+    if uv_scale is not None:
+        scale_x = get_node_from_shader(material,"UVScaleX")
+        scale_y = get_node_from_shader(material,"UVScaleY")
+        scale_z = get_node_from_shader(material,"UVScaleZ")
+        change_default_value(scale_x,from_value=0,to_value=uv_scale[0],begin_time=0,transition_time=0)
+        change_default_value(scale_y,from_value=0,to_value=uv_scale[1],begin_time=0,transition_time=0)
+        change_default_value(scale_z,from_value=0,to_value=uv_scale[2],begin_time=0,transition_time=0)
+
+    right_side = get_from_kwargs(kwargs,"right_side", None)
+    if right_side is not None:
+        right_side_node = get_node_from_shader(material,"RightSide")
+        change_default_value(right_side_node,from_value=0,to_value=right_side,begin_time=0,transition_time=0)
+    darkness = get_from_kwargs(kwargs,"darkness", None)
+    if darkness is not None:
+        darkness_node = get_node_from_shader(material,"Darkness")
+        change_default_value(darkness_node,from_value=-0.1,to_value=-darkness)
+
+    wear = get_from_kwargs(kwargs,"wear", None)
+    if wear is not None:
+        wear_node = get_node_from_shader(material,"Wear")
+        change_default_value(wear_node,from_value=0.05,to_value=wear,begin_time=0,transition_time=0)
+
+    # adjusting the image texture
+    location = get_from_kwargs(kwargs, 'location', [0, 0, 0])
+    scale = get_from_kwargs(kwargs, 'scale', [1, 1, 1])
+    rotation = get_from_kwargs(kwargs, 'rotation', [0, 0, 0])
+    extension = get_from_kwargs(kwargs, 'extension', 'EXTEND')
+    coordinates = get_from_kwargs(kwargs, 'coordinates', 'Generated')
+
+    map = get_node_from_shader(material,"ImageMapping")
+    map.inputs[1].default_value = location
+    map.inputs[2].default_value = rotation
+    map.inputs[3].default_value = scale
+
+    image_tex_node = get_node_from_shader(material,"ImageTexCoords")
+    if image_tex_node is not None:
+        material.node_tree.links.new(image_tex_node.outputs[coordinates],map.inputs[0])
+
+    image_node = get_node_from_shader(material,"ImageTexture")
+    if image_node is not None:
+        image_node.extension =extension
+
+    factor = get_from_kwargs(kwargs,"factor", None)
+    if factor is not None:
+        mixer = get_node_from_shader(material,"ImageMixer")
+        mixer.inputs[0].default_value=factor
+
+    bump_scale = get_from_kwargs(kwargs,"bump_scale", None)
+    if bump_scale is not None:
+        bump_scale_node = get_node_from_shader(material,"BumpScale")
+        change_default_value(bump_scale_node,from_value=0,to_value=bump_scale,begin_time=0,transition_time=0)
+
+    return material
+
 def get_texture(material, **kwargs):
     """
     this method is intended to supersed the get_material method
@@ -49,8 +331,12 @@ def get_texture(material, **kwargs):
     if isinstance(material,bpy.types.Material):
         return material
     if isinstance(material, str):
+        if material=="mix_texture":
+            return mix_texture(**kwargs)
         if material == 'image' and 'src' in kwargs:
             return make_image_material(**kwargs).copy()
+        elif material == 'movie' and 'src' in kwargs:
+            return make_movie_material(**kwargs)
         elif material == 'gradient':
             material = make_gradient_material(**kwargs)
         elif material == 'dashed':
@@ -70,7 +356,9 @@ def get_texture(material, **kwargs):
         elif material =="billiard_ball_material":
             material = real_billiard_ball_material(**kwargs)
         elif material =="old_paper":
-            material = create_from_xml("old_paper")
+            material = create_old_paper(**kwargs)
+        elif material=="old_paper_with_image":
+            material = create_old_paper_with_image(**kwargs)
         elif material =="c600_material":
             material = create_from_xml("c600_material")
         elif material == "c600_gradient":
@@ -151,9 +439,6 @@ def create_from_xml(filename):
                             break
                         elif line.startswith("<INPUTS>"):
                             input_count = 0
-                            if node_attributes["type"] in {'REPEAT_INPUT', 'FOREACH_GEOMETRY_ELEMENT_INPUT',
-                                                           "SIMULATION_INPUT"}:
-                                save_for_after_pairing[node_id] = {"inputs": [], "outputs": []}
                         elif line.startswith("<OUTPUTS>"):
                             output_count = 0
                         elif line.startswith("</INPUTS>"):
@@ -175,19 +460,7 @@ def create_from_xml(filename):
                                         input_attributes)
                                 input_count += 1
                             else:
-                                if input_attributes[
-                                    "type"] != "CUSTOM":  # FOREACH_GEOMETRY_ELEMENT_INPUT has a custom socket inbetween proper sockets
-                                    result = create_socket(tree, node, node_attributes, input_attributes)
-                                    if result:
-                                        node_structure[node_id]["inputs"][input_id] = input_count
-                                        input_count += 1
-                                    else:
-                                        print("Something went wrong with socket creation for node ", node_id)
-                                else:
-                                    # print("Warning: unrecognized socket in ", node_id, socket_count,input_attributes["type"])
-                                    node_structure[node_id]["inputs"][
-                                        input_id] = -1  # take last slot (this dynamically generates new sockets for Group Input and Group Output
-                                    input_count += 1  # also increase input_count, since the custom socket can between real sockets
+                                raise "variable for shader nodes not implemented yet"
                             socket_count += 1
                         elif line.startswith("<OUTPUT "):
                             output_attributes = get_attributes(line)
@@ -210,7 +483,15 @@ def create_from_xml(filename):
             # establish parent relations
             for key, val in parent_dir.items():
                 if node_dir[key] is not None:
-                    node_dir[key].set_parent(node_dir[name_dir[val]])
+                    # before parenting is established, the node needs to be shifted to the position of the parent
+                    # node_dir[key].location=(node_dir[key].location[0]+node_dir[name_dir[val]].location[0],node_dir[key].location[1]+node_dir[name_dir[val]].location[1])
+                    parent = node_dir[name_dir[val]]
+                    child = node_dir[key]
+
+                    parent_loc = parent.node.location
+                    child_loc = child.node.location
+                    child.node.location = (parent_loc[0] + child_loc[0], parent_loc[1] + child_loc[1])
+                    child.set_parent(parent)
 
             # check for zone pairing
             for key, val in node_dir.items():
@@ -352,6 +633,7 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
     :return:
     """
     obj = get_obj(obj)
+
     if obj.type not in ['EMPTY', 'ARMATURE']:
         if type_req is None or obj.type == type_req:
             if col == 'vertex_color':
@@ -424,6 +706,12 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
 
     if 'volume_scatter' in kwargs:
         ibpy.set_volume_scatter_of_material(material, value=kwargs.pop('volume_scatter'))
+
+    # add material to lights
+    if obj.type in ['LIGHT']:
+        obj.data.use_nodes=True
+        copy_nodes_and_links_from_material(obj.data.node_tree,material)
+
 
 def vertex_color_material():
     vertex_color = bpy.data.materials.new(name="Vertex_Color")
@@ -662,6 +950,253 @@ def make_colorful_bezier_curve(bob, hue_functions, emission_strength=0.3, scale=
     # assign material
     ibpy.set_material(bob, material)
     return dialer
+
+def make_image_material(src=None, **kwargs):
+    name = get_from_kwargs(kwargs,"name","image_"+src)
+    color = bpy.data.materials.new(name=name)
+    color.use_nodes = True
+    nodes = color.node_tree.nodes
+    links = color.node_tree.links
+    tree = color.node_tree
+
+    bsdf = nodes['Principled BSDF']
+    mat = nodes['Material Output']
+    img = nodes.new('ShaderNodeTexImage')
+    img.location = (-900, 0)
+    coords = nodes.new('ShaderNodeTexCoord')
+    coords.location = (-1400,0)
+    map = nodes.new('ShaderNodeMapping')
+    map.location = (-1100, 0)
+    location = get_from_kwargs(kwargs, 'location', [0, 0, 0])
+    scale = get_from_kwargs(kwargs, 'scale', [1, 1, 1])
+    rotation = get_from_kwargs(kwargs, 'rotation', [0, 0, 0])
+    extension = get_from_kwargs(kwargs, 'extension', 'EXTEND')
+    coordinates = get_from_kwargs(kwargs, 'coordinates', 'Generated')
+
+    map.inputs[1].default_value = location
+    map.inputs[2].default_value = rotation
+    map.inputs[3].default_value = scale
+    if src:
+        img.image = bpy.data.images.load(os.path.join(IMG_DIR, src))
+        img.extension = extension
+        img_out = img.outputs['Color']
+    else:
+        img_out = None
+
+    brightness = get_from_kwargs(kwargs, "brightness", 0)
+    contrast = get_from_kwargs(kwargs, "contrast", 0)
+
+    brightness_val = InputValue(tree,location=(-4.5,1),hide=True,value=brightness)
+    contrast_val = InputValue(tree,location=(-4.5,0.5),hide=True,value=contrast)
+
+    brightness_node = BrightContrast(tree,location=(-2.5,0),
+                                    color=img_out,bright=brightness_val.std_out,
+                                contrast=contrast_val.std_out)
+    links.new(brightness_node.std_out, bsdf.inputs['Base Color'])
+    links.new(brightness_node.std_out, bsdf.inputs[EMISSION])
+
+    alpha_factor = nodes.new(type='ShaderNodeMath')
+    alpha_factor.label = 'AlphaFactor'
+    alpha_factor.operation = 'MULTIPLY'
+    alpha_factor.location = (-400, -400)
+    alpha_factor.inputs[0].default_value = 1
+
+    if src:
+        links.new(img.outputs['Alpha'], alpha_factor.inputs[1])
+    links.new(alpha_factor.outputs[0], bsdf.inputs['Alpha'])
+    links.new(map.outputs['Vector'], img.inputs['Vector'])
+    links.new(coords.outputs[coordinates], map.inputs['Vector'])
+
+    emission = get_from_kwargs(kwargs, 'emission', 0)
+    bsdf.inputs['Emission Strength'].default_value = emission
+
+    displacement = get_from_kwargs(kwargs,'displacement',None)
+    if displacement=='color':
+        sep = nodes.new(type='ShaderNodeSeparateXYZ')
+        links.new(img.outputs['Color'], sep.inputs['Vector'])
+        sep.location = (0, -300)
+        sep.hide = True
+
+        #convert red blue into height
+        displacement = nodes.new(type="ShaderNodeMath")
+        displacement.operation = 'SUBTRACT'
+        displacement.hide=True
+        displacement.location=(50,-400)
+        links.new(sep.outputs[0],displacement.inputs[0])
+        links.new(sep.outputs[2],displacement.inputs[1])
+
+        displace = nodes.new(type="ShaderNodeDisplacement")
+        displace.location=(100,-500)
+        displace.inputs["Midlevel"].default_value=0
+        displacement_scale = get_from_kwargs(kwargs,'displacement_scale',1)
+        displace.inputs["Scale"].default_value=displacement_scale
+        links.new(displacement.outputs[0],displace.inputs['Height'])
+
+        color.displacement_method = "DISPLACEMENT"
+        links.new(displace.outputs[0], mat.inputs["Displacement"])
+
+
+    return color
+
+def make_movie_material(src=None,**kwargs):
+    name = get_from_kwargs(kwargs, "name", "movie_" + src)
+    color = bpy.data.materials.new(name=name)
+    color.use_nodes = True
+    nodes = color.node_tree.nodes
+    links = color.node_tree.links
+    tree = color.node_tree
+
+    bsdf = nodes['Principled BSDF']
+    mat = nodes['Material Output']
+    img = nodes.new('ShaderNodeTexImage')
+    img.location = (-900, 0)
+    coords = nodes.new('ShaderNodeTexCoord')
+    coords.location = (-1400, 0)
+    map = nodes.new('ShaderNodeMapping')
+    map.location = (-1100, 0)
+
+    location = get_from_kwargs(kwargs, 'location', [0, 0, 0])
+    scale = get_from_kwargs(kwargs, 'scale', [1, 1, 1])
+    rotation = get_from_kwargs(kwargs, 'rotation', [0, 0, 0])
+    extension = get_from_kwargs(kwargs, 'extension', 'CLIP')
+    coordinates = get_from_kwargs(kwargs, 'coordinates', 'UV')
+    begin_time = get_from_kwargs(kwargs, 'begin_time', 0)
+
+    map.inputs[1].default_value = location
+    map.inputs[2].default_value = rotation
+    map.inputs[3].default_value = scale
+
+    duration = get_from_kwargs(kwargs, 'duration', 0)
+
+    if src:
+        img.image = bpy.data.images.load(os.path.join(VID_DIR, src))
+        img.extension = extension
+        img.image_user.frame_duration = int(duration * FRAME_RATE)
+        img.image_user.use_auto_refresh = True
+        if begin_time==0:
+            img.image_user.use_cyclic=True
+        img.image_user.frame_start = begin_time*FRAME_RATE
+        img_out = img.outputs['Color']
+    else:
+        img_out = None
+
+    inverted = get_from_kwargs(kwargs, 'inverted', False)
+    if inverted:
+        links = mat.node_tree.links
+        invert = nodes.new(type='ShaderNodeInvert')
+        invert.location = (-200, 500)
+
+        # find the link that has to be replaced
+        for l in links:
+            if l.from_node == img:
+                special_link = l
+                from_socket = special_link.from_socket
+                to_socket = special_link.to_socket
+                print(special_link, from_socket, to_socket)
+                break
+
+        if special_link:
+            # link invert node into the previously existing link
+            links.new(from_socket, invert.inputs['Color'])
+            links.new(invert.outputs['Color'], to_socket)
+
+    brightness = get_from_kwargs(kwargs, "brightness", 0)
+    contrast = get_from_kwargs(kwargs, "contrast", 0)
+
+    brightness_val = InputValue(tree, location=(-4.5, 1), hide=True, value=brightness)
+    contrast_val = InputValue(tree, location=(-4.5, 0.5), hide=True, value=contrast)
+
+    brightness_node = BrightContrast(tree, location=(-2.5, 0),
+                                     color=img_out, bright=brightness_val.std_out,
+                                     contrast=contrast_val.std_out)
+    links.new(brightness_node.std_out, bsdf.inputs['Base Color'])
+    links.new(brightness_node.std_out, bsdf.inputs[EMISSION])
+
+    alpha_factor = nodes.new(type='ShaderNodeMath')
+    alpha_factor.label = 'AlphaFactor'
+    alpha_factor.operation = 'MULTIPLY'
+    alpha_factor.location = (-400, -400)
+    alpha_factor.inputs[0].default_value = 1
+
+    if src:
+        links.new(img.outputs['Alpha'], alpha_factor.inputs[1])
+    links.new(alpha_factor.outputs[0], bsdf.inputs['Alpha'])
+    links.new(map.outputs['Vector'], img.inputs['Vector'])
+    links.new(coords.outputs[coordinates], map.inputs['Vector'])
+
+    emission = get_from_kwargs(kwargs, 'emission', 0)
+    bsdf.inputs['Emission Strength'].default_value = emission
+
+    displacement = get_from_kwargs(kwargs, 'displacement', None)
+
+    if displacement == 'color':
+        sep = nodes.new(type='ShaderNodeSeparateXYZ')
+        links.new(img.outputs['Color'], sep.inputs['Vector'])
+        sep.location = (0, -300)
+        sep.hide = True
+
+        # convert red blue into height
+        displacement = nodes.new(type="ShaderNodeMath")
+        displacement.operation = 'SUBTRACT'
+        displacement.hide = True
+        displacement.location = (50, -400)
+        links.new(sep.outputs[0], displacement.inputs[0])
+        links.new(sep.outputs[2], displacement.inputs[1])
+
+        displace = nodes.new(type="ShaderNodeDisplacement")
+        displace.location = (100, -500)
+        displace.inputs["Midlevel"].default_value = 0
+        displacement_scale = get_from_kwargs(kwargs, 'displacement_scale', 1)
+        displace.inputs["Scale"].default_value = displacement_scale
+        links.new(displacement.outputs[0], displace.inputs['Height'])
+
+        color.displacement_method = "DISPLACEMENT"
+        links.new(displace.outputs[0], mat.inputs["Displacement"])
+
+    return color
+
+
+def make_image_material_stretched_over_geometry(src, v_min, v_max):
+    color = bpy.data.materials.new(name='image_' + src)
+    color.use_nodes = True
+    nodes = color.node_tree.nodes
+    bsdf = nodes['Principled BSDF']
+    img = nodes.new('ShaderNodeTexImage')
+    img.location = (-300, 0)
+    if src:
+        img.image = bpy.data.images.load(os.path.join(IMG_DIR, src))
+        img.extension = 'EXTEND'
+    color.node_tree.links.new(img.outputs['Color'], bsdf.inputs['Base Color'])
+    color.node_tree.links.new(img.outputs['Color'], bsdf.inputs['Emission'])
+    # color.node_tree.links.new(img.outputs['Alpha'], bsdf.inputs['Alpha']) # this disables the fade out of objects
+
+    # stretch image over the entire object
+    combine = nodes.new('ShaderNodeCombineXYZ')
+    combine.location = (-500, 0)
+    color.node_tree.links.new(combine.outputs['Vector'], img.inputs['Vector'])
+
+    map_x = nodes.new('ShaderNodeMapRange')
+    map_x.location = (-700, 400)
+    map_x.inputs['From Min'].default_value = v_min[0]
+    map_x.inputs['From Max'].default_value = v_max[0]
+    color.node_tree.links.new(map_x.outputs['Result'], combine.inputs['X'])
+
+    map_y = nodes.new('ShaderNodeMapRange')
+    map_y.location = (-700, -400)
+    map_y.inputs['From Min'].default_value = v_min[1]
+    map_y.inputs['From Max'].default_value = v_max[1]
+    color.node_tree.links.new(map_y.outputs['Result'], combine.inputs['Y'])
+
+    sep = nodes.new('ShaderNodeSeparateXYZ')
+    sep.location = (-900, 0)
+    color.node_tree.links.new(sep.outputs['X'], map_x.inputs['Value'])
+    color.node_tree.links.new(sep.outputs['Y'], map_y.inputs['Value'])
+
+    geometry = nodes.new('ShaderNodeNewGeometry')
+    geometry.location = (-1100, 0)
+    color.node_tree.links.new(geometry.outputs['Position'], sep.inputs['Vector'])
+
+    return color
 
 def pie_checker_material(colors=['drawing', 'joker'], name='PieChecker', **kwargs):
     """
@@ -3812,12 +4347,18 @@ def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('draw
         mapping_out = mapping_node.outputs[0]
     left = -8
     sep = SeparateXYZ(tree, location=(left, 0), vector=mapping_out)
-    if direction == 'X':
-        sep_out = sep.std_out_x
-    elif direction == 'Y':
-        sep_out = sep.std_out_y
+    sep_x = sep.std_out_x
+    sep_y = sep.std_out_y
+    sep_z = sep.std_out_z
+
+    # global definition can be overriden for each highlight
+    if direction == 'Y':
+        sep_out=sep_y
+    elif direction=='X':
+        sep_out=sep_x
     else:
-        sep_out = sep.std_out_z
+        sep_out=sep_z
+
     left += 1
 
     top = len(data) * 2.5
@@ -3830,6 +4371,16 @@ def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('draw
             "filter": "coord," + str(infimum) + ",>,coord," + str(supremum) + ",<,*"
         }, location=(lleft, top), scalars=["filter", "coord"], inputs=["coord"], outputs=["filter"],
                                node_group_type='Shader')
+
+        # individually highlighting
+        if len(val)>2:
+            if val[2]=='X':
+                sep_out=sep_x
+            elif val[2]=='Y':
+                sep_out=sep_y
+            else:
+                sep_out=sep_z
+
         links.new(sep_out, filter.inputs['coord'])
         lleft += 1
 
@@ -3859,6 +4410,69 @@ def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('draw
             links.new(mixers[-1].std_out, bsdf.inputs[EMISSION])
 
     return mixers
+
+def box_highlighting_for_material(page_material, data={(0,0,0.5,0.5): ('drawing', 0.5)}):
+    """
+        highlights a rectangular domain (x0,y0, x1,y1)
+        in UV coordinates of the original object
+    """
+    tree = page_material.node_tree
+    nodes = tree.nodes
+    links = tree.links
+    mapping_node = nodes.get("Mapping")
+    if mapping_node is None:
+        # create texture coordinates with mapping node
+        tex_coord = TextureCoordinate(tree, location=(-10, 0))
+        mapping_node = Mapping(tree, location=(-9, 0))
+        links.new(tex_coord.std_out, mapping_node.inputs['Vector'])
+        mapping_out = mapping_node.std_out
+    else:
+        mapping_out = mapping_node.outputs[0]
+    left = -7
+
+    top = len(data) * 2.5
+    mixers = []
+    for key, val in data.items():
+        lleft = left
+        minX = key[0]
+        maxX = key[2]
+        minY = key[1]
+        maxY = key[3]
+        filter = make_function(tree, functions={
+            "filter": "v_x," + str(minX) + ",>,v_x," + str(maxX) + ",<,*,v_y,"+str(minY)+",>,*,v_y,"+str(maxY)+",<,*"
+        }, location=(lleft, top), scalars=["filter"], inputs=["v"], outputs=["filter"],vectors=["v"],
+                               node_group_type='Shader')
+
+        links.new(mapping_out, filter.inputs['v'])
+        lleft += 1
+
+        ramp = ColorRamp(tree, location=(lleft, top), factor=filter.outputs['filter'])
+        ramp.color_ramp.elements[0].color = [0, 0, 0, 0]
+        ramp.color_ramp.elements[1].color = get_color(val[0])
+        lleft += 1
+
+        if len(mixers) == 0:
+            mix = MixRGB(tree, location=(lleft, top - 2), factor=val[1], color1=ramp.std_out)
+        else:
+            mix = MixRGB(tree, location=(lleft, top - 2), factor=val[1], color1=mixers[-1].std_out)
+            links.new(ramp.std_out, mixers[-1].color2)
+        mixers.append(mix)
+        top -= 2.5
+
+    # find link to the color socket of the bsdf
+    bsdf = nodes.get("Principled BSDF")
+    if bsdf is not None:
+        for link in links:
+            if link.to_node == bsdf:
+                if link.to_socket.name == 'Base Color':
+                    from_socket = link.from_socket
+        if from_socket is not None:
+            links.new(mixers[-1].color2, from_socket)
+            links.new(mixers[-1].std_out, bsdf.inputs['Base Color'])
+            links.new(mixers[-1].std_out, bsdf.inputs[EMISSION])
+
+    return mixers
+
 
 def real_billiard_ball_material(**kwargs):
     color_name = get_from_kwargs(kwargs,"color", 'white')

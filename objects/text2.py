@@ -330,6 +330,8 @@ class TextModifier(GeometryNodesModifier):
         self.number_of_letters = generate_expression(self.expression, **kwargs)
         create_from_xml(tree,"geo_fonts",**kwargs)
 
+        nodes = tree.nodes
+
         collection_info = tree.nodes.get("TextData")
         collection_info.inputs["Separate Children"].default_value = True
         collection_name = hashed_tex(self.expression)
@@ -354,6 +356,16 @@ class TextModifier(GeometryNodesModifier):
         material_node.inputs['Material'].default_value= material
 
         outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        outline_radius = get_from_kwargs(kwargs,'outline_radius',0.01)
+
+        radius_node = None
+        for n in nodes:
+            if n.label=="OutlineRadius":
+                radius_node=n
+                break
+        if radius_node:
+            radius_node.outputs[0].default_value=outline_radius
+
         kwargs['emission']=outline_emission
         outline_material = get_material(get_from_kwargs(kwargs,'outline_color',"text"),**kwargs)
         self.materials.append(outline_material)

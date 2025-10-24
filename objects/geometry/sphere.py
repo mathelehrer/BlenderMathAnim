@@ -27,7 +27,7 @@ class Sphere(GeoBObject):
         """
         self.kwargs = kwargs
         self.scale = self.get_from_kwargs('scale', [1,1,1])
-        mesh_type = self.get_from_kwargs('mesh_type', 'iso')
+        mesh_type = self.get_from_kwargs('mesh_type', 'ico')
 
         if mesh_type == 'uv':
             default_name = 'UV-Sphere'

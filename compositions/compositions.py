@@ -35,7 +35,6 @@ def create_alpha_over_composition(color="background"):
 
     alpha_over = nodes.new(type="CompositorNodeAlphaOver")
     links.new(mix.outputs["Image"],alpha_over.inputs[1])
-    links.new(layers.outputs["Image"],alpha_over.inputs[2])
     links.new(alpha_over.outputs["Image"],composite.inputs[0])
 
 
@@ -64,7 +63,6 @@ def create_star_glow_composition():
     glare.threshold = 0.01
 
     links.new(layers.outputs["Image"], glare.inputs["Image"])
-    links.new(layers.outputs["Alpha"], set_alpha.inputs["Alpha"])
     set_alpha.mode = "REPLACE_ALPHA"
     links.new(glare.outputs["Image"],set_alpha.inputs["Image"])
     links.new(set_alpha.outputs["Image"], composite.inputs["Image"])
@@ -94,7 +92,6 @@ def create_glow_composition(threshold=1,type='BLOOM',size=4):
     glare.threshold =threshold
 
     links.new(layers.outputs["Image"],glare.inputs["Image"])
-    links.new(layers.outputs["Alpha"],set_alpha.inputs["Alpha"])
     set_alpha.mode="REPLACE_ALPHA"
     links.new(glare.outputs["Image"],set_alpha.inputs["Image"])
     links.new(set_alpha.outputs["Image"],composite.inputs["Image"])

@@ -3,6 +3,7 @@ from mathutils import Vector
 from interface import ibpy
 from objects.bobject import BObject
 from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
+from utils.kwargs import get_from_kwargs
 
 
 class LightProbe(BObject):
@@ -25,19 +26,15 @@ class SpotLight(BObject):
     target to bob
     specify location, radius,scale,energy
     """
-    def __init__(self,target = None, **kwargs):
+    def __init__(self, **kwargs):
         self.kwargs = kwargs
         name=self.get_from_kwargs('name','SpotLight')
-        light = ibpy.add_spot_light(**kwargs)
 
-        # default arguments that are used in the construction
-        # they are removed that they are not used again in the construction of the wrapper
-        self.location=self.get_from_kwargs('location',Vector())
-        self.radius=self.get_from_kwargs('radius',1)
-        self.scale=self.get_from_kwargs('scale',[1]*3)
-        self.energy=self.get_from_kwargs('energy',10)
+        energy = get_from_kwargs(kwargs, "energy", 10)
+        light = ibpy.add_spot_light(energy)
 
         super().__init__(obj=light,name=name,**self.kwargs)
+        target = get_from_kwargs(kwargs,"target",None)
 
         if target:
             ibpy.set_track(self,target)

@@ -111,7 +111,7 @@ class Cylinder(GeoBObject):
         elif modus == 'from_end' and self.end:
             ibpy.shrink_from(self, self.end, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
         elif modus == 'from_center' and self.start and self.end:
-            ibpy.shrink_from(self, 0.5 * (self.start + self.end), begin_time * FRAME_RATE, transition_time * FRAME_RATE)
+            ibpy.shrink_from(self, 0.5 * (self.start + self.end),begin_time * FRAME_RATE, transition_time * FRAME_RATE)
         else:
             ibpy.shrink(self, scale, begin_time * FRAME_RATE, transition_time * FRAME_RATE, modus=modus,
                       initial_scale=initial_scale)

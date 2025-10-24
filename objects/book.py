@@ -1,6 +1,7 @@
 import numpy as np
 from mathutils import Vector
 
+from appearance.textures import get_texture, make_image_material
 from interface import ibpy
 from objects.bobject import BObject
 from objects.cube import Cube
@@ -10,7 +11,7 @@ from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
 
 class Book(BObject):
     """
-    Create a cylinder with a descent mesh:
+    Create a foldable book
     """
 
     def __init__(self, scale=[1, 1, 0.4], pages=100, cover_thickness=0.01, page_thickness=0.002, **kwargs):
@@ -77,9 +78,9 @@ class Book(BObject):
             ibpy.insert_keyframe(page, 'rotation_euler', 0)
 
     def set_cover_image(self, src,**kwargs):
-        mat = ibpy.make_image_material(src,**kwargs)
+        mat = make_image_material(src,**kwargs)
         ibpy.set_material(self.cover, mat, slot=1)
-        ibpy.asign_material_to_faces(self.cover, 1, normal=Vector([0, 0, -1]))
+        ibpy.assign_material_to_faces(self.cover, 1, normal=Vector([0, 0, -1]))
 
     def set_page_image(self, index,src,**kwargs):
         if index%2==0:
@@ -89,10 +90,23 @@ class Book(BObject):
             normal = Vector([0,1,0])
             slot = 1
 
-        mat = ibpy.make_image_material(src,**kwargs)
+        mat = make_image_material(src,**kwargs)
         page = index // 2 - 1
         ibpy.set_material(self.page_list[page], mat, slot=slot)
-        ibpy.asign_material_to_faces(self.page_list[page], slot, normal=normal)
+        ibpy.assign_material_to_faces(self.page_list[page], slot, normal=normal)
+
+    def set_page_image_with_background_color(self, index,src,**kwargs):
+        if index%2==0:
+            normal = Vector([0,-1,0])
+            slot = 0
+        else:
+            normal = Vector([0,1,0])
+            slot = 1
+
+        mat = get_texture("old_paper_with_image",src=src,**kwargs)
+        page = index // 2 - 1
+        ibpy.set_material(self.page_list[page], mat, slot=slot)
+        ibpy.assign_material_to_faces(self.page_list[page], slot, normal=normal)
 
     def closed(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, direction='right'):
         if direction == 'right':
@@ -121,6 +135,24 @@ class Book(BObject):
         ibpy.change_modifier_attribute(page, 'deform', 'angle', np.pi / 4, 0,
                                        begin_frame=begin_time * FRAME_RATE + half + 1, frame_duration=half)
         return begin_time + transition_time
+
+    def turn_page_back(self, index, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        page = self.page_list[index % (self.pages + 1)]
+        half = transition_time / 2
+        page.rotate(rotation_euler=[-np.pi / 2, -np.pi, 0], begin_time=begin_time, transition_time=transition_time)
+        location = [
+            -self.scale[2] + 2 * self.cover_thickness + 2 * index / self.pages * (
+                        self.scale[2] - 2 * self.cover_thickness), 0, 0]
+        page.move_to(target_location=location, begin_time=begin_time, transition_time=half)
+        location2 = [-self.scale[2], 0, self.scale[2] + location[0]]
+        page.move_to(target_location=location2, begin_time=begin_time + half, transition_time=half)
+        half = int(transition_time * FRAME_RATE / 2)
+        ibpy.change_modifier_attribute(page, 'deform', 'angle', 0, np.pi / 4, begin_frame=begin_time * FRAME_RATE,
+                                       frame_duration=half)
+        ibpy.change_modifier_attribute(page, 'deform', 'angle', np.pi / 4, 0,
+                                       begin_frame=begin_time * FRAME_RATE + half + 1, frame_duration=half)
+        return begin_time + transition_time
+
 
     def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
                clear_data=False, silent=False,linked=False, nice_alpha=False,**kwargs):

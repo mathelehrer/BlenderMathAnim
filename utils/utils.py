@@ -110,6 +110,7 @@ def flatten(colors):
 
 
 def quaternion_from_normal(normal):
+    normal = to_vector(normal)
     normal.normalize()
     angle = np.arccos(normal.dot(Vector([0, 0, 1])))
     axis = Vector([0, 0, 1]).cross(normal)

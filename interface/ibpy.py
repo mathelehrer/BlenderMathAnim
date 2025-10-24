@@ -5,8 +5,7 @@ from datetime import date, datetime
 # import bmesh
 import bpy
 import numpy as np
-
-from mathutils import Vector, Matrix, Quaternion, Euler
+from mathutils import Vector, Matrix, Euler, Quaternion
 
 from interface.interface_constants import EMISSION, TRANSMISSION, BLENDER_EEVEE, blender_version
 from utils.color_conversion import get_color_from_string, get_color
@@ -136,18 +135,13 @@ def add_light_probe(**kwargs):
     return probe
 
 
-def add_spot_light(**kwargs):
+def add_spot_light(energy):
     '''
     :param kwargs: location,radius,scale,energy
     :return:
     '''
-    if 'energy' in kwargs:
-        energy = kwargs['energy']
-    else:
-        energy = 10
-    kwargs.pop('energy')
 
-    bpy.ops.object.light_add(type='SPOT', **kwargs)
+    bpy.ops.object.light_add(type='SPOT')
     spot = bpy.context.object
     spot.data.energy = energy
     return spot
@@ -1511,6 +1505,22 @@ def set_hdri_background(filename='', ext='exr', simple=False, transparent=False,
 
     bpy.data.scenes["Scene"].render.film_transparent = transparent
 
+def set_volume_scatter_background(density=1):
+    world = bpy.data.worlds[-1]
+    nodes = world.node_tree.nodes
+    links = world.node_tree.links
+
+    # remove lights
+    for obj in bpy.data.objects:
+        if 'Sun' in obj.name:
+            un_link(obj, collection='Collection')
+
+    scatter = nodes.new(type="ShaderNodeVolumeScatter")
+    scatter.inputs[1].default_value=density
+
+    out = nodes.get("World Output")
+    links.new(scatter.outputs["Volume"],out.inputs["Volume"])
+
 
 def hdri_background_rotate(rotation_euler=[0, 0, 0], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
     world = bpy.data.worlds[-1]
@@ -1608,7 +1618,7 @@ def set_alpha_for_material(material, alpha, viewport = "material"):
     if material:
         alpha_node = None
         for n in material.node_tree.nodes:
-            if 'AlphaFactor' in n.name or 'AlphaFactor' in n.label:
+            if 'AlphaFactor' in n.label:
                 alpha_node = n
                 break
         if alpha_node:
@@ -1885,14 +1895,13 @@ def customize_material(material, **kwargs):
 
     return material
 
-
 def get_material(material, **kwargs):
     if isinstance(material,bpy.types.Material):
         return material
     if isinstance(material, str):
-        if material == 'image' and 'src' in kwargs:
-            return make_image_material(**kwargs).copy()
-        elif material == 'gradient':
+        # if material == 'image' and 'src' in kwargs:
+        #     return make_image_material(**kwargs).copy()
+        if material == 'gradient':
             material = make_gradient_material(**kwargs)
         elif material == 'dashed':
             material = make_dashed_material(**kwargs)
@@ -3297,83 +3306,6 @@ def make_dashed_material(**kwargs):
 
     return material
 
-
-def make_image_material(src=None, **kwargs):
-    if 'name' in kwargs:
-        name = kwargs.pop('name')
-    else:
-        name = 'image_' + src
-    color = bpy.data.materials.new(name=name)
-    color.use_nodes = True
-    nodes = color.node_tree.nodes
-    bsdf = nodes['Principled BSDF']
-    mat = nodes['Material Output']
-    img = nodes.new('ShaderNodeTexImage')
-    img.location = (-400, 0)
-    coords = nodes.new('ShaderNodeTexCoord')
-    coords.location = (-1000, 0)
-    map = nodes.new('ShaderNodeMapping')
-    map.location = (-600, 0)
-    location = get_from_kwargs(kwargs, 'location', [0, 0, 0])
-    scale = get_from_kwargs(kwargs, 'scale', [1, 1, 1])
-    rotation = get_from_kwargs(kwargs, 'rotation', [0, 0, 0])
-    extension = get_from_kwargs(kwargs, 'extension', 'EXTEND')
-    coordinates = get_from_kwargs(kwargs, 'coordinates', 'Generated')
-
-    map.inputs[1].default_value = location
-    map.inputs[2].default_value = rotation
-    map.inputs[3].default_value = scale
-    if src:
-        img.image = bpy.data.images.load(os.path.join(IMG_DIR, src))
-        img.extension = extension
-    links = color.node_tree.links
-    links.new(img.outputs['Color'], bsdf.inputs['Base Color'])
-    links.new(img.outputs['Color'], bsdf.inputs[EMISSION])
-
-    alpha_factor = nodes.new(type='ShaderNodeMath')
-    alpha_factor.name = 'AlphaFactor'
-    alpha_factor.label = 'AlphaFactor'
-    alpha_factor.operation = 'MULTIPLY'
-    alpha_factor.location = (-200, 0)
-    alpha_factor.inputs[0].default_value = 1
-
-    links.new(img.outputs['Alpha'], alpha_factor.inputs[1])
-    links.new(alpha_factor.outputs[0], bsdf.inputs['Alpha'])
-    links.new(map.outputs['Vector'], img.inputs['Vector'])
-    links.new(coords.outputs[coordinates], map.inputs['Vector'])
-
-    emission = get_from_kwargs(kwargs, 'emission', 0)
-    bsdf.inputs['Emission Strength'].default_value = emission
-
-    displacement = get_from_kwargs(kwargs,'displacement',None)
-    if displacement=='color':
-        sep = nodes.new(type='ShaderNodeSeparateXYZ')
-        links.new(img.outputs['Color'], sep.inputs['Vector'])
-        sep.location = (0, -300)
-        sep.hide = True
-
-        #convert red blue into height
-        displacement = nodes.new(type="ShaderNodeMath")
-        displacement.operation = 'SUBTRACT'
-        displacement.hide=True
-        displacement.location=(50,-400)
-        links.new(sep.outputs[0],displacement.inputs[0])
-        links.new(sep.outputs[2],displacement.inputs[1])
-
-        displace = nodes.new(type="ShaderNodeDisplacement")
-        displace.location=(100,-500)
-        displace.inputs["Midlevel"].default_value=0
-        displacement_scale = get_from_kwargs(kwargs,'displacement_scale',1)
-        displace.inputs["Scale"].default_value=displacement_scale
-        links.new(displacement.outputs[0],displace.inputs['Height'])
-
-        color.displacement_method = "DISPLACEMENT"
-        links.new(displace.outputs[0], mat.inputs["Displacement"])
-
-
-    return color
-
-
 def set_movie_to_material(bob, src=None, duration=0, **kwargs):
     obj = get_obj(bob)
     mat = obj.material_slots[0].material
@@ -3434,7 +3366,7 @@ def set_material(bob, material, slot=0):
         print("No material found with name ", material)
 
 
-def asign_material_to_faces(bob, material_index, normal=Vector([0, 0, 1])):
+def assign_material_to_faces(bob, material_index, normal=Vector([0, 0, 1])):
     """
     asign the material to all faces with a given normal
     :param bob:
@@ -6125,6 +6057,9 @@ def add_constraint(b_object, type, name=None, **kwargs):
     elif type == 'COPY_LOCATION':
         target = get_from_kwargs(kwargs, 'target', None)
         constraint.target = get_obj(target)
+    elif type ==("TRACK_TO"):
+        target = get_from_kwargs(kwargs,"target",None)
+        constraint.target = get_obj(target)
     return constraint
 
 
@@ -6548,11 +6483,10 @@ def shrink_from(b_obj, pivot, begin_frame, frame_duration):
     if pivot:
         set_pivot(obj, pivot)
 
-    scale = obj.scale.copy()
-    obj.scale = scale
+    obj.scale=b_obj.intrinsic_scale
     insert_keyframe(obj, "scale", int(begin_frame))
 
-    obj.scale =  [0] * 3
+    obj.scale = [0, 0, 0]
     insert_keyframe(obj, "scale", int(begin_frame + np.maximum(1, frame_duration)))
 
 

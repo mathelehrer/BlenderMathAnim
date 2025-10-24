@@ -55,11 +55,9 @@ class Arc2(Curve):
 
     """
 
-    def __init__(self, center=[0,0,0],start_point=[0,0,1], start_angle=0,
-                 end_angle=np.pi, normal=[0,0,1], pivot = None,**kwargs):
+    def __init__(self, center=[0,0,0],start_point=[0,0,1], start_angle=0,end_angle=np.pi, normal=[0,0,1], pivot = None,**kwargs):
         """
         """
-
         self.kwargs = kwargs
         self.arc_start=start_point
 
@@ -79,7 +77,7 @@ class Arc2(Curve):
 
         super().__init__([
             lambda t: center +x*np.cos(t)+y*np.sin(t)],
-            domain=[start_angle, (1+1/num_points)*end_angle], name=name,
+            domain=[start_angle, end_angle], name=name,
             num_points=num_points, **kwargs)
         ibpy.set_pivot(self,pivot)
 
