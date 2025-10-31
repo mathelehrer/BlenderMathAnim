@@ -271,7 +271,6 @@ class CodeParser(BObject):
 
     def write(self, code_display, class_index=0, function=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
               **kwargs):
-        cls = self.classes[class_index]
 
         if 'back' in kwargs:
             back = kwargs.pop('back')
@@ -287,11 +286,18 @@ class CodeParser(BObject):
             all = True
 
         elif function is not None:
-            fcn = cls.functions[function]
-            lines = fcn.lines
-            all = False
+            if len(self.classes)>0:
+                cls = self.classes[class_index]
+                fcn = cls.functions[function]
+                lines = fcn.lines
+                all = False
+            else:
+                all = True
 
-        indents = self.indents[class_index]
+        if len(self.indents)>0:
+            indents = self.indents[class_index]
+        else:
+            indents = 0
 
         # calculate time per char
         sum = 0

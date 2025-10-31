@@ -629,9 +629,11 @@ class CodeDisplay(Display):
     def __init__(self, code_parser, class_index=0, **kwargs):
         self.kwargs = kwargs
         self.code_parser = code_parser
-        cls = self.code_parser.classes[class_index]
+
         n_lines = self.get_from_kwargs('number_of_lines', None)
+
         if n_lines is None:
+            cls = self.code_parser.classes[class_index]
             n_lines = cls.number_of_lines()
 
         super().__init__(number_of_lines=n_lines, **kwargs)
