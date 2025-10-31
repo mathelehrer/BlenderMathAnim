@@ -627,6 +627,14 @@ class DisplayOld(BObject):
 
 class CodeDisplay(Display):
     def __init__(self, code_parser, class_index=0, **kwargs):
+        """
+        displays the class of class_index that is hosted by the code_parser
+        use class_index=-1 for code that is not contained in a class
+
+        :param code_parser: the code_parser, whose code is to be displayed
+        :param class_index: index of the class that is selected for display
+        :param kwargs:
+        """
         self.kwargs = kwargs
         self.code_parser = code_parser
 

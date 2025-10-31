@@ -144,9 +144,13 @@ class ClassText:
 
     def parse(self, content):
         fcn = []
+        inside = False
         header_line=0 # for functions without def (main)
         for l,line in enumerate(content):
-            if 'def' in line:
+            if not inside and line=='!': # ignore empty lines between functions
+                continue
+            if 'def' in line or 'if __name__' in line:
+                inside = True
                 if not fcn:
                     fcn = [line]
                     header_line = l
@@ -158,6 +162,7 @@ class ClassText:
                 fcn.append(line)
         if fcn:
             self.functions.append(FunctionText(fcn[0], fcn[1:],lines=range(header_line,len(content)))) # exclusive right boundary
+
     def number_of_lines(self):
         n_lines = 1  # header + empty line
         for fcn in self.functions:
@@ -247,9 +252,9 @@ class CodeParser(BObject):
             else:
                 remaining_lines2.append(line)
 
-        # if len(remaining_lines2) > 0:
-        #     self.classes.append(ClassText(remaining_lines2[0], remaining_lines2[1:]))
-        #     self.remaining_lines = remaining_lines2
+        if len(remaining_lines2) > 0:
+            self.classes.append(ClassText(remaining_lines2[0], remaining_lines2[1:]))
+            self.remaining_lines = remaining_lines2
 
         if cls is not None:
             self.classes.append(ClassText(cls[0], cls[1:]))
@@ -272,6 +277,8 @@ class CodeParser(BObject):
     def write(self, code_display, class_index=0, function=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
               **kwargs):
 
+        cls = self.classes[class_index]
+
         if 'back' in kwargs:
             back = kwargs.pop('back')
         else:
@@ -287,7 +294,6 @@ class CodeParser(BObject):
 
         elif function is not None:
             if len(self.classes)>0:
-                cls = self.classes[class_index]
                 fcn = cls.functions[function]
                 lines = fcn.lines
                 all = False
