@@ -53,8 +53,8 @@ def get_leading_spaces(text):
 
 def prepare_colors(text, isheader=False):
     builtin = ['import', 'as', 'from', 'def', 'class', 'if', 'not', 'return', 'else', 'None', 'and', 'or', 'elif',
-               'for', 'in', 'while', 'yield']
-    builtin2 = ['super', 'range', 'len', 'print', 'list', 'int', 'open', 'enumerate']
+               'for', 'in', 'while', 'yield',"contiue","except",]
+    builtin2 = ['super', 'range', 'len', 'print', 'list', 'int', 'open', 'enumerate','str','OSError',]
     self = 'self'
     override = '__'
     digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -211,6 +211,8 @@ class CodeParser(BObject):
     '''
     The CodeParser has limitations
     1.) no comments
+    2.) It is important that assignments have spaces to the left and right of the equal sign, otherwise they are formatted
+    like key-value pairs
     '''
 
     def __init__(self, filename, **kwargs):

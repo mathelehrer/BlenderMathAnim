@@ -20,12 +20,14 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     SeparateGeometry, CurveWireFrame, AlignRotationToVector, ScaleInstances, ValueToString, StringToCurves, IndexSwitch, \
     CycleNode, FillCurve, AttributeStatistic, CoxeterReflectionNode, QuaternionToRotation, RotateVector, \
     SubdivisionSurface, FilletCurve, FaceArea, SortElements, InputBoolean, BeveledCubeNode, CompareNode, \
-    GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode, CornersOfFace
+    GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode, CornersOfFace, BoundingBox, CurveLine, \
+    ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
 from objects.derived_objects.p_arrow import PArrow
+from perform.scene import OLDSCHOOL
 from utils.constants import FRAME_RATE, TEMPLATE_TEXT_FILE, SVG_DIR, TEX_DIR, TEX_TEXT_TO_REPLACE, TEMPLATE_TEX_FILE, \
     TEX_LOCAL_SCALE_UP, DEFAULT_ANIMATION_TIME
 from utils.kwargs import get_from_kwargs
@@ -34,7 +36,6 @@ pi = np.pi
 tau = 2 * pi
 r2 = np.sqrt(2)
 r3 = np.sqrt(3)
-
 
 face_color_dict = {
     1: "white",
@@ -99,7 +100,8 @@ class GeometryNodesModifier:
     base class that organizes the boilerplate code for the creation of a geometry nodes modifier
     """
 
-    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True,mode="Sugiyama", group_output=True, group_input=False, **kwargs):
+    def __init__(self, name='DefaultGeometryNodeGroup', automatic_layout=True, mode="Sugiyama", group_output=True,
+                 group_input=False, **kwargs):
         tree = get_node_tree(name=name, type='GeometryNodeTree')
 
         # if  materials are created inside the geometry node,
@@ -121,8 +123,7 @@ class GeometryNodesModifier:
         self.create_node(tree, **kwargs)
         # automatically layout nodes
         if automatic_layout:
-            layout(tree,mode = mode)
-
+            layout(tree, mode=mode)
 
     def create_node(self, tree, **kwargs):
         """
@@ -135,6 +136,7 @@ class GeometryNodesModifier:
 
     def get_node_tree(self):
         return self.tree
+
 
 ##################
 ## Applications ##
@@ -293,6 +295,7 @@ class SpherePreImage(GeometryNodesModifier):
                              [line, mesh2points, points2verts, attr, extrude_mesh, sub_div, set_pos, wireframe, mat,
                               join, trafo1, trafo2, trafo3], out=out.inputs["Geometry"])
 
+
 class MathematicalSurface(GeometryNodesModifier):
     """
     geometry node setup to display a mathematical surface in explicit form
@@ -361,10 +364,11 @@ class MathematicalSurface(GeometryNodesModifier):
         # connect all geometry nodes
         create_geometry_line(tree, [grid, del_geo, set_pos, smooth, mat], out=out.inputs["Geometry"])
 
+
 class PendulumModifierSmall(GeometryNodesModifier):
-    def __init__(self, min_frame=0,max_frame=100,name="SmallPendulum", automatic_layout=False):
-        self.min_frame=min_frame
-        self.max_frame=max_frame
+    def __init__(self, min_frame=0, max_frame=100, name="SmallPendulum", automatic_layout=False):
+        self.min_frame = min_frame
+        self.max_frame = max_frame
         super().__init__(name=name, automatic_layout=automatic_layout)
 
     def create_node(self, tree):
@@ -569,7 +573,7 @@ class PendulumModifierSmall(GeometryNodesModifier):
         graph_iop = InstanceOnPoints(tree, location=(left, y), instance=graph_sphere.geometry_out)
         left += 1
         graph_trafo = TransformGeometry(tree, location=(left, y),
-                                        translation=Vector([-24.7, 0,- 0.5]))
+                                        translation=Vector([-24.7, 0, - 0.5]))
         left += 1
 
         graph_mat = SetMaterial(tree, location=(left, y), material_list=self.materials,
@@ -579,10 +583,11 @@ class PendulumModifierSmall(GeometryNodesModifier):
         create_geometry_line(tree, [graph, set_graph], out=switch.true)
         create_geometry_line(tree, [simulation2, graph_iop, graph_trafo, graph_mat, join_full])
 
+
 class PendulumModifierLarge(GeometryNodesModifier):
-    def __init__(self, min_frame=0,max_frame=10,name="Pendulum", automatic_layout=False):
-        self.min_frame=min_frame
-        self.max_frame=max_frame
+    def __init__(self, min_frame=0, max_frame=10, name="Pendulum", automatic_layout=False):
+        self.min_frame = min_frame
+        self.max_frame = max_frame
         super().__init__(name=name, automatic_layout=automatic_layout)
 
     def create_node(self, tree):
@@ -695,7 +700,7 @@ class PendulumModifierLarge(GeometryNodesModifier):
         left += 1
         join2 = JoinGeometry(tree, location=(left, -0.5))
         left += 1
-        trafo = TransformGeometry(tree, location=(left, 0), translation=[-6, 0, 2.5],scale = [1,1,0.8])
+        trafo = TransformGeometry(tree, location=(left, 0), translation=[-6, 0, 2.5], scale=[1, 1, 0.8])
         left += 1
 
         join_full = JoinGeometry(tree, location=(left, 0))
@@ -813,6 +818,7 @@ class PendulumModifierLarge(GeometryNodesModifier):
 
         create_geometry_line(tree, [simulation2, graph_iop, graph_trafo, graph_mat, join_full])
 
+
 class VectorLogo(GeometryNodesModifier):
     def __init__(self, name='VectorLogo', n=10, colors=['important', 'example', 'drawing']):
         self.n = n
@@ -929,6 +935,7 @@ class VectorLogo(GeometryNodesModifier):
     def get_arrow_object(self):
         return self.arrow
 
+
 class LorentzAttractorNode(GeometryNodesModifier):
     def __init__(self, name='LorentzAttractor', iterations=15000, a=0.4):
         self.iterations = iterations
@@ -977,6 +984,7 @@ class LorentzAttractorNode(GeometryNodesModifier):
 
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
+
 
 # Penrose videos
 class Penrose2DIntro(GeometryNodesModifier):
@@ -1056,6 +1064,7 @@ class Penrose2DIntro(GeometryNodesModifier):
 
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
+
 
 class Penrose2DVoronoi(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
@@ -1284,6 +1293,7 @@ class Penrose2DVoronoi(GeometryNodesModifier):
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
 
+
 class Penrose2D(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
         super().__init__(name)
@@ -1450,6 +1460,7 @@ class Penrose2D(GeometryNodesModifier):
 
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
+
 
 class ConvexHull2D(GeometryNodesModifier):
     def __init__(self, name='ConvexHull2D', size=10):
@@ -1644,6 +1655,7 @@ class ConvexHull2D(GeometryNodesModifier):
         # voronoi zone
         create_geometry_line(tree, [projection_line, product_geometry, realize, hull_hull, zone_mat, join2])
 
+
 # CMB video
 class SphericalHarmonicsNode(GeometryNodesModifier):
     def __init__(self, l=0, m=0, name='SphericalHarmonics', resolution=5, **kwargs):
@@ -1735,6 +1747,7 @@ class SphericalHarmonicsNode(GeometryNodesModifier):
         smooth = SetShadeSmooth(tree, location=(1, -1))
 
         create_geometry_line(tree, [sphere, set_pos, attr, color, smooth], out=self.group_outputs.inputs[0])
+
 
 class SphericalHarmonicsNode2(GeometryNodesModifier):
     def __init__(self, l=0, m=0, name='SphericalHarmonics', resolution=5, **kwargs):
@@ -1961,6 +1974,7 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
                              out=self.group_outputs.inputs[0])
         create_geometry_line(tree, [join, join_full])
 
+
 class NodeFromCollection(GeometryNodesModifier):
     def __init__(self, name='NodeFromCollection', collection="Collection", translation=Vector(), rotation=Vector(),
                  scale=Vector([1, 1, 1]), **kwargs):
@@ -1990,6 +2004,7 @@ class NodeFromCollection(GeometryNodesModifier):
                                     trafo
                                     ], out=self.group_outputs.inputs[0])
 
+
 class SliderModifier(GeometryNodesModifier):
     def __init__(self, name='SliderModifier', **kwargs):
         """
@@ -2018,11 +2033,11 @@ class SliderModifier(GeometryNodesModifier):
         pos = InputVector(tree, location=(left, -2), value=Vector(position), name="Position")
         # shape
         shape = get_from_kwargs(self.kwargs, "shape", "cylinder")
-        domain = get_from_kwargs(self.kwargs,"domain",[-1,1])
-        side_segments = get_from_kwargs(self.kwargs,"side_segments",2)
-        min = max(domain[0],0)
+        domain = get_from_kwargs(self.kwargs, "domain", [-1, 1])
+        side_segments = get_from_kwargs(self.kwargs, "side_segments", 2)
+        min = max(domain[0], 0)
 
-        delta = domain[1]-domain[0]
+        delta = domain[1] - domain[0]
 
         if shape == 'cubic':
             geometry = CubeMesh(tree, size=dimensions, location=(left, 0))
@@ -2033,16 +2048,25 @@ class SliderModifier(GeometryNodesModifier):
             l = dimensions[2]
             if orientation == "HORIZONTAL":
                 rotation = [0, pi / 2, 0]
-                p0 = "pos_x,"+str(min)+",2,*,"+  str(domain[1]) + ",-,"+str(domain[0])+",-," + str(delta) + ",/,s_z,*,+"
+                p0 = "pos_x," + str(min) + ",2,*," + str(domain[1]) + ",-," + str(domain[0]) + ",-," + str(
+                    delta) + ",/,s_z,*,+"
                 self.label_position = Vector(position) - Vector([1.1 * l, 0, 0])
-                position_function = [p0+",value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,not,*,value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,*,+,s_z,*,+", "pos_y", "pos_z"]
-                scale_function = ["s_x", "s_y", "value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,not,*,value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,*,+,s_z,*"]
+                position_function = [
+                    p0 + ",value," + str(min) + ",-," + str(delta) + ",/,value," + str(min) + ",<,not,*,value," + str(
+                        min) + ",-," + str(delta) + ",/,value," + str(min) + ",<,*,+,s_z,*,+", "pos_y", "pos_z"]
+                scale_function = ["s_x", "s_y", "value," + str(min) + ",-," + str(delta) + ",/,value," + str(
+                    min) + ",<,not,*,value," + str(min) + ",-," + str(delta) + ",/,value," + str(min) + ",<,*,+,s_z,*"]
             else:
-                p0 = "pos_z," +str(min)+",2,*,"+  str(domain[1]) + ",-,"+str(domain[0])+",-," + str(delta) + ",/,s_z,*,+"
+                p0 = "pos_z," + str(min) + ",2,*," + str(domain[1]) + ",-," + str(domain[0]) + ",-," + str(
+                    delta) + ",/,s_z,*,+"
                 rotation = [0, 0, 0]
                 self.label_position = Vector(position) - Vector([0, 0, 1.1 * l])
-                position_function = ["pos_x", "pos_y", p0+",value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,not,*,value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,*,+,s_z,*,+"]
-                scale_function = ["s_x", "s_y", "value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,not,*,value,"+str(min)+",-,"+str(delta)+",/,value,"+str(min)+",<,*,+,s_z,*"]
+                position_function = ["pos_x", "pos_y",
+                                     p0 + ",value," + str(min) + ",-," + str(delta) + ",/,value," + str(
+                                         min) + ",<,not,*,value," + str(min) + ",-," + str(delta) + ",/,value," + str(
+                                         min) + ",<,*,+,s_z,*,+"]
+                scale_function = ["s_x", "s_y", "value," + str(min) + ",-," + str(delta) + ",/,value," + str(
+                    min) + ",<,not,*,value," + str(min) + ",-," + str(delta) + ",/,value," + str(min) + ",<,*,+,s_z,*"]
         left += 1
 
         slider_trafo = make_function(tree, location=(left, -1),
@@ -2070,14 +2094,14 @@ class SliderModifier(GeometryNodesModifier):
         left += 1
         sub_div = SubdivideMesh(tree, level=5, location=(left, 0))
 
-        color = get_from_kwargs(self.kwargs,'color',None)
+        color = get_from_kwargs(self.kwargs, 'color', None)
         if color:
-            material = get_material(color,**self.kwargs)
+            material = get_material(color, **self.kwargs)
             self.materials.append(material)
         else:
             material = double_gradient(functions={"uv": ["uv_x,0.5,-,2,*", "uv_y,0.5,-,2,*", "uv_z,0.5,-,2,*"],
-                                                       "abs_uv": ["uv_x,0.5,-,2,*,abs", "uv_y,0.5,-,2,*,abs",
-                                                                  "uv_z,0.5,-,2,*,abs"]})
+                                                  "abs_uv": ["uv_x,0.5,-,2,*,abs", "uv_y,0.5,-,2,*,abs",
+                                                             "uv_z,0.5,-,2,*,abs"]})
             self.materials.append(material)
         material_node = SetMaterial(tree, location=(left, -1), material=material)
         pos = Position(tree, location=(left, -2))
@@ -2100,7 +2124,9 @@ class SliderModifier(GeometryNodesModifier):
         del_geo = DeleteGeometry(tree, location=(left, 0), selection=sel_fcn.outputs["selection"])
 
         create_geometry_line(tree, [geometry, inside_transformation, material_node, join])
-        create_geometry_line(tree, [geometry, transformation, wireframe, grid_material, sub_div, join, del_geo], out=out.inputs[0])
+        create_geometry_line(tree, [geometry, transformation, wireframe, grid_material, sub_div, join, del_geo],
+                             out=out.inputs[0])
+
 
 class NumberLineModifier(GeometryNodesModifier):
     def __init__(self, name='NumberLineModifier', **kwargs):
@@ -2118,35 +2144,37 @@ class NumberLineModifier(GeometryNodesModifier):
         domain = get_from_kwargs(kwargs, 'domain', [0, 10])
         tic_labels = get_from_kwargs(kwargs, 'tic_labels', 'AUTO')
         tic_label_digits = get_from_kwargs(kwargs, 'tic_label_digits', 1)
-        tic_label_shift = get_from_kwargs(kwargs, 'tic_label_shift', [0,0,0])
+        tic_label_shift = get_from_kwargs(kwargs, 'tic_label_shift', [0, 0, 0])
         max_length = get_from_kwargs(kwargs, 'length', 5)
         radius = get_from_kwargs(kwargs, 'radius', 0.025)
         tip_length = get_from_kwargs(kwargs, 'tip_length', 0.1)
         n_tics = get_from_kwargs(kwargs, 'n_tics', 5)
-        direction = get_from_kwargs(kwargs,'direction','HORIZONTAL')
-        axis_label=get_from_kwargs(kwargs,'axis_label',"x")
-        axis_label_location=get_from_kwargs(kwargs,'axis_label_location','AUTO')
+        direction = get_from_kwargs(kwargs, 'direction', 'HORIZONTAL')
+        axis_label = get_from_kwargs(kwargs, 'axis_label', "x")
+        axis_label_location = get_from_kwargs(kwargs, 'axis_label_location', 'AUTO')
 
-        if direction =="VERTICAL":
+        if direction == "VERTICAL":
             global_rotation = Vector()
         elif direction == "HORIZONTAL":
-            global_rotation=Vector([0,pi/2,0])
+            global_rotation = Vector([0, pi / 2, 0])
         elif direction == "DEEP":
-            global_rotation=Vector([-pi/2,0,0])
+            global_rotation = Vector([-pi / 2, 0, 0])
         else:
-            global_rotation = get_from_kwargs(kwargs,"rotation_euler",[0,0,0])
+            global_rotation = get_from_kwargs(kwargs, "rotation_euler", [0, 0, 0])
 
         # setup rotation
         # the labels have to be rotated with inverse rotation to stay in the readable orientation
-        rotation_frame=Frame(tree,name="Rotations")
+        rotation_frame = Frame(tree, name="Rotations")
         left = -15
-        in_rotation = InputRotation(tree,location=(left,5),rotation=global_rotation,name="GlobalRotation")
-        inv_rotation = InvertRotation(tree,location=(left+1,4.75),in_rotation=in_rotation.std_out)
+        in_rotation = InputRotation(tree, location=(left, 5), rotation=global_rotation, name="GlobalRotation")
+        inv_rotation = InvertRotation(tree, location=(left + 1, 4.75), in_rotation=in_rotation.std_out)
 
-        label_rotation0 = InputRotation(tree,location=(left,4.5),rotation=[pi/2,0,0],name="InitialLabelRotation")
-        label_rotation = RotateRotation(tree,location=(left+2,4),rotation=label_rotation0.std_out,rotate_by=inv_rotation.std_out)
+        label_rotation0 = InputRotation(tree, location=(left, 4.5), rotation=[pi / 2, 0, 0],
+                                        name="InitialLabelRotation")
+        label_rotation = RotateRotation(tree, location=(left + 2, 4), rotation=label_rotation0.std_out,
+                                        rotate_by=inv_rotation.std_out)
 
-        rotation_frame.add([in_rotation,inv_rotation,label_rotation,label_rotation0])
+        rotation_frame.add([in_rotation, inv_rotation, label_rotation, label_rotation0])
 
         if tic_labels == 'AUTO':
             tic_labels = {}
@@ -2156,34 +2184,35 @@ class NumberLineModifier(GeometryNodesModifier):
             p = 10 ** tic_label_digits  # power for rounding
             for i in range(0, n_tics + 1):
                 if p == 1:
-                    rounded_val = str(int(round(x0+dx * i)))
+                    rounded_val = str(int(round(x0 + dx * i)))
                 else:
-                    rounded_val = str(round((x0+dx * i) * p) / p)
-                tic_labels[rounded_val] = [x0+dx * i]
+                    rounded_val = str(round((x0 + dx * i) * p) / p)
+                tic_labels[rounded_val] = [x0 + dx * i]
 
-        tic_labels, axis_label = generate_labels(tic_labels,axis_label, **kwargs)
-        downshift=-5
-        in_min = InputValue(tree,location=(left,downshift), name='Minimum', value=domain[0])
-        in_max = InputValue(tree,location=(left,downshift+0.25), name='Maximum', value=domain[1])
-        in_length = InputValue(tree,location=(left,downshift+0.5), name='AxisLength', value=max_length)
-        in_radius = InputValue(tree,location=(left,downshift+0.75), name='Radius', value=radius)
-        in_log = InputValue(tree,location=(left,downshift+1),name='Log',value=0)
-        in_label_scale = InputValue(tree,location=(left,downshift+1),name='LabelScale',value=0)
+        tic_labels, axis_label = generate_labels(tic_labels, axis_label, **kwargs)
+        downshift = -5
+        in_min = InputValue(tree, location=(left, downshift), name='Minimum', value=domain[0])
+        in_max = InputValue(tree, location=(left, downshift + 0.25), name='Maximum', value=domain[1])
+        in_length = InputValue(tree, location=(left, downshift + 0.5), name='AxisLength', value=max_length)
+        in_radius = InputValue(tree, location=(left, downshift + 0.75), name='Radius', value=radius)
+        in_log = InputValue(tree, location=(left, downshift + 1), name='Log', value=0)
+        in_label_scale = InputValue(tree, location=(left, downshift + 1), name='LabelScale', value=0)
 
         # create geometry
         # axis
-        left+=2
-        cyl = CylinderMesh(tree,location=(left,0), depth=in_length.std_out, radius=in_radius.std_out,name="Axis")
-        translation = make_function(tree,location=(left-1,1) ,name="AxisTranslation",
+        left += 2
+        cyl = CylinderMesh(tree, location=(left, 0), depth=in_length.std_out, radius=in_radius.std_out, name="Axis")
+        translation = make_function(tree, location=(left - 1, 1), name="AxisTranslation",
                                     functions={"translation": ["0", "0", "l,2,/"]},
                                     inputs=['l'], outputs=["translation"],
                                     scalars=['l'], vectors=["translation"],
                                     )
         links.new(in_length.std_out, translation.inputs['l'])
-        cyl_transformation = TransformGeometry(tree,location=(left+1,0), translation=translation.outputs["translation"])
+        cyl_transformation = TransformGeometry(tree, location=(left + 1, 0),
+                                               translation=translation.outputs["translation"])
 
         # tip
-        tip_scaling = make_function(tree,location=(left-1,-1), name="TipScaling",
+        tip_scaling = make_function(tree, location=(left - 1, -1), name="TipScaling",
                                     functions={
                                         "tipLength": "l," + str(tip_length) + ",*",
                                         "tipRadius": "r,2,*"
@@ -2194,88 +2223,105 @@ class NumberLineModifier(GeometryNodesModifier):
         for node, label in zip([in_radius, in_length], ["r", "l"]):
             links.new(node.std_out, tip_scaling.inputs[label])
 
-        cone = ConeMesh(tree,location=(left,-0.5), radius_bottom=tip_scaling.outputs["tipRadius"],
-                        depth=tip_scaling.outputs["tipLength"],name="Tip")
-        cone_transformation = TransformGeometry(tree,location=(left+1,-0.5), translation_z=in_length)
-        left+=3
+        cone = ConeMesh(tree, location=(left, -0.5), radius_bottom=tip_scaling.outputs["tipRadius"],
+                        depth=tip_scaling.outputs["tipLength"], name="Tip")
+        cone_transformation = TransformGeometry(tree, location=(left + 1, -0.5), translation_z=in_length)
+        left += 3
 
         # tics
         # increase by one to include tic at zero
         # the tic position is given by x0+(i+1-includeZero)*(x1-x0)/n mapped by f**(-1)
         # this position is stored in the coordinate of the point associated with the tic
 
-        tic_function = make_function(tree, location=(left-2,0),name="ticsFunction",
+        tic_function = make_function(tree, location=(left - 2, 0), name="ticsFunction",
                                      functions={
-                                                "depth": "l,500,/",
-                                                "r": "r,3,*",
-                                                },
-                                     inputs=[ "l", "r"],
-                                     outputs=[ "r", "depth"],
-                                     scalars=[ "l", "r", "depth"])
+                                         "depth": "l,500,/",
+                                         "r": "r,3,*",
+                                     },
+                                     inputs=["l", "r"],
+                                     outputs=["r", "depth"],
+                                     scalars=["l", "r", "depth"])
 
         links.new(in_length.std_out, tic_function.inputs["l"])
         links.new(in_radius.std_out, tic_function.inputs["r"])
-        left+=1
+        left += 1
 
         # join parts
-        join = JoinGeometry(tree,location=(left+4,0))
+        join = JoinGeometry(tree, location=(left + 4, 0))
 
-        label_frame =  Frame(tree,name="LabelFrame")
+        label_frame = Frame(tree, name="LabelFrame")
         # add tic_labels
-        count=0
-        shift=InputVector(tree,location=(left-3,downshift+0.5),name="LabelShift",value=tic_label_shift)
+        count = 0
+        shift = InputVector(tree, location=(left - 3, downshift + 0.5), name="LabelShift", value=tic_label_shift)
         for key, val in tic_labels.items():
-            coll_info = CollectionInfo(tree,location=(left-3,downshift-0.5*count), collection_name=str(key), name=str(key))
-            value = InputValue(tree,location=(left-3,downshift-0.5*(count+1/2)), name="LabelValue=" + str(val[0]), value=val[0])
+            coll_info = CollectionInfo(tree, location=(left - 3, downshift - 0.5 * count), collection_name=str(key),
+                                       name=str(key))
+            value = InputValue(tree, location=(left - 3, downshift - 0.5 * (count + 1 / 2)),
+                               name="LabelValue=" + str(val[0]), value=val[0])
             label_frame.add(value)
-            transform_geo = TransformGeometry(tree,location=(left-2,downshift+0.5+0.25*count), rotation=label_rotation.std_out, translation=[0,0,0])
+            transform_geo = TransformGeometry(tree, location=(left - 2, downshift + 0.5 + 0.25 * count),
+                                              rotation=label_rotation.std_out, translation=[0, 0, 0])
             label_frame.add(transform_geo)
-            tic_label_function = make_function(tree,location=(left-1,downshift+0.25*count), name="LabelPositionVisibility" + str(key),
+            tic_label_function = make_function(tree, location=(left - 1, downshift + 0.25 * count),
+                                               name="LabelPositionVisibility" + str(key),
                                                functions={
-                                                   "position_tic":["0","0", "val,x0,-,x1,x0,-,/,1,lambda,-,*,val,lg,x0,lg,-,x1,lg,x0,lg,-,/,lambda,*,+," + str(max_length) + ",*"],
-                                                   "position_label":["shift_x","shift_y", "shift_z,val,x0,-,x1,x0,-,/,1,lambda,-,*,val,lg,x0,lg,-,x1,lg,x0,lg,-,/,lambda,*,+," + str(max_length) + ",*,+"],
+                                                   "position_tic": ["0", "0",
+                                                                    "val,x0,-,x1,x0,-,/,1,lambda,-,*,val,lg,x0,lg,-,x1,lg,x0,lg,-,/,lambda,*,+," + str(
+                                                                        max_length) + ",*"],
+                                                   "position_label": ["shift_x", "shift_y",
+                                                                      "shift_z,val,x0,-,x1,x0,-,/,1,lambda,-,*,val,lg,x0,lg,-,x1,lg,x0,lg,-,/,lambda,*,+," + str(
+                                                                          max_length) + ",*,+"],
                                                    "invisible": "l,val,x0,-,x1,x0,-,/," + str(max_length) + ",*,<"
-                                               }, inputs=["shift","val", "x0", "x1", "l","lambda"], outputs=["position_tic","position_label", "invisible"],
-                                               scalars=["val", "x0", "x1", "invisible", "l","lambda"], vectors=["shift","position_tic","position_label"])
+                                               }, inputs=["shift", "val", "x0", "x1", "l", "lambda"],
+                                               outputs=["position_tic", "position_label", "invisible"],
+                                               scalars=["val", "x0", "x1", "invisible", "l", "lambda"],
+                                               vectors=["shift", "position_tic", "position_label"])
 
             links.new(in_length.std_out, tic_label_function.inputs["l"])
             links.new(in_log.std_out, tic_label_function.inputs["lambda"])
             links.new(in_min.std_out, tic_label_function.inputs["x0"])
             links.new(in_max.std_out, tic_label_function.inputs["x1"])
             links.new(value.std_out, tic_label_function.inputs["val"])
-            links.new(shift.std_out,tic_label_function.inputs["shift"])
+            links.new(shift.std_out, tic_label_function.inputs["shift"])
             label_frame.add(tic_label_function)
-            tic_mesh = CylinderMesh(tree, location=(left, downshift+0.25*count+3), vertices=16, radius=tic_function.outputs["r"],depth=tic_function.outputs['depth'])
-            set_tic_pos = TransformGeometry(tree, location=(left + 1,  downshift+0.25*count+3),translation=tic_label_function.outputs["position_tic"])
-            local_join = JoinGeometry(tree,location=(left+2, downshift+0.25*count+1.5))
-            del_label_geo = DeleteGeometry(tree, location=(left+3,downshift+0.25*count),selection=tic_label_function.outputs["invisible"])
+            tic_mesh = CylinderMesh(tree, location=(left, downshift + 0.25 * count + 3), vertices=16,
+                                    radius=tic_function.outputs["r"], depth=tic_function.outputs['depth'])
+            set_tic_pos = TransformGeometry(tree, location=(left + 1, downshift + 0.25 * count + 3),
+                                            translation=tic_label_function.outputs["position_tic"])
+            local_join = JoinGeometry(tree, location=(left + 2, downshift + 0.25 * count + 1.5))
+            del_label_geo = DeleteGeometry(tree, location=(left + 3, downshift + 0.25 * count),
+                                           selection=tic_label_function.outputs["invisible"])
             label_frame.add(del_label_geo)
-            create_geometry_line(tree,[tic_mesh, set_tic_pos, local_join])
-            set_label_pos = SetPosition(tree, location=(left+1, downshift + 0.25 * count),
+            create_geometry_line(tree, [tic_mesh, set_tic_pos, local_join])
+            set_label_pos = SetPosition(tree, location=(left + 1, downshift + 0.25 * count),
                                         position=tic_label_function.outputs["position_label"],
                                         offset=Vector([12 * radius, 0, 0]))
             label_frame.add(set_label_pos)
-            create_geometry_line(tree, [coll_info, transform_geo,  set_label_pos, local_join,del_label_geo,join])
-            count+=1
+            create_geometry_line(tree, [coll_info, transform_geo, set_label_pos, local_join, del_label_geo, join])
+            count += 1
 
         # take care of the axis label
-        if axis_label_location=='AUTO':
-            axis_label_location=[2*radius,0,max_length]
+        if axis_label_location == 'AUTO':
+            axis_label_location = [2 * radius, 0, max_length]
 
         if axis_label:
-            label_location=InputVector(tree,location=(left-3,downshift+0.25*count+2),name="LabelLocation",value=axis_label_location)
-            label_info = CollectionInfo(tree, location=(left - 3, downshift+0.25*count+3), collection_name=axis_label,
-                                       name="AxisLabel")
+            label_location = InputVector(tree, location=(left - 3, downshift + 0.25 * count + 2), name="LabelLocation",
+                                         value=axis_label_location)
+            label_info = CollectionInfo(tree, location=(left - 3, downshift + 0.25 * count + 3),
+                                        collection_name=axis_label,
+                                        name="AxisLabel")
         else:
-            label_info=None
+            label_info = None
         if label_info:
-            label_trafo= TransformGeometry(tree, location=(left - 2, downshift + 0.5 + 0.25 * count),
-                                              rotation=label_rotation.std_out, translation=label_location.std_out,scale=in_label_scale.std_out)
-            create_geometry_line(tree,[label_info,label_trafo,join])
+            label_trafo = TransformGeometry(tree, location=(left - 2, downshift + 0.5 + 0.25 * count),
+                                            rotation=label_rotation.std_out, translation=label_location.std_out,
+                                            scale=in_label_scale.std_out)
+            create_geometry_line(tree, [label_info, label_trafo, join])
 
         # finalize
-        left+=5
-        global_transformation = TransformGeometry(tree, location=(left,0),rotation=in_rotation.std_out, name="GlobalTransformation")
+        left += 5
+        global_transformation = TransformGeometry(tree, location=(left, 0), rotation=in_rotation.std_out,
+                                                  name="GlobalTransformation")
         left += 1
         pre_material = get_from_kwargs(kwargs, 'color', 'drawing')
         material = get_material(pre_material, **kwargs)
@@ -2284,13 +2330,14 @@ class NumberLineModifier(GeometryNodesModifier):
         left += 1
         auto_smooth = get_from_kwargs(kwargs, 'auto_smooth', True)
         if auto_smooth:
-            smooth = SetShadeSmooth(tree,location=(left,0))
+            smooth = SetShadeSmooth(tree, location=(left, 0))
             main_line = [cyl, cyl_transformation, join, global_transformation, set_material, smooth]
         else:
             main_line = [cyl, cyl_transformation, join, global_transformation, set_material]
 
         create_geometry_line(tree, [cone, cone_transformation, join])
         create_geometry_line(tree, main_line, out=out.inputs[0])
+
 
 class DataModifier(GeometryNodesModifier):
     def __init__(self, name='DataModifier', **kwargs):
@@ -2308,15 +2355,15 @@ class DataModifier(GeometryNodesModifier):
         # input parameters
         x_domain = get_from_kwargs(kwargs, 'x_domain', [0, 10])
         y_domain = get_from_kwargs(kwargs, 'y_domain', [0, 10])
-        width = get_from_kwargs(kwargs,"width",10)
-        height= get_from_kwargs(kwargs,"height",7)
+        width = get_from_kwargs(kwargs, "width", 10)
+        height = get_from_kwargs(kwargs, "height", 7)
 
         pointsize = get_from_kwargs(kwargs, "pointsize", None)
         linesize = get_from_kwargs(kwargs, "linesize", None)
         if pointsize:
-            in_pointsize = InputValue(tree,name='PointSize',value=0.05*pointsize)
+            in_pointsize = InputValue(tree, name='PointSize', value=0.05 * pointsize)
         else:
-            in_pointsize=None
+            in_pointsize = None
 
         in_width = InputValue(tree, name='Width', value=width)
         in_height = InputValue(tree, name='Height', value=height)
@@ -2324,56 +2371,63 @@ class DataModifier(GeometryNodesModifier):
         in_x_max = InputValue(tree, name='X1', value=x_domain[1])
         in_y_min = InputValue(tree, name='Y0', value=y_domain[0])
         in_y_max = InputValue(tree, name='Y1', value=y_domain[1])
-        in_time = SceneTime(tree,std_out="Seconds")
-        in_log = InputValue(tree,name='Log',value=0)
+        in_time = SceneTime(tree, std_out="Seconds")
+        in_log = InputValue(tree, name='Log', value=0)
 
-        in_time_min = InputValue(tree,name='T0',value=0)
-        in_time_max = InputValue(tree,name='T1',value=DEFAULT_ANIMATION_TIME)
+        in_time_min = InputValue(tree, name='T0', value=0)
+        in_time_max = InputValue(tree, name='T1', value=DEFAULT_ANIMATION_TIME)
         in_pos = Position(tree)
 
         # this function takes care of
         # * positioning the data points
         # * deleting points outside the view window
         # * deleting points outside the display time
-        position_function=make_function(tree,name="DataDisplayFunction",
-                    functions={
-                        "position":["pos_x,x0,-,x1,x0,-,/,1,l,-,*,pos_x,x0,/,lg,x1,x0,/,lg,/,l,*,+,w,*","0","pos_z,y0,-,y1,y0,-,/,h,*"],
-                        "invisible":["pos_x,x0,<,pos_x,x1,>,or,pos_z,y0,<,or,pos_z,y1,>,or,t,t0,<,or,pos_x,x0,-,x1,x0,-,/,t,t0,-,t1,t0,-,/,>,or"]
-                    },
-                    inputs=["pos","x0","x1","y0","y1","w","h","t0","t1","t","l"],outputs=["position","invisible"],
-                    scalars=["x0","x1","y0","y1","w","h","invisible","t0","t1","t","l"],vectors=["pos","position"])
-        links.new(in_pos.std_out,position_function.inputs["pos"])
-        links.new(in_width.std_out,position_function.inputs["w"])
-        links.new(in_height.std_out,position_function.inputs["h"])
-        links.new(in_x_min.std_out,position_function.inputs["x0"])
-        links.new(in_x_max.std_out,position_function.inputs["x1"])
+        position_function = make_function(tree, name="DataDisplayFunction",
+                                          functions={
+                                              "position": [
+                                                  "pos_x,x0,-,x1,x0,-,/,1,l,-,*,pos_x,x0,/,lg,x1,x0,/,lg,/,l,*,+,w,*",
+                                                  "0", "pos_z,y0,-,y1,y0,-,/,h,*"],
+                                              "invisible": [
+                                                  "pos_x,x0,<,pos_x,x1,>,or,pos_z,y0,<,or,pos_z,y1,>,or,t,t0,<,or,pos_x,x0,-,x1,x0,-,/,t,t0,-,t1,t0,-,/,>,or"]
+                                          },
+                                          inputs=["pos", "x0", "x1", "y0", "y1", "w", "h", "t0", "t1", "t", "l"],
+                                          outputs=["position", "invisible"],
+                                          scalars=["x0", "x1", "y0", "y1", "w", "h", "invisible", "t0", "t1", "t", "l"],
+                                          vectors=["pos", "position"])
+        links.new(in_pos.std_out, position_function.inputs["pos"])
+        links.new(in_width.std_out, position_function.inputs["w"])
+        links.new(in_height.std_out, position_function.inputs["h"])
+        links.new(in_x_min.std_out, position_function.inputs["x0"])
+        links.new(in_x_max.std_out, position_function.inputs["x1"])
         links.new(in_y_min.std_out, position_function.inputs["y0"])
         links.new(in_y_max.std_out, position_function.inputs["y1"])
         links.new(in_time_min.std_out, position_function.inputs["t0"])
         links.new(in_time_max.std_out, position_function.inputs["t1"])
-        links.new(in_time.std_out,position_function.inputs["t"])
-        links.new(in_log.std_out,position_function.inputs["l"])
+        links.new(in_time.std_out, position_function.inputs["t"])
+        links.new(in_log.std_out, position_function.inputs["l"])
 
-        del_geo = DeleteGeometry(tree,selection=position_function.outputs["invisible"])
-        set_pos = SetPosition(tree,position=position_function.outputs["position"])
+        del_geo = DeleteGeometry(tree, selection=position_function.outputs["invisible"])
+        set_pos = SetPosition(tree, position=position_function.outputs["position"])
         if pointsize:
-            point = IcoSphere(tree,subdivisions=2,radius=in_pointsize.std_out)
-            iop = InstanceOnPoints(tree,instance=point.geometry_out)
+            point = IcoSphere(tree, subdivisions=2, radius=in_pointsize.std_out)
+            iop = InstanceOnPoints(tree, instance=point.geometry_out)
         if linesize:
-            wireframe = WireFrame(tree,radius=0.02*linesize,**kwargs)
+            wireframe = WireFrame(tree, radius=0.02 * linesize, **kwargs)
 
-        mat = get_from_kwargs(kwargs,"material",None)
+        mat = get_from_kwargs(kwargs, "material", None)
         if mat:
-            mat = get_material(mat,**kwargs)
+            mat = get_material(mat, **kwargs)
             self.materials.append(mat)
-        set_material = SetMaterial(tree,material=mat)
+        set_material = SetMaterial(tree, material=mat)
         if pointsize:
-            create_geometry_line(tree, [del_geo,set_pos,iop,set_material], ins = ins.outputs[0],out=out.inputs[0])
+            create_geometry_line(tree, [del_geo, set_pos, iop, set_material], ins=ins.outputs[0], out=out.inputs[0])
         if linesize:
-            create_geometry_line(tree, [del_geo,set_pos,wireframe,set_material], ins = ins.outputs[0],out=out.inputs[0])
+            create_geometry_line(tree, [del_geo, set_pos, wireframe, set_material], ins=ins.outputs[0],
+                                 out=out.inputs[0])
+
 
 class LegendrePolynomials(GeometryNodesModifier):
-    def __init__(self,l_range=range(10), name='LegendrePolynomials', **kwargs):
+    def __init__(self, l_range=range(10), name='LegendrePolynomials', **kwargs):
         """
         geometry nodes that turn a set of mesh lines into Legendre Polynomials
         """
@@ -2393,58 +2447,60 @@ class LegendrePolynomials(GeometryNodesModifier):
         out = self.group_outputs
         links = tree.links
 
-        transform=TransformGeometry(tree,scale=[7]*3)
+        transform = TransformGeometry(tree, scale=[7] * 3)
         join = JoinGeometry(tree)
         time = SceneTime(tree)
-        dt = self.transition_time/len(list(self.l_range))
+        dt = self.transition_time / len(list(self.l_range))
 
-        colors = ["drawing","joker","important","custom1","custom2","custom3","custom4","gray_4"]
+        colors = ["drawing", "joker", "important", "custom1", "custom2", "custom3", "custom4", "gray_4"]
         count = 0
         for l in self.l_range:
-            mesh_line = MeshLine(tree,count=l*20+10,start_location=[-1,0,0],end_location=[1,0,0])
+            mesh_line = MeshLine(tree, count=l * 20 + 10, start_location=[-1, 0, 0], end_location=[1, 0, 0])
             position = Position(tree)
-            separate = SeparateXYZ(tree,vector=position.std_out)
-            pl = AssociatedLegendrePolynomial(tree,l=l,x=separate.x)
+            separate = SeparateXYZ(tree, vector=position.std_out)
+            pl = AssociatedLegendrePolynomial(tree, l=l, x=separate.x)
             appear_function = make_function(tree, name="AppearFunction",
                                             functions={
-                                                "selection": "t," + str(self.begin_time) + ",-," + str(dt) + ",/,"+str(count)+",<"
+                                                "selection": "t," + str(self.begin_time) + ",-," + str(
+                                                    dt) + ",/," + str(count) + ",<"
                                             },
-                                inputs=["t"],outputs=["selection"],scalars=["t","selection"])
-            links.new(time.std_out,appear_function.inputs["t"])
-            combine = CombineXYZ(tree,x=separate.x,y=0,z=pl.std_out)
-            set_pos = SetPosition(tree,position=combine.std_out)
-            wireframe = WireFrame(tree,radius=0.0025)
-            del_geo = DeleteGeometry(tree,selection=appear_function.outputs["selection"])
+                                            inputs=["t"], outputs=["selection"], scalars=["t", "selection"])
+            links.new(time.std_out, appear_function.inputs["t"])
+            combine = CombineXYZ(tree, x=separate.x, y=0, z=pl.std_out)
+            set_pos = SetPosition(tree, position=combine.std_out)
+            wireframe = WireFrame(tree, radius=0.0025)
+            del_geo = DeleteGeometry(tree, selection=appear_function.outputs["selection"])
 
-            if count<len(colors):
-                color=colors[count]
+            if count < len(colors):
+                color = colors[count]
             else:
-                color=colors[-1]
-            set_mat = SetMaterial(tree,material=color)
-            create_geometry_line(tree,[mesh_line,set_pos,del_geo,wireframe,set_mat,join])
-            count+=1
+                color = colors[-1]
+            set_mat = SetMaterial(tree, material=color)
+            create_geometry_line(tree, [mesh_line, set_pos, del_geo, wireframe, set_mat, join])
+            count += 1
 
-        create_geometry_line(tree,[join,transform],out=out.inputs[0])
+        create_geometry_line(tree, [join, transform], out=out.inputs[0])
+
 
 class AssociatedLegendreP(GeometryNodesModifier):
-    def __init__(self,l_range=range(0,5),m=1, name='AssociatedLegendrePolynomials', **kwargs):
+    def __init__(self, l_range=range(0, 5), m=1, name='AssociatedLegendrePolynomials', **kwargs):
         """
         geometry nodes that turn a set of mesh lines into associated Legendre Polynomials
         """
-        self.m=m
-        self.l_range=l_range
-        if begin_time :=kwargs.pop("begin_time"):
-            self.begin_time=begin_time
+        self.m = m
+        self.l_range = l_range
+        if begin_time := kwargs.pop("begin_time"):
+            self.begin_time = begin_time
         else:
-            self.begin_time=0
-        if transition_time :=kwargs.pop("transition_time"):
-            self.transition_time=transition_time
+            self.begin_time = 0
+        if transition_time := kwargs.pop("transition_time"):
+            self.transition_time = transition_time
         else:
-            self.transition_time=0
+            self.transition_time = 0
         if 'scale' in kwargs:
-            self.scale=kwargs.pop('scale')
+            self.scale = kwargs.pop('scale')
         else:
-            self.scale = [1]*3
+            self.scale = [1] * 3
 
         super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
 
@@ -2459,7 +2515,8 @@ class AssociatedLegendreP(GeometryNodesModifier):
         colors = ["drawing", "joker", "important", "custom1", "custom2", "custom3", "custom4", "gray_4"]
         count = 0
         for l in self.l_range:
-            mesh_line = MeshLine(tree, count=l * 100 + 10, start_location=[-0.999, 0, 0], end_location=[0.999, 0, 0]) # avoid numerical singularity at \pm 1
+            mesh_line = MeshLine(tree, count=l * 100 + 10, start_location=[-0.999, 0, 0],
+                                 end_location=[0.999, 0, 0])  # avoid numerical singularity at \pm 1
             position = Position(tree)
             y = make_function(tree, name="y",
                               functions={
@@ -2489,14 +2546,15 @@ class AssociatedLegendreP(GeometryNodesModifier):
             else:
                 color = colors[-1]
             set_mat = SetMaterial(tree, material=color)
-            create_geometry_line(tree, [mesh_line, set_pos, del_geo, transform,wireframe, set_mat, join])
+            create_geometry_line(tree, [mesh_line, set_pos, del_geo, transform, wireframe, set_mat, join])
             count += 1
 
         create_geometry_line(tree, [join], out=out.inputs[0])
 
+
 class PlmSurface(GeometryNodesModifier):
-    def __init__(self, domain = [[-1,1],[0,1]], l=6,m=3, name='AssociatedLegendrePolynomialSurface',
-                 begin_time=0,transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+    def __init__(self, domain=[[-1, 1], [0, 1]], l=6, m=3, name='AssociatedLegendrePolynomialSurface',
+                 begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         """
         geometry nodes that turn a set of mesh lines into Legendre Polynomials
         """
@@ -2504,11 +2562,11 @@ class PlmSurface(GeometryNodesModifier):
         self.l = l
         self.m = m
         if "begin_time" in kwargs:
-            self.begin_time=kwargs.pop("begin_time")
+            self.begin_time = kwargs.pop("begin_time")
         else:
-            self.begin_time =0
+            self.begin_time = 0
         if "transition_time" in kwargs:
-            self.transition_time=kwargs.pop("transition_time")
+            self.transition_time = kwargs.pop("transition_time")
         else:
             self.transition_time = 0
 
@@ -2518,30 +2576,31 @@ class PlmSurface(GeometryNodesModifier):
         out = self.group_outputs
         links = tree.links
 
-        size_x = self.domain[0][1]-self.domain[0][0]
-        size_y = self.domain[1][1]-self.domain[1][0]
-        mesh = Grid(tree,size_x=size_x,size_y=size_y,vertices_y=100,vertices_x=100)
-        translation_x=(self.domain[0][1]+self.domain[0][0])/2
-        translation_y=(self.domain[1][1]+self.domain[1][0])/2
+        size_x = self.domain[0][1] - self.domain[0][0]
+        size_y = self.domain[1][1] - self.domain[1][0]
+        mesh = Grid(tree, size_x=size_x, size_y=size_y, vertices_y=100, vertices_x=100)
+        translation_x = (self.domain[0][1] + self.domain[0][0]) / 2
+        translation_y = (self.domain[1][1] + self.domain[1][0]) / 2
         # move mesh to the coordinates of its middle
-        transform = TransformGeometry(tree,translation_x=translation_x,translation_y=translation_y)
+        transform = TransformGeometry(tree, translation_x=translation_x, translation_y=translation_y)
         position = Position(tree)
-        sep = SeparateXYZ(tree,vector=position.std_out)
-        function  = AssociatedLegendrePolynomial(tree,l=self.l,m=self.m,x=sep.x,y=sep.y)
-        combine = CombineXYZ(tree,x=sep.x,y=sep.y,z=function.std_out)
-        set_pos = SetPosition(tree,position=combine.std_out)
+        sep = SeparateXYZ(tree, vector=position.std_out)
+        function = AssociatedLegendrePolynomial(tree, l=self.l, m=self.m, x=sep.x, y=sep.y)
+        combine = CombineXYZ(tree, x=sep.x, y=sep.y, z=function.std_out)
+        set_pos = SetPosition(tree, position=combine.std_out)
         if 'scale' in kwargs:
             scale = kwargs.pop('scale')
-            transform2 = TransformGeometry(tree,scale=scale)
+            transform2 = TransformGeometry(tree, scale=scale)
         else:
             transform2 = TransformGeometry(tree)
-        wireframe=WireFrame(tree)
+        wireframe = WireFrame(tree)
 
-        create_geometry_line(tree, [mesh,transform,set_pos,transform2,wireframe], out=out.inputs[0])
+        create_geometry_line(tree, [mesh, transform, set_pos, transform2, wireframe], out=out.inputs[0])
+
 
 class YlmSurface(GeometryNodesModifier):
-    def __init__(self, domain = [[-pi,pi],[0,pi]], l=3,m=2, name="SphericalHarmonicsSurface",
-                  **kwargs):
+    def __init__(self, domain=[[-pi, pi], [0, pi]], l=3, m=2, name="SphericalHarmonicsSurface",
+                 **kwargs):
         """
         geometry nodes that turn a grid into a representation of a spherical harmonics function
         """
@@ -2549,14 +2608,14 @@ class YlmSurface(GeometryNodesModifier):
         self.l = l
         self.m = m
         if "begin_time" in kwargs:
-            self.begin_time=kwargs.pop("begin_time")
+            self.begin_time = kwargs.pop("begin_time")
         else:
-            self.begin_time =0
+            self.begin_time = 0
         if "transition_time" in kwargs:
-            self.transition_time=kwargs.pop("transition_time")
+            self.transition_time = kwargs.pop("transition_time")
         else:
             self.transition_time = 0
-        self.thickness = get_from_kwargs(kwargs,"thickness",1)
+        self.thickness = get_from_kwargs(kwargs, "thickness", 1)
 
         super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
 
@@ -2564,31 +2623,32 @@ class YlmSurface(GeometryNodesModifier):
         out = self.group_outputs
         links = tree.links
 
-        size_x = self.domain[0][1]-self.domain[0][0]
-        size_y = self.domain[1][1]-self.domain[1][0]
-        mesh = Grid(tree,size_x=size_x,size_y=size_y,vertices_y=self.l*10+20,vertices_x=self.l*10+20)
+        size_x = self.domain[0][1] - self.domain[0][0]
+        size_y = self.domain[1][1] - self.domain[1][0]
+        mesh = Grid(tree, size_x=size_x, size_y=size_y, vertices_y=self.l * 10 + 20, vertices_x=self.l * 10 + 20)
 
-        translation_x=(self.domain[0][1]+self.domain[0][0])/2
-        translation_y=(self.domain[1][1]+self.domain[1][0])/2
+        translation_x = (self.domain[0][1] + self.domain[0][0]) / 2
+        translation_y = (self.domain[1][1] + self.domain[1][0]) / 2
         # move mesh to the coordinates of its middle
-        transform = TransformGeometry(tree,translation_x=translation_x,translation_y=translation_y)
+        transform = TransformGeometry(tree, translation_x=translation_x, translation_y=translation_y)
         position = Position(tree)
-        sep = SeparateXYZ(tree,vector=position.std_out)
-        function  = SphericalHarmonicsRekursive(tree,l=self.l,m=self.m,phi=sep.x,theta=sep.y)
-        combine = CombineXYZ(tree,x=sep.x,y=sep.y,z=function.re)
-        set_pos = SetPosition(tree,position=combine.std_out)
+        sep = SeparateXYZ(tree, vector=position.std_out)
+        function = SphericalHarmonicsRekursive(tree, l=self.l, m=self.m, phi=sep.x, theta=sep.y)
+        combine = CombineXYZ(tree, x=sep.x, y=sep.y, z=function.re)
+        set_pos = SetPosition(tree, position=combine.std_out)
         if 'scale' in kwargs:
             scale = kwargs.pop('scale')
-            transform2 = TransformGeometry(tree,scale=scale)
+            transform2 = TransformGeometry(tree, scale=scale)
         else:
             transform2 = TransformGeometry(tree)
-        wireframe=WireFrame(tree,radius=0.02*self.thickness)
+        wireframe = WireFrame(tree, radius=0.02 * self.thickness)
 
-        create_geometry_line(tree, [mesh,transform,set_pos,transform2,wireframe], out=out.inputs[0])
+        create_geometry_line(tree, [mesh, transform, set_pos, transform2, wireframe], out=out.inputs[0])
+
 
 class YlmSurface_200(GeometryNodesModifier):
-    def __init__(self, domain = [[-pi,pi],[0,pi]], l=3,m=2, name="SphericalHarmonicsSurface",
-                  **kwargs):
+    def __init__(self, domain=[[-pi, pi], [0, pi]], l=3, m=2, name="SphericalHarmonicsSurface",
+                 **kwargs):
         """
         geometry nodes that turn a grid into a representation of a spherical harmonics function
         """
@@ -2596,14 +2656,14 @@ class YlmSurface_200(GeometryNodesModifier):
         self.l = l
         self.m = m
         if "begin_time" in kwargs:
-            self.begin_time=kwargs.pop("begin_time")
+            self.begin_time = kwargs.pop("begin_time")
         else:
-            self.begin_time =0
+            self.begin_time = 0
         if "transition_time" in kwargs:
-            self.transition_time=kwargs.pop("transition_time")
+            self.transition_time = kwargs.pop("transition_time")
         else:
             self.transition_time = 0
-        self.thickness = get_from_kwargs(kwargs,"thickness",1)
+        self.thickness = get_from_kwargs(kwargs, "thickness", 1)
 
         super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
 
@@ -2611,31 +2671,32 @@ class YlmSurface_200(GeometryNodesModifier):
         out = self.group_outputs
         links = tree.links
 
-        size_x = self.domain[0][1]-self.domain[0][0]
-        size_y = self.domain[1][1]-self.domain[1][0]
-        mesh = Grid(tree,size_x=size_x,size_y=size_y,vertices_y=self.l*10+20,vertices_x=self.l*10+20)
+        size_x = self.domain[0][1] - self.domain[0][0]
+        size_y = self.domain[1][1] - self.domain[1][0]
+        mesh = Grid(tree, size_x=size_x, size_y=size_y, vertices_y=self.l * 10 + 20, vertices_x=self.l * 10 + 20)
 
-        translation_x=(self.domain[0][1]+self.domain[0][0])/2
-        translation_y=(self.domain[1][1]+self.domain[1][0])/2
+        translation_x = (self.domain[0][1] + self.domain[0][0]) / 2
+        translation_y = (self.domain[1][1] + self.domain[1][0]) / 2
         # move mesh to the coordinates of its middle
-        transform = TransformGeometry(tree,translation_x=translation_x,translation_y=translation_y)
+        transform = TransformGeometry(tree, translation_x=translation_x, translation_y=translation_y)
         position = Position(tree)
-        sep = SeparateXYZ(tree,vector=position.std_out)
-        function  = SphericalHarmonics200(tree,m=self.m,phi=sep.x,theta=sep.y)
-        combine = CombineXYZ(tree,x=sep.x,y=sep.y,z=function.re)
-        set_pos = SetPosition(tree,position=combine.std_out)
+        sep = SeparateXYZ(tree, vector=position.std_out)
+        function = SphericalHarmonics200(tree, m=self.m, phi=sep.x, theta=sep.y)
+        combine = CombineXYZ(tree, x=sep.x, y=sep.y, z=function.re)
+        set_pos = SetPosition(tree, position=combine.std_out)
         if 'scale' in kwargs:
             scale = kwargs.pop('scale')
-            transform2 = TransformGeometry(tree,scale=scale)
+            transform2 = TransformGeometry(tree, scale=scale)
         else:
             transform2 = TransformGeometry(tree)
-        wireframe=WireFrame(tree,radius=0.02*self.thickness)
+        wireframe = WireFrame(tree, radius=0.02 * self.thickness)
 
-        create_geometry_line(tree, [mesh,transform,set_pos,transform2,wireframe], out=out.inputs[0])
+        create_geometry_line(tree, [mesh, transform, set_pos, transform2, wireframe], out=out.inputs[0])
+
 
 class YlmSurfaceReference(GeometryNodesModifier):
-    def __init__(self, domain = [[-pi,pi],[0,pi]], l=3,m=2, name="SphericalHarmonicsSurfaceReference",
-                  **kwargs):
+    def __init__(self, domain=[[-pi, pi], [0, pi]], l=3, m=2, name="SphericalHarmonicsSurfaceReference",
+                 **kwargs):
         """
         geometry nodes that turn a grid into a representation of a spherical harmonics function
         """
@@ -2643,11 +2704,11 @@ class YlmSurfaceReference(GeometryNodesModifier):
         self.l = l
         self.m = m
         if "begin_time" in kwargs:
-            self.begin_time=kwargs.pop("begin_time")
+            self.begin_time = kwargs.pop("begin_time")
         else:
-            self.begin_time =0
+            self.begin_time = 0
         if "transition_time" in kwargs:
-            self.transition_time=kwargs.pop("transition_time")
+            self.transition_time = kwargs.pop("transition_time")
         else:
             self.transition_time = 0
 
@@ -2657,16 +2718,16 @@ class YlmSurfaceReference(GeometryNodesModifier):
         out = self.group_outputs
         links = tree.links
 
-        size_x = self.domain[0][1]-self.domain[0][0]
-        size_y = self.domain[1][1]-self.domain[1][0]
-        mesh = Grid(tree,size_x=size_x,size_y=size_y,vertices_y=self.l*10+20,vertices_x=self.l*10+20)
+        size_x = self.domain[0][1] - self.domain[0][0]
+        size_y = self.domain[1][1] - self.domain[1][0]
+        mesh = Grid(tree, size_x=size_x, size_y=size_y, vertices_y=self.l * 10 + 20, vertices_x=self.l * 10 + 20)
 
-        translation_x=(self.domain[0][1]+self.domain[0][0])/2
-        translation_y=(self.domain[1][1]+self.domain[1][0])/2
+        translation_x = (self.domain[0][1] + self.domain[0][0]) / 2
+        translation_y = (self.domain[1][1] + self.domain[1][0]) / 2
         # move mesh to the coordinates of its middle
-        transform = TransformGeometry(tree,translation_x=translation_x,translation_y=translation_y)
+        transform = TransformGeometry(tree, translation_x=translation_x, translation_y=translation_y)
         position = Position(tree)
-        sep = SeparateXYZ(tree,vector=position.std_out)
+        sep = SeparateXYZ(tree, vector=position.std_out)
         # create spherical harmonics terms
 
         y_lm = SphericalHarmonics(self.l, self.m, "theta", "phi")
@@ -2674,8 +2735,8 @@ class YlmSurfaceReference(GeometryNodesModifier):
         real_part = ExpressionConverter(y_lm.real()).postfix()
         imag_part = ExpressionConverter(y_lm.imag()).postfix()
 
-        if imag_part=='':
-            imag_part='0'
+        if imag_part == '':
+            imag_part = '0'
 
         compute_y_lm = make_function(tree, name="Y_lm", functions={
             "re": real_part,
@@ -2683,25 +2744,26 @@ class YlmSurfaceReference(GeometryNodesModifier):
         },
                                      inputs=["theta", "phi"],
                                      outputs=["re", "im"], scalars=["re", "im", "theta", "phi"], hide=True,
-        )
+                                     )
 
         tree.links.new(sep.y, compute_y_lm.inputs["theta"])
         tree.links.new(sep.x, compute_y_lm.inputs["phi"])
 
-        combine = CombineXYZ(tree,x=sep.x,y=sep.y,z=compute_y_lm.outputs["re"])
-        set_pos = SetPosition(tree,position=combine.std_out)
+        combine = CombineXYZ(tree, x=sep.x, y=sep.y, z=compute_y_lm.outputs["re"])
+        set_pos = SetPosition(tree, position=combine.std_out)
         if 'scale' in kwargs:
             scale = kwargs.pop('scale')
-            transform2 = TransformGeometry(tree,scale=scale)
+            transform2 = TransformGeometry(tree, scale=scale)
         else:
             transform2 = TransformGeometry(tree)
-        material = SetMaterial(tree,material=z_gradient)
+        material = SetMaterial(tree, material=z_gradient)
 
-        create_geometry_line(tree, [mesh,transform,set_pos,transform2,material], out=out.inputs[0])
+        create_geometry_line(tree, [mesh, transform, set_pos, transform2, material], out=out.inputs[0])
+
 
 class LogoModifier(GeometryNodesModifier):
     def __init__(self, name="LogoModifier",
-                  **kwargs):
+                 **kwargs):
         """
 
         GeometryNodes representation of the NumberCruncher logo. The data is stored in a point cloud (x,y,r)
@@ -2710,71 +2772,73 @@ class LogoModifier(GeometryNodesModifier):
         """
         super().__init__(name, group_input=False, automatic_layout=True, **kwargs)
 
-    def create_node(self, tree, sphere_colors =["important","joker","drawing"],**kwargs):
+    def create_node(self, tree, sphere_colors=["important", "joker", "drawing"], **kwargs):
         out = self.group_outputs
         links = tree.links
 
-        circles = ["RedCircles","GreenCircles","BlueCircles"]
-        center_names=["CenterRed","CenterGreen","CenterBlue"]
-        theta_names=["ThetaRed","ThetaGreen","ThetaBlue"]
-        phi_names=["PhiRed","PhiGreen","PhiBlue"]
+        circles = ["RedCircles", "GreenCircles", "BlueCircles"]
+        center_names = ["CenterRed", "CenterGreen", "CenterBlue"]
+        theta_names = ["ThetaRed", "ThetaGreen", "ThetaBlue"]
+        phi_names = ["PhiRed", "PhiGreen", "PhiBlue"]
         join_geometry = JoinGeometry(tree)
-        segments = [64,32,32]
-        rings = [32,16,16]
-        radii = [1,1,1]
-        for i,circle in enumerate(circles):
+        segments = [64, 32, 32]
+        rings = [32, 16, 16]
+        radii = [1, 1, 1]
+        for i, circle in enumerate(circles):
             object = ibpy.get_obj_from_name(circle)
             object_info = ObjectInfo(tree, object=object)
             pos = Position(tree)
-            get_pos_and_scale = make_function(tree,name="PositionAndScale",
-                        functions={"position":["pos_x","pos_y","0"],
-                                   "scale":["pos_z"]*3
-                        },inputs=["pos"],outputs=["position","scale"],
-                        scalars=[],vectors=["pos","position","scale"])
-            links.new(pos.std_out,get_pos_and_scale.inputs["pos"])
-            store_center=StoredNamedAttribute(tree,data_type='FLOAT_VECTOR',name=center_names[i],value=pos.std_out)
-            set_pos = SetPosition(tree,position=get_pos_and_scale.outputs["position"])
-            uv_sphere=UVSphere(tree,segments=segments[i],rings=rings[i],radius=radii[i])
-            transform_geometry = TransformGeometry(tree,geometry=uv_sphere.geometry_out,translation=[0,0,-1])
-            iop = InstanceOnPoints(tree,instance=transform_geometry.geometry_out,scale=get_pos_and_scale.outputs["scale"])
+            get_pos_and_scale = make_function(tree, name="PositionAndScale",
+                                              functions={"position": ["pos_x", "pos_y", "0"],
+                                                         "scale": ["pos_z"] * 3
+                                                         }, inputs=["pos"], outputs=["position", "scale"],
+                                              scalars=[], vectors=["pos", "position", "scale"])
+            links.new(pos.std_out, get_pos_and_scale.inputs["pos"])
+            store_center = StoredNamedAttribute(tree, data_type='FLOAT_VECTOR', name=center_names[i], value=pos.std_out)
+            set_pos = SetPosition(tree, position=get_pos_and_scale.outputs["position"])
+            uv_sphere = UVSphere(tree, segments=segments[i], rings=rings[i], radius=radii[i])
+            transform_geometry = TransformGeometry(tree, geometry=uv_sphere.geometry_out, translation=[0, 0, -1])
+            iop = InstanceOnPoints(tree, instance=transform_geometry.geometry_out,
+                                   scale=get_pos_and_scale.outputs["scale"])
             realize_instance = RealizeInstances(tree)
 
-            center_attr = NamedAttribute(tree,name=center_names[i],data_type="FLOAT_VECTOR")
-            get_loc_on_sphere = make_function(tree,name="LocalSphereCoords",
-                        functions={
-                            "r":"pos,center,sub",
-                            "length":"pos,center,sub,length"
-                        },inputs=["pos","center"],outputs=["r","length"],
-                        scalars=["length"],vectors=["pos","center","r"])
-            links.new(pos.std_out,get_loc_on_sphere.inputs["pos"])
-            links.new(center_attr.std_out,get_loc_on_sphere.inputs["center"])
+            center_attr = NamedAttribute(tree, name=center_names[i], data_type="FLOAT_VECTOR")
+            get_loc_on_sphere = make_function(tree, name="LocalSphereCoords",
+                                              functions={
+                                                  "r": "pos,center,sub",
+                                                  "length": "pos,center,sub,length"
+                                              }, inputs=["pos", "center"], outputs=["r", "length"],
+                                              scalars=["length"], vectors=["pos", "center", "r"])
+            links.new(pos.std_out, get_loc_on_sphere.inputs["pos"])
+            links.new(center_attr.std_out, get_loc_on_sphere.inputs["center"])
 
-            get_theta_phi = make_function(tree,name="UVComputation",
-                        functions={
-                        "theta":"r_z,l,/,acos",
-                        "phi":"r_x,r_y,atan2"
-                        },inputs=["r","l"],outputs=["theta","phi"],
-                        scalars=["l","theta","phi"],vectors=["r"])
-            links.new(get_loc_on_sphere.outputs["r"],get_theta_phi.inputs["r"])
-            links.new(get_loc_on_sphere.outputs["length"],get_theta_phi.inputs["l"])
+            get_theta_phi = make_function(tree, name="UVComputation",
+                                          functions={
+                                              "theta": "r_z,l,/,acos",
+                                              "phi": "r_x,r_y,atan2"
+                                          }, inputs=["r", "l"], outputs=["theta", "phi"],
+                                          scalars=["l", "theta", "phi"], vectors=["r"])
+            links.new(get_loc_on_sphere.outputs["r"], get_theta_phi.inputs["r"])
+            links.new(get_loc_on_sphere.outputs["length"], get_theta_phi.inputs["l"])
 
-            store_theta=StoredNamedAttribute(tree,name=theta_names[i],value=get_theta_phi.outputs["theta"])
-            store_phi=StoredNamedAttribute(tree,name=phi_names[i],value=get_theta_phi.outputs["phi"])
+            store_theta = StoredNamedAttribute(tree, name=theta_names[i], value=get_theta_phi.outputs["theta"])
+            store_phi = StoredNamedAttribute(tree, name=phi_names[i], value=get_theta_phi.outputs["phi"])
 
-            mat=get_material(sphere_colors[i],**kwargs)
+            mat = get_material(sphere_colors[i], **kwargs)
             self.materials.append(mat)
-            material_node = SetMaterial(tree,material=mat)
-            create_geometry_line(tree,green_nodes=[object_info,set_pos,store_center,
-                                                   iop,realize_instance,
-                                                   store_theta,store_phi,material_node,join_geometry])
+            material_node = SetMaterial(tree, material=mat)
+            create_geometry_line(tree, green_nodes=[object_info, set_pos, store_center,
+                                                    iop, realize_instance,
+                                                    store_theta, store_phi, material_node, join_geometry])
 
-        transform_geometry = TransformGeometry(tree,translation=[0,0,-5.5],rotation=[pi/2,0,0],scale=[5.5]*3)
+        transform_geometry = TransformGeometry(tree, translation=[0, 0, -5.5], rotation=[pi / 2, 0, 0], scale=[5.5] * 3)
         shade_smooth = SetShadeSmooth(tree)
-        create_geometry_line(tree,[join_geometry,transform_geometry,shade_smooth],out=out.inputs["Geometry"])
+        create_geometry_line(tree, [join_geometry, transform_geometry, shade_smooth], out=out.inputs["Geometry"])
+
 
 class VoronoiModifier(GeometryNodesModifier):
-    def __init__(self, name="VoronoiModifier",begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,
-                  **kwargs):
+    def __init__(self, name="VoronoiModifier", begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+                 **kwargs):
         """
 
         GeometryNodes to convert a PreVoronoi mesh into a voronoi mesh.
@@ -2791,83 +2855,87 @@ class VoronoiModifier(GeometryNodesModifier):
         links = tree.links
         # show points
 
-        sphere = IcoSphere(tree,radius=0.01)
-        iop = InstanceOnPoints(tree,instance = sphere.geometry_out)
+        sphere = IcoSphere(tree, radius=0.01)
+        iop = InstanceOnPoints(tree, instance=sphere.geometry_out)
         sphere_mat = get_material("plastic_joker")
         self.materials.append(sphere_mat)
-        set_mat = SetMaterial(tree,material=sphere_mat)
+        set_mat = SetMaterial(tree, material=sphere_mat)
         join_geometry = JoinGeometry(tree)
         create_geometry_line(tree, [iop, set_mat, join_geometry], ins=ins.outputs["Geometry"])
 
         # create voronoi mesh
         time = SceneTime(tree)
 
-        iterator = make_function(tree,name="IterationTimer",
-                    functions={
-                        "iterations":"t,t0,-,dt,/,25,*,t,t0,>,*"
-                    },inputs=["t","t0","dt"],outputs=["iterations"],
-                    scalars=["t","t0","dt","iterations"])
+        iterator = make_function(tree, name="IterationTimer",
+                                 functions={
+                                     "iterations": "t,t0,-,dt,/,25,*,t,t0,>,*"
+                                 }, inputs=["t", "t0", "dt"], outputs=["iterations"],
+                                 scalars=["t", "t0", "dt", "iterations"])
 
-        links.new(time.std_out,iterator.inputs["t"])
-        iterator.inputs["t0"].default_value=self.t0
-        iterator.inputs["dt"].default_value=self.dt
+        links.new(time.std_out, iterator.inputs["t"])
+        iterator.inputs["t0"].default_value = self.t0
+        iterator.inputs["dt"].default_value = self.dt
 
         index = Index(tree)
-        dual_mesh = DualMesh(tree,keep_boundaries = True)
-        store_index = StoredNamedAttribute(tree,data_type="INT",domain="FACE",name="Index",value=index.std_out)
+        dual_mesh = DualMesh(tree, keep_boundaries=True)
+        store_index = StoredNamedAttribute(tree, data_type="INT", domain="FACE", name="Index", value=index.std_out)
         split_edges = SplitEdges(tree)
         wireframe_material = get_material("gold")
-        wireframe=WireFrameRectangle(tree, node_width=0.02, node_height=0.02)
+        wireframe = WireFrameRectangle(tree, node_width=0.02, node_height=0.02)
         self.materials.append(wireframe_material)
-        set_material_wireframe=SetMaterial(tree,material=wireframe_material)
-        scale_elements=ScaleElements(tree,scale=0.99)
+        set_material_wireframe = SetMaterial(tree, material=wireframe_material)
+        scale_elements = ScaleElements(tree, scale=0.99)
 
         # start fractalizing
 
         # rotate tilings
         position = Position(tree)
-        index_attr = NamedAttribute(tree,data_type="INT",name="Index")
+        index_attr = NamedAttribute(tree, data_type="INT", name="Index")
         normal = InputNormal(tree)
-        angle = InputValue(tree,name="Angle",value=0.1)
+        angle = InputValue(tree, name="Angle", value=0.1)
 
-        direction = make_function(tree,name="RotationDirection",
-                    functions={
-                        "angle":"-1,idx,**,angle,*"
-                    },inputs=["angle","idx"],outputs=["angle"],
-                    scalars=["angle","idx"],vectors=[])
-        links.new(index_attr.std_out,direction.inputs["idx"])
-        links.new(angle.std_out,direction.inputs["angle"])
+        direction = make_function(tree, name="RotationDirection",
+                                  functions={
+                                      "angle": "-1,idx,**,angle,*"
+                                  }, inputs=["angle", "idx"], outputs=["angle"],
+                                  scalars=["angle", "idx"], vectors=[])
+        links.new(index_attr.std_out, direction.inputs["idx"])
+        links.new(angle.std_out, direction.inputs["angle"])
 
-        eval_domain = EvaluateOnDomain(tree,data_type="FLOAT_VECTOR",domain="FACE",value=position.std_out)
+        eval_domain = EvaluateOnDomain(tree, data_type="FLOAT_VECTOR", domain="FACE", value=position.std_out)
         rotate_vector = VectorRotate(tree, rotation_type="AXIS_ANGLE", center=eval_domain.std_out, axis=normal.std_out,
-                                     vector=position.std_out,angle = direction.outputs["angle"])
+                                     vector=position.std_out, angle=direction.outputs["angle"])
 
-        repeat= RepeatZone(tree,iteration=5,geometry=scale_elements.geometry_out)
+        repeat = RepeatZone(tree, iteration=5, geometry=scale_elements.geometry_out)
         repeat_join = JoinGeometry(tree)
-        repeat_scale = ScaleElements(tree,scale=0.9)
-        repeat_set_pos = SetPosition(tree,offset=[0,-0.025,0],position=rotate_vector.std_out)
-        repeat.create_geometry_line([repeat_scale,repeat_set_pos,repeat_join])
-        links.new(scale_elements.geometry_out,repeat_join.geometry_in)
-        links.new(iterator.outputs["iterations"],repeat.inputs["Iterations"])
+        repeat_scale = ScaleElements(tree, scale=0.9)
+        repeat_set_pos = SetPosition(tree, offset=[0, -0.025, 0], position=rotate_vector.std_out)
+        repeat.create_geometry_line([repeat_scale, repeat_set_pos, repeat_join])
+        links.new(scale_elements.geometry_out, repeat_join.geometry_in)
+        links.new(iterator.outputs["iterations"], repeat.inputs["Iterations"])
 
         # after processing
-        extrude_mesh = ExtrudeMesh(tree,mode="FACES",offset_scale=1,offset=[0,-0.025,0])
-        tile_material = get_material("text",emission=0.5)
+        extrude_mesh = ExtrudeMesh(tree, mode="FACES", offset_scale=1, offset=[0, -0.025, 0])
+        tile_material = get_material("text", emission=0.5)
         self.materials.append(tile_material)
-        set_material_tiles=SetMaterial(tree,material=tile_material)
+        set_material_tiles = SetMaterial(tree, material=tile_material)
 
         local_join = JoinGeometry(tree)
         # create_geometry_line(tree,[split_edges,local_join]) # cover extrude of face on the other side
-        create_geometry_line(tree,[dual_mesh,split_edges,store_index,scale_elements,repeat],ins=ins.outputs["Geometry"])
-        create_geometry_line(tree,[repeat, extrude_mesh,set_material_tiles,local_join,join_geometry],out=out.inputs["Geometry"])
-        create_geometry_line(tree,[repeat,wireframe,set_material_wireframe,local_join])
+        create_geometry_line(tree, [dual_mesh, split_edges, store_index, scale_elements, repeat],
+                             ins=ins.outputs["Geometry"])
+        create_geometry_line(tree, [repeat, extrude_mesh, set_material_tiles, local_join, join_geometry],
+                             out=out.inputs["Geometry"])
+        create_geometry_line(tree, [repeat, wireframe, set_material_wireframe, local_join])
+
 
 class UnfoldModifier(GeometryNodesModifier):
-    def __init__(self, name="UnfoldModifier",**kwargs):
-        super().__init__(name, automatic_layout=False,group_output=False,group_input=False, **kwargs)
+    def __init__(self, name="UnfoldModifier", **kwargs):
+        super().__init__(name, automatic_layout=False, group_output=False, group_input=False, **kwargs)
 
-    def create_node(self,tree,**kwargs):
-        create_from_xml(tree,"unfolding_node",**kwargs)
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "unfolding_node", **kwargs)
+
 
 # Rubik's cube videos
 
@@ -3437,6 +3505,7 @@ class RubiksCubeModifier(GeometryNodesModifier):
         create_geometry_line(tree, [material_edge_font2, join])
         create_geometry_line(tree, [material_corner_font2, join])
 
+
 class RubiksCubeUnfolded(GeometryNodesModifier):
     def __init__(self, name="RubiksCubeUnfolded", **kwargs):
         # define a mapping between geometry indices and face indices at are used in permutations
@@ -3806,6 +3875,7 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
         # connect to output
         create_geometry_line(tree, [join, global_transform], out=out.inputs["Geometry"])
 
+
 class RubiksCubeTower(GeometryNodesModifier):
     def __init__(self, name="RubiksCubeTower", **kwargs):
         super().__init__(name, automatic_layout=True, group_output=True, group_input=False, **kwargs)
@@ -3846,6 +3916,7 @@ class RubiksCubeTower(GeometryNodesModifier):
         foreachzone.create_geometry_line([set_pos, iop, join])
         join2 = JoinGeometry(tree)
         create_geometry_line(tree, [points, del_geo, foreachzone, join2], out=out.inputs["Geometry"])
+
 
 class RubiksSphereModifier(GeometryNodesModifier):
     def __init__(self, name="RubiksSphereModifier", **kwargs):
@@ -4205,6 +4276,7 @@ class RubiksSphereModifier(GeometryNodesModifier):
                                           hide=True)
             create_geometry_line(tree, [join, sep_geo, transform, join2], out=out.inputs[0])
 
+
 class RubiksCubeGroupStabChain(GeometryNodesModifier):
     def __init__(self, name="RubiksCubeGroupStabChainModifier", **kwargs):
         super().__init__(name, automatic_layout=True, group_input=True, **kwargs)
@@ -4397,6 +4469,7 @@ class RubiksCubeGroupStabChain(GeometryNodesModifier):
                              [store_attr_first, in_geometry, store_attr_pos, store_attr_idx, select_geo, foreach_number,
                               rot_instance, translate], ins=ins.outputs["Geometry"], out=out.inputs[0])
 
+
 class TransformationModifier(GeometryNodesModifier):
     def __init__(self, name="TransformationModifier", label=None, **kwargs):
         """
@@ -4538,6 +4611,7 @@ class TransformationModifier(GeometryNodesModifier):
 
         create_geometry_line(tree, [join2, rotation_transform, rotation_join], out=out.inputs[0])
 
+
 class TransformationSphereModifier(GeometryNodesModifier):
     def __init__(self, name="TransformationSphereModifier", label=None, **kwargs):
         """
@@ -4600,6 +4674,7 @@ class TransformationSphereModifier(GeometryNodesModifier):
 
         create_geometry_line(tree, [cube_node, store_face_index, set_face_material,
                                     sub_div, set_pos2, set_pos, rotation_transform, smooth], out=out.inputs[0])
+
 
 class WordTreeModifier(GeometryNodesModifier):
     def __init__(self, name="TreeModifier", words=[], instances=[], **kwargs):
@@ -4729,6 +4804,7 @@ class WordTreeModifier(GeometryNodesModifier):
         create_geometry_line(tree, [for_each_point, del_instance_geo, join, global_transform], out=out.inputs[0],
                              ins=input.outputs[0])
 
+
 class PermutationModifier(GeometryNodesModifier):
     def __init__(self, name="PermutationModifier", n=8, number_of_cycles=5, **kwargs):
         """
@@ -4837,6 +4913,7 @@ class PermutationModifier(GeometryNodesModifier):
                                     join, centering],
                              out=out.inputs[0])
 
+
 class QuadModifier(GeometryNodesModifier):
     def __init__(self, name="QuadrialateralModifier", mode="RECTANGLE", **kwargs):
         """
@@ -4890,6 +4967,7 @@ class QuadModifier(GeometryNodesModifier):
         create_geometry_line(tree, [quad_node, resample, trim, select_geo, wireframe, join, quad_material_node,
                                     global_transform], out=out.inputs[0])
 
+
 class SingmasterDisplayModifier(GeometryNodesModifier):
     def __init__(self, **kwargs):
         super().__init__(get_from_kwargs(kwargs, 'name', "SingmasterDisplayModifier"),
@@ -4898,36 +4976,8 @@ class SingmasterDisplayModifier(GeometryNodesModifier):
     def create_node(self, tree, **kwargs):
         create_from_xml(tree, "singmaster_display_node", **kwargs)
 
-# Billiard video
 
-class BilliardsTableModifier(GeometryNodesModifier):
-    def __init__(self, **kwargs):
-        super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsTableModifier"),
-                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
-
-    def create_node(self, tree, **kwargs):
-        create_from_xml(tree, "GeoBilliardsTable_node", **kwargs)
-
-class BilliardsBallModifier(GeometryNodesModifier):
-    def __init__(self, **kwargs):
-        self.subdivisions = get_from_kwargs(kwargs, "subdivisions", 5)
-        super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsBallModifier"),
-                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
-
-    def create_node(self, tree, **kwargs):
-        create_from_xml(tree, "GeoBilliardsBall_node", **kwargs)
-        subdivisions_node = ibpy.get_geometry_node_from_modifier(self, label="SubdivisionsValue")
-        ibpy.change_default_integer(subdivisions_node, from_value=5, to_value=self.subdivisions,
-                                    begin_time=0, transition_time=0)
-
-class BilliardBallRealModifier(GeometryNodesModifier):
-    def __init__(self, **kwargs):
-        self.subdivisions = get_from_kwargs(kwargs, "subdivisions", 5)
-        super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsBallModifier"),
-                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
-
-    def create_node(self, tree, **kwargs):
-        create_from_xml(tree, "GeoBilliardsBallReal_node", **kwargs)
+# Billiard and Benford video
 
 class IlluminationModifier(GeometryNodesModifier):
     def __init__(self, light_instance, **kwargs):
@@ -4953,6 +5003,7 @@ class IlluminationModifier(GeometryNodesModifier):
         join = JoinGeometry(tree)
         tree.links.new(for_each.foreach_output.outputs[0], join.geometry_in)
         create_geometry_line(tree, [for_each, join], ins=ins.outputs[0], out=out.inputs[0])
+
 
 class ScoreTableModifier(GeometryNodesModifier):
     def __init__(self, **kwargs):
@@ -4986,6 +5037,57 @@ class ScoreTableModifier(GeometryNodesModifier):
         for w in range(0, width):
             for h in range(0, height):
                 ibpy.add_item_to_switch(index_selector_node, w * height + h, False, tree)
+
+
+class BilliardsTableModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsTableModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "GeoBilliardsTable_node", **kwargs)
+
+
+class BilliardsTableRoundModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsTableRoundModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "GeoBilliardsTableRound_node", **kwargs)
+
+
+class BilliardsBallModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        self.subdivisions = get_from_kwargs(kwargs, "subdivisions", 5)
+        super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsBallModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "GeoBilliardsBall_node", **kwargs)
+        subdivisions_node = ibpy.get_geometry_node_from_modifier(self, label="SubdivisionsValue")
+        ibpy.change_default_integer(subdivisions_node, from_value=5, to_value=self.subdivisions,
+                                    begin_time=0, transition_time=0)
+
+
+class BilliardBallRealModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        self.subdivisions = get_from_kwargs(kwargs, "subdivisions", 5)
+        super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsBallModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "GeoBilliardsBallReal_node", **kwargs)
+
+
+class BilliardBallRoundModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsBallRoundModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "GeoBilliardsBallRound_node", **kwargs)
+
 
 class ReflectableBilliardPaperModifier(GeometryNodesModifier):
     def __init__(self, width=10, height=10, **kwargs):
@@ -5103,98 +5205,884 @@ class ReflectableBilliardPaperModifier(GeometryNodesModifier):
             create_geometry_line(tree, [last, rotate_instance, join2])
             last = rotate_instance
 
+
+class BenfordDiagramModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(get_from_kwargs(kwargs, "name", "BenfordDiagramModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "Benford_node", **kwargs)
+
+
+class BenfordFibonacciDiagramModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(get_from_kwargs(kwargs, "name", "BenfordFibonacciDiagramModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "Benford_Fibonacci_node", **kwargs)
+
+
+class BenfordFilesDiagramModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(get_from_kwargs(kwargs, "name", "BenfordFilesDiagramModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "Benford_Files_node", **kwargs)
+
+
+class PowerOfTwoModifier(GeometryNodesModifier):
+    def __init__(self, name="PowerOfTwoModifier", level=10, **kwargs):
+        """
+        A geometry node setup that visualizes the sequence of powers of two
+        ie. 1, 2, 4, 8, 16, ...
+
+        """
+        self.level = level
+        super().__init__(name, automatic_layout=False, group_input=False, **kwargs)
+
+    def create_node(self, tree, uv_geometry=None, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        #point geometry
+        current = -3 * self.level
+        points = Points(tree, location=(current, 0), count=2 ** self.level, hide=True)
+        current += 1
+        index = Index(tree, location=(current, -1), hide=True)
+        index_store = StoredNamedAttribute(tree, location=(current, 0), data_type="INT",
+                                           name="IndexStore", value=index.std_out, hide=True)
+        index = NamedAttribute(tree, location=(current, -2), data_type="INT", name="IndexStore", label="StoredIndex",
+                               hide=True)
+        current += 1
+        store_material = StoredNamedAttribute(tree, location=(current, 0), data_type="INT", name="Material",
+                                              value=0, hide=True)
+        current += 1
+        store_scale = StoredNamedAttribute(tree, location=(current, 0), data_type="FLOAT", name="Scale",
+                                           value=1 + 1 / 100, hide=True)
+        create_geometry_line(tree, [points, index_store, store_material, store_scale])
+
+        self.materials.append(get_texture("plastic_joker"))
+        self.materials.append(get_texture("plastic_custom1"))
+        self.materials.append(get_texture("plastic_important"))
+        self.materials.append(get_texture("plastic_text"))
+        self.materials.append(get_texture("plastic_custom3"))
+
+        # create transformations
+        last_join = store_scale
+        for l in range(self.level):
+            current += 1
+
+            selector = make_function(tree, location=(current, -1), functions={
+                "selector": "idx," + str(2 ** (l + 1)) + ",%," + str(2 ** l) + ",<"
+            }, inputs=["idx"], outputs=["selector"], scalars=["idx", "selector"],
+                                     hide=True)
+            links.new(index.std_out, selector.inputs["idx"])
+            sep_geo = SeparateGeometry(tree, location=(current, 0),
+                                       selection=selector.outputs["selector"], hide=True)
+            links.new(last_join.geometry_out, sep_geo.geometry_in)
+            current += 1
+            if l % 2 == 0:
+                offset_vector = Vector([2 ** (l // 2), 0, 0])
+            else:
+                offset_vector = Vector([0, -2 ** (l // 2), 0])
+
+            value = InputValue(tree, location=(current - 1, -2), label="Slider" + str(l),
+                               name="Slider" + str(l), value=0, hide=True)
+            offset = InputVector(tree, location=(current - 1, -3), value=offset_vector, hide=True)
+
+            offset_function = make_function(tree, location=(current, -2),
+                                            functions={
+                                                "offset": "vec,s,scale"
+                                            }, inputs=["vec", "s"], outputs=["offset"], vectors=["offset", "vec"],
+                                            scalars=["s"], hide=True)
+            links.new(offset.std_out, offset_function.inputs["vec"])
+            links.new(value.std_out, offset_function.inputs["s"])
+            set_pos = SetPosition(tree, location=(current, -1),
+                                  offset=offset_function.outputs["offset"], hide=True)
+            current += 1
+            store_material = StoredNamedAttribute(tree, location=(current, 0), data_type="INT", name="Material",
+                                                  value=(l + 1) % len(self.materials), hide=True)
+            current += 1
+            store_scale = StoredNamedAttribute(tree, location=(current, 0), data_type="FLOAT", name="Scale",
+                                               value=1 - l / 100, hide=True)
+            current += 1
+            join = JoinGeometry(tree, location=(current, 0))
+            create_geometry_line(tree, [sep_geo, join])
+            links.new(sep_geo.outputs["Inverted"], set_pos.inputs["Geometry"])
+            create_geometry_line(tree, [set_pos, store_material, store_scale, join])
+            last_join = join
+
+        mat_attr = NamedAttribute(tree, location=(current, -1), data_type="INT", name="Material", hide=True)
+        current += 1
+        for_each = ForEachZone(tree, location=(current, 1), hide=False)
+        for_each.add_socket(socket_type="INT", value=mat_attr.std_out, for_input=True)
+
+        mat_nodes = []
+        for n, mat in enumerate(self.materials):
+            mat_nod = InputMaterial(tree, location=(current, -0.25 * n - 2), material=self.materials[n], hide=True)
+            mat_nodes.append(mat_nod)
+
+        current += 1
+
+        ico_sphere = IcoSphere(tree, location=(current, -1), radius=0.3, subdivisions=1, hide=True)
+        scale_attr = NamedAttribute(tree, location=(current, -2), data_type="FLOAT", name="Scale", value=1, hide=True)
+        iop = InstanceOnPoints(tree, location=(current, 0), instance=ico_sphere.geometry_out, scale=scale_attr.std_out,
+                               hide=True)
+        index_switch = IndexSwitch(tree, location=(current, -2), index=for_each.foreach_input.outputs[2],
+                                   data_type="MATERIAL", hide=False)
+        for node in mat_nodes:
+            index_switch.add_item(node.std_out)
+        current += 1
+        material = SetMaterial(tree, location=(current, 0), material=index_switch.std_out, hide=True)
+        for_each.create_geometry_line([iop, material])
+
+        # out
+        current += 5
+        out.location = (current * 200, 0)
+        create_geometry_line(tree, [last_join, for_each], out=out.inputs[0])
+
+class FibonacciModifierDiagonal(GeometryNodesModifier):
+    def __init__(self, name="FibonacciModifier", level=10, **kwargs):
+        """
+        A geometry node setup that visualizes the sequence of Fibonacci numbers
+        ie. 1,1,2,3,5,8,13,21,34,55,...
+
+        """
+        self.level = level
+        super().__init__(name, automatic_layout=False, group_input=False, **kwargs)
+
+    def create_node(self, tree, uv_geometry=None, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        # prepare materials
+        self.materials.append(get_texture("plastic_joker"))
+        self.materials.append(get_texture("plastic_custom1"))
+        self.materials.append(get_texture("plastic_example"))
+        self.materials.append(get_texture("plastic_text"))
+        self.materials.append(get_texture("plastic_custom3"))
+
+        # generate fibonacci dictionary
+        fib = {0: 0, 1: 1, 2: 1}
+        for i in range(3, self.level + 1):
+            fib[i] = fib[i - 1] + fib[i - 2]
+
+        # outer join
+        join = JoinGeometry(tree, location=(0, 0), hide=True)
+
+        for n in range(1, self.level + 1):
+            current = -7
+            grid = Grid(tree, location=(current, -3 * (n - 1)), size_x=fib[n], size_y=fib[n], vertices_x=2,
+                        vertices_y=2, hide=True)
+            if n % 2 == 0:
+                center = Vector([fib[n - 1] + fib[n] / 2, -fib[n] / 2, 0])
+            else:
+                center = Vector([+fib[n] / 2, -fib[n - 1] - fib[n] / 2, 0])
+            center_node = InputVector(tree, location=(current, -3 * (n - 1) - 1), label="Center" + str(n), value=center,
+                                      hide=True)
+            current += 1
+            trans_geo = TransformGeometry(tree, location=(current, -3 * (n - 1)), translation=center_node.std_out,
+                                          hide=True)
+            current += 1
+            geo_to_instance = GeometryToInstance(tree, location=(current, -3 * (n - 1)), hide=True)
+            slider = InputValue(tree, location=(current, -3 * (n - 1) - 2), label="Slider" + str(n),
+                                name="Slider" + str(n), value=0, hide=False)
+            combine_xyz = CombineXYZ(tree, location=(current, -3 * (n - 1) - 1), x=1, y=1, z=1, hide=True)
+            if n % 2 == 1:
+                links.new(slider.std_out, combine_xyz.inputs["Y"])
+            else:
+                links.new(slider.std_out, combine_xyz.inputs["X"])
+            current += 1
+            if n % 2 == 0:
+                pivot = Vector([fib[n - 1], 0, 0])
+            else:
+                pivot = Vector([0, -fib[n - 1], 0])
+            pivot_node = InputVector(tree, location=(current, -3 * (n - 1) - 1), label="Pivot" + str(n), value=pivot,
+                                     hide=True)
+            scale_instance = ScaleInstances(tree, location=(current, -3 * (n - 1)), scale=combine_xyz.std_out,
+                                            center=pivot_node.std_out, hide=True)
+            current += 1
+            center_store = StoredNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="FLOAT_VECTOR",
+                                                name="Center",
+                                                domain="INSTANCE", value=center_node.std_out, hide=True)
+            current += 1
+            index_store = StoredNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="INT",
+                                               domain="INSTANCE", name="Index", value=n, hide=True)
+            current += 1
+            material = SetMaterial(tree, location=(current, -3 * (n - 1)),
+                                   material=self.materials[(n - 1) % len(self.materials)], hide=True)
+            create_geometry_line(tree,
+                                 [grid, trans_geo, geo_to_instance, scale_instance, center_store, index_store, material,
+                                  join])
+        # scaling of the squares
+
+        current += 1
+        fib_function = make_function(tree, location=(current, -1), name="Fibonacci",
+                                     functions={
+                                         "fib": ["1.618,idx,**,-0.618,idx,**,-,5,0.5,**,/"]
+                                     },
+                                     inputs=["idx"], outputs=["fib"], scalars=["idx", "fib"], hide=True)
+        index = NamedAttribute(tree, location=(current, -2), data_type="INT", name="Index", hide=True)
+        links.new(index.std_out, fib_function.inputs["idx"])
+
+        current += 1
+        rim_function = make_function(tree, location=(current, -1), name="ScaleFunction",
+                                     functions={"scale": "fib,rim,-,fib,/"},
+                                     inputs=["fib", "rim"], outputs=["scale"], scalars=["fib", "rim", "scale"],
+                                     hide=True)
+        rim = InputValue(tree, location=(current, -2), label="Rim", name="Rim", value=0.1, hide=True)
+        links.new(rim.std_out, rim_function.inputs["rim"])
+        links.new(fib_function.outputs["fib"], rim_function.inputs["fib"])
+
+        current += 1
+        center = NamedAttribute(tree, location=(current, -1), data_type="FLOAT_VECTOR", name="Center", hide=True)
+        scale_instance = ScaleInstances(tree, location=(current, 0), scale=rim_function.outputs["scale"],
+                                        center=center.std_out, hide=True)
+
+        # out
+        current += 5
+        out.location = ((current + 1) * 200, 0)
+        create_geometry_line(tree, [join, scale_instance], out=out.inputs[0])
+
+class FibonacciModifier(GeometryNodesModifier):
+    def __init__(self, name="FibonacciModifier", level=10, **kwargs):
+        """
+        A geometry node setup that visualizes the sequence of Fibonacci numbers
+        ie. 1,1,2,3,5,8,13,21,34,55,...
+        including the Fibonacci spiral
+
+        """
+        self.level = level
+        super().__init__(name, automatic_layout=False, group_input=False, **kwargs)
+
+    def create_node(self, tree, uv_geometry=None, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        # prepare materials
+        self.materials.append(get_texture("joker"))
+        self.materials.append(get_texture("custom1"))
+        self.materials.append(get_texture("important"))
+        self.materials.append(get_texture("custom3"))
+
+        # generate fibonacci dictionary
+        fib = {0: 0, 1: 1, 2: 1}
+        for i in range(3, self.level + 1):
+            fib[i] = fib[i - 1] + fib[i - 2]
+        # outer join
+        join = JoinGeometry(tree, location=(0, 0), hide=True)
+
+        self.centers = []
+        sliders = []
+        for n in range(1, self.level + 1):
+            if n % 4 == 0:
+                k = n // 4
+                x = -fib[n] / 2 + sum([fib[4 * l + 1] for l in range(0, k)])
+                y = -fib[n] / 2 - sum([fib[4 * l] for l in range(0, k)])
+                center = Vector([x, y, 0])
+                pivot = Vector([0, y + fib[n] / 2, 0])
+                scale_normal = Vector([0, 1, 0])
+                scale_parallel = Vector([1, 0, 1])
+            elif n % 4 == 1:
+                k = (n - 1) // 4
+                x = fib[n] / 2 + sum([fib[4 * l + 1] for l in range(0, k)])
+                y = fib[n] / 2 - sum([fib[4 * (l + 1)] for l in range(0, k)])
+                center = Vector([x, y, 0])
+                pivot = Vector([x - fib[n] / 2, 0, 0])
+                scale_normal = Vector([1, 0, 0])
+                scale_parallel = Vector([0, 1, 1])
+            elif n % 4 == 2:
+                k = (n - 2) // 4
+                x = fib[n] / 2 - sum([fib[4 * l + 3] for l in range(0, k)])
+                y = fib[n] / 2 + sum([fib[4 * l + 2] for l in range(0, k)]) + 1
+                center = Vector([x, y, 0])
+                pivot = Vector([0, y - fib[n] / 2, 0])
+                scale_normal = Vector([0, 1, 0])
+                scale_parallel = Vector([1, 0, 1])
+            else:
+                k = (n - 3) // 4
+                x = -fib[n] / 2 - sum([fib[4 * l + 3] for l in range(0, k)])
+                y = fib[n] / 2 - sum([fib[4 * (l + 1)] for l in range(0, k)])
+                center = Vector([x, y, 0])
+                pivot = Vector([x + fib[n] / 2, 0, 0])
+                scale_normal = Vector([1, 0, 0])
+                scale_parallel = Vector([0, 1, 1])
+
+            self.centers.append(center)
+            current = -7
+            grid = Grid(tree, location=(current, -3 * (n - 1)), size_x=fib[n], size_y=fib[n], vertices_x=2,
+                        vertices_y=2, hide=True)
+            center_node = InputVector(tree, location=(current, -3 * (n - 1) - 1), label="Center" + str(n), value=center,
+                                      hide=True)
+            current += 1
+            trans_geo = TransformGeometry(tree, location=(current, -3 * (n - 1)), translation=center_node.std_out,
+                                          hide=True)
+            current += 1
+            geo_to_instance = GeometryToInstance(tree, location=(current, -3 * (n - 1)), hide=True)
+            slider = InputValue(tree, location=(current, -3 * (n - 1) - 1), label="Slider" + str(n),
+                                name="Slider" + str(n), value=0, hide=False)
+            sliders.append(slider)
+            normal = InputVector(tree, location=(current, -3 * (n - 1) - 2), label="ScaleNormal" + str(n),
+                                 value=scale_normal, hide=True)
+            parallel = InputVector(tree, location=(current, -3 * (n - 1) - 2.5), label="ScaleParallel" + str(n),
+                                   value=scale_parallel, hide=True)
+            current += 1
+            scale_function = make_function(tree, name="ScaleFunction", location=(current, -3 * (n - 1) - 1),
+                                           functions={
+                                               "scale": "normal,slider,scale,parallel,add"
+                                           }, inputs=["normal", "slider", "parallel"], outputs=["scale"],
+                                           scalars=["slider"], vectors=["scale", "normal", "parallel"], hide=True)
+            links.new(slider.std_out, scale_function.inputs["slider"])
+            links.new(normal.std_out, scale_function.inputs["normal"])
+            links.new(parallel.std_out, scale_function.inputs["parallel"])
+            scale_instance = ScaleInstances(tree, location=(current, -3 * (n - 1)),
+                                            scale=scale_function.outputs["scale"], center=pivot, hide=True)
+            current += 1
+            center_store = StoredNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="FLOAT_VECTOR",
+                                                name="Center",
+                                                domain="INSTANCE", value=center_node.std_out, hide=True)
+            current += 1
+            index_store = StoredNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="INT",
+                                               domain="INSTANCE", name="Index", value=n, hide=True)
+            current += 1
+            material = SetMaterial(tree, location=(current, -3 * (n - 1)),
+                                   material=self.materials[(n - 1) % len(self.materials)], hide=True)
+            create_geometry_line(tree,
+                                 [grid, trans_geo, geo_to_instance, scale_instance, center_store, index_store, material,
+                                  join])
+
+        # scaling of the squares
+        current += 1
+        fib_function = make_function(tree, location=(current, -1), name="Fibonacci",
+                                     functions={
+                                         "fib": ["1.618,idx,**,-0.618,idx,**,-,5,0.5,**,/"]
+                                     },
+                                     inputs=["idx"], outputs=["fib"], scalars=["idx", "fib"], hide=True)
+        index = NamedAttribute(tree, location=(current, -2), data_type="INT", name="Index", hide=True)
+        links.new(index.std_out, fib_function.inputs["idx"])
+
+        current += 1
+        rim_function = make_function(tree, location=(current, -1), name="ScaleFunction",
+                                     functions={"scale": "fib,rim,-,fib,/"},
+                                     inputs=["fib", "rim"], outputs=["scale"], scalars=["fib", "rim", "scale"],
+                                     hide=True)
+        rim = InputValue(tree, location=(current, -2), label="Rim", name="Rim", value=0.25, hide=True)
+        links.new(rim.std_out, rim_function.inputs["rim"])
+        links.new(fib_function.outputs["fib"], rim_function.inputs["fib"])
+
+        current += 1
+        center = NamedAttribute(tree, location=(current, -1), data_type="FLOAT_VECTOR", name="Center", hide=True)
+        scale_instance = ScaleInstances(tree, location=(current, 2), scale=rim_function.outputs["scale"],
+                                        center=center.std_out, hide=True)
+
+        # make numbers
+
+        current_start = current
+        join_final_numbers = JoinGeometry(tree, location=(current + 8, 2), label="NumbersJoin", hide=True)
+
+        for n in range(1, self.level + 1):
+            current = current_start + 1
+            val_to_string = ValueToString(tree, location=(current, -3 * (n - 1) - 1), data_type="INT", value=fib[n],
+                                          hide=True)
+            string_to_curve = StringToCurves(tree, location=(current, -3 * (n - 1)), align_x="RIGHT", size=0.75,
+                                             string=val_to_string.std_out, hide=True)
+            current += 1
+            real_instance = RealizeInstances(tree, location=(current, -3 * (n - 1) - 1), hide=True)
+            current += 1
+            bbox = BoundingBox(tree, location=(current, -3 * (n - 1) - 0.75), hide=True)
+            pos = Position(tree, location=(current, -3 * (n - 1) - 0.75), hide=True)
+            current += 1
+            font_center = InputVector(tree, location=(current, -3 * (n - 1) - 0.5), label="FontCenter" + str(n),
+                                      value=self.centers[n - 1], hide=True)
+            scale = InputValue(tree, location=(current, -3 * (n - 1) - 1), label="FontScale" + str(n),
+                               value=fib[n] * 0.9 ** (len(str(fib[n])) - 1), hide=True)
+            right_aligned = InputValue(tree, location=(current, -3 * (n - 1) - 1.5), label="RightAligned" + str(n),
+                                       name="RightAligned" + str(n), value=1, hide=True)
+            attr_stat = AttributeStatistic(tree, location=(current, -3 * (n - 1) - 2), domain="POINT",
+                                           data_type="FLOAT_VECTOR",
+                                           attribute=pos.std_out, hide=True, std_out="Mean")
+            real_center = make_function(tree, name="FontCenter", location=(current + 1, -3 * (n - 1) - 1),
+                                        functions={
+                                            "center": "center,mean,ra,s,*,scale,sub"
+                                        }, inputs=["center", "mean", "s", "ra"], outputs=["center"],
+                                        scalars=["s", "ra"], vectors=["center", "mean"], hide=True)
+            links.new(font_center.std_out, real_center.inputs["center"])
+            links.new(attr_stat.std_out, real_center.inputs["mean"])
+            links.new(scale.std_out, real_center.inputs["s"])
+            links.new(right_aligned.std_out, real_center.inputs["ra"])
+            current=current_start+2
+            transform = TransformGeometry(tree, location=(current, -3 * (n - 1)),
+                                          translation=real_center.outputs["center"], hide=True)
+            current+=1
+            circle = CurveCircle(tree,location=(current,-3*(n-1)+0.5),hide=True,radius=0.02)
+            fill = FillCurve(tree, location=(current, -3 * (n - 1)), hide=True)
+            current+=1
+            curve_to_mesh=CurveToMesh(tree,location=(current,-3*(n-1)+0.5),profile_curve=circle.geometry_out,hide=True)
+            extrude = ExtrudeMesh(tree, location=(current, -3 * (n - 1)), mode="FACES", offset_scale=0.02, hide=True)
+            current += 1
+            set_material_outline=SetMaterial(tree,location=(current,-3*(n-1)+0.5),material=get_texture("background"),hide=True)
+            mat = SetMaterial(tree, location=(current, -3 * (n - 1)), material=get_texture("text"), hide=True)
+            current+=1
+            font_join = JoinGeometry(tree,location=(current,-3*(n-1)),hide=True)
+            current += 1
+            geo_to_instance = GeometryToInstance(tree, location=(current, -3 * (n - 1)), hide=True)
+            current += 1
+            # the scale is reduced by a factor of 0.9 for each additional digit
+            mul = MathNode(tree, location=(current, -3 * (n - 1) - 2), operation="MULTIPLY",
+                           inputs0=scale.std_out, inputs1=sliders[n - 1].std_out, hide=True)
+            sc_inst = ScaleInstances(tree, location=(current, -3 * (n - 1)), center=real_center.outputs["center"],
+                                     scale=mul.std_out, hide=True)
+            create_geometry_line(tree, [string_to_curve, real_instance, bbox, attr_stat])
+            create_geometry_line(tree, [string_to_curve,transform, fill, extrude,  mat, font_join,geo_to_instance, sc_inst,
+                                        join_final_numbers])
+            # outline branch
+            create_geometry_line(tree,[transform,curve_to_mesh,set_material_outline,font_join])
+        join_final_spiral = JoinGeometry(tree, location=(current, 3), label="SpiralJoin", hide=True)
+
+        # spiral
+        current_save = current
+        current = current - 8
+        line = CurveLine(tree, location=(current, 3), hide=True)
+        resolution = InputInteger(tree, location=(current, 2), integer=10000, hide=True)
+        current += 1
+        resample = ResampleCurve(tree, location=(current, 3), count=resolution.std_out, hide=True)
+        index = Index(tree, location=(current, 2), hide=True)
+        current += 1
+        t = make_function(tree, name="tValue", location=(current, 3),
+                          functions={
+                              "t": "idx,res,/,6.5,*,pi,*"
+                          }, inputs=["idx", "res"], outputs=["t"],
+                          scalars=["idx", "res", "t"], hide=True)
+        links.new(resolution.std_out, t.inputs["res"])
+        links.new(index.std_out, t.inputs["idx"])
+        trunc = make_function(tree, name="tTon", location=(current, 4),
+                              functions={
+                                  "n": "t,2,*,pi,/,floor,1,+",
+                                  "n2": "t,2,*,pi,/,floor,1,+,2,/,floor",
+                                  "nm12": "t,2,*,pi,/,floor,1,+,1,-,2,/,floor",
+                                  "n21": "t,2,*,pi,/,floor,1,+,2,/,floor,1,-",
+                                  "nm32": "t,2,*,pi,/,floor,1,+,3,-,2,/,floor",
+                                  "np12": "t,2,*,pi,/,floor,1,+,1,+,2,/,floor",
+                              }, inputs=["t"], outputs=["n", "n2", "nm12", "n21", "nm32", "np12"],
+                              scalars=["t", "n", "n2", "nm12", "n21", "nm32", "np12"], hide=True)
+        links.new(t.outputs["t"], trunc.inputs["t"])
+        current += 1
+        fib = make_function(tree, name="Fibonacci", location=(current, 3),
+                            functions={
+                                "fib": "1,5,sqrt,+,2,/,n,**,1,5,sqrt,-,2,/,n,**,-,5,sqrt,/"
+                            }, inputs=["n"], outputs=["fib"], scalars=["n", "fib"], hide=True)
+        links.new(trunc.outputs["n"], fib.inputs["n"])
+        fib2 = make_function(tree, name="Fibonacci(n//2)", location=(current, 3.5),
+                             functions={
+                                 "fib2": "1,5,sqrt,+,2,/,n,**,1,5,sqrt,-,2,/,n,**,-,5,sqrt,/"
+                             }, inputs=["n"], outputs=["fib2"], scalars=["n", "fib2"], hide=True)
+        links.new(trunc.outputs["n2"], fib2.inputs["n"])
+        fibm12 = make_function(tree, name="Fibonacci((n-1)//2)", location=(current, 4),
+                               functions={
+                                   "fibm12": "1,5,sqrt,+,2,/,n,**,1,5,sqrt,-,2,/,n,**,-,5,sqrt,/"
+                               }, inputs=["n"], outputs=["fibm12"], scalars=["n", "fibm12"], hide=True)
+        links.new(trunc.outputs["nm12"], fibm12.inputs["n"])
+        fib21 = make_function(tree, name="Fibonacci(n//2-1)", location=(current, 4.5),
+                              functions={
+                                  "fib21": "1,5,sqrt,+,2,/,n,**,1,5,sqrt,-,2,/,n,**,-,5,sqrt,/"
+                              }, inputs=["n"], outputs=["fib21"], scalars=["n", "fib21"], hide=True)
+        links.new(trunc.outputs["n21"], fib21.inputs["n"])
+        fibm32 = make_function(tree, name="Fibonacci((n-3)//2", location=(current, 5),
+                               functions={
+                                   "fibm32": "1,5,sqrt,+,2,/,n,**,1,5,sqrt,-,2,/,n,**,-,5,sqrt,/"
+                               }, inputs=["n"], outputs=["fibm32"], scalars=["n", "fibm32"], hide=True)
+        links.new(trunc.outputs["nm32"], fibm32.inputs["n"])
+        fibp12 = make_function(tree, name="Fibonacci((n+1)//2", location=(current, 5.5),
+                               functions={
+                                   "fibp12": "1,5,sqrt,+,2,/,n,**,1,5,sqrt,-,2,/,n,**,-,5,sqrt,/"
+                               }, inputs=["n"], outputs=["fibp12"], scalars=["n", "fibp12"], hide=True)
+        links.new(trunc.outputs["np12"], fibp12.inputs["n"])
+        current += 1
+        # the spiral consists of quater circles
+        # the radius is given by Fib[floor(2t/pi)]
+        # the center is computed recursively from the previous center
+        # we start at n=1 (0,1,0)
+        # for even n the x coordinate changes x_new = x_old +(-1)**(n/2)*(Fib[n-3]+Fib[n-4])
+        # for odd n the y coordinate changes y_new = y_old +(-1)**((n-1)/2)*(Fib[n-3]+Fib[n-4])
+        # these recursive formulas can be made explicit
+        # center x_{n}=(-1)^(n//2)Fib[n//2-1]Fib[n//2] start with n=1
+        #        y_{n} = (-1)^((n-1)//2)Fib[(n-3)//2]Fib[(n+1)//2]
+        spiral = make_function(tree, name="Sprial", location=(current, 2),
+                               functions={
+                                   "pos": ["fib,t,sin,*,fib21,fib2,*,-1,n,2,/,floor,**,*,+",
+                                           "fib,t,cos,*,-1,*,fibm32,fibp12,*,-1,n,1,-,2,/,floor,**,*,+",
+                                           "0"]
+                               }, inputs=["n", "fib", "fib2", "fibm12", "fib21", "fibm32", "fibp12", "t"],
+                               outputs=["pos"],
+                               scalars=["n", "fib", "fib2", "fibm12", "fib21", "fibm32", "fibp12", "t"],
+                               vectors=["pos"], hide=True)
+        links.new(fib.outputs["fib"], spiral.inputs["fib"])
+        links.new(t.outputs["t"], spiral.inputs["t"])
+        links.new(trunc.outputs["n"], spiral.inputs["n"])
+        links.new(fib2.outputs["fib2"], spiral.inputs["fib2"])
+        links.new(fibm12.outputs["fibm12"], spiral.inputs["fibm12"])
+        links.new(fib21.outputs["fib21"], spiral.inputs["fib21"])
+        links.new(fibm32.outputs["fibm32"], spiral.inputs["fibm32"])
+        links.new(fibp12.outputs["fibp12"], spiral.inputs["fibp12"])
+        set_pos = SetPosition(tree, location=(current, 3),
+                              position=spiral.outputs["pos"], hide=True)
+        current += 1
+
+        value = InputValue(tree, location=(current, 1), label="SpiralGrowthFactor", name="SpiralGrowthFactor", value=0,
+                           hide=True)
+        selector = make_function(tree, name="CurveGrowthSelector", location=(current, 2),
+                                 functions={
+                                     "selector": "idx,1,-,res,/,val,>"
+                                 }, inputs=["idx", "res", "val"], outputs=["selector"],
+                                 scalars=["idx", "res", "val", "selector"], hide=True)
+        links.new(value.std_out, selector.inputs["val"])
+        links.new(index.std_out, selector.inputs["idx"])
+        links.new(resolution.std_out, selector.inputs["res"])
+        del_geo = DeleteGeometry(tree, location=(current, 3), selection=selector.outputs["selector"], hide=True)
+        current += 1
+        wireframe = CurveWireFrame(tree, location=(current, 3), radius=1, hide=True)
+        current += 1
+        curve_material = SetMaterial(tree, location=(current, 3), material=get_texture("example", emission=0),
+                                     hide=True)
+
+        create_geometry_line(tree, [line, resample, set_pos, del_geo, wireframe, curve_material, join_final_spiral])
+        # glowing tip of spiral
+
+        current -= 6
+        index = Index(tree, location=(current, 5), hide=True)
+        current += 1
+        attr_stat2 = AttributeStatistic(tree, location=(current, 6), domain="POINT", data_type="FLOAT_VECTOR",
+                                        std_out="Max", attribute=index.std_out, hide=True)
+        current += 1
+        cmp = CompareNode(tree, location=(current, 6), data_type="INT", operation="EQUAL",
+                          inputs0=index.std_out, inputs1=attr_stat2.std_out, hide=True)
+        current += 1
+        sep_geo2 = SeparateGeometry(tree, location=(current, 6), selection=cmp.std_out, hide=True)
+        current += 1
+        ico_sphere = IcoSphere(tree, location=(current, 5), radius=2, subdivisions=1, hide=True)
+        iop2 = InstanceOnPoints(tree, location=(current, 6), instance=ico_sphere.geometry_out, hide=True)
+        current += 1
+        glow_mat = SetMaterial(tree, location=(current, 6), material=get_texture("drawing", emission=1), hide=True)
+
+        create_geometry_line(tree, [del_geo, attr_stat2])
+        create_geometry_line(tree, [del_geo, sep_geo2, iop2, glow_mat, join_final_spiral])
+
+        # out
+
+        current += current_save + 1
+        out.location = ((current + 1) * 200, 400)
+        create_geometry_line(tree, [join, scale_instance, join_final_numbers, join_final_spiral], out=out.inputs[0])
+
+class BenfordIntervalModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(get_from_kwargs(kwargs, 'name', "BenfordIntervalModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "Benford_Interval_node", **kwargs)
+
+class FileExplorerModifier(GeometryNodesModifier):
+    def __init__(self, name="FileExplorerModifier", max_length=40,csv_file=None, **kwargs):
+        """
+        A modifier for visualizing file data, which has been entered with ascii coded filenames and file size.
+        max_length: The maximum length of the file name.
+
+        """
+        self.max_length = max_length
+        self.csv_file = csv_file
+        super().__init__(name, automatic_layout=False, group_input=False, **kwargs)
+
+    def create_node(self, tree, uv_geometry=None, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        # input data from csv-file
+        if self.csv_file is not None:
+            shift = 0
+            import_csv = ImportCSV(tree,path=self.csv_file, location=( shift,0), hide=True)
+            shift+=1
+            for_each = ForEachZone(tree, location=( shift,0), hide=True)
+            shift+=1
+            input_string =InputString(tree, location=(shift,-1),string="", hide=True)
+            shift+=1
+            repeat = RepeatZone(tree,location=(shift,1),iterations=self.max_length)
+            repeat.add_socket(socket_type="STRING",name="Filename")
+            links.new(input_string.std_out,repeat.inputs["Filename"])
+            repeat.add_socket(socket_type="INT",name="Index")
+            links.new(for_each.outputs["Index"],repeat.inputs["Index"])
+            shift+=1
+            val_to_string = ValueToString(tree, location=(shift,0), data_type="INT", value=0, hide=True)
+            links.new(repeat.outputs["Iteration"],val_to_string.inputs["Value"])
+            shift+=1
+            named_attribute=NamedAttribute(tree,location=(shift,0),name=val_to_string.std_out,
+            data_type="INT",hide=True)
+            shift+=1
+            sample_index = SampleIndex(tree,location=(shift,0),data_type="INT",
+                                      value=named_attribute.std_out,index=repeat.repeat_input.outputs["Index"], hide=True)
+            links.new(repeat.repeat_input.outputs["Geometry"], sample_index.inputs["Geometry"])
+            repeat.create_geometry_line([])
+            for_each.create_geometry_line([repeat])
+            shift+=1
+            ascii = IndexSwitch(tree,location=(shift,0),data_type="STRING",
+            index=sample_index.std_out,hide=False)
+            for i in range(32):
+                ascii.add_item(socket="")
+            ascii.add_item(socket=" ")
+            for i in range(33,128):
+                ascii.add_item(socket=chr(i))
+
+            shift+=1
+            join_string = StringJoin(tree,location=(shift,0),hide=True)
+            links.new(ascii.std_out, join_string.inputs["Strings"])
+            links.new(repeat.repeat_input.outputs["Filename"],join_string.inputs["Strings"])
+            links.new(join_string.std_out,repeat.repeat_output.inputs["Filename"])
+            size_attr = NamedAttribute(tree, location=(shift, -2), data_type="INT", name="size", hide=True)
+            shift+=1
+            repeat.repeat_output.location=(shift*200,0)
+            sample_size = SampleIndex(tree, location=(shift, -1), geometry=for_each.element, value=size_attr.std_out,
+                                      hide=True)
+            shift+=1
+            size_string = ValueToString(tree, location=(shift, -1), data_type="INT", value=sample_size.std_out, hide=True)
+            length_function=make_function(tree,name="Length",
+                        functions={
+                        "length":str(self.max_length)+",val,lg,floor,-"
+                        },inputs=["val"],outputs=["length"],
+                        scalars=["val","length"],vectors=[],location=(shift,-2))
+            links.new(sample_size.std_out,length_function.inputs["val"])
+            shift+=1
+            slice = SliceString(tree, location=(shift, 0), string=repeat.repeat_output.outputs["Filename"],
+                                position=0,length=length_function.outputs["length"], hide=True)
+            shift+=1
+            join_string = StringJoin(tree, location=(shift, 0), hide=True)
+            links.new(size_string.std_out, join_string.inputs["Strings"])
+            links.new(slice.std_out,join_string.inputs["Strings"])
+            shift+=1
+            string_to_curve =StringToCurves(tree,location=(shift,0),align_x="LEFT",font=OLDSCHOOL,character_spacing=1,
+                                           string=join_string.std_out,hide=True)
+            shift+=1
+            fill_curve = FillCurve(tree,location=(shift,0),hide=True)
+            shift+=1
+            extrude= ExtrudeMesh(tree,location=(shift,0),mode="FACES",offset_scale=0.0625,hide=True)
+            shift+=1
+            rotate = RotateInstances(tree,location=(shift,0),
+                                     rotation=[pi/2,0,0],hide=True)
+            shift+=1
+            line_storage=StoredNamedAttribute(tree,location=(shift,0),data_type="INT",domain="INSTANCE",name="Line",value=for_each.index,hide=True)
+            shift+=1
+            terminal_green = get_texture("terminal_green",emission=1)
+            self.materials.append(terminal_green)
+            mat = SetMaterial(tree, location=(shift,0), material=terminal_green, hide=True)
+            shift+=1
+            for_each.create_geometry_line([fill_curve,extrude,rotate,line_storage,mat],ins = string_to_curve.geometry_out)
+            shift+=1
+            for_each.foreach_output.location=(shift*200,0)
+            shift+=1
+            line_retrieval = NamedAttribute(tree,location=(shift,-4),name="Line",label="Line",data_type="INT",hide=True)
+            shift_x = InputValue(tree,location=(shift,-1),label="ShiftX",value =8,hide=True)
+            scroll= InputValue(tree,location=(shift,-2),label="Scroll",value =-5.5,hide=False)
+            position = Position(tree,location=(shift,-3),hide=True)
+            shift+=1
+            position_function=make_function(tree,name="Positioning",
+                        functions={
+                            "position":["position_x,horizontal,-","0","scroll,position_z,+,line,-"]
+                        },inputs=["horizontal","scroll","position","line"],outputs=["position"],
+                        scalars=["horizontal","scroll","line"],vectors=["position"],hide=True,location=(shift,-1))
+            links.new(shift_x.std_out,position_function.inputs["horizontal"])
+            links.new(position.std_out,position_function.inputs["position"])
+            links.new(scroll.std_out,position_function.inputs["scroll"])
+            links.new(line_retrieval.std_out,position_function.inputs["line"])
+            min_z = InputValue(tree,location=(shift,-2),label="ScreenMin",value =-4,hide=False)
+            max_z = InputValue(tree,location=(shift,-3),label="ScreenMax",value =3.5,hide=False)
+            shift += 1
+            set_pos = SetPosition(tree,location=(shift,0),position=position_function.outputs["position"],hide=True)
+            selection_function=make_function(tree,name="OnScreen",
+                        functions={
+                        "selection":["pos_z,minz,>,pos_z,maxz,<,and"]
+                        },inputs=["pos","minz","maxz"],outputs=["selection"],
+                        scalars=["minz","maxz","selection"],vectors=["pos"],location=(shift,-2),hide=True)
+            links.new(position.std_out,selection_function.inputs["pos"])
+            links.new(min_z.std_out,selection_function.inputs["minz"])
+            links.new(max_z.std_out,selection_function.inputs["maxz"])
+            shift+=1
+            del_geo = SeparateGeometry(tree,location=(shift,0),selection=selection_function.outputs["selection"],domain="INSTANCE",hide=True)
+            shift+=1
+            join = JoinGeometry(tree,location=(shift,0),label="Join",hide=True)
+            shift+=1
+            out.location=(shift*200,0)
+            create_geometry_line(tree,[import_csv,for_each,set_pos,del_geo,join], out=out.inputs[0])
+
+            # terminal screen
+            back = 6
+            grid = Grid(tree, location=(shift-back, 1), size_x=16.5, size_y = 8.5, vertices_x=2,vertices_y=2, hide=True)
+            back-=1
+            extrude = ExtrudeMesh(tree,location=(shift-back,1),mode="FACES",offset_scale=0.25,hide=True)
+            back-=1
+            join_extrude = JoinGeometry(tree,location=(shift-back,1),label="JoinExtrude",hide=True)
+            back-=1
+            terminal_mat = get_texture("gray_1",emission=0,scatter=5)
+            self.materials.append(terminal_mat)
+            mat = SetMaterial(tree, location=(shift-back, 1), material=terminal_mat, hide=True)
+            back-=1
+            transform = TransformGeometry(tree,location=(shift-back,1),translation=[0,0.2,0],rotation=[pi/2,0,0],hide=True)
+            create_geometry_line(tree,[grid,extrude,join_extrude,mat,transform,join])
+            create_geometry_line(tree,[grid,join_extrude])
+
+            # terminal frame
+
+            back=6
+            quad = Quadrilateral(tree,location=(shift-back,3),width=16.5,height=8.5,hide=True)
+            back-=1
+            quad_profile = Quadrilateral(tree,location=(shift-back,2),width=0.5,height=0.25,hide=True)
+            back-=1
+            curve_to_mesh=CurveToMesh(tree,location=(shift-back,3),profile_curve=quad_profile.geometry_out,hide=True)
+            back-=1
+            frame_mat = get_texture("background")
+            self.materials.append(frame_mat)
+            mat = SetMaterial(tree, location=(shift-back, 3), material=frame_mat, hide=True)
+            back-=1
+            transform_frame=TransformGeometry(tree,location=(shift-back,3),rotation=[pi/2,0,0],translation=[0,0.05
+                ,0],hide=True)
+            create_geometry_line(tree,[quad,curve_to_mesh,mat,transform_frame,join])
+
+class SimpleFunctionModifier(GeometryNodesModifier):
+    def __init__(self, name="SimpleFunctionModifier", **kwargs):
+        """
+        A geometry node setup that visualizes a function graph that is provided as mesh data
+
+        """
+        super().__init__(name, automatic_layout=True, group_input=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        input = self.group_inputs
+        links = tree.links
+
+        num_points = InputValue(tree, name="NumPoints", label="NumpPoints", value=100, hide=True)
+        index = Index(tree, hide=True)
+        scene_time = SceneTime(tree, hide=True)
+        start_time = InputValue(tree, name="StartTime", label="StartTime", value=0, hide=True)
+        transition_time = InputValue(tree, name="TransitionTime", label="TransitionTime", value=1, hide=True)
+
+        grow_function = make_function(tree, name="GrowFunction",
+                                      functions={
+                                          "selector": "t,t0,-,dt,/,idx,n,/,<"
+                                      }, inputs=["t", "t0", "dt", "idx", "n"], outputs=["selector"],
+                                      scalars=["t", "t0", "dt", "idx", "n", "selector"], hide=True)
+        links.new(index.std_out, grow_function.inputs["idx"])
+        links.new(num_points.std_out, grow_function.inputs["n"])
+        links.new(start_time.std_out, grow_function.inputs["t0"])
+        links.new(transition_time.std_out, grow_function.inputs["dt"])
+        links.new(scene_time.std_out, grow_function.inputs["t"])
+
+        del_geo = DeleteGeometry(tree, hide=True)
+        links.new(grow_function.outputs["selector"], del_geo.inputs["Selection"])
+
+        wireframe = WireFrame(tree, radius=0.005)
+        set_material = SetMaterial(tree, material=get_texture(get_from_kwargs(kwargs, "color", "example")))
+        create_geometry_line(tree, [del_geo, wireframe, set_material], out=out.inputs[0],
+                             ins=input.outputs[0])
+
 # new videos
 
 class CustomUnfoldModifier(GeometryNodesModifier):
-    def __init__(self, name="UnfoldModifier",**kwargs):
-        super().__init__(name, automatic_layout=True,group_output=True,group_input=True, **kwargs)
+    def __init__(self, name="UnfoldModifier", **kwargs):
+        super().__init__(name, automatic_layout=True, group_output=True, group_input=True, **kwargs)
 
-    def create_node(self,tree,**kwargs):
+    def create_node(self, tree, **kwargs):
         out = self.group_outputs
         ins = self.group_inputs
         links = tree.links
 
         # reindex faces
-        pos = Position(tree,hide=True)
+        pos = Position(tree, hide=True)
         re_index_function = make_function(tree, name="ReIndexFunction",
                                           functions={
-                                              "weight":"pos_x,0.33,*,pos_z,+"
-                                          },hide=True,inputs=["pos"],outputs=["weight"],scalars=["weight"],vectors=["pos"])
-        links.new(pos.std_out,re_index_function.inputs["pos"])
-        sort_node = SortElements(tree,sort_weight=re_index_function.outputs["weight"],hide=True)
+                                              "weight": "pos_x,0.33,*,pos_z,+"
+                                          }, hide=True, inputs=["pos"], outputs=["weight"], scalars=["weight"],
+                                          vectors=["pos"])
+        links.new(pos.std_out, re_index_function.inputs["pos"])
+        sort_node = SortElements(tree, sort_weight=re_index_function.outputs["weight"], hide=True)
 
         # prepare face selection
-        face_selector = InputInteger(tree,label="FaceSelector",integer=3,hide=True)
-        index = Index(tree,hide=True)
+        face_selector = InputInteger(tree, label="FaceSelector", integer=3, hide=True)
+        index = Index(tree, hide=True)
 
-        selector_function=make_function(tree,name="SelectorFunction",functions={
-            "selection":"idx,face_selector,<"
-        },inputs=["idx","face_selector"],outputs=["selection"],scalars=["selection","idx","face_selector"],
-                                        vectors=[],hide=True)
-        links.new(index.std_out,selector_function.inputs["idx"])
-        links.new(face_selector.std_out,selector_function.inputs["face_selector"])
+        selector_function = make_function(tree, name="SelectorFunction", functions={
+            "selection": "idx,face_selector,<"
+        }, inputs=["idx", "face_selector"], outputs=["selection"], scalars=["selection", "idx", "face_selector"],
+                                          vectors=[], hide=True)
+        links.new(index.std_out, selector_function.inputs["idx"])
+        links.new(face_selector.std_out, selector_function.inputs["face_selector"])
 
-        select_geo = SeparateGeometry(tree,domain="FACE",selection=selector_function.outputs["selection"],hide=True)
+        select_geo = SeparateGeometry(tree, domain="FACE", selection=selector_function.outputs["selection"], hide=True)
 
         # create unfolding
         progress = InputValue(tree, name="Progress", value=0.0, hide=True)
-        unfold_node = UnfoldMeshNode(tree, name="UnfoldMeshNode",hide=True,progression=progress.std_out,scale_elements=1,**kwargs)
+        unfold_node = UnfoldMeshNode(tree, name="UnfoldMeshNode", hide=True, progression=progress.std_out,
+                                     scale_elements=1, **kwargs)
 
-        create_geometry_line(tree,[sort_node,select_geo,unfold_node],ins = ins.outputs[0])
+        create_geometry_line(tree, [sort_node, select_geo, unfold_node], ins=ins.outputs[0])
 
         # select types of faces
-        face_types = get_from_kwargs(kwargs,"face_types",[4,6,10])
-        face_materials = get_from_kwargs(kwargs,"face_materials",["example","important","joker"])
-        corners_of_face = CornersOfFace(tree,std_out="Total",hide=True)
-        join_geo = JoinGeometry(tree,hide=True)
-        for type,material_string in zip(face_types,face_materials):
-            compare_node = CompareNode(tree,hide=True,
-                                       data_type="INT",operation="EQUAL",inputs0=corners_of_face.std_out,inputs1=type)
-            separate_geometry = SeparateGeometry(tree,domain="FACE",selection=compare_node.outputs[0],hide=True)
-            material = get_texture(material_string,**kwargs)
+        face_types = get_from_kwargs(kwargs, "face_types", [4, 6, 10])
+        face_materials = get_from_kwargs(kwargs, "face_materials", ["example", "important", "joker"])
+        corners_of_face = CornersOfFace(tree, std_out="Total", hide=True)
+        join_geo = JoinGeometry(tree, hide=True)
+        for type, material_string in zip(face_types, face_materials):
+            compare_node = CompareNode(tree, hide=True,
+                                       data_type="INT", operation="EQUAL", inputs0=corners_of_face.std_out,
+                                       inputs1=type)
+            separate_geometry = SeparateGeometry(tree, domain="FACE", selection=compare_node.outputs[0], hide=True)
+            material = get_texture(material_string, **kwargs)
             self.materials.append(material)
-            material_node = SetMaterial(tree,material=material,hide=True)
+            material_node = SetMaterial(tree, material=material, hide=True)
 
-            create_geometry_line(tree,[unfold_node,separate_geometry,material_node,join_geo])
+            create_geometry_line(tree, [unfold_node, separate_geometry, material_node, join_geo])
 
-        edge_material_string = get_from_kwargs(kwargs,"edge_material",None)
+        edge_material_string = get_from_kwargs(kwargs, "edge_material", None)
         if edge_material_string is not None:
-            edge_material = get_texture(edge_material_string,**kwargs)
+            edge_material = get_texture(edge_material_string, **kwargs)
             self.materials.append(edge_material)
-            edge_material_node = SetMaterial(tree,material=edge_material,hide=True)
-            wire_frame = WireFrame(tree,hide=True)
-            join_wireframe=JoinGeometry(tree,hide=True)
-            create_geometry_line(tree,[join_geo,join_wireframe],out=out.inputs[0])
-            create_geometry_line(tree,[join_geo,wire_frame,edge_material_node,join_wireframe])
+            edge_material_node = SetMaterial(tree, material=edge_material, hide=True)
+            wire_frame = WireFrame(tree, hide=True)
+            join_wireframe = JoinGeometry(tree, hide=True)
+            create_geometry_line(tree, [join_geo, join_wireframe], out=out.inputs[0])
+            create_geometry_line(tree, [join_geo, wire_frame, edge_material_node, join_wireframe])
         else:
-            create_geometry_line(tree,[join_geo],out=out.inputs[0])
+            create_geometry_line(tree, [join_geo], out=out.inputs[0])
 
-    def change_alpha(self,material_slot,from_value=1,to_value=0,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def change_alpha(self, material_slot, from_value=1, to_value=0, begin_time=0,
+                     transition_time=DEFAULT_ANIMATION_TIME):
         mat = self.materials[material_slot]
-        return ibpy.change_alpha_of_material(mat,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
+        return ibpy.change_alpha_of_material(mat, from_value=from_value, to_value=to_value, begin_time=begin_time,
+                                             transition_time=transition_time)
+
 
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
 
-def generate_labels(tic_labels,axis_label, **kwargs):
+def generate_labels(tic_labels, axis_label, **kwargs):
     aligned = get_from_kwargs(kwargs, 'aligned', 'left')
     imported_svg_data = {}  # Build dictionary of imported svgs to use
 
     # shape keys later and to avoid duplicate
     tic_label_suffix = get_from_kwargs(kwargs, 'tic_label_suffix', '')
     for key, val in tic_labels.items():
-        path = get_file_path(key+tic_label_suffix)
-        if isinstance(val,(float,int)):
-            val=[val]
+        path = get_file_path(key + tic_label_suffix)
+        if isinstance(val, (float, int)):
+            val = [val]
         tic_labels[key] = val + [path]
-        imported_svg_data=import_svg_data(imported_svg_data,path,kwargs)
+        imported_svg_data = import_svg_data(imported_svg_data, path, kwargs)
 
     imported_svg_data = align_figures(imported_svg_data, aligned)
 
     # cleaning up
     for label, expr in zip(tic_labels, imported_svg_data):
         # create new collection for every label
-        collection = ibpy.make_new_collection(str(label),hide_render=True,hide_viewport=True)
+        collection = ibpy.make_new_collection(str(label), hide_render=True, hide_viewport=True)
         for curve in imported_svg_data[expr]:
             ibpy.link(curve, collection)
         # remove import collection
@@ -5205,28 +6093,29 @@ def generate_labels(tic_labels,axis_label, **kwargs):
         ibpy.remove_collection(old_collection)
 
     # prepare axis label
-    if len(axis_label)>0:
-        imported_svg_data={}
-        path=get_file_path(axis_label)
-        imported_svg_data = import_svg_data(imported_svg_data,path,kwargs)
+    if len(axis_label) > 0:
+        imported_svg_data = {}
+        path = get_file_path(axis_label)
+        imported_svg_data = import_svg_data(imported_svg_data, path, kwargs)
         imported_svg_data = align_figures(imported_svg_data, "left")
-        collection = ibpy.make_new_collection(axis_label,hide_render=True,hide_viewport=True)
+        collection = ibpy.make_new_collection(axis_label, hide_render=True, hide_viewport=True)
         for curve in imported_svg_data[list(imported_svg_data.keys())[-1]]:
-            ibpy.link(curve,collection)
+            ibpy.link(curve, collection)
 
         # replace default import collection with a more appropriately named collection
         collection_name = path.split(os.sep)[-1]
-        old_collection=ibpy.get_collection(collection_name)
+        old_collection = ibpy.get_collection(collection_name)
         for obj in old_collection.objects:
             ibpy.un_link(obj, old_collection.name)
         ibpy.remove_collection(old_collection)
         label = collection.name
     else:
-        label=None
+        label = None
 
     return tic_labels, label
 
-def import_svg_data(imported_svg_data,path,kwargs):
+
+def import_svg_data(imported_svg_data, path, kwargs):
     default_color = get_from_kwargs(kwargs, 'color', 'text')
     text_size = get_from_kwargs(kwargs, 'text_size', 'normal')
     scale = get_from_kwargs(kwargs, 'scale', 1)
@@ -5299,6 +6188,7 @@ def import_svg_data(imported_svg_data,path,kwargs):
             imported_svg_data[path]['curves'] = new_curves
     return imported_svg_data
 
+
 #### Generating functions
 def get_file_path(expression, text_only=False, typeface="default"):
     # Replaces the svg_b_object method
@@ -5314,6 +6204,7 @@ def get_file_path(expression, text_only=False, typeface="default"):
 
     return tex_to_svg_file(expression, template, typeface, text_only)
 
+
 def tex_to_svg_file(expression, template_tex_file, typeface, text_only):
     path = os.path.join(
         SVG_DIR,
@@ -5325,6 +6216,7 @@ def tex_to_svg_file(expression, template_tex_file, typeface, text_only):
     tex_file = generate_tex_file(expression, template_tex_file, typeface, text_only)
     dvi_file = tex_to_dvi(tex_file)
     return dvi_to_svg(dvi_file)
+
 
 def generate_tex_file(expression, template_tex_file, typeface, text_only):
     result = os.path.join(
@@ -5354,6 +6246,7 @@ def generate_tex_file(expression, template_tex_file, typeface, text_only):
             outfile.write(body)
     return result
 
+
 def tex_to_dvi(tex_file):
     result = tex_file.replace(".tex", ".dvi")
     if not os.path.exists(result):
@@ -5377,6 +6270,7 @@ def tex_to_dvi(tex_file):
                 "Latex error converting to dvi. "
                 "See log output above or the log file: %s" % log_file)
     return result
+
 
 def dvi_to_svg(dvi_file):
     """
@@ -5407,10 +6301,12 @@ def dvi_to_svg(dvi_file):
         os.system(" ".join(commands))
     return result
 
+
 def hashed_tex(expression, typeface):
     string = expression + typeface
     hasher = hashlib.sha256(string.encode())
     return hasher.hexdigest()[:16]
+
 
 #### Alignment functions
 
@@ -5422,6 +6318,7 @@ def get_figure_curves(imported_svg_data, fig):
         """
 
     return imported_svg_data[fig]['curves']
+
 
 def calc_lengths(imported_svg_data):
     """
@@ -5482,11 +6379,13 @@ def calc_lengths(imported_svg_data):
         imported_svg_data[expr]['curves'] = curves
     return imported_svg_data
 
+
 def align_figures(imported_svg_data, aligned):
     imported_svg_data = calc_lengths(imported_svg_data)
     for fig in imported_svg_data:
         imported_svg_data[fig] = align_figure(fig, imported_svg_data, aligned)
     return imported_svg_data
+
 
 def align_figure(fig, imported_svg_data, aligned):
     data = imported_svg_data
@@ -5526,9 +6425,10 @@ def align_figure(fig, imported_svg_data, aligned):
         curve_list[i].location = new_loc
 
     # sort letters from left to right
-    curve_list.sort(key=lambda x:x.location[0])
+    curve_list.sort(key=lambda x: x.location[0])
     # remove reference H
     return curve_list[1:]
+
 
 def add_lists_by_element(list1, list2, subtract=False):
     if len(list1) != len(list2):

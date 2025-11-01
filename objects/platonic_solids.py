@@ -40,6 +40,92 @@ def orient_face(s, vertices):
 
     return s
 
+class Tetrahedron(BObject):
+    def __init__(self,**kwargs):
+        self.kwargs = kwargs
+        self.name=self.get_from_kwargs('name','Tetrahedron')
+        # vertices from wikipedia
+
+        r2 = 2**0.5
+        r3 = 3**0.5
+        r6 = 6**0.5
+
+        #vertices = [[1,0,-1/r2],[-1,0,-1/r2],[0,1,1/r2],[0,-1,1/r2]]
+        vertices = [
+            [1,-1/r3,-1/r6],
+            [-1,-1/r3,-1/r6],
+            [0,2/r3,-1/r6],
+            [0,0,3/r6]]
+        vertices = [Vector(v) for v in vertices]
+
+        # find shortest edges
+        edges = []
+        for i,v in enumerate(vertices):
+            for j,w in enumerate(vertices):
+                if i>j:
+                    d = (v-w).length
+                    if d<2.1:
+                        edges.append([i,j])
+        print(len(edges))
+        # find faces
+        faces = []
+        for i in range(len(edges)):
+            for j in range(i+1,len(edges)):
+                for k in range(j+1,len(edges)):
+                    u,v,w = edges[i],edges[j],edges[k]
+                    s = set(u + v + w)
+                    if len(s)==3:
+                        s = orient_face(s,vertices)
+                        faces.append(s)
+
+        print(len(faces))
+
+        super().__init__(mesh=create_mesh(vertices,edges,faces),name=self.name,**kwargs)
+
+class Octahedron(BObject):
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.name = self.get_from_kwargs('name', 'Octahedron')
+        # vertices from wikipedia
+
+        r2 = 2 ** 0.5
+        r3 = 3 ** 0.5
+        r6 = 6 ** 0.5
+
+        # vertices = [[1,0,-1/r2],[-1,0,-1/r2],[0,1,1/r2],[0,-1,1/r2]]
+        vertices = [
+            [0,0,1/r2],
+            [0,0,-1/r2],
+            [1/2,1/2,0],
+            [-1/2,1/2,0],
+            [-1/2,-1/2,0],
+            [1/2,-1/2,0]
+        ]
+        vertices = [Vector(v) for v in vertices]
+
+        # find shortest edges
+        edges = []
+        for i, v in enumerate(vertices):
+            for j, w in enumerate(vertices):
+                if i > j:
+                    d = (v - w).length
+                    if d < 1.1:
+                        edges.append([i, j])
+        print(len(edges))
+        # find faces
+        faces = []
+        for i in range(len(edges)):
+            for j in range(i + 1, len(edges)):
+                for k in range(j + 1, len(edges)):
+                    u, v, w = edges[i], edges[j], edges[k]
+                    s = set(u + v + w)
+                    if len(s) == 3:
+                        s = orient_face(s, vertices)
+                        faces.append(s)
+
+        print(len(faces))
+
+        super().__init__(mesh=create_mesh(vertices, edges, faces), name=self.name, **kwargs)
 
 class Icosahedron(BObject):
     def __init__(self,**kwargs):
