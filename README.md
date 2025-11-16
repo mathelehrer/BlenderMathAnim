@@ -1,3 +1,9 @@
+This library is the backbone of the video projects that you can find on my youtube channel: https://www.youtube.com/@Number_Cruncher<br>
+All animations are rendered using the Blender render engine. However, the blender files are not created in blender, but rather in python using the bpy library. This makes it easy to combine the workflow with version control systems like git. The library is work in progress and I am constantly adding new features and improving the existing ones.
+The following gallery shows objects that are created from simple spheres. You can find more examples in the examples folder. I try to include more and more examples to make it easier for you to learn the usage of the library.
+
+<br>
+<h1> Examples </h1>
 Here is a gallery of examples that are you can find in the example folder:<br>
 <b> A simple sphere</b><br>
 <img src="readme_images/simple_sphere.png">
