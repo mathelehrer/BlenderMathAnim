@@ -9,7 +9,24 @@ Here is a gallery of examples that are you can find in the example folder:<br>
 <img src="readme_images/multi_sphere.png">
 <br>
 
+<b> HalfSphere </b><br>
+<img src="readme_images/half_sphere.png">
+<br>
+<code> 
+half_sphere = HalfSphere(1 / 2, location=[0, 0, 1 / 2], resolution=100, solid=0.01, offset=0,color="example",roughness=0,metallic=0.5)
+</code><br>
 
+<b> StackOfSpheres </b><br>
+<img src="readme_images/stack_of_spheres.png">
+<br>
+<code>
+sequence = [50, 20, 20, 20, 3, 1, 1]
+stack_b = StackOfSpheres(radius=0.5, number_of_spheres=100, color='important', smooth=2,
+                             location=[2.4894, 2.8364, 0.116], name="StackBob", scale=2)
+</code><br>
+
+
+<h1> Installation </h1>
 
 Once you cloned the repository, you need to install the bpy library.<br>
 This is what worked for me:<br>
@@ -21,7 +38,6 @@ source venv/bin/activate.fish  (sorry, I use fish terminals)<br>
 Then you can just run<br>
 pip install python-dev-tools
 pip install bpy<br>
-pip install mathutils<br>
 <br>
 and the current bpy-wheels downloaded and bpy and mathutils are installed<br>
 <br>
@@ -29,7 +45,6 @@ and the current bpy-wheels downloaded and bpy and mathutils are installed<br>
 create a virtual environment (use the python distributed with you latest blender installation)<br>
 Then you can just run<br>
 pip install bpy<br>
-pip install mathutils<br>
 <br>
 On Windows: You need to install the Visual C++ Build Tools and then install the python development package using pip<br>
 pip install --upgrade setuptools<br>

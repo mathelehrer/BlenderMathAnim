@@ -7,7 +7,7 @@ from interface import ibpy
 from interface.ibpy import Vector, Quaternion
 from interface.interface_constants import BLENDER_EEVEE, CYCLES
 from objects.empties import EmptyCube
-from objects.geometry.sphere import Sphere, MultiSphere, invert
+from objects.geometry.sphere import Sphere, MultiSphere, invert, HalfSphere, StackOfSpheres
 from perform.scene import Scene
 from utils.constants import DATA_DIR
 from utils.utils import print_time_report
@@ -38,6 +38,7 @@ class ExamplesObjects(Scene):
             ('sphere', {'duration': 10}),
             ('half_sphere', {'duration': 10}),
             ('multi_sphere', {'duration': 10}),
+            ('stack_of_sphere', {'duration': 40}),
         ])
         super().__init__(light_energy=2, transparent=False)
 
@@ -108,7 +109,55 @@ class ExamplesObjects(Scene):
 
         self.t0 = t0
 
+    def half_sphere(self):
+        t0 = 0
 
+        ibpy.set_hdri_background("qwantani_puresky_4k", 'exr', simple=True,
+                                 transparent=True,
+                                 rotation_euler=pi / 180 * Vector([0,-157,-283]))
+        t0 = ibpy.set_hdri_strength(1, begin_time=t0, transition_time=1)
+        ibpy.set_render_engine(denoising=False, transparent=False, frame_start=1,  # skip initialization frame at 0
+                               resolution_percentage=100, engine=CYCLES, taa_render_samples=512,
+                               motion_blur=False)
+
+        camera_empty = EmptyCube(location=Vector([0, 0, 0]))
+        camera_location = [18.7,-15,0]
+        ibpy.set_camera_location(location=camera_location)
+        ibpy.set_camera_view_to(camera_empty)
+        ibpy.set_camera_lens(lens=140)
+
+        half_sphere = HalfSphere(1 / 2, location=[0, 0, 1 / 2], resolution=100, solid=0.01, offset=0,color="example",roughness=0,metallic=0.5)
+        t0 = half_sphere.appear(begin_time=t0)
+
+        self.t0 = t0
+
+    def stack_of_sphere(self):
+        t0 = 0
+
+        ibpy.set_hdri_background("qwantani_puresky_4k", 'exr', simple=True,
+                                 transparent=True,
+                                 rotation_euler=pi / 180 * Vector([0,-157,-283]))
+        t0 = ibpy.set_hdri_strength(1, begin_time=t0, transition_time=1)
+        ibpy.set_render_engine(denoising=False, transparent=False, frame_start=1,  # skip initialization frame at 0
+                               resolution_percentage=100, engine=CYCLES, taa_render_samples=512,
+                               motion_blur=False)
+
+        camera_empty = EmptyCube(location=Vector([0, 6,4]))
+        camera_location = [18.7,-15,6.5]
+        ibpy.set_camera_location(location=camera_location)
+        ibpy.set_camera_view_to(camera_empty)
+        ibpy.set_camera_lens(lens=30)
+
+        sequence = [50, 20, 20, 20, 3, 1, 1]
+        stack_b = StackOfSpheres(radius=0.5, number_of_spheres=100, color='important', smooth=2,
+                             location=[2.4894, 2.8364, 0.116], name="StackBob", scale=2)
+        duration=30
+        dt = 8 * duration / 10 / len(sequence)
+        for i in range(len(sequence)):
+            stack_b.appear(incr=sequence[i], begin_time=t0 + dt / 3, transition_time=dt / 3)
+            t0 += dt
+
+        self.t0 = t0
 
 if __name__ == '__main__':
     try:
