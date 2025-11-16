@@ -637,7 +637,7 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
     if obj.type not in ['EMPTY', 'ARMATURE']:
         if type_req is None or obj.type == type_req:
             if col == 'vertex_color':
-                material = vertex_color_material()
+                material = vertex_color_material(**kwargs)
             elif col is None:
                 if 'colors' in kwargs:
                     colors = kwargs.pop('colors')
@@ -713,13 +713,15 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
         copy_nodes_and_links_from_material(obj.data.node_tree,material)
 
 
-def vertex_color_material():
+def vertex_color_material(**kwargs):
     vertex_color = bpy.data.materials.new(name="Vertex_Color")
     vertex_color.use_nodes = True
     nodes = vertex_color.node_tree.nodes
     links = vertex_color.node_tree.links
     bsdf = nodes["Principled BSDF"]
     col_att = nodes.new('ShaderNodeVertexColor')
+    attribute = get_from_kwargs(kwargs,"attribute","default")
+    col_att.layer_name = attribute
     links.new(col_att.outputs['Color'], bsdf.inputs['Base Color'])
     links.new(col_att.outputs['Alpha'], bsdf.inputs[TRANSMISSION])
     return vertex_color

@@ -1,3 +1,16 @@
+Here is a list of examples that are added in the example folder:<br>
+<b> A simple sphere</b><br>
+<img src="readme_images/simple_sphere.png">
+<br>
+
+<code> sphere = Sphere(location=[0, 0, 0], radius=10,color="gold",smooth=3)</code><br>
+
+<b> MultiSphere </b><br>
+<img src="readme_images/multi_sphere.png">
+<br>
+
+
+
 Once you cloned the repository, you need to install the bpy library.<br>
 This is what worked for me:<br>
 <b>Linux</b><br>
@@ -10,7 +23,7 @@ pip install python-dev-tools
 pip install bpy<br>
 pip install mathutils<br>
 <br>
-and the current bpy-wheelis downloaded and bpy and mathutils are installed<br>
+and the current bpy-wheels downloaded and bpy and mathutils are installed<br>
 <br>
 <b>Windows</b><br>
 create a virtual environment (use the python distributed with you latest blender installation)<br>

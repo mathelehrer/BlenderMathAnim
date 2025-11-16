@@ -7387,3 +7387,8 @@ def camera_alignment_euler(bob,camera_location,):
 
     # no rotation would be needed, when the camera direction was (0,0,1)
     return direction.to_track_quat('Z', 'Y').to_euler()
+
+# work with operators
+
+def register_class(cls):
+    bpy.utils.register_class(cls)
