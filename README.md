@@ -1,4 +1,4 @@
-Here is a list of examples that are added in the example folder:<br>
+Here is a gallery of examples that are you can find in the example folder:<br>
 <b> A simple sphere</b><br>
 <img src="readme_images/simple_sphere.png">
 <br>
