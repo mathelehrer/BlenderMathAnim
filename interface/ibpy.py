@@ -487,6 +487,13 @@ def camera_follow(target, initial_value, final_value, begin_time=0, transition_t
 # meshes
 ###############
 
+def get_vertex_locations(bob):
+    locations = []
+    obj = get_obj(bob)
+    for v in obj.data.vertices:
+        locations.append(obj.matrix_world@v.co)
+    return locations
+
 def smooth_mesh(bob):
     obj = get_obj(bob)
     bm = bmesh.new()

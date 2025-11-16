@@ -3,12 +3,15 @@ import bpy
 import mathutils
 import numpy as np
 
+from interface import ibpy
 from interface.ibpy import add_sphere, add_shape_key, Vector
 from objects.bobject import BObject
 from objects.geometry.geo_bobject import GeoBObject
 
 from random import uniform
 
+from utils.constants import DEFAULT_ANIMATION_TIME
+from utils.kwargs import get_from_kwargs
 from utils.utils import to_vector
 
 
@@ -242,6 +245,31 @@ def get_polar_coordinates(vertex, curvature, location):
     theta = np.arccos(np.maximum(np.minimum(1, v.z / r), -1))
     phi = np.arctan2(v.y, v.x)
     return theta, phi
+
+
+class SphereOnVertexInstancer(BObject):
+    def __init__(self,bob,**kwargs):
+        radius = get_from_kwargs(kwargs,"radius",1)
+        name = get_from_kwargs(kwargs,"name","SphereOnVertexInstancer")
+        # create a sphere for each vertex of the BObject bob
+        # access the vertex data
+        locations = ibpy.get_vertex_locations(bob)
+        self.spheres = []
+        print(locations)
+        for i,loc in enumerate(locations):
+            sphere = Sphere(r=radius,location=loc,name="VertexSphere"+str(i),**kwargs)
+            self.spheres.append(sphere)
+
+        super().__init__(children=self.spheres,name=name,**kwargs)
+
+
+    def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,scale=1,
+               clear_data=False, silent=False,linked=False, nice_alpha=False,**kwargs):
+        super().appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,scale=scale,children=False)
+        dt = transition_time / len(self.spheres)
+        for i,sphere in enumerate(self.spheres):
+            sphere.grow(begin_time=begin_time+i*dt,transition_time=dt)
+        return begin_time+transition_time
 
 
 class MultiSphere(BObject):
