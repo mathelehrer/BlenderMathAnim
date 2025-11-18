@@ -250,12 +250,13 @@ class OBJECT_OT_add_platonic_from_points(bpy.types.Operator):
     bl_label = "Add Platonic Solid From Points"
     bl_options = {'REGISTER', 'UNDO'}
 
-    # Up to 5 input points; we will use only the first 3 for fitting
-    p0: FloatVectorProperty(size=3)
-    p1: FloatVectorProperty(size=3)
-    p2: FloatVectorProperty(size=3)
-    p3: FloatVectorProperty(size=3)
-    p4: FloatVectorProperty(size=3)
+    # p0: FloatVectorProperty(size=3)
+    # p1: FloatVectorProperty(size=3)
+    # p2: FloatVectorProperty(size=3)
+    # p3: FloatVectorProperty(size=3)
+    # p4: FloatVectorProperty(size=3)
+
+
 
     point_count: IntProperty(min=3, max=5, default=3)
     face_sides: IntProperty(min=3, max=5, default=3)
@@ -270,6 +271,12 @@ class OBJECT_OT_add_platonic_from_points(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
+        # compute the face center
+        p0 = Vector(self.p0)
+        p1 = Vector(self.p1)
+        p2 = Vector(self.p2)
+        center = (p0 + p1 + p2) / 3.0
+
         # Use first 3 points to define the transform
         p0 = Vector(self.p0)
         p1 = Vector(self.p1)
@@ -322,11 +329,18 @@ class OBJECT_OT_pick_points_for_platonic(bpy.types.Operator):
     picked_names: list[str] | None = None
 
     def invoke(self, context, event):
+        self.picked_names = []
+        if 3<= len(context.selected_objects) <=6:
+            for obj in context.selected_objects:
+                self.picked_names.append(obj.name)
+            self.report({'INFO'},"Create solid from selected objects: "+str(self.picked_names))
+            return self.finish_and_spawn_operator(context)
+
         if context.area.type != 'VIEW_3D':
             self.report({'WARNING'}, "Go to a 3D View to use this operator")
             return {'CANCELLED'}
 
-        self.picked_names = []
+
         self.report(
             {'INFO'},
             "Click objects to pick them (3–5 needed). ESC to cancel."
@@ -363,7 +377,9 @@ class OBJECT_OT_pick_points_for_platonic(bpy.types.Operator):
         return {'PASS_THROUGH'}
 
     def finish_and_spawn_operator(self, context):
+
         n = len(self.picked_names)
+        self.report({'INFO'}, f"Selected {n} objects.")
         if n < 3 or n > 5:
             self.report({'ERROR'}, "Need between 3 and 5 objects.")
             return {'CANCELLED'}
@@ -389,21 +405,18 @@ class OBJECT_OT_pick_points_for_platonic(bpy.types.Operator):
         def loc(i):
             return objs[i].location.copy() if i < len(objs) else objs[-1].location.copy()
 
-        p0 = loc(0)
-        p1 = loc(1)
-        p2 = loc(2)
-        p3 = loc(3)
-        p4 = loc(4)
+        points=[obj.location.copy() for obj in objs]
+
+        # create keyword arguments for operator
+        kwargs = {}
+        for i in range(len(points)):
+            kwargs[f"p{i}"] = points[i]
+        kwargs["point_count"] = len(points)
+        kwargs["face_sides"] = face_sides
 
         bpy.ops.object.add_platonic_from_points(
             'INVOKE_DEFAULT',
-            p0=p0,
-            p1=p1,
-            p2=p2,
-            p3=p3,
-            p4=p4,
-            point_count=n,
-            face_sides=face_sides,
+            **kwargs
         )
 
         return {'FINISHED'}
@@ -425,7 +438,7 @@ class VIEW3D_PT_platonic_from_points(bpy.types.Panel):
         layout = self.layout
         layout.operator(
             OBJECT_OT_pick_points_for_platonic.bl_idname,
-            text="Pick 3–5 Objects & Create"
+            text="Select Objects and hit Enter & Esc to cancel"
         )
 
 
