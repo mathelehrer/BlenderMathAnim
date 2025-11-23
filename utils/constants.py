@@ -140,6 +140,27 @@ COLOR_NAMES = [
     'billiard_8',
     'billiard_0',
     'terminal_green',
+    'tetra',
+    'trunc_tetra',
+    'octa',
+    'cubocta',
+    'trunc_octa',
+    'cube',
+    'trunc_cube',
+    'rhombicubocta',
+    'trunc_cubocta',
+    'dodeca',
+    'icosa',
+    'icosidodeca',
+    'trunc_dodeca',
+    'trunc_icosa',
+    'rhombicosidodeca',
+    'trunc_icosidodeca',
+    'prism3',
+    'prism5',
+    'prism6',
+    'prism10',
+
     'gray_1', # gray always has to stay last in this list
     'gray_2',
     'gray_3',
@@ -228,6 +249,27 @@ if color_scheme == -1:
         [255,255,255,0],# billiard 0
 
         [78, 154, 6,1], # terminal_green
+
+        [0,255,0,1],  # tetra
+        [0,127,0,1],
+        [0,127,0,1], # octa
+        [0,127,127,1], # cubocta
+        [0,64,127,1], # trunc octa
+        [0,0,255,1], # hexa
+        [0,0,127,1],
+        [0,127,64,1],
+        [0,64,64,1],
+        [255,0,0,1], # dodeca
+        [255,127,0,1], # icosa
+        [255,255,0,1], # icosidodeca
+        [127,0,0,1],
+        [127,64,0,1],
+        [127,0,127,1],
+        [255,0,255,1],
+        [85,85,85,1],# three prism
+        [51,51,51,1],
+        [43,43,43,1],
+        [25,25,25,1]
     ]
 
 # add gray values

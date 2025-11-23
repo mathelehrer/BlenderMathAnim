@@ -55,6 +55,8 @@ def get_context():
 def get_scene():
     return get_context().scene
 
+def get_layout():
+    return bpy.data.screens["Layout"]
 
 def close(x, y, precision=EPS):
     return np.abs(x - y) / precision < 1
@@ -1138,6 +1140,41 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
         space.shading.type = 'MATERIAL'  # set the viewport shading
 
     create_composition(denoising=denoising)
+
+def empty_blender_view3d():
+    layout = get_layout()
+    space = layout.areas[3].spaces[0]
+    overlay = space.overlay
+
+    overlay.show_ortho_grid=False
+    overlay.show_floor=False
+    overlay.show_axis_x=False
+    overlay.show_axis_y=False
+    overlay.show_axis_z=False
+    overlay.show_text=False
+    overlay.show_cursor=False
+    overlay.show_annotation=False
+    overlay.show_extras=False
+    overlay.show_bones=False
+    overlay.show_motion_paths=False
+    overlay.show_relationship_lines=False
+    overlay.show_object_origins=False
+
+    space.show_gizmo_navigate=False
+    space.show_gizmo_tool=False
+    space.show_gizmo_modifier=False
+    space.show_gizmo_context = False
+    space.show_gizmo_empty_image=False
+    space.show_gizmo_empty_force_field = False
+    space.show_gizmo_light_size=False
+    space.show_gizmo_light_look_at=False
+    space.show_gizmo_camera_lens=False
+    space.show_gizmo_camera_dof_distance=False
+
+
+
+
+
 
 #######################
 # compositions #

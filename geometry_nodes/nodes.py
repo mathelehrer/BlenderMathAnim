@@ -51,7 +51,7 @@ class Node:
         self.tree = tree
         self.location = location
         self.l, self.m = location
-        self.node.location = (self.l * node_width, self.m * node_height + offset_y)
+
         self.links = tree.links
 
         if "hide" in kwargs:
@@ -66,6 +66,13 @@ class Node:
         if "label" in kwargs:
             label = kwargs.pop("label")
             self.node.label = label
+
+        parent = get_from_kwargs(kwargs,"parent",None)
+        if parent:
+            self.node.parent = parent.node
+            self.node.location = ((self.l+parent.l) * node_width, (self.m+parent.m) * node_height + offset_y)
+        else:
+            self.node.location = (self.l * node_width, self.m * node_height + offset_y)
 
         self.inputs = self.node.inputs
         self.outputs = self.node.outputs
@@ -5216,14 +5223,13 @@ class Structure:
 
 def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[], scalars=[],rotations=[],
                   node_group_type="GeometryNodes",
-                  name="FunctionNode", hide=True, location=(0, 0)):
+                  name="FunctionNode", hide=True, location=(0, 0),parent=None):
     """
     this will be the optimized prototype for a flexible function generator
     functions: a dictionary that contains a key for every output. If the key is in vectors,
      either a list of three functions is required or a function with vector output
     :return:
     """
-    location = (location[0] * 200, location[1] * 100)
     if hasattr(nodes_or_tree, "nodes"):
         tree = nodes_or_tree
         nodes = tree.nodes
@@ -5371,6 +5377,11 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
     if hide:
         group.hide = True
 
+    if parent:
+        group.parent = parent.node
+        location = ((location[0] + parent.location[0]) * 200, (location[1] + parent.location[1]) * 100)
+    else:
+        location = (location[0]  * 200, location[1]  * 100)
     group.location = location
     return group
 
