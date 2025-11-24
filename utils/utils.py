@@ -164,9 +164,9 @@ def get_rotation_quaternion_from_start_and_end(start, end):
     :param end:
     :return:
     """
-    if isinstance(start, list):
+    if isinstance(start, (list,tuple)):
         start = Vector(start)
-    if isinstance(end, list):
+    if isinstance(end, (list,tuple)):
         end = Vector(end)
 
     diff = to_vector(end - start)

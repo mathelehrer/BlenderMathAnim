@@ -76,7 +76,7 @@ class Face(BObject, NodeMixin):
 
         sphere_colors, edge_colors, face_colors = colors
 
-        self.polygon = Polygon(poly_vertices, poly_edges, index=i, color=face_colors[0], transmission=1, roughness=0,
+        self.polygon = Polygon(poly_vertices, edges = poly_edges, index=i, color=face_colors[0], transmission=1, roughness=0,
                                brightness=1, thickness=0.02)
         self.vertex_spheres = []
 
