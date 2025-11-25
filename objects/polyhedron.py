@@ -2,9 +2,9 @@ import itertools
 
 import numpy as np
 from anytree import RenderTree
-from mathutils import Vector, Quaternion
+from mathutils import Vector, Quaternion,Matrix
 
-from interface.ibpy import create_mesh
+from interface.ibpy import create_mesh, to_vector
 from mathematics.lin_alg.subspace import Subspace
 from objects.bobject import BObject
 from objects.face import Face
@@ -530,6 +530,58 @@ def get_solid_data(solid_type: str):
         return verts, faces
     raise ValueError(f"Unknown solid_type: {solid_type}")
 
+
+def compute_similarity_transform(a0, a1, a2, p0, p1, p2):
+    """
+    Find scale s, rotation R, translation t so that
+    R * (a_i * s) + t ~= p_i for i=0,1,2.
+    """
+    vA1 = to_vector(a1) - to_vector(a0)
+    vA2 = to_vector(a2) - to_vector(a0)
+    vP1 = p1.real() - p0
+    vP2 = p2.real() - p0
+
+    lenA1 = vA1.length
+    lenP1 = vP1.length
+    if lenA1 < 1e-8 or lenP1 < 1e-8:
+        raise ValueError("Degenerate reference configuration")
+
+    scale = lenP1 / lenA1
+
+    uA = vA1.normalized()
+    wA = vA1.cross(vA2)
+    if wA.length < 1e-8:
+        raise ValueError("Canonical reference points are collinear")
+    wA.normalize()
+    vA = wA.cross(uA)
+
+    uP = vP1.normalized()
+    wP = vP1.cross(vP2)
+    if wP.length < 1e-8:
+        raise ValueError("Target points are collinear")
+    wP.normalize()
+    vP = wP.cross(uP)
+
+    RA = Matrix((uA, vA, wA)).transposed()
+    RP = Matrix((uP, vP, wP)).transposed()
+
+    R = RP @ RA.transposed()
+    R.resize_4x4()
+
+    a0_scaled = a0 * scale
+    t = p0 - (R.to_3x3() @ a0_scaled)
+
+    return scale, R, t
+
+def apply_similarity_to_vertices(verts, scale, R, t):
+    result = []
+    for v in verts:
+        v_vec = Vector(v) * scale
+        v_world = R.to_3x3() @ v_vec + t
+        result.append(v_world)
+    return result
+
+
 class Polyhedron(BObject):
     """
     Create a polyhedron from vertices, edges and faces:
@@ -599,6 +651,19 @@ class Polyhedron(BObject):
         src_vertices, faces = get_solid_data(solid_type)
         if vertices is None:
             return Polyhedron(src_vertices,faces,name=solid_type,simple = True, **kwargs)
+        else:
+            # transform source vertices to align polyhedron with the given vertices
+            # find appropriate face
+            n = len(vertices)
+            for face in faces:
+                if len(face)==n:
+                    break
+
+            # align three consecutive points
+            scale,rot,translation = compute_similarity_transform(src_vertices[face[0]],src_vertices[face[1]],src_vertices[face[2]],vertices[0],vertices[1],vertices[2])
+
+            img_vertices = apply_similarity_to_vertices(src_vertices,scale,rot,translation)
+            return Polyhedron(img_vertices,faces,name=solid_type,simple = True, **kwargs)
 
     @classmethod
     def from_group(cls, group, start, eps=1.e-4, **kwargs):
