@@ -6000,14 +6000,15 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         pos = Position(tree, hide=True)
         re_index_function = make_function(tree, name="ReIndexFunction",
                                           functions={
-                                              "weight": "pos_x,0.33,*,pos_z,+"
+                                              "weight": "pos,length"
                                           }, hide=True, inputs=["pos"], outputs=["weight"], scalars=["weight"],
                                           vectors=["pos"])
         links.new(pos.std_out, re_index_function.inputs["pos"])
         sort_node = SortElements(tree, sort_weight=re_index_function.outputs["weight"], hide=True)
 
         # prepare face selection
-        face_selector = InputInteger(tree, label="FaceSelector", integer=3, hide=True)
+        max_faces = get_from_kwargs(kwargs,"max_faces",4)
+        face_selector = InputInteger(tree, label="FaceSelector", integer=max_faces, hide=True)
         index = Index(tree, hide=True)
 
         selector_function = make_function(tree, name="SelectorFunction", functions={

@@ -159,7 +159,9 @@ COLOR_NAMES = [
     'prism3',
     'prism5',
     'prism6',
+    'prism8',
     'prism10',
+    'dark_red',
 
     'gray_1', # gray always has to stay last in this list
     'gray_2',
@@ -266,10 +268,13 @@ if color_scheme == -1:
         [127,64,0,1],
         [127,0,127,1],
         [255,0,255,1],
-        [85,85,85,1],# three prism
-        [51,51,51,1],
+        [175,175,175,1],# three prism
+        [125,125,125,1],
+        [80,80,80,1],
         [43,43,43,1],
-        [25,25,25,1]
+        [25,25,25,1],
+        [76,0,0,1],# dark red for vertex spheres
+
     ]
 
 # add gray values

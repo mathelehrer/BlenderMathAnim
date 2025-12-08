@@ -5,6 +5,7 @@ from anytree import RenderTree
 from mathutils import Vector, Quaternion,Matrix
 
 from interface.ibpy import create_mesh, to_vector
+from mathematics.geometry.field_extensions import QR5
 from mathematics.lin_alg.subspace import Subspace
 from objects.bobject import BObject
 from objects.face import Face
@@ -538,8 +539,12 @@ def compute_similarity_transform(a0, a1, a2, p0, p1, p2):
     """
     vA1 = to_vector(a1) - to_vector(a0)
     vA2 = to_vector(a2) - to_vector(a0)
-    vP1 = p1.real() - p0
-    vP2 = p2.real() - p0
+    if isinstance(p1,QR5):
+        vP1 = p1.real()-p0
+        vP2 = p2.real()-p0
+    else:
+        vP1 = p1-p0
+        vP2 = p2-p0
 
     lenA1 = vA1.length
     lenP1 = vP1.length
@@ -568,7 +573,7 @@ def compute_similarity_transform(a0, a1, a2, p0, p1, p2):
     R = RP @ RA.transposed()
     R.resize_4x4()
 
-    a0_scaled = a0 * scale
+    a0_scaled = to_vector(a0) * scale
     t = p0 - (R.to_3x3() @ a0_scaled)
 
     return scale, R, t
@@ -599,6 +604,8 @@ class Polyhedron(BObject):
         self.simple = get_from_kwargs(kwargs,'simple',False)
         if self.simple:
             # short cut, when vertices and faces are given
+            self.vertices =vertices
+            self.faces = faces
             super().__init__(mesh=create_mesh(vertices= vertices,faces=faces),**kwargs)
         else:
             self.counter = None  # dummy counter for growing the polyhedron
@@ -650,10 +657,15 @@ class Polyhedron(BObject):
     def from_points(cls, vertices=None, solid_type="TETRA",**kwargs):
         src_vertices, faces = get_solid_data(solid_type)
         if vertices is None:
+
             return Polyhedron(src_vertices,faces,name=solid_type,simple = True, **kwargs)
         else:
             # transform source vertices to align polyhedron with the given vertices
             # find appropriate face
+            flipped = get_from_kwargs(kwargs, 'flipped', False)
+            if flipped:
+                vertices = vertices[::-1]
+
             n = len(vertices)
             for face in faces:
                 if len(face)==n:

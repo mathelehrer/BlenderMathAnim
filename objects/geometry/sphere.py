@@ -23,7 +23,7 @@ class Sphere(GeoBObject):
     mesh_type = 'iso'
     """
 
-    def __init__(self, r=1, **kwargs):
+    def     __init__(self, r=1, **kwargs):
         """
         :param r:  radius of the sphere
         :param kwargs:
@@ -35,7 +35,7 @@ class Sphere(GeoBObject):
         if mesh_type == 'uv':
             default_name = 'UV-Sphere'
         else:
-            default_name = 'ISO-Sphere'
+            default_name = 'ICO-Sphere'
 
         smooth = self.get_from_kwargs('smooth',True)
 
