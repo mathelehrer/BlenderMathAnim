@@ -23,6 +23,22 @@ class CoordinateSystem2(BObject):
 
             for each dimension an Numberline is created
             in geometry nodes
+            :param origin: origin of coordinate system
+            :param dimension: number of axes (2 or 3), use numberline for one-dimensional coordinate system
+            :param location: location of coordinate system
+            :param lengths: length of axes in world coordinates
+            :param radii: radius of axes in world coordinates
+            :param domains: domains of axes
+            :param tic_labels: labels for tics of axes, either lists or ["AUTO"]*3
+            :param n_tics: number of tics for each axis, either lists or [2]*3
+            :param tic_label_digits: whether to display digits for tic labels, either lists or [False]*3
+            :param tic_label_shifts: shifts for tic labels, either lists or [Vector()]*3
+            :param colors: colors of axes, either lists or ["drawing"]*3
+            :param axes_labels: labels for axes, either dicts or {"x":"AUTO","y":"AUTO","z":"AUTO"}
+            :param include_zeros: whether to include zero on axes, either lists or [True]*3
+            :param data:
+            :param name: name of coordinate system
+
             """
 
         self.kwargs = kwargs
@@ -129,9 +145,23 @@ class CoordinateSystem2(BObject):
             data.to_log_x(begin_time=begin_time,transition_time=transition_time)
         return self.axes[0].to_log(begin_time=begin_time,transition_time=transition_time)
 
+
+    def log_y(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        for data in self.data_rows:
+            data.to_log_y(begin_time=begin_time,transition_time=transition_time)
+        return self.axes[1].to_log(begin_time=begin_time,transition_time=transition_time)
+
+    def log_z(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        for data in self.data_rows:
+            data.to_log_z(begin_time=begin_time,transition_time=transition_time)
+        return self.axes[2].to_log(begin_time=begin_time,transition_time=transition_time)
+
+
     def add_data(self,bob_data):
         ibpy.set_parent(bob_data,self)
         self.data_rows.append(bob_data)
+
+
 class CoordinateSystem(BObject):
     """
     creates a coordinate system

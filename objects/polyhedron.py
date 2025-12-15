@@ -4,6 +4,7 @@ import numpy as np
 from anytree import RenderTree
 from mathutils import Vector, Quaternion,Matrix
 
+from interface import ibpy
 from interface.ibpy import create_mesh, to_vector
 from mathematics.geometry.field_extensions import QR5
 from mathematics.lin_alg.subspace import Subspace
@@ -657,8 +658,7 @@ class Polyhedron(BObject):
     def from_points(cls, vertices=None, solid_type="TETRA",**kwargs):
         src_vertices, faces = get_solid_data(solid_type)
         if vertices is None:
-
-            return Polyhedron(src_vertices,faces,name=solid_type,simple = True, **kwargs)
+            bob =  Polyhedron(src_vertices,faces,name=solid_type,simple = True, **kwargs)
         else:
             # transform source vertices to align polyhedron with the given vertices
             # find appropriate face
@@ -675,7 +675,8 @@ class Polyhedron(BObject):
             scale,rot,translation = compute_similarity_transform(src_vertices[face[0]],src_vertices[face[1]],src_vertices[face[2]],vertices[0],vertices[1],vertices[2])
 
             img_vertices = apply_similarity_to_vertices(src_vertices,scale,rot,translation)
-            return Polyhedron(img_vertices,faces,name=solid_type,simple = True, **kwargs)
+            bob =  Polyhedron(img_vertices,faces,name=solid_type,simple = True, **kwargs)
+        return bob
 
     @classmethod
     def from_group(cls, group, start, eps=1.e-4, **kwargs):
