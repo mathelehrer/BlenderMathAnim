@@ -1,8 +1,11 @@
+from __future__ import annotations
 from itertools import combinations
 
 import numpy as np
 from anytree import Node, RenderTree
 from sympy import factorial
+
+
 
 ### Warning
 # this only works for linear Dynkin diagrams so far
@@ -159,6 +162,48 @@ class Diagram:
         else:
             return self.is_linear(node.children[0])
 
+    def __get_position_node_dictionary(self,node,dictionary={})->{}:
+        dictionary={node.name[1]:node}
+        for child in node.children:
+            dictionary.update(self.__get_position_node_dictionary(child,dictionary))
+        return dictionary
+
+    def get_position_node_dictionary(self)->{}:
+        position_node_dictionary = {}
+        for root in self.roots:
+            position_node_dictionary.update(self.__get_position_node_dictionary(root))
+
+        return position_node_dictionary
+
+    def get_diagram(self)->str:
+        """
+        create the diagram from the graph
+        >>> d=Diagram("x3x5x")
+        >>> d.get_diagram()
+        'x3x5x'
+
+        >>> d=Diagram("x . o5x")
+        >>> d.get_diagram()
+        'x . o5x'
+        """
+
+        diagram = ""
+        pos2node= self.get_position_node_dictionary()
+        max_pos = max(pos2node.keys())
+
+        for i in range(max_pos+1):
+            diagram+=". "
+        diagram=diagram[:-1]
+
+        for pos,val in pos2node.items():
+            diagram=diagram[0:2*pos]+val.name[0]+diagram[2*pos+1:]
+
+            if val.weight>2:
+                diagram=diagram[0:2*pos-1]+str(val.weight)+diagram[2*pos:]
+                break
+
+        return diagram
+
 
     def get_weights(self,node)->[]:
         """
@@ -177,7 +222,16 @@ class Diagram:
 
         return weights
 
+    def get_complement(self)->Diagram:
+        """
+        return a diagram that has the same structure as the unringed nodes of
+        the given diagram
 
+
+        1. create Diagram from graph
+        2. string replace x -> . and o->x
+        3. convert back to graph
+        """
 
     def __get_vertex_count(self,node):
         """
@@ -212,7 +266,7 @@ class Diagram:
             # TODO lots of diagrams missing
             pass
         weights = []
-        return n
+        return 0
 
     def get_vertex_count(self):
         """
