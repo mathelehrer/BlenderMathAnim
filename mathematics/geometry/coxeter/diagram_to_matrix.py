@@ -1,11 +1,13 @@
 from __future__ import annotations
+
+import typing
 from itertools import combinations
 
 import numpy as np
 from anytree import Node, RenderTree
-from sympy import factorial
-
-
+import networkx as nx
+import matplotlib.pyplot as plt
+from sympy import factorial, subsets
 
 ### Warning
 # this only works for linear Dynkin diagrams so far
@@ -18,12 +20,87 @@ class Diagram:
     def __init__(self,diagram_string):
         # convert diagram_string into graph
         self.diagram_string = diagram_string
-        self.roots = self.parse_diagram()
 
-    def show_tree(self):
-        for root in self.roots:
-            for pre, _, node in RenderTree(root):
-                print("%s%s" % (pre, node.name))
+        self.graph = nx.Graph()
+        self.create_graph()
+
+
+    def create_graph(self):
+        """
+        convert Coxeter diagram string representation into a graph
+        """
+        # list of letters to match the position of the branches in the notation
+        letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n']
+
+        # detect branches
+        diagram_string = self.diagram_string.replace(" *", "*")
+        diagram_string = diagram_string.replace(" ", "2")
+        parts = diagram_string.split("*")
+
+        node_count = 0
+
+        for part in parts:
+            follow_digits = False
+            weight = 0
+            branch_index = None
+            branch_height = None
+            branch_pos = None
+            for l in part:
+                if l.isdigit():
+                    if not follow_digits:
+                        weight = int(l)
+                        follow_digits = True
+                    else:
+                        weight = weight * 10 + int(l)
+                else:
+                    follow_digits = False
+                    # missing node
+                    if l == '.':
+                        node_count += 1
+                    elif l == 'o' or l == 'x':
+                        # create node and position
+                        if branch_pos is not None:
+                            pos=(branch_pos,branch_height)
+                            branch_height+=1
+                        else:
+                            pos = (node_count, 0)
+                        self.graph.add_node((l,node_count),pos=pos)
+                        # add edges
+                        if weight>2:
+                            if branch_index is not None:
+                                # search for branching node
+                                for node in self.graph.nodes:
+                                    if node[1]==branch_index:
+                                        self.graph.add_edge((l,node_count),node,weight=weight)
+                                        break
+                                branch_index = None
+                            else:
+                                # connect to previous node
+                                self.graph.add_edge(list(self.graph.nodes.keys())[-2],(l,node_count),weight=weight)
+                        node_count += 1
+                    else:
+                        branch_index = letters.index(l)
+                        branch_pos = branch_index
+                        branch_height = 1
+
+
+    def show_graph(self):
+        """
+        display the graph
+        >>> d=Diagram("x3o . x3x3x3x *c3x")
+        >>> d.show_graph()
+        """
+        plt.figure(figsize=(10,2))
+
+        pos = nx.get_node_attributes(self.graph, 'pos')
+        nx.draw(self.graph, pos,font_weight='bold' ,with_labels=True)
+        labels = nx.get_edge_attributes(self.graph, 'weight')
+        nx.draw_networkx_edge_labels(self.graph,pos, edge_labels=labels)
+
+        # for cc in nx.connected_components(G):
+        #     print([labels[c] for c in cc])
+
+        plt.show()
 
     def find_node(self,root,index)->Node:
         if root.name[1]==index:
@@ -162,48 +239,71 @@ class Diagram:
         else:
             return self.is_linear(node.children[0])
 
-    def __get_position_node_dictionary(self,node,dictionary={})->{}:
-        dictionary={node.name[1]:node}
-        for child in node.children:
-            dictionary.update(self.__get_position_node_dictionary(child,dictionary))
-        return dictionary
-
-    def get_position_node_dictionary(self)->{}:
-        position_node_dictionary = {}
-        for root in self.roots:
-            position_node_dictionary.update(self.__get_position_node_dictionary(root))
-
-        return position_node_dictionary
-
-    def get_diagram(self)->str:
+    def get_diagrams_from_connected_components(self)->[str]:
         """
-        create the diagram from the graph
+        create the diagram for each connected component of the graph
         >>> d=Diagram("x3x5x")
-        >>> d.get_diagram()
-        'x3x5x'
+        >>> d.get_diagrams_from_connected_components()
+        ['x3x5x']
 
         >>> d=Diagram("x . o5x")
-        >>> d.get_diagram()
-        'x . o5x'
+        >>> d.get_diagrams_from_connected_components()
+        ['x', 'o5x']
+        """
+        comp_strings = []
+        for comp in nx.connected_components(self.graph):
+            id2label={}
+            id2node = {}
+            max_id = -1
+            for label,node_id in comp:
+                id2label[node_id]=label
+                id2node[node_id]=self.graph.nodes[(label,node_id)]
+                if node_id>max_id:
+                    max_id = node_id
+
+            edges = nx.edges(self.graph)
+
+            diagram = ""
+            for val in id2label.values():
+                diagram+=val+" "
+            diagram = diagram[:-1]
+            for edge in edges:
+                if edge[0] in comp and edge[1] in comp:
+                    a = edge[0][1]
+                    b = edge[1][1]
+                    if a>b:
+                        b,a = a,b
+                    w = self.graph.get_edge_data(*edge)["weight"]
+                    diagram = diagram[:2*a+1]+str(w)+diagram[2*a+2:]
+            comp_strings.append(diagram)
+
+        return comp_strings
+
+    def get_complement(self)->Diagram:
+        """
+        return a diagram that has the same structure as the unringed nodes of
+        the given diagram
+        >>> d = Diagram("x3x3o5o")
+        >>> d.get_complement().diagram_string
+        '. . x5x'
         """
 
-        diagram = ""
-        pos2node= self.get_position_node_dictionary()
-        max_pos = max(pos2node.keys())
-
-        for i in range(max_pos+1):
-            diagram+=". "
-        diagram=diagram[:-1]
-
-        for pos,val in pos2node.items():
-            diagram=diagram[0:2*pos]+val.name[0]+diagram[2*pos+1:]
-
-            if val.weight>2:
-                diagram=diagram[0:2*pos-1]+str(val.weight)+diagram[2*pos:]
+        complement_str = self.diagram_string.replace("x",".").replace("o","x")
+        # remove connections to dots
+        dot_position = 0
+        while dot_position>-1:
+            try:
+                dot_position = complement_str.index(".",dot_position)
+            except ValueError:
                 break
-
-        return diagram
-
+            if dot_position == 0:
+                complement_str = ". "+complement_str[2:]
+            elif dot_position == len(complement_str)-1:
+                complement_str = complement_str[:-2]+" ."
+            else:
+                complement_str = complement_str[:dot_position-1]+" . "+complement_str[dot_position+2:]
+            dot_position+=1
+        return Diagram(complement_str)
 
     def get_weights(self,node)->[]:
         """
@@ -221,17 +321,6 @@ class Diagram:
             weights+=self.get_weights(child)
 
         return weights
-
-    def get_complement(self)->Diagram:
-        """
-        return a diagram that has the same structure as the unringed nodes of
-        the given diagram
-
-
-        1. create Diagram from graph
-        2. string replace x -> . and o->x
-        3. convert back to graph
-        """
 
     def __get_vertex_count(self,node):
         """
@@ -282,28 +371,6 @@ class Diagram:
             n*=self.__get_vertex_count(root)
 
         return n
-
-def get_complement(edges,nodes):
-    """
-    remove all x and their connections from the diagram
-    """
-    edges_comp=[]
-    nodes_comp=[]
-
-    first = True
-    for pos,n in enumerate(nodes):
-        if n=='o':
-            if first:
-                if len(nodes_comp)>0:
-                    edges_comp.append(2)
-                nodes_comp.append('x')
-                first = False
-            else:
-                nodes_comp.append('x')
-                edges_comp.append(edges[pos-1])
-        else:
-            first = True
-    return edges_comp,nodes_comp
 
 def create_diagram(edges,nodes):
     """
