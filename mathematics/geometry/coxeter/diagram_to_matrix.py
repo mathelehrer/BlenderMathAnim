@@ -17,9 +17,12 @@ DEBUG=True
 logging =[]
 
 class Diagram:
+
     def __init__(self,diagram_string):
         # convert diagram_string into graph
         self.diagram_string = diagram_string
+        # list of letters to match the position of the branches in the notation
+        self.letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n']
 
         self.graph = nx.Graph()
         self.create_graph()
@@ -29,10 +32,9 @@ class Diagram:
         """
         convert Coxeter diagram string representation into a graph
         """
-        # list of letters to match the position of the branches in the notation
-        letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n']
 
         # detect branches
+
         diagram_string = self.diagram_string.replace(" *", "*")
         diagram_string = diagram_string.replace(" ", "2")
         parts = diagram_string.split("*")
@@ -79,7 +81,7 @@ class Diagram:
                                 self.graph.add_edge(list(self.graph.nodes.keys())[-2],(l,node_count),weight=weight)
                         node_count += 1
                     else:
-                        branch_index = letters.index(l)
+                        branch_index =self.letters.index(l)
                         branch_pos = branch_index
                         branch_height = 1
 
@@ -242,6 +244,10 @@ class Diagram:
     def get_diagrams_from_connected_components(self)->[str]:
         """
         create the diagram for each connected component of the graph
+        >>> d=Diagram("x3x3x3x3x *c3x")
+        >>> d.get_diagrams_from_connected_components()
+        ['x3x3x3x3x *c3x']
+
         >>> d=Diagram("x3x5x")
         >>> d.get_diagrams_from_connected_components()
         ['x3x5x']
@@ -249,32 +255,55 @@ class Diagram:
         >>> d=Diagram("x . o5x")
         >>> d.get_diagrams_from_connected_components()
         ['x', 'o5x']
+
+        >>> d=Diagram("x3x . x3x *c3x")
+        >>> d.get_diagrams_from_connected_components()
+        ['x3x', 'x3x', 'x']
+
         """
         comp_strings = []
         for comp in nx.connected_components(self.graph):
+            # sort components
+            comp = list(comp)
+            comp.sort(key=lambda x: x[1])
             id2label={}
             id2node = {}
-            max_id = -1
+            node2pos = {}
+            pos= 0 # the position of the connected components might differ from the original larger diagram
             for label,node_id in comp:
                 id2label[node_id]=label
                 id2node[node_id]=self.graph.nodes[(label,node_id)]
-                if node_id>max_id:
-                    max_id = node_id
+                node2pos[(label,node_id)]=pos
+                pos+=1
 
             edges = nx.edges(self.graph)
 
             diagram = ""
             for val in id2label.values():
                 diagram+=val+" "
+
             diagram = diagram[:-1]
+
+            branching = ""
+            already_connected =[]
             for edge in edges:
                 if edge[0] in comp and edge[1] in comp:
                     a = edge[0][1]
                     b = edge[1][1]
+                    pos = node2pos[edge[0]]
+                    connection = a
                     if a>b:
-                        b,a = a,b
+                        connection = b
+                        pos = node2pos[edge[1]]
                     w = self.graph.get_edge_data(*edge)["weight"]
-                    diagram = diagram[:2*a+1]+str(w)+diagram[2*a+2:]
+                    if connection in already_connected:
+                        alt_pos = node2pos[edge[1]]
+                        branching = "*"+self.letters[connection]+str(w)+diagram[2*alt_pos]
+                        diagram = diagram[:2*alt_pos]
+                    else:
+                        diagram = diagram[:2*pos+1]+str(w)+diagram[2*pos+2:]
+                    already_connected.append(connection)
+            diagram = diagram + branching
             comp_strings.append(diagram)
 
         return comp_strings
