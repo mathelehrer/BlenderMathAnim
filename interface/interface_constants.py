@@ -22,5 +22,7 @@ else:
 CYCLES="CYCLES"
 if blender_version()<(4,2):
     BLENDER_EEVEE='BLENDER_EEVEE'
-else:
+elif blender_version()<(5,0):
     BLENDER_EEVEE='BLENDER_EEVEE_NEXT'
+else:
+    BLENDER_EEVEE='BLENDER_EEVEE'

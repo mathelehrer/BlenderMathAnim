@@ -179,8 +179,7 @@ class Node:
             return SetMaterial(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="SCALE_ELEMENTS":
             domain=attributes["domain"]
-            scale_mode=attributes["scale_mode"]
-            return ScaleElements(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,domain=domain,scale_mode=scale_mode)
+            return ScaleElements(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,domain=domain)
         if type=="TRANSFORM_GEOMETRY":
             mode=attributes["mode"]
             return TransformGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
@@ -1652,7 +1651,15 @@ class ScaleElements(GreenNode):
         super().__init__(tree, location=location, **kwargs)
 
         self.node.domain = domain
-        self.node.scale_mode = scale_mode
+        if blender_version()<(5,0):
+            self.node.scale_mode = scale_mode
+        else:
+            if scale_mode=="UNIFORM":
+                scale_mode="Uniform"
+            else:
+                scale_mode="Single Axis"
+            self.node.inputs["Scale Mode"].default_value = scale_mode
+
         self.geometry_out = self.node.outputs["Geometry"]
         self.geometry_in = self.node.inputs["Geometry"]
 
@@ -4719,7 +4726,6 @@ class TranslateToCenterNode(NodeGroup):
         self.geometry_in = self.node.inputs["TargetGeometry"]
         self.geometry_out = self.node.outputs["Geometry"]
 
-
     def fill_group_with_node(self,tree,**kwargs):
         pos = Position(tree)
         stat = AttributeStatistic(tree,geometry=self.group_inputs.outputs["SourceGeometry"],
@@ -4845,6 +4851,37 @@ class BevelFaces(NodeGroup):
 
         create_geometry_line(tree,[foreachface],ins=self.group_inputs.outputs["Geometry"],out=self.group_outputs.inputs["Geometry"])
 
+class PolyhedronViewNode(NodeGroup):
+    def __init__(self,tree,**kwargs):
+        self.name = get_from_kwargs(kwargs, "name", "PolyhedronViewNode")
+        super().__init__(tree, inputs={"Mesh": "GEOMETRY"},
+                         outputs={"Mesh": "GEOMETRY"}, auto_layout=False, name=self.name, **kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_in = self.node.inputs["Mesh"]
+        self.geometry_out = self.node.outputs["Mesh"]
+
+    def fill_group_with_node(self, tree, **kwargs):
+        # remove any existing node
+        nodes = tree.nodes
+        for n in nodes:
+            nodes.remove(n)
+
+        create_from_xml(tree, "PolyhedronView_nodes", **kwargs)
+
+        edge_color = get_from_kwargs(kwargs, 'edge_color', 'example')
+        vertex_color = get_from_kwargs(kwargs, 'vertex_color', 'red')
+
+        edge_material = ibpy.get_material(edge_color, **kwargs)
+        vertex_material = ibpy.get_material(vertex_color, **kwargs)
+
+        edge_node = ibpy.get_geometry_node_from_modifier(tree, "EdgeMaterial")
+        edge_node.material = edge_material
+        vertex_node = ibpy.get_geometry_node_from_modifier(tree, "VertexMaterial")
+        vertex_node.material = vertex_material
+
 # aux functions #
 
 def get_attributes(line):
@@ -4936,6 +4973,8 @@ def get_default_value_for_socket(attributes):
         if color=='None' or len(color)==0:
             return None
         return ibpy.get_material(color)
+    elif socket_type=="MENU":
+        return attributes['default_value']
 
 
 def create_socket(tree, node, node_attributes, attributes):
@@ -5046,14 +5085,13 @@ def create_from_xml(tree,filename=None,**kwargs):
                         elif line.startswith("</OUTPUTS>"):
                             pass
                         elif line.startswith("<INPUT "):
-                            if node_id == 16:
+                            if node_id == 20:
                                 pass
                             input_attributes = get_attributes(line)
                             input_id = int(input_attributes["id"])
                             if node_attributes["type"] in {"REPEAT_INPUT","FOREACH_GEOMETRY_ELEMENT_INPUT","SIMULATION_INPUT"}:
                                 # repeat inputs can only be initiated after pairing
                                 save_for_after_pairing[node_id]["inputs"].append(input_attributes)
-
                             elif len(node.inputs)>input_count and node.inputs[input_count].name!="": # avoid virtual socket
                                 node_structure[node_id]["inputs"][input_id] = input_count
                                 node.inputs[input_count].name=input_attributes['name']

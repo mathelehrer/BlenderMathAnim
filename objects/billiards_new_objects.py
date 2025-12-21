@@ -29,7 +29,6 @@ def f(w, h):
     else:
         return 0
 
-
 class BilliardsTableRound(BObject):
     def __init__(self,radius=4,  **kwargs):
         self.kwargs = kwargs

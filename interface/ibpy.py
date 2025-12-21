@@ -100,7 +100,10 @@ def create(mesh, name, location):
 
 def set_shadow(value):
     for light in bpy.data.lights:
-        light.cycles.cast_shadow = value
+        if blender_version()<(5,0):
+            light.cycles.cast_shadow = value
+        else:
+            light.use_shadow = value
 
 
 def set_shadow_of_object(b_object, shadow=True):
@@ -1109,7 +1112,8 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
     scene.render.film_transparent = transparent
 
     if engine == BLENDER_EEVEE:
-        scene.eevee.use_gtao = True
+        if blender_version()<(5,0):
+            scene.eevee.use_gtao = True
         scene.eevee.use_raytracing = True # allow for transparency in eevee
         scene.eevee.use_shadows = shadows
 
@@ -1187,25 +1191,35 @@ def create_composition(denoising=None):
     :return:
     """
 
-    bpy.context.scene.use_nodes = True
-    nodes = bpy.context.scene.node_tree.nodes
-    links = bpy.context.scene.node_tree.links
 
-    composite = nodes["Composite"]
-    composite.use_alpha=False
+    if blender_version()<(5,0):
+        bpy.context.scene.use_nodes = True
+        nodes = bpy.context.scene.node_tree.nodes
+        links = bpy.context.scene.node_tree.links
+    else:
+        bpy.ops.node.new_compositing_node_group(name="MyComposition")
+        bpy.context.scene.compositing_node_group = bpy.data.node_groups["MyComposition"]
+        nodes = bpy.context.scene.compositing_node_group.nodes
+        links = bpy.context.scene.compositing_node_group.links
+
+    if blender_version()<(5,0):
+        composite = nodes["Composite"]
+        composite.use_alpha=False
+        set_alpha_node = nodes.new(type="CompositorNodeSetAlpha")
+        set_alpha_node.mode = "REPLACE_ALPHA"
     layers = nodes["Render Layers"]
-    set_alpha_node = nodes.new(type="CompositorNodeSetAlpha")
-    set_alpha_node.mode = "REPLACE_ALPHA"
+
     if denoising:
         denoise = nodes.new(type="CompositorNodeDenoise")
         links.new(layers.outputs["Image"], denoise.inputs["Image"])
         links.new(denoise.outputs["Image"], composite.inputs["Image"])
-
-        links.new(denoise.outputs["Image"], set_alpha_node.inputs["Image"])
-        links.new(set_alpha_node.outputs["Image"], composite.inputs["Image"])
+        if blender_version()<(5,0):
+            links.new(denoise.outputs["Image"], set_alpha_node.inputs["Image"])
+            links.new(set_alpha_node.outputs["Image"], composite.inputs["Image"])
     else:
-        links.new(layers.outputs["Image"], set_alpha_node.inputs["Image"])
-        links.new(set_alpha_node.outputs["Image"], composite.inputs["Image"])
+        if blender_version()<(5,0):
+            links.new(layers.outputs["Image"], set_alpha_node.inputs["Image"])
+            links.new(set_alpha_node.outputs["Image"], composite.inputs["Image"])
 
 
 
@@ -1451,10 +1465,9 @@ def set_hdri_background(filename='', ext='exr', simple=False, transparent=False,
 
     out = nodes['World Output']
     light_path = nodes['Light Path']
-    rgb = nodes['RGB']
-
-    # nodes.remove(nodes['Mix'])
-    nodes.remove(rgb)
+    if blender_version()<(5,0):
+        rgb = nodes['RGB']
+        nodes.remove(rgb)
 
     bg = nodes['Background']
     bg.location = (-400, 0)
@@ -2503,8 +2516,11 @@ def get_node_from_shader(shader,label):
             return n
 
 def get_socket_names_from_modifier(modifier):
-    socket_names = {item.name: f"{item.identifier}" for item in modifier.node_group.interface.items_tree
-                    if item.in_out == "INPUT"}
+    if isinstance(modifier,bpy.types.Modifier):
+        socket_names = {item.name: f"{item.identifier}" for item in modifier.node_group.interface.items_tree
+                        if item.in_out == "INPUT"}
+    elif isinstance(modifier,bpy.types.GeometryNodeTree):
+        socket_names = {item.name:f"{item.identifier}" for item in modifier.interface.items_tree if item.in_out == "INPUT"}
     return socket_names
 
 

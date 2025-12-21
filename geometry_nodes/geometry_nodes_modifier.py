@@ -21,7 +21,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     CycleNode, FillCurve, AttributeStatistic, CoxeterReflectionNode, QuaternionToRotation, RotateVector, \
     SubdivisionSurface, FilletCurve, FaceArea, SortElements, InputBoolean, BeveledCubeNode, CompareNode, \
     GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode, CornersOfFace, BoundingBox, CurveLine, \
-    ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode
+    ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode, PolyhedronViewNode
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
 from mathematics.parsing.parser import ExpressionConverter
@@ -5079,7 +5079,6 @@ class BilliardBallRealModifier(GeometryNodesModifier):
     def create_node(self, tree, **kwargs):
         create_from_xml(tree, "GeoBilliardsBallReal_node", **kwargs)
 
-
 class BilliardBallRoundModifier(GeometryNodesModifier):
     def __init__(self, **kwargs):
         super().__init__(get_from_kwargs(kwargs, 'name', "BilliardsBallRoundModifier"),
@@ -5087,7 +5086,6 @@ class BilliardBallRoundModifier(GeometryNodesModifier):
 
     def create_node(self, tree, **kwargs):
         create_from_xml(tree, "GeoBilliardsBallRound_node", **kwargs)
-
 
 class ReflectableBilliardPaperModifier(GeometryNodesModifier):
     def __init__(self, width=10, height=10, **kwargs):
@@ -5205,7 +5203,6 @@ class ReflectableBilliardPaperModifier(GeometryNodesModifier):
             create_geometry_line(tree, [last, rotate_instance, join2])
             last = rotate_instance
 
-
 class BenfordDiagramModifier(GeometryNodesModifier):
     def __init__(self, **kwargs):
         super().__init__(get_from_kwargs(kwargs, "name", "BenfordDiagramModifier"),
@@ -5213,7 +5210,6 @@ class BenfordDiagramModifier(GeometryNodesModifier):
 
     def create_node(self, tree, **kwargs):
         create_from_xml(tree, "Benford_node", **kwargs)
-
 
 class BenfordFibonacciDiagramModifier(GeometryNodesModifier):
     def __init__(self, **kwargs):
@@ -5223,7 +5219,6 @@ class BenfordFibonacciDiagramModifier(GeometryNodesModifier):
     def create_node(self, tree, **kwargs):
         create_from_xml(tree, "Benford_Fibonacci_node", **kwargs)
 
-
 class BenfordFilesDiagramModifier(GeometryNodesModifier):
     def __init__(self, **kwargs):
         super().__init__(get_from_kwargs(kwargs, "name", "BenfordFilesDiagramModifier"),
@@ -5231,7 +5226,6 @@ class BenfordFilesDiagramModifier(GeometryNodesModifier):
 
     def create_node(self, tree, **kwargs):
         create_from_xml(tree, "Benford_Files_node", **kwargs)
-
 
 class PowerOfTwoModifier(GeometryNodesModifier):
     def __init__(self, name="PowerOfTwoModifier", level=10, **kwargs):
@@ -5989,6 +5983,7 @@ class SimpleFunctionModifier(GeometryNodesModifier):
 
 class CustomUnfoldModifier(GeometryNodesModifier):
     def __init__(self, name="UnfoldModifier", **kwargs):
+        self.number = 0 # count the number of shown faces
         super().__init__(name, automatic_layout=True, group_output=True, group_input=True, **kwargs)
 
     def create_node(self, tree, **kwargs):
@@ -5997,26 +5992,46 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         links = tree.links
 
         # reindex faces
-        pos = Position(tree, hide=True)
-        re_index_function = make_function(tree, name="ReIndexFunction",
-                                          functions={
-                                              "weight": "pos,length"
-                                          }, hide=True, inputs=["pos"], outputs=["weight"], scalars=["weight"],
-                                          vectors=["pos"])
-        links.new(pos.std_out, re_index_function.inputs["pos"])
-        sort_node = SortElements(tree, sort_weight=re_index_function.outputs["weight"], hide=True)
+        sorting = get_from_kwargs(kwargs,"sorting",True)
+        if sorting:
+            pos = Position(tree, hide=True)
+            re_index_function = make_function(tree, name="ReIndexFunction",
+                                              functions={
+                                                  "weight": "pos,length"
+                                              }, hide=True, inputs=["pos"], outputs=["weight"], scalars=["weight"],
+                                              vectors=["pos"])
+            links.new(pos.std_out, re_index_function.inputs["pos"])
+            sort_node = SortElements(tree, sort_weight=re_index_function.outputs["weight"], hide=True)
 
         # prepare face selection
         max_faces = get_from_kwargs(kwargs,"max_faces",4)
         face_selector = InputInteger(tree, label="FaceSelector", integer=max_faces, hide=True)
         index = Index(tree, hide=True)
 
-        selector_function = make_function(tree, name="SelectorFunction", functions={
-            "selection": "idx,face_selector,<"
-        }, inputs=["idx", "face_selector"], outputs=["selection"], scalars=["selection", "idx", "face_selector"],
-                                          vectors=[], hide=True)
+        face_appearance_order = get_from_kwargs(kwargs,"face_appearance_order",None)
+
+        if not face_appearance_order:
+            self.number_of_faces = 10
+            selector_function = make_function(tree, name="SelectorFunction", functions={
+                "selection": "idx,fsel,<"
+            }, inputs=["idx", "fsel"], outputs=["selection"], scalars=["selection", "idx", "fsel"],
+                                              vectors=[], hide=True)
+
+        else:
+            self.number_of_faces = len(face_appearance_order)
+            face_appearance_function = ""
+            for i,idx in enumerate(face_appearance_order):
+                if i==0:
+                    face_appearance_function += f"idx,{idx},=,fsel,{i},>,and,"
+                else:
+                    face_appearance_function += f"idx,{idx},=,fsel,{i},>,and,or,"
+            face_appearance_function=face_appearance_function[:-1]
+            selector_function = make_function(tree, name="SelectorFunction", functions={
+                "selection": face_appearance_function
+            }, inputs=["fsel","idx"], outputs=["selection"],
+                                              scalars=["selection", "idx","fsel"], vectors=[], hide=True)
         links.new(index.std_out, selector_function.inputs["idx"])
-        links.new(face_selector.std_out, selector_function.inputs["face_selector"])
+        links.new(face_selector.std_out, selector_function.inputs["fsel"])
 
         select_geo = SeparateGeometry(tree, domain="FACE", selection=selector_function.outputs["selection"], hide=True)
 
@@ -6025,7 +6040,10 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         unfold_node = UnfoldMeshNode(tree, name="UnfoldMeshNode", hide=True, progression=progress.std_out,
                                      scale_elements=1, **kwargs)
 
-        create_geometry_line(tree, [sort_node, select_geo, unfold_node], ins=ins.outputs[0])
+        if sorting:
+            create_geometry_line(tree, [sort_node, unfold_node, select_geo], ins=ins.outputs[0])
+        else:
+            create_geometry_line(tree, [unfold_node,select_geo], ins=ins.outputs[0])
 
         # select types of faces
         face_types = get_from_kwargs(kwargs, "face_types", [4, 6, 10])
@@ -6041,7 +6059,7 @@ class CustomUnfoldModifier(GeometryNodesModifier):
             self.materials.append(material)
             material_node = SetMaterial(tree, material=material, hide=True)
 
-            create_geometry_line(tree, [unfold_node, separate_geometry, material_node, join_geo])
+            create_geometry_line(tree, [select_geo, separate_geometry, material_node, join_geo])
 
         edge_material_string = get_from_kwargs(kwargs, "edge_material", None)
         if edge_material_string is not None:
@@ -6053,7 +6071,12 @@ class CustomUnfoldModifier(GeometryNodesModifier):
             create_geometry_line(tree, [join_geo, join_wireframe], out=out.inputs[0])
             create_geometry_line(tree, [join_geo, wire_frame, edge_material_node, join_wireframe])
         else:
-            create_geometry_line(tree, [join_geo], out=out.inputs[0])
+            create_geometry_line(tree, [join_geo])
+
+        poly_view = PolyhedronViewNode(tree, **kwargs)
+        out_loc = out.location
+        poly_view.location= (out_loc[0]-200,out_loc[1])
+        create_geometry_line(tree,[join_geo,poly_view], out = out.inputs[0])
 
     def change_alpha(self, material_slot, from_value=1, to_value=0, begin_time=0,
                      transition_time=DEFAULT_ANIMATION_TIME):
@@ -6061,6 +6084,30 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         return ibpy.change_alpha_of_material(mat, from_value=from_value, to_value=to_value, begin_time=begin_time,
                                              transition_time=transition_time)
 
+    def unfold(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        progress = ibpy.get_geometry_node_from_modifier(self,"Progress")
+        ibpy.change_default_value(progress,from_value=0,to_value=20,begin_time=begin_time,transition_time=transition_time)
+        return begin_time + transition_time
+
+    def fold(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        progress = ibpy.get_geometry_node_from_modifier(self,"Progress")
+        ibpy.change_default_value(progress,from_value=20,to_value=0,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def grow(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,max_faces = None):
+        if self.number:
+            start = self.number
+        else:
+            start = -1
+
+        if max_faces is not None:
+            self.number = max_faces
+        else:
+            self.number = self.number_of_faces
+
+        face_selector = ibpy.get_geometry_node_from_modifier(self,"FaceSelector")
+        ibpy.change_default_integer(face_selector,from_value=start,to_value=self.number,begin_time=begin_time,transition_time=transition_time)
+        return begin_time + transition_time
 
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes

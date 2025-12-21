@@ -11,6 +11,7 @@ from appearance.textures import make_basic_material, make_creature_material, mak
     make_wood_material, make_scattering_material, make_silk_material, make_magnet_material, make_sign_material, \
     make_cloud_material, make_six_color_ramp_material, make_eevee_glass_material
 from interface import ibpy
+from interface.interface_constants import blender_version
 from perform.render import render_with_skips
 from utils.constants import DEFAULT_SCENE_BUFFER, LIGHT_TYPE, CAMERA_LOCATION, CAMERA_ANGLE, FRAME_RATE, COLORS_SCALED, \
     DEFAULT_SCENE_DURATION, SAMPLE_COUNT, LIGHT_SAMPLING_THRESHOLD, RESOLUTION_PERCENTAGE, RENDER_DIR, \
@@ -164,7 +165,10 @@ def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_
     # BUT WAIT. I can put stacks of pngs straight into premiere.
     scn.render.image_settings.color_depth = '16'
     scn.render.image_settings.color_mode = 'RGBA'
-    scn.cycles.film_transparent = False
+    if blender_version()<(5,0):
+        scn.cycles.film_transparent = False
+    else:
+        scn.render.film_transparent = False
 
     # Set to FRAME_RATE
     bpy.ops.script.execute_preset(
