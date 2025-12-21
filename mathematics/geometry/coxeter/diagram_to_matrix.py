@@ -14,6 +14,8 @@ import re
 # this only works for linear Dynkin diagrams so far
 import doctest
 
+from sympy.multipledispatch.conflict import edge
+
 DEBUG = True
 logging = []
 letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n']
@@ -34,7 +36,7 @@ class Diagram:
         """
         create a diagram from a graph
         this is useful to convert sub-graphs into diagrams
-
+        TODO: This needs to be improved
         """
         diagram_string = ""
         # create diagram string from graph
@@ -44,10 +46,6 @@ class Diagram:
             diagram_string+=". "
         diagram_string=diagram_string[:-1]
 
-        for node in nodes:
-            label, pos = node
-            diagram_string = diagram_string[:2*pos] + label + diagram_string[2*pos+1:]
-
         # deal with branches
         connection_count = {}
         for edge in nx.edges(graph):
@@ -56,7 +54,52 @@ class Diagram:
 
         weights = nx.get_edge_attributes(graph, 'weight')
 
-        for edge,weight in weights.items():
+        new_nodes = nodes
+        new_weights = weights
+
+        # relocated branch node, when the diagram becomes linear (put the nodes with the lowest connectivity at the start and the end
+        if all(val<=2 for key,val in connection_count.items()):
+            positions = list(connection_count.keys())
+            positions.sort() # make sure that the branch point is at the end
+            if len(positions)>0:
+                if connection_count[positions[0]]==2 and connection_count[positions[-1]]==1:
+                    connection_count[positions[0]-1]=connection_count[positions[-1]]
+                    connection_count.pop(positions[-1])
+
+                    new_nodes = []
+                    for node in nodes:
+                        if node[1]==positions[-1]:
+                            new_nodes.append((node[0],positions[0]-1))
+                        else:
+                            new_nodes.append(node)
+
+                    new_edges = []
+                    for edge in graph.edges:
+                        if edge[0][1]==positions[-1]:
+                            new_edge=((edge[0][0],positions[0]-1),edge[1])
+                        elif edge[1][1]==positions[-1]:
+                            new_edge=(edge[0],(edge[1][0],positions[0]-1))
+                        else:
+                            new_edge = edge
+                        if new_edge[0][1]>new_edge[1][1]:
+                            new_edge = (new_edge[1],new_edge[0])
+                        new_edges.append(new_edge)
+
+                    new_weights={}
+                    for edge,weight in weights.items():
+                        if edge in new_edges:
+                            new_weights[edge]=weight
+                        else:
+                            if edge[0][1]==positions[-1]:
+                                new_weights[((edge[0][0],positions[0]-1),edge[1])]=weight
+                            else:
+                                new_weights[(((edge[1][0],positions[0]-1)),edge[0])]=weight
+
+        for node in new_nodes:
+            label, pos = node
+            diagram_string = diagram_string[:2*pos] + label + diagram_string[2*pos+1:]
+
+        for edge,weight in new_weights.items():
             if connection_count[edge[0][1]]<3 and connection_count[edge[1][1]]<3:
                 diagram_string = diagram_string[:2*edge[0][1]+1]+str(weight)+diagram_string[2*edge[0][1]+2:]
             else:
@@ -531,6 +574,12 @@ class Diagram:
         """
         computation of the factor, by which a diagonal element of the incidence matrix is contracted in comparsion to the full incidence matrix
         We need to find the vertex count of the subgraph that only contains "o" and is not connected to the 'x' of the diagram
+
+        especially difficult case: a branching point becomes linear
+        >>> d = Diagram("x3o3o3o3o *c3o")
+        >>> sub_rows,subs,sub_dimensions = d.get_subdiagrams()
+        >>> d.get_maximal_orthogonal_contraction(subs[4][1])
+        6
         >>> d = Diagram("x3x3o3o")
         >>> sub_rows,subs,sub_dimensions = d.get_subdiagrams()
         >>> d.get_maximal_orthogonal_contraction(subs[1][0])
@@ -539,6 +588,10 @@ class Diagram:
         >>> sub_rows,subs,sub_dimensions = d.get_subdiagrams()
         >>> d.get_maximal_orthogonal_contraction(subs[1][1])
         2
+        >>> d = Diagram("o5x")
+        >>> sub_rows,subs,sub_dimensions = d.get_subdiagrams()
+        >>> d.get_maximal_orthogonal_contraction(subs[1][0])
+        1
         """
 
         nodes = list(self.graph.nodes)
@@ -550,7 +603,7 @@ class Diagram:
         for edge in edges:
             if edge[0] in sub_nodes and edge[1] in complement_nodes:
                 complement_nodes.remove(edge[1])
-            if edge[1] in complement_nodes and edge[0] in sub_nodes:
+            if edge[0] in complement_nodes and edge[1] in sub_nodes:
                 complement_nodes.remove(edge[0])
 
         if len(complement_nodes)==0:
@@ -574,8 +627,13 @@ class IncidenceMatrix:
         self.max_matrix,self.max_dimensions = self.compute_largest_incidence_matrix()
         self.max_rows,self_max_sub_diagrams,self.max_dimensions = self.max_diagram.get_subdiagrams()
 
-        self.rows, self.sub_diagrams, self.dimensions = self.diagram.get_subdiagrams()
-        self.matrix,self.dimension = self.compute_incidence_matrix()
+        if not 'o' in diagram_string:
+            self.rows=self.max_rows
+            self.matrix = self.max_matrix
+            self.dimensions = self.max_dimensions
+        else:
+            self.rows, self.sub_diagrams, self.dimensions = self.diagram.get_subdiagrams()
+            self.matrix,self.dimension = self.compute_incidence_matrix()
 
     def print_largest_table(self):
         """
@@ -992,17 +1050,58 @@ class IncidenceMatrix:
     def compute_incidence_matrix(self):
         """
         compute the incidence matrix under the assumption that all nodes are active (ringed)
+        It is not successful yet. I need a smarter way to convert original branched diagrams into linear ones
+        >>> im = IncidenceMatrix("o5x")
+        >>> im.print_table()
+        +---+-+-+
+        |. .|5|2|
+        |---+-+-|
+        |. x|2|5|
+        +---+-+-+
+        >>> im = IncidenceMatrix("o3o3o5x")
+        >>> im.print_table()
+        +-------+---+----+---+---+
+        |. . . .|600|   4|  6|  4|
+        |-------+---+----+---+---|
+        |. . . x|  2|1200|  3|  3|
+        |-------+---+----+---+---|
+        |. . o5x|  5|   5|720|  2|
+        |-------+---+----+---+---|
+        |. o3o5x| 20|  30| 12|120|
+        +-------+---+----+---+---+
+        >>> im = IncidenceMatrix("x3o3o3o3o *c3o")
+        >>> im.print_table()
+        +--------------+--+---+---+----+--- ---+-- --+
+        |. . . . . *c .|27| 16| 80| 160| 80  40|16 10|
+        |--------------+--+---+---+----+--- ---+-- --|
+        |x . . . . *c .| 2|216| 10|  30| 20  10| 5  5|
+        |--------------+--+---+---+----+--- ---+-- --|
+        |x3o . . . *c .| 3|  3|720|   6|  6   3| 2  3|
+        |--------------+--+---+---+----+--- ---+-- --|
+        |x3o3o . . *c .| 4|  6|  4|1080|  2   1| 1  2|
+        |--------------+--+---+---+----+--- ---+-- --|
+        |x3o3o3o . *c .| 5| 10| 10|   5|432   *| 1  1|
+        |x3o3o . . *c3o| 5| 10| 10|   5|  * 216| 0  2|
+        |--------------+--+---+---+----+--- ---+-- --|
+        |x3o3o3o3o *c .| 6| 15| 20|  15|  6   0|72  *|
+        |x3o3o3o . *c3o|10| 40| 80|  80| 16  16| * 27|
+        +--------------+--+---+---+----+--- ---+-- --+
 
         >>> im = IncidenceMatrix("x3x3o3o")
         >>> im.print_table()
+        +-------+--+-- --+-- --+-- --+
+        |. . . .|20| 1  3| 3  3| 3  1|
+        |-------+--+-- --+-- --+-- --|
+        |x . . .| 2|10  *| 3  0| 3  0|
+        |. x . .| 2| * 30| 1  2| 2  1|
+        |-------+--+-- --+-- --+-- --|
+        |x3x . .| 6| 3  3|10  *| 2  0|
+        |. x3o .| 3| 0  3| * 20| 1  1|
+        |-------+--+-- --+-- --+-- --|
+        |x3x3o .|12| 6 12| 4  4| 5  *|
+        |. x3o3o| 4| 0  6| 0  4| *  5|
+        +-------+--+-- --+-- --+-- --+
 
-
-        >>> im = IncidenceMatrix("x3x5x")
-        >>> im.print_table()
-
-
-        >>> im = IncidenceMatrix("x3o3o3o3o *c3o")
-        >>> im.print_table()
 
         >>> im = IncidenceMatrix("o3o5x")
         >>> im.print_largest_table()
@@ -1016,8 +1115,9 @@ class IncidenceMatrix:
         +---+-+-+
         """
 
+        dim = self.diagram.get_dim()
+        row_strings, sub_diagrams, dimensions = self.diagram.get_subdiagrams()
         matrix = self.max_matrix.copy()
-        dimensions = self.max_dimensions.copy()
         max_rows = self.max_rows.copy()
         surviving_row_patterns = [row.replace('o','x') for row in self.rows]
         # delete unvalid rows and columns
@@ -1032,20 +1132,64 @@ class IncidenceMatrix:
             matrix = np.delete(matrix,r,axis=1)
             max_rows.remove(self.max_rows[r])
 
-        # adjust values along the diagonal
-        matrix[0][0] = self.diagram.get_vertex_count()
 
         # for each o, we have to half the number of elements in the diagonal once for each active orthogonal dimension
         sub_rows,sub_diagrams,sub_dimensions = self.diagram.get_subdiagrams()
         sub_diagrams.pop(0)
+
+        matrix[0][0]=self.diagram.get_vertex_count()
+
         for sub_dim,subs in sub_diagrams.items():
             for sub in subs:
                 row = self.rows.index(sub.diagram_string)
-                matrix[row][row] = matrix[row][row] //self.diagram.get_maximal_orthogonal_contraction(sub)
+                # remaining diagonals
+                if row>0:
+                    matrix[row][0] = sub.get_vertex_count()  # first column
+                    matrix[row][row] = matrix[row][row] //self.diagram.get_maximal_orthogonal_contraction(sub)
+
+        # now, we repeat the analysis from the large_incidence_matrix
+        # start with the lower left part of the matrix  (they are taken from sub-diagrams)
+
+        # Populates matrix from subdiagram incidence matrices, that are computed recursively from dimension 2
+        for d in range(dim, 2, -1):
+            subs = sub_diagrams[d-1]
+            for sub in subs:
+                sub_im = IncidenceMatrix(sub.diagram_string)
+                sub_matrix, sub_dimensions = sub_im.compute_incidence_matrix()
+                # we need the entries of the last diagonal and need to place them,
+                # where the corresponding sub_row fits into the row of the current row
+                # for example x3x3x
+                row = row_strings.index(sub.diagram_string)
+                sub_rows, subsub_dias, sub_dimensions = sub.get_subdiagrams()
+                for sub_dim,subsubs in subsub_dias.items():
+                    if sub_dim>0: # we can start with edges, vertices are done already
+                        sub_start = sum(sub_dimensions[:sub_dim])
+                        for i, subsub in enumerate(subsubs):
+                            position = row_strings.index(subsub.diagram_string)
+                            matrix[row][position] = sub_matrix[sub_start+i, sub_start+i]
+
+        # compute the upper part of the matrix from the lower part
+        sub_rows, sub_diagrams, sub_dimensions = self.diagram.get_subdiagrams()
+        # work on upper half (next to the diagonal)
+        # compute the far off-diagonal terms
+        for sub_dim_row in range(dim - 1, -1, -1):
+            for sub_dim_col in range(sub_dim_row + 1, dim):
+                row_subs = sub_diagrams[sub_dim_row]
+                col_subs = sub_diagrams[sub_dim_col]
+                for row_sub in row_subs:
+                    row = row_strings.index(row_sub.diagram_string)
+                    for col_sub in col_subs:
+                        col = row_strings.index(col_sub.diagram_string)
+                        if col_sub.contains(row_sub):
+                            matrix[row][col] = matrix[col][col]*matrix[col][row]//matrix[row][row]
+
+
+
+
         return matrix, dimensions
 
 
 
 if __name__ == '__main__':
-    im = IncidenceMatrix("x3x3x3x")
-    im.print_latex_table()
+    im = IncidenceMatrix("x3x3x3x3x *c3x")
+    im.print_table()
