@@ -11,6 +11,12 @@ from interface.ibpy import select, link, Vector, delete, Quaternion
 pi = np.pi
 
 
+def de_capitalize(word):
+    """
+    From blender 5 on, modes are not capitalized anymore
+    """
+    return word[0]+word[1:].lower()
+
 def get_from_dictionary(dictionary, string_list):
     objects = []
     for string in string_list:

@@ -73,6 +73,7 @@ class Arc2(Curve):
 
         x=start_point-center
         y=normal.cross(x)
+        y = y/y.length*x.length
         self.arc_end = center +x*np.cos(end_angle)+y*np.sin(end_angle)
 
         super().__init__([

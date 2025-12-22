@@ -3,6 +3,8 @@ import math
 import os
 from copy import deepcopy
 
+import numpy as np
+
 from geometry_nodes.geometry_nodes_modifier import  GeometryNodesModifier
 from geometry_nodes.nodes import InputVector, CollectionInfo, SetMaterial, create_geometry_line, TransformGeometry, \
     create_from_xml
@@ -46,9 +48,10 @@ class Text(BObject):
         mat_outline = get_material(outline_color,emission=outline_emission,**kwargs)
         material_node = get_geometry_node_from_modifier(self.modifier,label="FontMaterial")
         outline_material_node = get_geometry_node_from_modifier(self.modifier,label="OutlineMaterial")
+        outline_radius = get_from_kwargs(kwargs,'outline_radius',0.01)
 
-        # material_node.inputs['Material'].default_value= mat
-        # outline_material_node.inputs['Material'].default_value = mat_outline
+        material_node.inputs['Material'].default_value= mat
+        outline_material_node.inputs['Material'].default_value = mat_outline
 
         keep_outline = get_from_kwargs(kwargs, 'keep_outline', False)
         keep_outline_node = get_geometry_node_from_modifier(self.modifier, "KeepOutline")
@@ -56,6 +59,9 @@ class Text(BObject):
             ibpy.change_default_boolean(keep_outline_node,False,True,begin_frame=0)
         else:
             ibpy.change_default_boolean(keep_outline_node,True,False,begin_frame=0)
+        outline_radius_node = get_geometry_node_from_modifier(self.modifier, "OutlineRadius")
+        if outline_radius!=0.01:
+            ibpy.change_default_value(outline_radius_node,from_value=0.01,to_value=outline_radius,begin_frame=0)
 
         super().__init__(obj=cube, name=self.name, no_material=True, **kwargs)
         super().add_mesh_modifier('NODES', node_modifier=self.modifier)
@@ -88,6 +94,38 @@ class Text(BObject):
 
     def length(self):
         return self.modifier.number_of_letters
+
+    def get_text_bounding_box(self):
+        '''
+        designated for SimpleTexBOjects
+        it works on the level of letters
+        :param texBObject:
+        :return:
+        '''
+        x_min = np.Infinity
+        x_max = -np.Infinity
+        y_min = np.Infinity
+        y_max = -np.Infinity
+        z_min = np.Infinity
+        z_max = -np.Infinity
+        obj = self.ref_obj
+        loc = obj.location
+        bb = obj.bound_box  # eight corner coordinates of the surrounding box
+        for b in bb:
+            if (b[0] + loc[0]) < x_min:
+                x_min = b[0] + loc[0]
+            if (b[0] + loc[0]) > x_max:
+                x_max = b[0] + loc[0]
+            if (b[1] + loc[1]) < y_min:
+                y_min = b[1] + loc[1]
+            if (b[1] + loc[1]) > y_max:
+                y_max = b[1] + loc[1]
+            if (b[2] + loc[2]) < z_min:
+                z_min = b[2] + loc[2]
+            if (b[2] + loc[2]) > z_max:
+                z_max = b[2] + loc[2]
+        return [x_min, y_min, z_min, x_max, y_max, z_max]
+
 
 class MorphText(BObject):
     """

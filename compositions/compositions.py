@@ -1,8 +1,10 @@
 import bpy
 
 from appearance.textures import get_color
+from interface.interface_constants import blender_version
 from utils.constants import DEFAULT_ANIMATION_TIME
 from utils.kwargs import get_from_kwargs
+from utils.utils import de_capitalize
 
 
 ###############
@@ -75,26 +77,46 @@ def create_glow_composition(threshold=1,type='BLOOM',size=4):
     :return:
     """
 
-    bpy.context.scene.use_nodes = True
-    nodes = bpy.context.scene.node_tree.nodes
-    links = bpy.context.scene.node_tree.links
+    if blender_version()<(5,0):
+        bpy.context.scene.use_nodes = True
+        nodes = bpy.context.scene.node_tree.nodes
+        links = bpy.context.scene.node_tree.links
+    else:
+        bpy.ops.node.new_compositing_node_group(name="MyComposition")
+        bpy.context.scene.compositing_node_group = bpy.data.node_groups["MyComposition"]
+        nodes = bpy.context.scene.compositing_node_group.nodes
+        links = bpy.context.scene.compositing_node_group.links
 
-    composite = nodes["Composite"]
+
+    if blender_version()<(5,0):
+        composite = nodes["Composite"]
+        set_alpha = nodes["Set Alpha"]
+    else:
+        set_alpha = nodes.new(type="CompositorNodeSetAlpha")
+
     layers = nodes["Render Layers"]
-    set_alpha = nodes["Set Alpha"]
     viewer = nodes["Viewer"]
-    nodes.remove(viewer)
+    out = nodes["Group Output"]
 
     glare = nodes.new(type='CompositorNodeGlare')
-    glare.glare_type = type
-    glare.quality='HIGH'
-    glare.size=size*1000
-    glare.threshold =threshold
+    if blender_version()<(5,0):
+        glare.glare_type = type
+        glare.quality='HIGH'
+        glare.size=size
+        glare.threshold =threshold
+        set_alpha.mode = "REPLACE_ALPHA"
+    else:
+
+        glare.inputs["Type"].default_value=de_capitalize(type)
+        glare.inputs["Quality"].default_value="High"
+        glare.inputs["Size"].default_value=size
+        set_alpha.inputs["Type"].default_value="Replace Alpha"
 
     links.new(layers.outputs["Image"],glare.inputs["Image"])
-    set_alpha.mode="REPLACE_ALPHA"
+
     links.new(glare.outputs["Image"],set_alpha.inputs["Image"])
-    links.new(set_alpha.outputs["Image"],composite.inputs["Image"])
+    links.new(set_alpha.outputs["Image"],viewer.inputs["Image"])
+    links.new(set_alpha.outputs["Image"],out.inputs["Image"])
     return glare
 
 def create_bloom_and_streak_composition():

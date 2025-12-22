@@ -77,6 +77,9 @@ class Text(BObject):
         ibpy.change_default_value(write_control,from_value=all_letters,to_value=all_letters-letters,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
 
+    def get_bounding_box(self):
+        return self.get_text_bounding_box()
+
 class MorphText(BObject):
     """
     A new class for a morphing text object based on geometry nodes

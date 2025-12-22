@@ -315,14 +315,11 @@ class Node:
         if type=="CURVE_TO_MESH":
             return CurveToMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="RESAMPLE_CURVE":
-            mode =attributes["mode"]
-            return ResampleCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
+            return ResampleCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="FILLET_CURVE":
-            mode = attributes["mode"]
-            return FilletCurve(tree, location=location, name=name, label=label, hide=hide, mute=mute,node_height=200,mode=mode)
+            return FilletCurve(tree, location=location, name=name, label=label, hide=hide, mute=mute,node_height=200)
         if type=="FILL_CURVE":
-            mode = attributes["mode"]
-            return FillCurve(tree, location=location, name=name, label=label, hide=hide, mute=mute,node_height=200,mode=mode)
+            return FillCurve(tree, location=location, name=name, label=label, hide=hide, mute=mute,node_height=200)
         if type=="SAMPLE_CURVE":
             data_type = attributes["data_type"]
             mode = attributes["mode"]
@@ -867,14 +864,14 @@ class Quadrilateral(GreenNode):
             self.tree.links.new(height, self.node.inputs["Height"])
 
 class ResampleCurve(GreenNode):
-    def __init__(self, tree, location=(0, 0),mode="COUNT",curve=None,
+    def __init__(self, tree, location=(0, 0),mode="Count",curve=None,
                  selection = None,
                  count=1,
                  limit_radius="False",**kwargs):
         self.node=tree.nodes.new(type="GeometryNodeResampleCurve")
         super().__init__(tree,location=location,**kwargs)
 
-        self.node.mode=mode
+        self.node.inputs["Mode"].default_value=mode
         self.geometry_out=self.node.outputs["Curve"]
         self.geometry_in=self.node.inputs["Curve"]
 
@@ -917,13 +914,13 @@ class TrimCurve(GreenNode):
             self.tree.links.new(end, self.node.inputs["End"])
 
 class FilletCurve(GreenNode):
-    def __init__(self, tree, location=(0, 0),mode="POLY",radius=1,curve=None,
+    def __init__(self, tree, location=(0, 0),mode="Poly",radius=1,curve=None,
                  count=1,
                  limit_radius="False",**kwargs):
         self.node=tree.nodes.new(type="GeometryNodeFilletCurve")
         super().__init__(tree,location=location,**kwargs)
 
-        self.node.mode=mode
+        self.node.inputs["Mode"].default_value=mode
         self.geometry_out=self.node.outputs["Curve"]
         self.geometry_in=self.node.inputs["Curve"]
 
@@ -944,13 +941,13 @@ class FilletCurve(GreenNode):
             self.tree.links.new(count, self.node.inputs["Count"])
 
 class FillCurve(GreenNode):
-    def __init__(self,tree,location=(0,0),mode="NGONS",curve=None,group_id=None,**kwargs):
+    def __init__(self,tree,location=(0,0),mode="N-gons",curve=None,group_id=None,**kwargs):
         self.node=tree.nodes.new(type="GeometryNodeFillCurve")
         super().__init__(tree,location=location,**kwargs)
 
-        self.node.mode=mode
         self.geometry_out=self.node.outputs["Mesh"]
         self.geometry_in=self.node.inputs["Curve"]
+        self.node.inputs["Mode"].default_value=mode
 
         if curve:
             self.tree.links.new(curve,self.node.inputs["Curve"])

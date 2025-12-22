@@ -808,10 +808,11 @@ class SimpleTexBObject(SVGBObject):
                 self.letters[i].disappear(begin_time=begin_time + transition_time, transition_time=0)
         return begin_time + transition_time
 
-    def grow_letter(self, index, final_scale=1, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
+    def grow_letter(self, index,initial_scale=0, final_scale=1, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
         letter = self.letters[index]
-        letter.appear(begin_time=begin_time, transition_time=transition_time)
-        letter.grow(final_scale, transition_time=transition_time)
+        if not letter.appeared:
+            letter.appear(begin_time=begin_time, transition_time=transition_time)
+        letter.grow(initial_scale=initial_scale, scale=final_scale, begin_time=begin_time,transition_time=transition_time)
         self.write(letter_set={index}, begin_time=begin_time * 1.02, transition_time=0)
 
     def move_to_match_letter(self, target=None, src_letter_index=0, target_letter_index=0, begin_time=0,
