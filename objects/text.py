@@ -7,7 +7,7 @@ import numpy as np
 
 from geometry_nodes.geometry_nodes_modifier import  GeometryNodesModifier
 from geometry_nodes.nodes import InputVector, CollectionInfo, SetMaterial, create_geometry_line, TransformGeometry, \
-    create_from_xml
+    create_from_xml, InputValue
 from interface import ibpy
 from interface.ibpy import Vector, get_material, get_collection, get_geometry_node_from_modifier
 from objects.bobject import BObject
@@ -252,14 +252,17 @@ class TextModifier(GeometryNodesModifier):
                                      value=get_from_kwargs(kwargs,'location',Vector()))
         expr_rotation = InputVector(tree, name="ExprRotation",value=get_from_kwargs(kwargs,'rotation',Vector()))
 
+        expr_scale = InputValue(tree, name="ExprScale",value=get_from_kwargs(kwargs,'scale',1))
+
 
         transform_geometry = TransformGeometry(tree,name="ExprTransform",translation=expr_location.std_out,
-                                               rotation=expr_rotation.std_out)
+                                               rotation=expr_rotation.std_out,scale=expr_scale.std_out)
 
         # override default location
         transform_geometry.node.location=below(out)
         expr_location.node.location=below(transform_geometry.node,buffer_y=400)
         expr_rotation.node.location=below(expr_location.node,buffer_y=200)
+        expr_scale.node.location=below(expr_rotation.node,buffer_y=200)
 
         tree.links.new(last_join_node.outputs["Geometry"],transform_geometry.geometry_in)
         tree.links.new(transform_geometry.geometry_out,out.inputs['Geometry'])
@@ -410,7 +413,7 @@ def import_svg_data(imported_svg_data,path,kwargs):
             scale_up = 3 * TEX_LOCAL_SCALE_UP
         elif text_size == 'Huge':
             scale_up = 5 * TEX_LOCAL_SCALE_UP
-        else:  # a number
+        elif isinstance(text_size,(int,float)):  # a number
             scale_up = text_size * TEX_LOCAL_SCALE_UP
 
         # in the following lines the location of the curve is determined from the geometry and the

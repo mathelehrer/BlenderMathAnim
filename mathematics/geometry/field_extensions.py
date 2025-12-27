@@ -6,97 +6,188 @@ from interface.ibpy import Vector
 from sympy.combinatorics import Permutation
 
 
-class QR5:
-    def __init__(self,x:Fraction,y:Fraction):
-        """
-        >>> QR5(Fraction(1, 2), Fraction(3, 4))
-        (1/2+3/4*r5)
+def find_modulus(string):
+    """
+    determine the modulus from a given string representation
+    >>> find_modulus("(1/2+3/4*r11)")
+    (11, 'r11')
+    >>> find_modulus("-r5")
+    (5, 'r5')
+    >>> find_modulus("-2/3*r5")
+    (5, 'r5')
+    >>> find_modulus("1/2")
+    (1, 'r1')
+    >>> find_modulus("-1/2")
+    (1, 'r1')
+    >>> find_modulus("0")
+    (1, 'r1')
+    >>> find_modulus("-2-r7")
+    (7, 'r7')
+    >>> find_modulus("5+2*r53")
+    (53, 'r53')
+    >>> find_modulus("3+r5")
+    (5, 'r5')
 
-        :param x:
-        :param y:
-        """
-        self.x=x
-        self.y=y
+    """
+    if "r" in string:
+        # remove spaces
+        string = string.replace(" ", "")
+        # remove brackets
+        if string[0]=="(":
+            string=string[1:-1]
+        if "+" in string:
+            parts = string.split("+")
+            returns = [find_modulus(part) for part in parts]
+            for ret in returns:
+                if ret != (1, "r1"):
+                    return ret
+            return (1, "r1")
+        if "*" in string:
+            parts = string.split("*")
+            returns = [find_modulus(part) for part in parts]
+            for ret in returns:
+                if ret != (1, "r1"):
+                    return ret
+            return (1, "r1")
+        else:
+            r_index = string.index("r")
+            string = string[r_index:]
+            try:
+                modulus = int(string[1:])
+            except ValueError:
+                return (1, "r1")
+            return modulus, string.strip()
+    else:
+        return (1, "r1")
 
+class QR:
+    def __init__(self,x:Fraction,y:Fraction,root_modulus=5,root_string="r5"):
+        """
+       >>> QR(Fraction(1, 2), Fraction(3, 4))
+       (1/2+3/4*r5)
+       >>> QR(Fraction(1,2), Fraction(3,4),root_modulus=2,root_string="r2")
+       (1/2+3/4*r2)
+
+       :param x:
+       :param y:
+       """
+        self.x = x
+        self.y = y
+        self.root_modulus = root_modulus
+        self.root_string=root_string
 
     @classmethod
-    def parse(cls,string):
+    def parse(cls, string):
         """
-        parse a string of the form "(a/b+c/d*r5)" into a QR5 object
-        >>> QR5.parse("(1/2+3/4*r5)")
+        parse a string of the form "(a/b+c/d*root_string)" into a QR object
+
+        >>> QR.parse("1/2-1/2*r2")
+        (1/2-1/2*r2)
+        >>> QR.parse("-2/3*r5")
+        -2/3*r5
+        >>> QR.parse("-r5")
+        -1*r5
+        >>> QR.parse("(1/2+3/4*r5)")
         (1/2+3/4*r5)
-        >>> QR5.parse("1/2")
+        >>> QR.parse("1/2")
         1/2
-        >>> QR5.parse("-1/2")
+        >>> QR.parse("-1/2")
         -1/2
-        >>> QR5.parse("0")
+        >>> QR.parse("0")
         0
-        >>> QR5.parse("-2-r5")
+        >>> QR.parse("-2-r5")
         (-2-1*r5)
-        >>> QR5.parse("5+2*r5")
+        >>> QR.parse("5+2*r5")
         (5+2*r5)
-        >>> QR5.parse("3+r5")
+        >>> QR.parse("3+r5")
         (3+1*r5)
         """
         # remove brackets
+        root_modulus, root_string =  find_modulus(string)
 
-        if string[0]=="(":
-            string=string[1:-1]
-        if string[0]=="-":
-            string=string[1:]
-            sign1=-1
+
+        string = string.replace(" ","")
+        if string[0] == "(":
+            string = string[1:-1]
+        if string[0] == "-":
+            string = string[1:]
+            sign1 = -1
         else:
-            sign1=1
+            sign1 = 1
         if "-" in string:
             parts = string.split("-")
-            sign2=-1
-        else:
+            sign2 = -1
+        elif "+" in string:
             parts = string.split("+")
-            sign2=1
+            sign2 = 1
+        else:
+            parts = [string]
 
-        if len(parts)==1:
-            if "/" in parts[0]:
-                a,b=parts[0].split("/")
-                return cls(Fraction(sign1*int(a),int(b)),Fraction(0,1))
+        if len(parts) == 1:
+            if "*" in parts[0]:
+                smaller_parts = parts[0].split("*"+root_string)
+                if len(smaller_parts[0]) == 0:
+                    return cls(Fraction(0, 1), Fraction(sign1, 1),root_modulus=root_modulus,root_string=root_string)
+                else:
+                    if "/" in smaller_parts[0]:
+                        a, b = smaller_parts[0].split("/")
+                        return cls(Fraction(0, 1), Fraction(sign1 * int(a), int(b)),root_modulus=root_modulus,root_string=root_string)
+                    else:
+                        return cls(Fraction(0, 1), Fraction(sign1 * int(smaller_parts[0]), 1),root_modulus=root_modulus,root_string=root_string)
+            elif root_string in parts[0]:
+                return cls(Fraction(0, 1), Fraction(sign1, 1),root_modulus=root_modulus,root_string=root_string)
+            elif "/" in parts[0]:
+                a, b = parts[0].split("/")
+                return cls(Fraction(sign1 * int(a), int(b)), Fraction(0, 1),root_modulus=root_modulus,root_string=root_string)
             else:
-                return cls(Fraction(sign1*int(parts[0]),1),Fraction(0,1))
+                return cls(Fraction(sign1 * int(parts[0]), 1), Fraction(0, 1),root_modulus=root_modulus,root_string=root_string)
         else:
             if "/" in parts[0]:
-                a,b=parts[0].split("/")
+                a, b = parts[0].split("/")
             else:
-                a=parts[0]
-                b=1
-            if "*r5" in parts[1]:
-                parts[1]=parts[1].replace("*r5","")
+                a = parts[0]
+                b = 1
+            if "*" in parts[1]:
+                parts[1] = parts[1].replace("*"+root_string, "")
                 if "/" in parts[1]:
-                    c,d=parts[1].split("/")
+                    c, d = parts[1].split("/")
                 else:
-                    c=int(parts[1])
-                    d=1
-            elif "r5" in parts[1]:
-                c=1
-                d=1
+                    c = int(parts[1])
+                    d = 1
+            elif root_string in parts[1]:
+                c = 1
+                d = 1
             else:
-                c=parts[1]
-                d=1
-            return cls(Fraction(sign1*int(a),int(b)),Fraction(sign2*int(c),int(d)))
-
-
+                c = parts[1]
+                d = 1
+            return cls(Fraction(sign1 * int(a), int(b)), Fraction(sign2 * int(c), int(d)),root_modulus=root_modulus,root_string=root_string)
 
     @classmethod
-    def from_integers(cls, a:int, b:int, c:int, d:int):
+    def from_integers(cls, a:int, b:int, c:int, d:int,root_modulus:int=5,root_string="r5"):
         """
-        >>> QR5.from_integers(1,2,3,4)
+        >>> QR.from_integers(1,2,3,4,5,"r5")
         (1/2+3/4*r5)
         """
 
-        return cls(Fraction(a,b), Fraction(c,d))
+        return cls(Fraction(a,b), Fraction(c,d),root_modulus=root_modulus,root_string=root_string)
+
+    @classmethod
+    def random(cls, range=10,root_modulus=5,root_string="r5"):
+        x = Fraction(np.random.randint(-range, range), 1)
+        y = Fraction(np.random.randint(-range, range), 1)
+        return QR(x, y,root_modulus=root_modulus,root_string=root_string)
 
     def __str__(self):
         if self.y>0:
-            return "("+str(self.x)+"+"+str(self.y)+"*r5)"
+            if self.x!=0:
+                return "("+str(self.x)+"+"+str(self.y)+"*"+self.root_string+")"
+            else:
+                return str(self.y)+"*"+self.root_string
         elif self.y<0:
-            return "("+str(self.x)+"-"+str(Fraction(np.abs(self.y.numerator),np.abs(self.y.denominator)))+"*r5)"
+            if self.x!=0:
+                return "("+str(self.x)+"-"+str(Fraction(np.abs(self.y.numerator),np.abs(self.y.denominator)))+"*"+self.root_string+")"
+            else:
+                return "-"+str(Fraction(np.abs(self.y.numerator),np.abs(self.y.denominator)))+"*"+self.root_string
         else:
             return str(self.x)
 
@@ -105,132 +196,174 @@ class QR5:
 
     def __mul__(self, other):
         """
-        >>> QR5(Fraction(1, 2), Fraction(3, 4))*QR5(Fraction(2,1), Fraction(4,3))
+        >>> QR(Fraction(1, 2), Fraction(3, 4))*QR(Fraction(2,1), Fraction(4,3))
         (6+13/6*r5)
 
         >>> np.random.seed(1234)
-        >>> z = QR5.random()
-        >>> w = QR5.random()
+        >>> z = QR.random()
+        >>> w = QR.random()
         >>> z*w
         (70-26*r5)
+
+        >>> QR.parse("1/2-1/2*r2")*QR.parse("1/2+1/4*r2")
+        -1/8*r2
+        >>> QR.parse("4-1/2*r7")*QR.parse("1/2+1/4*r7")
+        (9/8+3/4*r7)
 
         :param other:
         :return:
         """
-        return QR5(self.x * other.x + 5 * self.y * other.y, self.x * other.y + self.y * other.x)
+
+        if self.root_modulus!=other.root_modulus:
+            # harmless case, when there is no modulus
+            if self.root_modulus==1 and self.y==0:
+                return QR(self.x * other.x , self.x * other.y ,root_modulus=other.root_modulus,root_string=other.root_string)
+            if other.root_modulus==1 and other.y==0:
+                return QR(self.x*other.x,self.y*other.x,root_modulus=self.root_modulus,root_string=self.root_string)
+            raise ValueError("Cannot multiply QR fields with different root moduli")
+        return QR(self.x * other.x + self.root_modulus * self.y * other.y, self.x * other.y + self.y * other.x,root_modulus=self.root_modulus,root_string=self.root_string)
 
     def __add__(self,other):
         """
         >>> np.random.seed(1234)
-        >>> z = QR5.random()
-        >>> w = QR5.random()
+        >>> z = QR.random()
+        >>> w = QR.random()
         >>> z+w
         (1+11*r5)
+        >>> QR.parse("4-1/2*r7")+QR.parse("1/2+1/4*r7")
+        (9/2-1/4*r7)
+
 
         :param other:
         :return:
         """
-        return QR5(self.x + other.x, self.y + other.y)
+        if self.root_modulus!=other.root_modulus:
+            # harmless case, when there is no modulus
+            if self.root_modulus==1 and self.y==0:
+                return QR(self.x +other.x ,other.y ,root_modulus=other.root_modulus,root_string=other.root_string)
+            if other.root_modulus==1 and other.y==0:
+                return QR(self.x+other.x,self.y,root_modulus=self.root_modulus,root_string=self.root_string)
+            raise ValueError("Cannot multiply QR fields with different root moduli")
+        return QR(self.x + other.x, self.y + other.y,root_modulus=self.root_modulus,root_string=self.root_string)
 
     def __sub__(self,other):
         """
         >>> np.random.seed(1234)
-        >>> z = QR5.random()
-        >>> w = QR5.random()
+        >>> z = QR.random()
+        >>> w = QR.random()
         >>> z-w
         (9+7*r5)
+        >>> QR.parse("4-1/2*r7")-QR.parse("1/2+1/4*r7")
+        (7/2-3/4*r7)
 
         :param other:
         :return:
         """
-        return QR5(self.x - other.x, self.y - other.y)
+
+        if self.root_modulus != other.root_modulus:
+            # harmless case, when there is no modulus
+            if self.root_modulus == 1 and self.y == 0:
+                return QR(self.x - other.x, -other.y, root_modulus=other.root_modulus, root_string=other.root_string)
+            if other.root_modulus == 1 and other.y == 0:
+                return QR(self.x -other.x, self.y, root_modulus=self.root_modulus, root_string=self.root_string)
+            raise ValueError("Cannot multiply QR fields with different root moduli")
+        return QR(self.x - other.x, self.y - other.y, root_modulus=self.root_modulus, root_string=self.root_string)
 
     def conj(self):
         """
-        >>> QR5(Fraction(1, 2), Fraction(3, 4)).conj()
+        >>> QR(Fraction(1, 2), Fraction(3, 4)).conj()
         (1/2-3/4*r5)
+        >>> QR.parse("4-1/2*r7").conj()
+        (4+1/2*r7)
 
         :return:
         """
-        return QR5(self.x, -self.y)
+        return QR(self.x, -self.y,self.root_modulus,self.root_string)
 
     def norm(self):
         """
-        >>> QR5(Fraction(1, 2), Fraction(3, 4)).norm()
+        >>> QR(Fraction(1, 2), Fraction(3, 4)).norm()
         Fraction(-41, 16)
+        >>> QR.parse("4-1/2*r7").norm()
+        Fraction(57, 4)
 
         :return:
         """
-        return self.x**2-5*self.y**2
+
+        return self.x**2-self.root_modulus*self.y**2
 
     def __neg__(self):
         """
-        >>> -QR5.from_integers(-1,1,2,-3)
+        >>> -QR.from_integers(-1,1,2,-3)
         (1+2/3*r5)
+        >>> -QR.from_integers(-1,1,2,-3,3,"r3")
+        (1+2/3*r3)
+
 
         :return:
         """
-        return QR5(-self.x, -self.y)
+        return QR(-self.x, -self.y,self.root_modulus,self.root_string)
 
     def __truediv__(self,other):
         """
         >>> np.random.seed(1234)
-        >>> z = QR5.random()
-        >>> w = QR5.random()
+        >>> z = QR.random(5,2,"r2")
+        >>> w = QR.random(5,2,"r2")
+        >>> z/w*w,z
+        ((-2+1*r2), (-2+1*r2))
+
+        >>> np.random.seed(1234)
+        >>> z = QR.random()
+        >>> w = QR.random()
         >>> z/w
         (55/2+23/2*r5)
-
-        >>> z = QR5.random()
-        >>> w = QR5.random()
-        >>> z/w*w,z
-        ((5+7*r5), (5+7*r5))
-
+        
         :param other:
         :return:
         """
-        return QR5(1 / other.norm(), Fraction(0, 1))*(self * other.conj())
-
-    @classmethod
-    def random(cls,range=10):
-        x=Fraction(np.random.randint(-range,range),1)
-        y=Fraction(np.random.randint(-range,range),1)
-        return QR5(x, y)
+        return QR(1 / other.norm(), Fraction(0, 1),self.root_modulus,self.root_string)*(self * other.conj())
 
     def __eq__(self, other):
-        return self.x==other.x and self.y==other.y
+        if self.root_modulus==other.root_modulus:
+            return self.x==other.x and self.y==other.y
+        else:
+            if self.y==0 and other.y==0:
+                return self.x==other.x
+            else:
+                return False
 
     def __hash__(self):
-        """ custom hash function for QR5 objects
-        >>> a = QR5(Fraction(1, 2), Fraction(3, 4))
+        """ custom hash function for QR objects
+        >>> a = QR(Fraction(1, 2), Fraction(3, 4))
         >>> hash(a)
-        590899387183067792
+        -5659871693760987716
 
-        >>> b = QR5(Fraction(5, 6), Fraction(7, 8))
+        >>> b = QR(Fraction(5, 6), Fraction(7, 8))
         >>> hash((a,b))
-        1680000522697785275
+        9002616610964909476
 
         >>> M=FTensor([a,b])
         >>> hash(M)
-        1680000522697785275
+        9002616610964909476
 
         """
-        return hash((self.x.numerator,self.x.denominator,self.y.numerator,self.y.denominator))
+        return hash((self.x.numerator,self.x.denominator,self.y.numerator,self.y.denominator,self.root_modulus))
 
     def real(self):
-        return float(self.x)+float(self.y)*np.sqrt(5)
+        return float(self.x)+float(self.y)*np.sqrt(self.root_modulus)
 
 # the quaternions are constructed with the Cayley-Dickson construction
-# we need complex numbers over QR5 and from these complex numbers the
+# we need complex numbers over QR and from these complex numbers the
 # quaternion can be constructed as pairs of complex numbers
 
 class FComplex:
-    def __init__(self, re:QR5, im:QR5):
+    def __init__(self, re:QR, im:QR):
         self.re=re
         self.im=im
 
     def __str__(self):
         """
-        >>> str(FComplex(QR5(Fraction(1, 2), Fraction(3, 4)), QR5(Fraction(2, 1), Fraction(4, 3))))
+        >>> str(FComplex(QR(Fraction(1, 2), Fraction(3, 4)), QR(Fraction(2, 1), Fraction(4, 3))))
         '(1/2+3/4*r5)+(2+4/3*r5)*i'
 
         :return:
@@ -241,7 +374,7 @@ class FComplex:
         return self.__str__()
     def __mul__(self, other):
         """
-        >>> FComplex(QR5(Fraction(1, 2), Fraction(3, 4)), QR5(Fraction(5, 6), Fraction(7, 8))) * FComplex(QR5(Fraction(9, 8), Fraction(7, 6)), QR5(Fraction(5, 4), Fraction(3, 2)))
+        >>> FComplex(QR(Fraction(1, 2), Fraction(3, 4)), QR(Fraction(5, 6), Fraction(7, 8))) * FComplex(QR(Fraction(9, 8), Fraction(7, 6)), QR(Fraction(5, 4), Fraction(3, 2)))
         (-8/3-11/12*r5)+(295/24+2099/576*r5)*i
 
         >>> u = FComplex.random(10)
@@ -257,7 +390,7 @@ class FComplex:
 
     def __add__(self,other):
         """
-        >>> FComplex(QR5(Fraction(1, 2), Fraction(3, 4)), QR5(Fraction(5, 6), Fraction(7, 8))) + FComplex(QR5(Fraction(9, 8), Fraction(7, 6)), QR5(Fraction(5, 4), Fraction(3, 2)))
+        >>> FComplex(QR(Fraction(1, 2), Fraction(3, 4)), QR(Fraction(5, 6), Fraction(7, 8))) + FComplex(QR(Fraction(9, 8), Fraction(7, 6)), QR(Fraction(5, 4), Fraction(3, 2)))
         (13/8+23/12*r5)+(25/12+19/8*r5)*i
 
         :param other:
@@ -267,7 +400,7 @@ class FComplex:
 
     def __sub__(self,other):
         """
-        >>> FComplex(QR5(Fraction(1, 2), Fraction(3, 4)), QR5(Fraction(5, 6), Fraction(7, 8))) - FComplex(QR5(Fraction(9, 8), Fraction(7, 6)), QR5(Fraction(5, 4), Fraction(3, 2)))
+        >>> FComplex(QR(Fraction(1, 2), Fraction(3, 4)), QR(Fraction(5, 6), Fraction(7, 8))) - FComplex(QR(Fraction(9, 8), Fraction(7, 6)), QR(Fraction(5, 4), Fraction(3, 2)))
         (-5/8-5/12*r5)+(-5/12-5/8*r5)*i
 
         :param other:
@@ -282,7 +415,7 @@ class FComplex:
 
     def norm(self):
         """
-        >>> FComplex(QR5(Fraction(1, 2), Fraction(3, 4)), QR5(Fraction(5, 6), Fraction(7, 8))).norm()
+        >>> FComplex(QR(Fraction(1, 2), Fraction(3, 4)), QR(Fraction(5, 6), Fraction(7, 8))).norm()
         Fraction(10998241, 331776)
 
         :return:
@@ -303,15 +436,15 @@ class FComplex:
         :param other:
         :return:
         """
-        return FComplex(QR5(1/other.norm(),Fraction(0,1)),QR5.from_integers(0,1,0,1))*(self*other.conj())
+        return FComplex(QR(1/other.norm(),Fraction(0,1)),QR.from_integers(0,1,0,1))*(self*other.conj())
 
     def __eq__(self, other):
         return self.re==other.re and self.im==other.im
 
     @classmethod
     def random(cls,range=10):
-        x=QR5.random(range)
-        y=QR5.random(range)
+        x=QR.random(range)
+        y=QR.random(range)
         return FComplex(x,y)
 
     def __hash__(self):
@@ -328,7 +461,7 @@ class FQuaternion:
         return self.__str__()
 
     @classmethod
-    def from_vector(cls,a:QR5,b:QR5,c:QR5,d:QR5):
+    def from_vector(cls,a:QR,b:QR,c:QR,d:QR):
         return FQuaternion(FComplex(a,b),FComplex(c,d))
 
     def __add__(self,other):
@@ -353,8 +486,8 @@ class FQuaternion:
         """
         Check algebra of quaternions
 
-        >>> one = QR5.from_integers(1,1,0,1)
-        >>> zero = QR5.from_integers(0,1,0,1)
+        >>> one = QR.from_integers(1,1,0,1)
+        >>> zero = QR.from_integers(0,1,0,1)
         >>> q_one=FQuaternion.from_vector(one,zero,zero,zero)
         >>> q_i=FQuaternion.from_vector(zero,one,zero,zero)
         >>> q_j=FQuaternion.from_vector(zero,zero,one,zero)
@@ -392,7 +525,7 @@ class FQuaternion:
 
 # For the computation of the normal vector, we compute the tri-vector from the
 # tensor product of the three basis vectors and finally compute the dual vector
-# To work with this machinery, we need to define a tensor class over the field of QR5
+# To work with this machinery, we need to define a tensor class over the field of QR
 
 class FTensor:
     def __init__(self,components):
@@ -446,17 +579,17 @@ class FTensor:
         else:
             return list()
 
-    def scale(self,alpha:QR5):
+    def scale(self,alpha:QR):
         """
         >>> np.random.seed(1234)
-        >>> comps = np.array([QR5.random() for i in range(12)])
+        >>> comps = np.array([QR.random() for i in range(12)])
         >>> components = comps.reshape(3,4)
 
         >>> tensor = FTensor(components)
         >>> tensor.components.tolist()
         [[(5+9*r5), (-4+2*r5), (5+7*r5), (-1+1*r5)], [(2+6*r5), (-5+6*r5), (-1+5*r5), (8+6*r5)], [(2-5*r5), (-8-4*r5), (-7-3*r5), (1-10*r5)]]
 
-        >>> tensor = tensor.scale(QR5(Fraction(2,1),Fraction(0,1)))
+        >>> tensor = tensor.scale(QR(Fraction(2,1),Fraction(0,1)))
         >>> tensor.components.tolist()
         [[(10+18*r5), (-8+4*r5), (10+14*r5), (-2+2*r5)], [(4+12*r5), (-10+12*r5), (-2+10*r5), (16+12*r5)], [(4-10*r5), (-16-8*r5), (-14-6*r5), (2-20*r5)]]
 
@@ -469,9 +602,9 @@ class FTensor:
         """
         tensor product between two tensors
         >>> np.random.seed(1234)
-        >>> comps = np.array([QR5.random() for i in range(12)])
+        >>> comps = np.array([QR.random() for i in range(12)])
         >>> components = comps.reshape(3,4)
-        >>> comps2 = np.array([QR5.random() for i in range(12)])
+        >>> comps2 = np.array([QR.random() for i in range(12)])
         >>> components2 = comps2.reshape(3,2,2)
         >>> product = FTensor(components)*FTensor(components2)
         >>> product.components.tolist()
@@ -529,6 +662,8 @@ class FVector(FTensor):
     def parse(cls, string):
         """
         parse matrix from string
+        >>> FVector.parse("[1,-1,-r5]")
+        [1, -1, -r5]
         >>> FVector.parse("[-2, 0, 0, 0]")
         [-2, 0, 0, 0]
         >>> FVector.parse("[1, (1/2-1/2*r5), 0, (1/2+1/2*r5)]")
@@ -537,12 +672,16 @@ class FVector(FTensor):
         [(1/2-1/2*r5), (1/2+1/2*r5), 0, 1]
         """
         # remove outer brackets
+        # string = string.strip()
+        # while string[0]==' ':
+        #     string = string[1:]
+        string = string.replace(" ","")
         string = string[1:-1]
         parts = string.split(",")
 
         components = []
         for part in parts:
-            components.append(QR5.parse(part.strip()))
+            components.append(QR.parse(part.strip()))
         return cls(components)
 
     @classmethod
@@ -553,16 +692,16 @@ class FVector(FTensor):
         components = []
         for v in vector:
             if isinstance(v,int):
-                components.append(QR5.from_integers(v,1,0,1))
+                components.append(QR.from_integers(v,1,0,1))
             elif isinstance(v,Fraction):
-                components.append(QR5.from_integers(v.numerator,v.denominator,0,1))
+                components.append(QR.from_integers(v.numerator,v.denominator,0,1))
             else:
                 components.append(v)
         return FVector(components)
 
-    def dot(self,other)->QR5:
+    def dot(self,other)->QR:
         """
-        >>> a = FVector([QR5.from_integers(1,1,0,1), QR5.from_integers(1,2,2,1)])
+        >>> a = FVector([QR.from_integers(1,1,0,1), QR.from_integers(1,2,2,1)])
         >>> a.dot(a)
         (85/4+2*r5)
 
@@ -590,8 +729,8 @@ class FVector(FTensor):
         Raises:
             Exception: If the cross product is attempted on vectors not in 3D.
 
-        >>> one = QR5.from_integers(1,1,0,1)
-        >>> zero = QR5.from_integers(0,1,0,1)
+        >>> one = QR.from_integers(1,1,0,1)
+        >>> zero = QR.from_integers(0,1,0,1)
         >>> x = FVector([one,zero,zero])
         >>> y = FVector([zero,one,zero])
         >>> z = FVector([zero,zero,one])
@@ -652,7 +791,7 @@ class FMatrix(FTensor):
             comp_row = []
             parts = row.split(", ")
             for part in parts:
-                comp_row.append(QR5.parse(part))
+                comp_row.append(QR.parse(part))
             components.append(comp_row)
         return cls(components)
 
@@ -689,9 +828,9 @@ class FMatrix(FTensor):
             row = []
             for c in range(rank):
                 if c==r:
-                    row.append(QR5.from_integers(1,1,0,1))
+                    row.append(QR.from_integers(1,1,0,1))
                 else:
-                    row.append(QR5.from_integers(0,1,0,1))
+                    row.append(QR.from_integers(0,1,0,1))
             components.append(row)
 
         return cls(components)
@@ -701,12 +840,12 @@ class EpsilonTensor(FTensor):
         n = rank**rank
         comps = []
         for i in range(n):
-            comps.append(QR5.from_integers(0,1,0,1))
+            comps.append(QR.from_integers(0,1,0,1))
         comps = np.array(comps)
         comps.shape = (rank,)*rank
         permutations =  list(itertools.permutations(range(rank)))
         for permutation in permutations:
             p = Permutation(permutation)
-            comps[permutation] = QR5.from_integers(p.signature(),1,0,1)
+            comps[permutation] = QR.from_integers(p.signature(),1,0,1)
 
         super().__init__(comps.tolist())

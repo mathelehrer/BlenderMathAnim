@@ -44,7 +44,10 @@ def get_color_from_string(color_str):
     for prefix in COLOR_PREFIXES:
         if prefix in color_str:
             color_str = color_str[len(prefix) + 1:]
-    color_index = COLOR_NAMES.index(color_str)
+    if color_str in COLOR_NAMES:
+        color_index = COLOR_NAMES.index(color_str)
+    else:
+        return None
     if color_index > -1:
         return COLORS_SCALED[color_index]
     else:

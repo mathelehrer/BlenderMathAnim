@@ -9,57 +9,56 @@ from interface.ibpy import Vector
 
 from mathematics.geometry.field_extensions import QR, FTensor, FMatrix, FVector
 
-COXH3_SEEDS= {
-    "DODECA":FVector.parse("[1, 1, -1]"),
-    "RHOMBICOSIDODECA":FVector.parse("[1, 1,2+r5]"),
-    "TRUNC_ICOSIDODECA":FVector.parse("[1, 1,-3-2*r5]"),
-    "ICOSA":FVector.parse("[1, 0,1/2+1/2*r5]"),
-    "TRUNC_ICOSA":FVector.parse("[1, 0,-3/2-3/2*r5]"),
-    "TRUNC_DODECA":FVector.parse("[0, 1,-5/2-3/2*r5]"),
-    "ICOSIDODECA":FVector.parse("[0, 0,1+r5]")
+COXB3_SEEDS= {
+    "OCTA":FVector.parse("[1, 0, -1]"),
+    "CUBE":FVector.parse("[0, 1,-r2]"),
+    "TRUNC_OCTA":FVector.parse("[1, 0, -3]"),
+    "TRUNC_CUBE":FVector.parse("[1, 1, 1 - r2]"),
+    "CUBOCTA":FVector.parse("[0, 0, 2]"),
+    "RHOMBICUBOCTA":FVector.parse("[1, 1, -1 - r2]"),
+    "TRUNC_CUBOCTA":FVector.parse("[1, 1, -3 - r2]")
 }
 
-COXH3_SIGNATURES= {
-    "DODECA":(1,1,1),
-    "RHOMBICOSIDODECA":(1,-1,1),
-    "TRUNC_ICOSIDODECA":(1,1,-1),
-    "ICOSA":(1,0,1),
-    "TRUNC_ICOSA":(1,0,-1),
-    "TRUNC_DODECA":(0,1,-1),
-    "ICOSIDODECA":(0,0,1)
+COXB3_SIGNATURES= {
+    "OCTA":(1,0,0),
+    "CUBE":(0,1,0),
+    "TRUNC_OCTA":(1,0,-1),
+    "TRUNC_CUBE":(1,1,1),
+    "CUBOCTA":(0,0,1),
+    "RHOMBICUBOCTA":(1,1,0),
+    "TRUNC_CUBOCTA":(1,1,-1)
 }
 
-COXH3_TYPES={
-    (1,1,1):"DODECA",
-    (1,-1,1):"RHOMBICOSIDODECA",
-    (1,1,-1):"TRUNC_ICOSIDODECA",
-    (1,0,1):"ICOSA",
-    (1,0,-1):"TRUNC_ICOSA",
-    (0,1,-1):"TRUNC_DODECA",
-    (0,0,1):"ICOSIDODECA"
+COXB3_TYPES={
+    (1,0,0):"OCTA",
+    (0,1,0):"CUBE",
+    (1,0,-1):"TRUNC_OCTA",
+    (1,1,1):"TRUNC_CUBE",
+    (0,0,1):"CUBOCTA",
+    (1,1,0):"RHOMBICUBOCTA",
+    (1,1,-1):"TRUNC_CUBOCTA"
 }
 
 # predefined seeds computed in video_CoxH4/mathematica/CoxH3.nb
 PATH = "../mathematics/geometry/data/"
-class CoxH3:
+class CoxB3:
     def __init__(self,path = None):
 
-        self.name = "coxH3"
+        self.name = "coxB3"
         if path is None:
             self.path = PATH
         else:
             self.path = path
 
-        zero = QR.from_integers(0,1,0,1)
-        one = QR.from_integers(1,1,0,1)
-        half = QR.from_integers(1,2,0,1)
-        two = QR.from_integers(2,1,0,1)
+        zero = QR.from_integers(0,1,0,1,2,"r2")
+        one = QR.from_integers(1,1,0,1,2,"r2")
+        half = QR.from_integers(1,2,0,1,2,"r2")
 
         # normal vectors
         normals = [
                     FVector([one,zero,zero]),
                    FVector([zero,one,zero]),
-                   FVector([QR.from_integers(1,2,0,1),QR.from_integers(1,4,1,4),QR.from_integers(-1,4,1,4)]),
+                   FVector([half,QR.from_integers(0,1,1,2,2,"r2"),half]),
                    ]
 
         self.normals = normals
@@ -72,10 +71,10 @@ class CoxH3:
         [print(g) for g in self.generators]
 
         # load or generate the group from the generators
-        if not os.path.exists(os.path.join(self.path, "coxH3_elements.dat")):
+        if not os.path.exists(os.path.join(self.path, self.name+"_elements.dat")):
             self.elements = self.generate_elements()
         else:
-            self.elements = self.read_elements("coxH3_elements.dat")
+            self.elements = self.read_elements(self.name+"_elements.dat")
 
     def read_elements(self,filname):
         data = []
@@ -125,16 +124,16 @@ class CoxH3:
         self.save(elements, self.name+"_elements.dat")
         return elements
 
-    def get_radius(self,seed=[1,1,-1]):
-        return self.get_real_point_cloud(seed)[0].length
+    def get_radius(self,signature=[1,1,-1]):
+        return self.get_real_point_cloud(signature)[0].length
 
     def point_cloud(self, signature=[1, 1, 1], start=None):
         if isinstance(signature, tuple):
             signature = list(signature)
-        filename = "coxH3_points" + str(signature).replace(",", "_") + ".dat"
+        filename = self.name+"_points" + str(signature).replace(",", "_") + ".dat"
         if not os.path.exists(os.path.join(self.path, filename)):
             if start is None:
-                start = COXH3_SEEDS.get(COXH3_TYPES[tuple(signature)],None)
+                start = COXB3_SEEDS.get(COXB3_TYPES[tuple(signature)],None)
                 if start is None:
                     raise "No start point given for point cloud generation."
             point_cloud = set()

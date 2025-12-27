@@ -6,7 +6,7 @@ from mathutils import Vector, Quaternion,Matrix
 
 from interface import ibpy
 from interface.ibpy import create_mesh, to_vector
-from mathematics.geometry.field_extensions import QR5
+from mathematics.geometry.field_extensions import QR
 from mathematics.lin_alg.subspace import Subspace
 from objects.bobject import BObject
 from objects.face import Face
@@ -540,7 +540,7 @@ def compute_similarity_transform(a0, a1, a2, p0, p1, p2):
     """
     vA1 = to_vector(a1) - to_vector(a0)
     vA2 = to_vector(a2) - to_vector(a0)
-    if isinstance(p1,QR5):
+    if isinstance(p1,QR):
         vP1 = p1.real()-p0
         vP2 = p2.real()-p0
     else:

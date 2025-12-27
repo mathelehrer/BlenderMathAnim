@@ -1,6 +1,7 @@
 import bmesh
 import bpy
 
+from appearance import textures
 from appearance.textures import apply_material
 from interface import ibpy
 from interface.ibpy import change_emission, Vector, Quaternion
@@ -107,9 +108,9 @@ class BObject(object):
         if smooth > 1:
             adaptive_subdivision=self.get_from_kwargs('adaptive_subdivision',False)
             dicing_rate = self.get_from_kwargs('dicing_rate',0.5)
-            ibpy.add_sub_division_surface_modifier(self, level=smooth,adaptive_subdivision=adaptive_subdivision,dicing_rate=dicing_rate)
+            ibpy.add_sub_division_surface_modifier(self, level=smooth,adaptive_subdivision=adaptive_subdivision,dicing_rate=dicing_rate,**kwargs)
         if solid:
-            ibpy.add_solidify_modifier(self, thickness=solid, offset=self.get_from_kwargs('offset', -1)),
+            ibpy.add_solidify_modifier(self, thickness=solid,**kwargs),
         if bevel:
             ibpy.add_bevel_modifier(self, width=bevel)
 
@@ -552,6 +553,31 @@ class BObject(object):
                              transition_time=transition_time)
         return begin_time + transition_time
 
+    def index_transform_mesh(self,transformations,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        """
+        This transforms the mesh with a list of lambda functions.
+        The lambda functions act on the index of the shape key rather than on the positions
+        The first of the transformations is scheduled with the begin_time and transition_time
+
+        """
+        if not isinstance(transformations, list):
+            transformations = [transformations]
+
+        state = 0
+        basis = None
+        for t in transformations:
+            state += 1
+            self.old_sk = ibpy.create_shape_key_from_index_transformation(self, basis, state, t)
+
+
+        # set all shape keys to zero initially
+        ibpy.zero_all_shape_keys(self,appear_frame=begin_time*FRAME_RATE-1)
+        self.transformation_state += 1
+        ibpy.morph_to_next_shape2(self, self.transformation_state - 1, begin_time * FRAME_RATE,
+                                  transition_time * FRAME_RATE)
+        return begin_time + transition_time
+
+
     def transform_mesh(self, transformation, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         """
         if there is only one transformation then the transformation can be performed immediately (backward compatability)
@@ -584,15 +610,24 @@ class BObject(object):
         self.transformation_state += 1
         return begin_time + transition_time
 
+    def transform_mesh_to_next_shape2(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+        if 'state' in kwargs:
+            self.transformation_state = kwargs.pop('state') - 1
+        ibpy.morph_to_next_shape2(self, self.transformation_state, begin_time * FRAME_RATE,
+                                 transition_time * FRAME_RATE)
+
+        self.transformation_state += 1
+        return begin_time + transition_time
+
     def transform_mesh_to_previous_shape(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         ibpy.morph_to_previous_shape(self, self.transformation_state, begin_time * FRAME_RATE,
                                      transition_time * FRAME_RATE)
         self.transformation_state -= 1
         return begin_time + transition_time
 
-    def change_color(self, new_color, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        ibpy.change_color(self, new_color, begin_frame=begin_time * FRAME_RATE,
-                          final_frame=(begin_time + transition_time) * FRAME_RATE)
+    def change_color(self, new_color, slot = 0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
+        ibpy.change_color(self, new_color, slot=0,begin_frame=begin_time * FRAME_RATE,
+                          final_frame=(begin_time + transition_time) * FRAME_RATE,**kwargs)
 
         return begin_time + transition_time
 
@@ -899,6 +934,17 @@ class BObject(object):
 
     def clear_parent(self):
         ibpy.clear_parent(self)
+
+    def change_material(self, new_color, begin_time, transition_time, slot,**kwargs):
+        """
+        add second material to existing material and make transition
+        """
+        mat = ibpy.get_material_of(self,slot=slot)
+        textures.add_texture_to_material(mat,new_color,**kwargs)
+        slider = ibpy.get_node_of_material(mat,"MaterialMixer")[0]
+        ibpy.change_default_value(slider.inputs[0],from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
+
+        return begin_time+transition_time
 
 
 class AnimBObject(BObject):

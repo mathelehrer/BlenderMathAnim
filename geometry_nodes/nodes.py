@@ -4849,9 +4849,10 @@ class BevelFaces(NodeGroup):
         create_geometry_line(tree,[foreachface],ins=self.group_inputs.outputs["Geometry"],out=self.group_outputs.inputs["Geometry"])
 
 class PolyhedronViewNode(NodeGroup):
-    def __init__(self,tree,**kwargs):
+    def __init__(self,tree,edge_material=None,edge_radius=0.05,vertex_material=None,vertex_radius=0.1,highlight_root=False,root_material="drawing",**kwargs):
         self.name = get_from_kwargs(kwargs, "name", "PolyhedronViewNode")
-        super().__init__(tree, inputs={"Mesh": "GEOMETRY"},
+        super().__init__(tree, inputs={"Mesh": "GEOMETRY","Edge Radius": "FLOAT", "Edge Material": "MATERIAL", "Vertex Radius": "FLOAT","Vertex Material": "MATERIAL",
+                                       "Highlight Root":"BOOLEAN", "Root Material":"MATERIAL"},
                          outputs={"Mesh": "GEOMETRY"}, auto_layout=False, name=self.name, **kwargs)
 
         self.inputs = self.node.inputs
@@ -4860,6 +4861,28 @@ class PolyhedronViewNode(NodeGroup):
         self.geometry_in = self.node.inputs["Mesh"]
         self.geometry_out = self.node.outputs["Mesh"]
 
+        if isinstance(edge_radius,(int,float)):
+            self.node.inputs["Edge Radius"].default_value =edge_radius
+        else:
+            tree.links.new(edge_radius,self.node.inputs["Edge Radius"])
+        if isinstance(vertex_radius,(int,float)):
+            self.node.inputs["Vertex Radius"].default_value =vertex_radius
+        else:
+            tree.links.new(vertex_radius,self.node.inputs["Vertex Radius"])
+
+        if edge_material is not None:
+            tree.links.new(edge_material,self.node.inputs["Edge Material"])
+        if vertex_material is not None:
+            tree.links.new(vertex_material,self.node.inputs["Vertex Material"])
+        if root_material is not None:
+            tree.links.new(root_material,self.node.inputs["Root Material"])
+
+        if highlight_root:
+            if isinstance(highlight_root,(bool)):
+                self.node.inputs["Highlight Root"].default_value=highlight_root
+            else:
+                tree.links.new(highlight_root,self.node.inputs["Highlight Root"])
+
     def fill_group_with_node(self, tree, **kwargs):
         # remove any existing node
         nodes = tree.nodes
@@ -4867,17 +4890,6 @@ class PolyhedronViewNode(NodeGroup):
             nodes.remove(n)
 
         create_from_xml(tree, "PolyhedronView_nodes", **kwargs)
-
-        edge_color = get_from_kwargs(kwargs, 'edge_color', 'example')
-        vertex_color = get_from_kwargs(kwargs, 'vertex_color', 'red')
-
-        edge_material = ibpy.get_material(edge_color, **kwargs)
-        vertex_material = ibpy.get_material(vertex_color, **kwargs)
-
-        edge_node = ibpy.get_geometry_node_from_modifier(tree, "EdgeMaterial")
-        edge_node.material = edge_material
-        vertex_node = ibpy.get_geometry_node_from_modifier(tree, "VertexMaterial")
-        vertex_node.material = vertex_material
 
 # aux functions #
 

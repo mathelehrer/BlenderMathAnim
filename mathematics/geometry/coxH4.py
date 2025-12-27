@@ -9,14 +9,14 @@ from multiprocessing import Pool
 
 import numpy as np
 
-from mathematics.geometry.field_extensions import QR5, FMatrix, FVector, EpsilonTensor
+from mathematics.geometry.field_extensions import QR, FMatrix, FVector, EpsilonTensor
 from utils.string_utils import show_inline_progress_in_terminal
 
 PATH = "data/"
-zero = QR5.from_integers(0,1,0,1)
-one = QR5.from_integers(1,1,0,1)
-half = QR5.from_integers(1,2,0,1)
-two = QR5.from_integers(2,1,0,1)
+zero = QR.from_integers(0,1,0,1)
+one = QR.from_integers(1,1,0,1)
+half = QR.from_integers(1,2,0,1)
+two = QR.from_integers(2,1,0,1)
 epsilon = EpsilonTensor(4)
 zero4 = FVector([zero,zero,zero,zero])
 
@@ -107,10 +107,10 @@ class CoxH4:
             self.path=PATH
         else:
             self.path = path
-        zero = QR5.from_integers(0,1,0,1)
-        one = QR5.from_integers(1,1,0,1)
-        half = QR5.from_integers(1,2,0,1)
-        two = QR5.from_integers(2,1,0,1)
+        zero = QR.from_integers(0,1,0,1)
+        one = QR.from_integers(1,1,0,1)
+        half = QR.from_integers(1,2,0,1)
+        two = QR.from_integers(2,1,0,1)
 
         # normal vectors: Computed in CoxH4.nb
         normals = [
@@ -118,9 +118,9 @@ class CoxH4:
                     FVector([half,half,half,half]),
                     FVector([zero, one,zero, zero]),
                    FVector([zero,
-                            QR5.from_integers(1,4,1,4),
+                            QR.from_integers(1,4,1,4),
                             -half,
-                            QR5.from_integers(1,4,-1,4)
+                            QR.from_integers(1,4,-1,4)
                             ]
                            ),
                    ]
@@ -438,7 +438,6 @@ class CoxH4:
                 print(key, val, center(key, point_cloud))
         return cells
 
-
     def find_faces_of_cell_chunk(self,point_cloud,edge_map,chunk):
         """
         function to find the faces of a cell chunk
@@ -516,7 +515,6 @@ class CoxH4:
             if len(signs) > 2:
                 return False
         return True
-
 
     def is_coplanar(self,points,normal=None):
         if len(points) < 4:

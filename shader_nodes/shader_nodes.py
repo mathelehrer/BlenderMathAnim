@@ -11,6 +11,7 @@ from utils.string_utils import parse_vector
 
 pi = np.pi
 
+
 # auxiliary functions
 
 def maybe_flatten(list_of_lists):
@@ -21,6 +22,7 @@ def maybe_flatten(list_of_lists):
         else:
             result.append(part)
     return result
+
 
 def parse_location(location):
     location = location.replace("(", "")
@@ -38,7 +40,7 @@ class ShaderNode:
         self.links = tree.links
         self.node.hide = True
         self.inputs = self.node.inputs
-        self.outputs= self.node.outputs
+        self.outputs = self.node.outputs
 
         if 'hide' in kwargs:
             hide = kwargs.pop('hide')
@@ -53,7 +55,7 @@ class ShaderNode:
             self.node.label = label
 
     @classmethod
-    def from_attributes(cls,tree,attributes):
+    def from_attributes(cls, tree, attributes):
         name = attributes["name"]
         # print("Create Node from attributes: ",attributes["id"],": ", name)
         if "location" not in attributes:
@@ -72,75 +74,82 @@ class ShaderNode:
 
         type = attributes["type"]
 
-        if type=="ATTRIBUTE":
-            attribute_name= attributes["attribute_name"]
-            return AttributeNode(tree,location=location,label=label,name=name,attribute_name=attribute_name,hide=hide,mute=mute,node_height=200)
-        elif type=="BRIGHTCONTRAST":
-            return BrightContrast(tree,location=location,label=label,name=name,hide=hide,mute=mute,node_height=200)
-        elif type =="BSDF_PRINCIPLED":
-            return PrincipledBSDF(tree,location=location,label=label,
-                                  name=name,hide=hide,mute=mute,
+        if type == "ATTRIBUTE":
+            attribute_name = attributes["attribute_name"]
+            return AttributeNode(tree, location=location, label=label, name=name, attribute_name=attribute_name,
+                                 hide=hide, mute=mute, node_height=200)
+        elif type == "BRIGHTCONTRAST":
+            return BrightContrast(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                                  node_height=200)
+        elif type == "BSDF_PRINCIPLED":
+            return PrincipledBSDF(tree, location=location, label=label,
+                                  name=name, hide=hide, mute=mute,
                                   node_height=600)
-        elif type=="BSDF_TRANSPARENT":
-            return BSDFTransparent(tree,location=location,label=label,name=name,hide=hide,mute=mute,
+        elif type == "BSDF_TRANSPARENT":
+            return BSDFTransparent(tree, location=location, label=label, name=name, hide=hide, mute=mute,
                                    node_height=200)
         elif type == "COMBXYZ":
             return CombineXYZ(tree, location=location, label=label, name=name, hide=hide, mute=mute, node_height=200)
-        elif type=="DISPLACEMENT":
-            space=attributes["space"]
-            return Displacement(tree,location=location,label=label,name=name,hide=hide,mute=mute,
-                                 space=space,node_height=400)
-        elif type=="FRAME":
-            return Frame(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,node_width=200)
-        elif type=="MAPPING":
-            vector_type=attributes["vector_type"]
-            return Mapping(tree,location,vector_type=vector_type,label=label,hide=hide,mute=mute,node_height=200,node_width=200)
-        elif type=="MATH":
+        elif type == "DISPLACEMENT":
+            space = attributes["space"]
+            return Displacement(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                                space=space, node_height=400)
+        elif type == "FRAME":
+            return Frame(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200,
+                         node_width=200)
+        elif type == "MAPPING":
+            vector_type = attributes["vector_type"]
+            return Mapping(tree, location, vector_type=vector_type, label=label, hide=hide, mute=mute, node_height=200,
+                           node_width=200)
+        elif type == "MATH":
             operation = attributes["operation"]
-            return MathNode(tree,location=location,label=label,name=name,hide=hide,mute=mute,
-                            operation=operation,node_height=200)
-        elif type=="MIX":
-            data_type=attributes["data_type"]
-            return MixNode(tree,location=location,label=label,name=name,hide=hide,mute=mute,
-                           data_type=data_type,node_height=200)
-        elif type=="MIX_SHADER":
-            return MixShader(tree,location=location,label=label,name=name,hide=hide,mute=mute,node_height=200)
-        elif type=="OUTPUT_MATERIAL":
-            return OutputMaterial(tree,location=location,label=label,name=name,hide=hide,mute=mute,node_height=200)
-        elif type=="SEPXYZ":
-            return SeparateXYZ(tree,location=location,label=label,name=name,hide=hide,mute=mute,node_height=200)
-        elif type=="TEX_COORD":
-            return TextureCoordinate(tree,location=location,label=label,name=name,hide=hide,mute=mute,node_height=200)
-        elif type=="TEX_IMAGE":
+            return MathNode(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                            operation=operation, node_height=200)
+        elif type == "MIX":
+            data_type = attributes["data_type"]
+            return MixNode(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                           data_type=data_type, node_height=200)
+        elif type == "MIX_SHADER":
+            return MixShader(tree, location=location, label=label, name=name, hide=hide, mute=mute, node_height=200)
+        elif type == "OUTPUT_MATERIAL":
+            return OutputMaterial(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                                  node_height=200)
+        elif type == "SEPXYZ":
+            return SeparateXYZ(tree, location=location, label=label, name=name, hide=hide, mute=mute, node_height=200)
+        elif type == "TEX_COORD":
+            return TextureCoordinate(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                                     node_height=200)
+        elif type == "TEX_IMAGE":
             extension = attributes["extension"]
-            image_name= attributes["image.name"]
+            image_name = attributes["image.name"]
             image_source = attributes["image.source"]
-            image_colorspace_settings_name=attributes["image.colorspace_settings.name"]
+            image_colorspace_settings_name = attributes["image.colorspace_settings.name"]
             interpolation = attributes["interpolation"]
             projection = attributes["projection"]
-            return TextureImage(tree,location=location,label=label,name=name,hide=hide,mute=mute,
-                                extension=extension,image_name=image_name,image_source=image_source,
+            return TextureImage(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                                extension=extension, image_name=image_name, image_source=image_source,
                                 image_colorspace_settings_name=image_colorspace_settings_name,
-                                interpolation=interpolation,projection=projection)
-        elif type=="TEX_NOISE":
+                                interpolation=interpolation, projection=projection)
+        elif type == "TEX_NOISE":
             noise_dimensions = attributes["noise_dimensions"]
             noise_type = attributes["noise_type"]
             bool_str = attributes["normalize"]
-            if bool_str=="True":
-                normalize=True
+            if bool_str == "True":
+                normalize = True
             else:
-                normalize=False
-            return NoiseTexture(tree,location=location,label=label,name=name,hide=hide,mute=mute,
-                                noise_type=noise_type,noise_dimensions=noise_dimensions,normalize=normalize,node_height=400)
-        elif type=="VALTORGB":
+                normalize = False
+            return NoiseTexture(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                                noise_type=noise_type, noise_dimensions=noise_dimensions, normalize=normalize,
+                                node_height=400)
+        elif type == "VALTORGB":
             color_dictionary = attributes["color_ramp"]
-            interpolation=attributes["interpolation"]
-            color_mode=attributes["color_mode"]
-            return ColorRamp(tree,location=location,label=label,name=name,hide=hide,mute=mute,
-                             color_dictionary=color_dictionary,interpolation=interpolation,color_mode=color_mode,
+            interpolation = attributes["interpolation"]
+            color_mode = attributes["color_mode"]
+            return ColorRamp(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                             color_dictionary=color_dictionary, interpolation=interpolation, color_mode=color_mode,
                              node_height=400)
-        elif type=="VALUE":
-            return InputValue(tree,location=location,label=label,name=name,hide=hide,mute=mute,node_height=200)
+        elif type == "VALUE":
+            return InputValue(tree, location=location, label=label, name=name, hide=hide, mute=mute, node_height=200)
         elif type == "VECT_MATH":
             operation = attributes["operation"]
             return VectorMathNode(tree, location=location, label=label, name=name, hide=hide, mute=mute,
@@ -148,8 +157,8 @@ class ShaderNode:
         else:
             return None
 
-    def set_parent(self,parent):
-        self.node.parent=parent.node
+    def set_parent(self, parent):
+        self.node.parent = parent.node
 
 
 class AttributeNode(ShaderNode):
@@ -166,8 +175,9 @@ class AttributeNode(ShaderNode):
             self.node.attribute_name = attribute_name
         self.node.attribute_type = type
 
+
 class BrightContrast(ShaderNode):
-    def __init__(self, tree, location,color=None,bright=0,contrast = 0, **kwargs):
+    def __init__(self, tree, location, color=None, bright=0, contrast=0, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeBrightContrast")
         super().__init__(tree, location, **kwargs)
 
@@ -175,27 +185,27 @@ class BrightContrast(ShaderNode):
         links = tree.links
 
         if color is not None:
-            if isinstance(color,(list,Vector)):
+            if isinstance(color, (list, Vector)):
                 self.node.inputs["Color"].default_value = color
             else:
-                links.new(color,self.node.inputs["Color"])
+                links.new(color, self.node.inputs["Color"])
 
-        if isinstance(bright,(int,float)):
-            self.node.inputs["Bright"].default_value=bright
+        if isinstance(bright, (int, float)):
+            self.node.inputs["Bright"].default_value = bright
         else:
-            links.new(bright,self.node.inputs["Bright"])
+            links.new(bright, self.node.inputs["Bright"])
 
-        if isinstance(contrast,(int,float)):
-            self.node.inputs["Contrast"].default_value=contrast
+        if isinstance(contrast, (int, float)):
+            self.node.inputs["Contrast"].default_value = contrast
         else:
-            links.new(contrast,self.node.inputs["Contrast"])
-
+            links.new(contrast, self.node.inputs["Contrast"])
 
 
 class BSDFTransparent(ShaderNode):
-    def __init__(self,tree,location,**kwargs):
+    def __init__(self, tree, location, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeBsdfTransparent")
-        super().__init__(tree,location,**kwargs)
+        super().__init__(tree, location, **kwargs)
+
 
 class ColorRamp(ShaderNode):
     def __init__(self, tree, location=(0, 0), factor=None, **kwargs):
@@ -212,68 +222,69 @@ class ColorRamp(ShaderNode):
             color_dictionary = kwargs["color_dictionary"]
             # remove curly braces
             color_dictionary = color_dictionary[1:-1]
-            dict ={}
-            key_flag=True
-            string=False
-            key_str=""
-            val_str=""
+            dict = {}
+            key_flag = True
+            string = False
+            key_str = ""
+            val_str = ""
             for l in color_dictionary:
-                if l==':' and not string:
-                    key_flag=False
-                elif l=="'":
+                if l == ':' and not string:
+                    key_flag = False
+                elif l == "'":
                     if string:
-                        string=False
+                        string = False
                     else:
-                        string=True
-                elif l==',' and not string:
-                    key_flag=True
-                    dict[float(key_str)]=parse_vector(val_str)
-                    key_str=""
-                    val_str=""
+                        string = True
+                elif l == ',' and not string:
+                    key_flag = True
+                    dict[float(key_str)] = parse_vector(val_str)
+                    key_str = ""
+                    val_str = ""
                 else:
                     if key_flag:
-                        key_str+=l
+                        key_str += l
                     else:
-                        val_str+=l
+                        val_str += l
             # add last element
-            dict[float(key_str)]=parse_vector(val_str)
-            color_dictionary=dict
+            dict[float(key_str)] = parse_vector(val_str)
+            color_dictionary = dict
             values = list(color_dictionary.keys())
             colors = list(color_dictionary.values())
         else:
-            values = get_from_kwargs(kwargs,"values",[0,1])
-            colors = get_from_kwargs(kwargs,"colors",[[0,0,0,1],[1,1,1,1]])
+            values = get_from_kwargs(kwargs, "values", [0, 1])
+            colors = get_from_kwargs(kwargs, "colors", [[0, 0, 0, 1], [1, 1, 1, 1]])
 
-        for i in range(2,len(values)):
+        for i in range(2, len(values)):
             self.node.color_ramp.elements.new(i)
 
         i = 0
-        for value,color in zip(values,colors):
-            self.node.color_ramp.elements[i].position=value
-            if len(color)==3:
-                color+=[1] # add default alpha if necessary
-            self.node.color_ramp.elements[i].color=color
-            i+=1
+        for value, color in zip(values, colors):
+            self.node.color_ramp.elements[i].position = value
+            if len(color) == 3:
+                color += [1]  # add default alpha if necessary
+            self.node.color_ramp.elements[i].color = color
+            i += 1
 
-        interpolation=get_from_kwargs(kwargs,"interpolation","LINEAR")
+        interpolation = get_from_kwargs(kwargs, "interpolation", "LINEAR")
         self.node.color_ramp.interpolation = interpolation
-        color_mode=get_from_kwargs(kwargs,"color_mode","RGB")
+        color_mode = get_from_kwargs(kwargs, "color_mode", "RGB")
         self.node.color_ramp.color_mode = color_mode
 
         self.std_out = self.node.outputs[0]
         self.color_ramp = self.node.color_ramp
 
+
 class Displacement(ShaderNode):
     def __init__(self, tree, location=(0, 0),
                  height=0,
                  midlevel=0.5,
-                 scale= 1.,
+                 scale=1.,
                  space="OBJECT", **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeDisplacement")
         self.node.space = space
         super().__init__(tree, location, **kwargs)
 
-        self.height=self.node.inputs[0]
+        self.height = self.node.inputs[0]
         self.midlevel = self.node.inputs[1]
         self.scale = self.node.inputs[2]
         self.std_out = self.node.outputs[0]
@@ -293,6 +304,7 @@ class Displacement(ShaderNode):
         else:
             self.tree.links.new(height, self.height)
 
+
 class GradientTexture(ShaderNode):
     def __init__(self, tree, location=(0, 0), gradient_type='LINEAR', vector=None,
                  std_out='Color', **kwargs):
@@ -308,6 +320,7 @@ class GradientTexture(ShaderNode):
                 self.tree.links.new(vector, self.node.inputs['Vector'])
 
         self.std_out = self.node.outputs[std_out]
+
 
 class HueSaturationValueNode(ShaderNode):
     def __init__(self, tree, location=(0, 0), hue=0, saturation=1, value=1, fac=1, color=[1, 0, 0, 0], **kwargs):
@@ -341,6 +354,7 @@ class HueSaturationValueNode(ShaderNode):
 
         self.std_out = self.node.outputs[0]
 
+
 class ImageTexture(ShaderNode):
     def __init__(self, tree, location=(0, 0), image=None, vector=None,
                  std_out='Color', **kwargs):
@@ -348,7 +362,7 @@ class ImageTexture(ShaderNode):
         super().__init__(tree, location, **kwargs)
 
         if image:
-            self.node.image=image
+            self.node.image = image
 
         if vector is not None:
             if isinstance(vector, (list, Vector)):
@@ -359,6 +373,7 @@ class ImageTexture(ShaderNode):
         self.std_out = self.node.outputs[std_out]
         self.alpha = self.node.outputs["Alpha"]
 
+
 class InputValue(ShaderNode):
     def __init__(self, tree, location=(0, 0), value=0, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeValue")
@@ -366,6 +381,7 @@ class InputValue(ShaderNode):
 
         self.std_out = self.node.outputs['Value']
         self.node.outputs['Value'].default_value = value
+
 
 class MathNode(ShaderNode):
     def __init__(self, tree, location=(0, 0), operation='ADD', input0=None, input1=None, input2=None, **kwargs):
@@ -391,6 +407,7 @@ class MathNode(ShaderNode):
             else:
                 self.tree.links.new(input2, self.node.inputs[2])
 
+
 class VectorMathNode(ShaderNode):
     def __init__(self, tree, location=(0, 0), operation='ADD', input0=None, input1=None, input2=None, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeVectorMath")
@@ -414,6 +431,7 @@ class VectorMathNode(ShaderNode):
                 self.node.inputs[2].default_value = input2
             else:
                 self.tree.links.new(input2, self.node.inputs[2])
+
 
 class Mapping(ShaderNode):
     def __init__(self, tree, location=(0, 0), vector_type='POINT', vector=None,
@@ -451,52 +469,56 @@ class Mapping(ShaderNode):
 
         self.std_out = self.node.outputs["Vector"]
 
+
 class NoiseTexture(ShaderNode):
-    def __init__(self, tree, location=(0, 0),noise_dimensions='3D',noise_type='FBM',normalize=True,
+    def __init__(self, tree, location=(0, 0), noise_dimensions='3D', noise_type='FBM', normalize=True,
                  color_dictionary={}, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeTexNoise")
 
         super().__init__(tree, location, **kwargs)
 
-        self.node.noise_dimensions=noise_dimensions
-        self.node.noise_type=noise_type
-        self.node.normalize=normalize
-        for key,value in color_dictionary.items():
-            self.node.color_ramp.elements[key].color=parse_vector(value)
+        self.node.noise_dimensions = noise_dimensions
+        self.node.noise_type = noise_type
+        self.node.normalize = normalize
+        for key, value in color_dictionary.items():
+            self.node.color_ramp.elements[key].color = parse_vector(value)
+
 
 class MixNode(ShaderNode):
-    def __init__(self,tree,location,data_type='FLOAT',factor=0,caseA=0,caseB=0,**kwargs):
+    def __init__(self, tree, location, data_type='FLOAT', factor=0, caseA=0, caseB=0, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeMix")
-        self.node.data_type=data_type
+        self.node.data_type = data_type
         self.std_out = self.node.outputs[0]
-        super().__init__(tree,location,**kwargs)
+        super().__init__(tree, location, **kwargs)
 
-        if isinstance(factor,(int,float)):
-            self.node.inputs['Factor'].default_value=factor
+        if isinstance(factor, (int, float)):
+            self.node.inputs['Factor'].default_value = factor
         else:
-            self.tree.links.new(factor,self.node.inputs['Factor'])
+            self.tree.links.new(factor, self.node.inputs['Factor'])
 
-        if isinstance(caseA,(int,float)):
-            self.node.inputs['A'].default_value=caseA
+        if isinstance(caseA, (int, float)):
+            self.node.inputs['A'].default_value = caseA
         else:
-            self.tree.links.new(caseA,self.node.inputs['A'])
+            self.tree.links.new(caseA, self.node.inputs['A'])
 
         if isinstance(caseB, (int, float)):
             self.node.inputs['B'].default_value = caseB
         else:
             self.tree.links.new(caseB, self.node.inputs['B'])
 
+
 class MixShader(ShaderNode):
-    def __init__(self,tree,location,**kwargs):
+    def __init__(self, tree, location, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeMixShader")
-        super().__init__(tree,location,**kwargs)
+        super().__init__(tree, location, **kwargs)
+
 
 class MixRGB(ShaderNode):
     def __init__(self, tree, location=(0, 0), factor=0, color1=[0, 0, 0, 1], color2=[1, 1, 1, 1], **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeMixRGB")
         super().__init__(tree, location, **kwargs)
 
-        self.factor=self.node.inputs[0]
+        self.factor = self.node.inputs[0]
         self.color1 = self.node.inputs[1]
         self.color2 = self.node.inputs[2]
         self.std_out = self.node.outputs[0]
@@ -516,15 +538,18 @@ class MixRGB(ShaderNode):
         else:
             self.tree.links.new(color2, self.node.inputs[2])
 
+
 class OutputMaterial(ShaderNode):
-    def __init__(self, tree, location=(0, 0),  **kwargs):
+    def __init__(self, tree, location=(0, 0), **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeOutputMaterial")
         super().__init__(tree, location=location, **kwargs)
 
+
 class PrincipledBSDF(ShaderNode):
-    def __init__(self, tree, location=(0, 0),  **kwargs):
+    def __init__(self, tree, location=(0, 0), **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeBsdfPrincipled")
         super().__init__(tree, location=location, **kwargs)
+
 
 class SeparateXYZ(ShaderNode):
     def __init__(self, tree, location=(0, 0), vector=None, **kwargs):
@@ -532,32 +557,32 @@ class SeparateXYZ(ShaderNode):
         super().__init__(tree, location=location, **kwargs)
 
         if vector:
-            tree.links.new(vector,self.node.inputs["Vector"])
+            tree.links.new(vector, self.node.inputs["Vector"])
 
         self.std_out_x = self.node.outputs['X']
         self.std_out_y = self.node.outputs['Y']
         self.std_out_z = self.node.outputs['Z']
 
+
 class CombineXYZ(ShaderNode):
-    def __init__(self, tree, location=(0, 0), x=0,y=0,z=0, **kwargs):
+    def __init__(self, tree, location=(0, 0), x=0, y=0, z=0, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeCombineXYZ")
         super().__init__(tree, location=location, **kwargs)
 
-        if isinstance(x,(int,float)):
+        if isinstance(x, (int, float)):
             self.node.inputs[0].default_value = x
         else:
-            tree.links.new(x,self.node.inputs["X"])
+            tree.links.new(x, self.node.inputs["X"])
 
-        if isinstance(y,(int,float)):
+        if isinstance(y, (int, float)):
             self.node.inputs[1].default_value = y
         else:
-            tree.links.new(y,self.node.inputs["Y"])
+            tree.links.new(y, self.node.inputs["Y"])
 
-
-        if isinstance(z,(int,float)):
+        if isinstance(z, (int, float)):
             self.node.inputs[2].default_value = z
         else:
-            tree.links.new(z,self.node.inputs["Z"])
+            tree.links.new(z, self.node.inputs["Z"])
 
         self.std_out = self.node.outputs['Vector']
 
@@ -572,27 +597,25 @@ class TextureCoordinate(ShaderNode):
 
 class TextureImage(ShaderNode):
     def __init__(self, tree, location=(0, 0), std_out="Color",
-                 extension="EXTEND",image_name=None,image_source="FILE",
-                 image_colorspace_settings_name="sRGB",interpolation="Linear",
-                 projection="FLAT",vector=None,**kwargs):
+                 extension="EXTEND", image_name=None, image_source="FILE",
+                 image_colorspace_settings_name="sRGB", interpolation="Linear",
+                 projection="FLAT", vector=None, **kwargs):
 
         self.node = tree.nodes.new(type="ShaderNodeTexImage")
-        self.node.extension=extension
+        self.node.extension = extension
         if image_name is not None:
-            self.node.image=bpy.data.images.load(os.path.join(IMG_DIR,image_name))
-            self.node.image.source=image_source
-            self.node.image.colorspace_settings.name=image_colorspace_settings_name
-        self.node.interpolation=interpolation
-        self.node.projection=projection
+            self.node.image = bpy.data.images.load(os.path.join(IMG_DIR, image_name))
+            self.node.image.source = image_source
+            self.node.image.colorspace_settings.name = image_colorspace_settings_name
+        self.node.interpolation = interpolation
+        self.node.projection = projection
 
-        super().__init__(tree,location=location,**kwargs)
+        super().__init__(tree, location=location, **kwargs)
 
         self.std_out = self.node.outputs[std_out]
 
         if vector is not None:
-            if isinstance(vector,(float,Vector)):
-                self.node.inputs["Vector"].default_value=vector
+            if isinstance(vector, (float, Vector)):
+                self.node.inputs["Vector"].default_value = vector
             else:
-                tree.links.new(vector,self.node.inputs["Vector"])
-
-
+                tree.links.new(vector, self.node.inputs["Vector"])

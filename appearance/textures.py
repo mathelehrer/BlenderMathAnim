@@ -63,8 +63,10 @@ def copy_properties(old_prop,new_prop):
     Unfortunately the recursion doesn't work full
     But you can set special attributes, for which the recursion is performed one level deeper
     as for instance "image_user" for the image texture node
+    or "color_ramp" for the color ramp node
     """
-    ignore_attributes = ("rna_type", "type", "dimensions", "inputs", "outputs", "internal_links", "select","asset_data","pixels")
+    ignore_attributes = ("rna_type", "type", "dimensions", "inputs", "outputs", "internal_links", "select","asset_data","pixels",
+                         "color_tag","texture_mapping","color_mapping")
     attributes = []
     for attr in old_prop.bl_rna.properties:
         # check if the attribute should be copied and add it to the list of attributes to copy
@@ -76,14 +78,27 @@ def copy_properties(old_prop,new_prop):
         if hasattr(new_prop, attr):
             try:
                 # make recursion for selected attributes
+                copy = True
                 if attr=="image_user":
                     if hasattr(getattr(old_prop, attr), "bl_rna"):
                         copy_properties(getattr(old_prop, attr), getattr(new_prop, attr))
+                elif attr=="color_ramp":
+                    if hasattr(getattr(old_prop,attr),"bl_rna"):
+                        copy_properties(getattr(old_prop,attr), getattr(new_prop, attr))
+                        copy=False
+                elif attr=="elements":
+                    # if hasattr(getattr(old_prop,attr),"bl_rna"):
+                    #     copy_properties(getattr(old_prop,attr), getattr(new_prop, attr))
+                    for i,item in enumerate(getattr(old_prop,attr)):
+                        getattr(new_prop,attr)[i].position=item.position
+                        getattr(new_prop,attr)[i].color=item.color
+                        copy = False
 
-                setattr(new_prop, attr, getattr(old_prop, attr))
+                if copy:
+                    setattr(new_prop, attr, getattr(old_prop, attr))
                 # if the attribute itself has properties again, the process is iterated
             except AttributeError:
-                pass
+                raise "Something went wrong with copying properties"
 
 
 def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0),first=True):
@@ -136,7 +151,8 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
             for i, inp in enumerate(node.inputs):
                 for link in inp.links:
                     # find the connected node for the link in the group
-                    connected_node = new_nodes.get(name_dictionary[link.from_node.name])
+                    # connected_node = new_nodes.get(name_dictionary[link.from_node.name])
+                    connected_node = new_nodes.get(link.from_node.name)
                     # connect the group nodes
                     new_links.new(connected_node.outputs[link.from_socket.name], new_node.inputs[i])
         if node.bl_idname == "ShaderNodeOutputMaterial":
@@ -373,6 +389,25 @@ def get_texture(material, **kwargs):
         material = customize_material(material, **kwargs)
 
         return material
+
+def add_texture_to_material(material,new_color,**kwargs):
+    """
+    add a second material to an existing material and combine the two materials with a MixShaderNode
+    """
+
+    new_material = get_texture(new_color,**kwargs)
+    copy_nodes_and_links_from_material(material.node_tree, new_material,exclude=["ShaderNodeOutputMaterial"],shift = (0,-500))
+
+    tree = material.node_tree
+    nodes = tree.nodes
+    links = tree.links
+
+    mix_node = nodes.new(type="ShaderNodeMixShader")
+    mix_node.label = "MaterialMixer"
+    links.new(nodes["Principled BSDF"].outputs[0],mix_node.inputs[1])
+    links.new(nodes["Principled BSDF.001"].outputs[0],mix_node.inputs[2])
+    links.new(mix_node.outputs[0],nodes["Material Output"].inputs[0])
+
 
 def create_from_xml(filename):
     """
@@ -4659,3 +4694,4 @@ def set_sky_background(**kwargs):
     links.new(background.outputs['Background'], out.inputs["Surface"])
 
     animate_sky_background(**kwargs)
+

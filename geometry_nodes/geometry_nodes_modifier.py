@@ -5991,6 +5991,38 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         ins = self.group_inputs
         links = tree.links
 
+        # prepare show root_flag
+        highlight_vertex_root = get_from_kwargs(kwargs,"highlight_root",False)
+        vertex_root_index = get_from_kwargs(kwargs, "vertex_root_index", 0)
+
+        # prepare materials
+        face_materials = get_from_kwargs(kwargs, "face_materials", ["example", "important", "joker"])
+        edge_material = get_from_kwargs(kwargs, "edge_material", "example")
+        vertex_material = get_from_kwargs(kwargs, "vertex_material", "red")
+        root_material = get_from_kwargs(kwargs, "root_material", "example")
+        root_emission = get_from_kwargs(kwargs, "root_emission", 0)
+
+
+        materials = [get_texture(mat,**kwargs) for mat in face_materials + [edge_material,vertex_material]]
+        materials.append(get_texture(root_material,emission=root_emission,**kwargs))
+        in_material_nodes = [InputMaterial(tree,material=material) for material in materials]
+        in_face_material_nodes = in_material_nodes[:-3]
+        in_edge_material_node = in_material_nodes[-3]
+        in_vertex_material_node = in_material_nodes[-2]
+        in_root_material_node=  in_material_nodes[-1]
+        in_vertex_material_node.label="VertexMaterial"
+        in_edge_material_node.label="EdgeMaterial"
+        in_root_material_node.label="RootMaterial"
+
+        [self.materials.append(mat) for mat in materials]
+
+        # store root vertex
+
+        root_vertex_node = InputInteger(tree,integer=vertex_root_index,label="RootVertex",hide=True)
+        index = Index(tree,hide=True)
+        compare= CompareNode(tree,data_type="INT",operation="EQUAL",inputs1=root_vertex_node.std_out,inputs0=index.std_out,hide=True)
+        store_root = StoredNamedAttribute(tree,name="RootIndex",domain="POINT",data_type="BOOLEAN",value=compare.std_out,hide=True)
+
         # reindex faces
         sorting = get_from_kwargs(kwargs,"sorting",True)
         if sorting:
@@ -6009,6 +6041,7 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         index = Index(tree, hide=True)
 
         face_appearance_order = get_from_kwargs(kwargs,"face_appearance_order",None)
+        face_index = NamedAttribute(tree, label="FaceIndex", data_type="INT", domain="FACE", name="FaceIndex", hide=True)
 
         if not face_appearance_order:
             self.number_of_faces = 10
@@ -6030,7 +6063,7 @@ class CustomUnfoldModifier(GeometryNodesModifier):
                 "selection": face_appearance_function
             }, inputs=["fsel","idx"], outputs=["selection"],
                                               scalars=["selection", "idx","fsel"], vectors=[], hide=True)
-        links.new(index.std_out, selector_function.inputs["idx"])
+        links.new(face_index.std_out, selector_function.inputs["idx"])
         links.new(face_selector.std_out, selector_function.inputs["fsel"])
 
         select_geo = SeparateGeometry(tree, domain="FACE", selection=selector_function.outputs["selection"], hide=True)
@@ -6040,40 +6073,36 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         unfold_node = UnfoldMeshNode(tree, name="UnfoldMeshNode", hide=True, progression=progress.std_out,
                                      scale_elements=1, **kwargs)
 
+        store_face_index = StoredNamedAttribute(tree,name="FaceIndex",data_type="INT",domain="FACE",value=index.std_out,hide=True)
+
         if sorting:
-            create_geometry_line(tree, [sort_node, unfold_node, select_geo], ins=ins.outputs[0])
+            create_geometry_line(tree, [store_root,sort_node, unfold_node,store_face_index, select_geo], ins=ins.outputs[0])
         else:
-            create_geometry_line(tree, [unfold_node,select_geo], ins=ins.outputs[0])
+            create_geometry_line(tree, [store_root,unfold_node,store_face_index,select_geo], ins=ins.outputs[0])
 
         # select types of faces
         face_types = get_from_kwargs(kwargs, "face_types", [4, 6, 10])
-        face_materials = get_from_kwargs(kwargs, "face_materials", ["example", "important", "joker"])
+
         corners_of_face = CornersOfFace(tree, std_out="Total", hide=True)
         join_geo = JoinGeometry(tree, hide=True)
-        for type, material_string in zip(face_types, face_materials):
+        for type, in_material_node in zip(face_types, in_face_material_nodes):
             compare_node = CompareNode(tree, hide=True,
                                        data_type="INT", operation="EQUAL", inputs0=corners_of_face.std_out,
                                        inputs1=type)
             separate_geometry = SeparateGeometry(tree, domain="FACE", selection=compare_node.outputs[0], hide=True)
-            material = get_texture(material_string, **kwargs)
-            self.materials.append(material)
-            material_node = SetMaterial(tree, material=material, hide=True)
+            material_node = SetMaterial(tree, material=in_material_node.std_out, hide=True)
 
             create_geometry_line(tree, [select_geo, separate_geometry, material_node, join_geo])
 
-        edge_material_string = get_from_kwargs(kwargs, "edge_material", None)
-        if edge_material_string is not None:
-            edge_material = get_texture(edge_material_string, **kwargs)
-            self.materials.append(edge_material)
-            edge_material_node = SetMaterial(tree, material=edge_material, hide=True)
-            wire_frame = WireFrame(tree, hide=True)
-            join_wireframe = JoinGeometry(tree, hide=True)
-            create_geometry_line(tree, [join_geo, join_wireframe], out=out.inputs[0])
-            create_geometry_line(tree, [join_geo, wire_frame, edge_material_node, join_wireframe])
-        else:
-            create_geometry_line(tree, [join_geo])
+        # prepare data for Polyhedron view
+        edge_radius= get_from_kwargs(kwargs,"edge_radius",0.05)
+        vertex_radius= get_from_kwargs(kwargs,"vertex_radius",0.1)
+        edge_radius_node = InputValue(tree,label="EdgeRadius",value=edge_radius)
+        vertex_radius_node = InputValue(tree,label="VertexRadius",value=vertex_radius)
 
-        poly_view = PolyhedronViewNode(tree, **kwargs)
+        poly_view = PolyhedronViewNode(tree, edge_radius=edge_radius_node.std_out,vertex_radius=vertex_radius_node.std_out,
+                                       edge_material=in_edge_material_node.std_out,highlight_root=highlight_vertex_root,
+                                       vertex_material=in_vertex_material_node.std_out,root_material=in_root_material_node.std_out,**kwargs)
         out_loc = out.location
         poly_view.location= (out_loc[0]-200,out_loc[1])
         create_geometry_line(tree,[join_geo,poly_view], out = out.inputs[0])
@@ -6107,6 +6136,16 @@ class CustomUnfoldModifier(GeometryNodesModifier):
 
         face_selector = ibpy.get_geometry_node_from_modifier(self,"FaceSelector")
         ibpy.change_default_integer(face_selector,from_value=start,to_value=self.number,begin_time=begin_time,transition_time=transition_time)
+        return begin_time + transition_time
+
+    def change_edge_radius(self,from_value=0.05,to_value=0.2,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        radius_node = ibpy.get_geometry_node_from_modifier(self,"EdgeRadius")
+        ibpy.change_default_value(radius_node,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
+        return begin_time + transition_time
+
+    def change_vertex_radius(self,from_value=0.1,to_value=0.4,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        radius_node = ibpy.get_geometry_node_from_modifier(self,"VertexRadius")
+        ibpy.change_default_value(radius_node,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
         return begin_time + transition_time
 
 # recreate the essentials to convert a latex expression into a collection of curves
