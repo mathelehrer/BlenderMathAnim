@@ -347,7 +347,8 @@ class QR:
         9002616610964909476
 
         """
-        return hash((self.x.numerator,self.x.denominator,self.y.numerator,self.y.denominator,self.root_modulus))
+        # the root_modulus is only effective, when the prefactor is non-zero,
+        return hash((self.x.numerator,self.x.denominator,self.y.numerator,self.y.denominator,self.y.numerator*self.root_modulus))
 
     def real(self):
         return float(self.x)+float(self.y)*np.sqrt(self.root_modulus)

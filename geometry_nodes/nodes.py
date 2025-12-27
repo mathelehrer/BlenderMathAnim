@@ -4849,7 +4849,8 @@ class BevelFaces(NodeGroup):
         create_geometry_line(tree,[foreachface],ins=self.group_inputs.outputs["Geometry"],out=self.group_outputs.inputs["Geometry"])
 
 class PolyhedronViewNode(NodeGroup):
-    def __init__(self,tree,edge_material=None,edge_radius=0.05,vertex_material=None,vertex_radius=0.1,highlight_root=False,root_material="drawing",**kwargs):
+    def __init__(self,tree,edge_material=None,edge_radius=0.05,vertex_material=None,
+                 vertex_radius=0.1,highlight_root=False,root_material=None,**kwargs):
         self.name = get_from_kwargs(kwargs, "name", "PolyhedronViewNode")
         super().__init__(tree, inputs={"Mesh": "GEOMETRY","Edge Radius": "FLOAT", "Edge Material": "MATERIAL", "Vertex Radius": "FLOAT","Vertex Material": "MATERIAL",
                                        "Highlight Root":"BOOLEAN", "Root Material":"MATERIAL"},

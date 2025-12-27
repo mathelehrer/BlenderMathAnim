@@ -23,7 +23,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode, CornersOfFace, BoundingBox, CurveLine, \
     ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode, PolyhedronViewNode
 from interface import ibpy
-from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material
+from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material, get_geometry_node_from_modifier
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
 from objects.derived_objects.p_arrow import PArrow
@@ -6146,6 +6146,169 @@ class CustomUnfoldModifier(GeometryNodesModifier):
     def change_vertex_radius(self,from_value=0.1,to_value=0.4,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
         radius_node = ibpy.get_geometry_node_from_modifier(self,"VertexRadius")
         ibpy.change_default_value(radius_node,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
+        return begin_time + transition_time
+
+class EdgePairingVisualizer(GeometryNodesModifier):
+    def __init__(self, name="UnfoldModifier", **kwargs):
+        """
+        Visualizer for edge pairs of an unfolded polyhedron
+        """
+        self.number = 0  # count the number of shown faces
+        super().__init__(name, automatic_layout=True, group_output=True, group_input=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        ins = self.group_inputs
+        links = tree.links
+
+        # store edge index
+        index = Index(tree, hide=True)
+        edge_index_storage = StoredNamedAttribute(tree, name="EdgeIndex", data_type="INT", domain="EDGE",value=index.std_out, hide=True,label="EdgeIndex")
+
+        # prepare materials
+        face_material = get_from_kwargs(kwargs, "face_material",   "joker")
+        edge_material = get_from_kwargs(kwargs, "edge_material", "example")
+        vertex_material = get_from_kwargs(kwargs, "vertex_material", "red")
+
+        materials = [get_texture(mat,**kwargs) for mat in [face_material,edge_material, vertex_material]]
+        in_material_nodes = [InputMaterial(tree, material=material) for material in materials]
+        in_face_material_node = in_material_nodes[0]
+        in_edge_material_node = in_material_nodes[1]
+        in_vertex_material_node = in_material_nodes[2]
+        in_vertex_material_node.label = "VertexMaterial"
+        in_edge_material_node.label = "EdgeMaterial"
+        [self.materials.append(mat) for mat in materials]
+
+        # prepare face selection
+        max_faces = get_from_kwargs(kwargs, "max_faces", 4)
+        face_selector = InputInteger(tree, label="FaceSelector", integer=max_faces, hide=True)
+        index = Index(tree, hide=True)
+
+        face_appearance_order = get_from_kwargs(kwargs, "face_appearance_order", None)
+        face_index = NamedAttribute(tree, label="FaceIndex", data_type="INT", domain="FACE", name="FaceIndex",
+                                    hide=True)
+
+        if not face_appearance_order:
+            self.number_of_faces = 10
+            selector_function = make_function(tree, name="SelectorFunction", functions={
+                "selection": "idx,fsel,<"
+            }, inputs=["idx", "fsel"], outputs=["selection"], scalars=["selection", "idx", "fsel"],
+                                              vectors=[], hide=True)
+
+        else:
+            self.number_of_faces = len(face_appearance_order)
+            face_appearance_function = ""
+            for i, idx in enumerate(face_appearance_order):
+                if i == 0:
+                    face_appearance_function += f"idx,{idx},=,fsel,{i},>,and,"
+                else:
+                    face_appearance_function += f"idx,{idx},=,fsel,{i},>,and,or,"
+            face_appearance_function = face_appearance_function[:-1]
+            selector_function = make_function(tree, name="SelectorFunction", functions={
+                "selection": face_appearance_function
+            }, inputs=["fsel", "idx"], outputs=["selection"],
+                                              scalars=["selection", "idx", "fsel"], vectors=[], hide=True)
+        links.new(face_index.std_out, selector_function.inputs["idx"])
+        links.new(face_selector.std_out, selector_function.inputs["fsel"])
+
+        select_geo = SeparateGeometry(tree, domain="FACE", selection=selector_function.outputs["selection"], hide=True)
+
+        # create unfolding
+        progress = InputValue(tree, name="Progress", value=0.0, hide=True)
+        unfold_node = UnfoldMeshNode(tree, name="UnfoldMeshNode", hide=True, progression=progress.std_out,
+                                     scale_elements=1, **kwargs)
+
+        store_face_index = StoredNamedAttribute(tree, name="FaceIndex", data_type="INT", domain="FACE",
+                                                value=index.std_out, hide=True)
+
+        material_node = SetMaterial(tree, material=in_face_material_node.std_out, hide=True)
+        create_geometry_line(tree, [edge_index_storage, unfold_node, store_face_index, select_geo,material_node], ins=ins.outputs[0])
+
+        # create edge selection
+        selected_edges = JoinGeometry(tree,hide=True)
+        number_of_edges = get_from_kwargs(kwargs, "number_of_edges", 30)
+        index = Index(tree, hide=True)
+        for e in range(number_of_edges):
+            edge_index = NamedAttribute(tree, label=f"EdgeIndex{e}", data_type="INT",  name="EdgeIndex", hide=True)
+            compare = CompareNode(tree, data_type="INT", operation="EQUAL", inputs0=edge_index.std_out, inputs1=e, hide=True)
+            separate_edge = SeparateGeometry(tree, domain="EDGE", selection=compare.std_out, hide=True)
+            edge_counter = AttributeStatistic(tree,data_type="FLOAT",domain="EDGE",std_out="Max",
+                                              geometry=separate_edge.geometry_out,
+                                              attribute=index.std_out,hide=True)
+            compare2 = CompareNode(tree,data_type="INT",operation="EQUAL",inputs0=edge_counter.std_out,
+                                   inputs1=0,hide=True)
+            del_geo = DeleteGeometry(tree,domain="EDGE",selection=compare2.std_out,hide=True)
+            create_geometry_line(tree,[select_geo,separate_edge,del_geo,selected_edges])
+
+        # prepare data for Polyhedron view
+        edge_radius = get_from_kwargs(kwargs, "edge_radius", 0.05)
+        vertex_radius = get_from_kwargs(kwargs, "vertex_radius", 0.1)
+        edge_radius_node = InputValue(tree, label="EdgeRadius", value=edge_radius)
+        vertex_radius_node = InputValue(tree, label="VertexRadius", value=vertex_radius)
+
+        poly_view = PolyhedronViewNode(tree, edge_radius=edge_radius_node.std_out,
+                                       vertex_radius=vertex_radius_node.std_out,
+                                       edge_material=in_edge_material_node.std_out,
+                                       vertex_material=in_vertex_material_node.std_out,
+                                       **kwargs)
+        out_loc = out.location
+        poly_view.location = (out_loc[0] - 200, out_loc[1])
+        create_geometry_line(tree, [selected_edges,poly_view])
+        hide_faces= InputBoolean(tree,label="HideFaces",hide=True,value=True)
+        del_geo = DeleteGeometry(tree,domain="FACE",selection=hide_faces.std_out,hide=True)
+        final_join = JoinGeometry(tree)
+        create_geometry_line(tree,[material_node,del_geo,final_join],out=out.inputs[0])
+        create_geometry_line(tree,[poly_view,final_join])
+
+    def show_faces(self,begin_time=0):
+        hide_face_node= get_geometry_node_from_modifier(self,"HideFace")
+        ibpy.change_default_boolean(hide_face_node,from_value=True,to_value=False,begin_time=begin_time)
+        return begin_time
+
+    def change_alpha(self, material_slot, from_value=1, to_value=0, begin_time=0,
+                     transition_time=DEFAULT_ANIMATION_TIME):
+        mat = self.materials[material_slot]
+        return ibpy.change_alpha_of_material(mat, from_value=from_value, to_value=to_value, begin_time=begin_time,
+                                             transition_time=transition_time)
+
+    def unfold(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        progress = ibpy.get_geometry_node_from_modifier(self, "Progress")
+        ibpy.change_default_value(progress, from_value=0, to_value=20, begin_time=begin_time,
+                                  transition_time=transition_time)
+        return begin_time + transition_time
+
+    def fold(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        progress = ibpy.get_geometry_node_from_modifier(self, "Progress")
+        ibpy.change_default_value(progress, from_value=20, to_value=0, begin_time=begin_time,
+                                  transition_time=transition_time)
+        return begin_time + transition_time
+
+    def grow(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, max_faces=None):
+        if self.number:
+            start = self.number
+        else:
+            start = -1
+
+        if max_faces is not None:
+            self.number = max_faces
+        else:
+            self.number = self.number_of_faces
+
+        face_selector = ibpy.get_geometry_node_from_modifier(self, "FaceSelector")
+        ibpy.change_default_integer(face_selector, from_value=start, to_value=self.number, begin_time=begin_time,
+                                    transition_time=transition_time)
+        return begin_time + transition_time
+
+    def change_edge_radius(self, from_value=0.05, to_value=0.2, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        radius_node = ibpy.get_geometry_node_from_modifier(self, "EdgeRadius")
+        ibpy.change_default_value(radius_node, from_value=from_value, to_value=to_value, begin_time=begin_time,
+                                  transition_time=transition_time)
+        return begin_time + transition_time
+
+    def change_vertex_radius(self, from_value=0.1, to_value=0.4, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        radius_node = ibpy.get_geometry_node_from_modifier(self, "VertexRadius")
+        ibpy.change_default_value(radius_node, from_value=from_value, to_value=to_value, begin_time=begin_time,
+                                  transition_time=transition_time)
         return begin_time + transition_time
 
 # recreate the essentials to convert a latex expression into a collection of curves
