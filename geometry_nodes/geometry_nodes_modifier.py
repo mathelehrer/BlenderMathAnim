@@ -6001,6 +6001,9 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         vertex_material = get_from_kwargs(kwargs, "vertex_material", "red")
         root_material = get_from_kwargs(kwargs, "root_material", "example")
         root_emission = get_from_kwargs(kwargs, "root_emission", 0)
+        max_faces = get_from_kwargs(kwargs, "max_faces", 4)
+        face_appearance_order = get_from_kwargs(kwargs, "face_appearance_order", None)
+        projection = get_from_kwargs(kwargs,"projection",False)
 
 
         materials = [get_texture(mat,**kwargs) for mat in face_materials + [edge_material,vertex_material]]
@@ -6036,13 +6039,11 @@ class CustomUnfoldModifier(GeometryNodesModifier):
             sort_node = SortElements(tree, sort_weight=re_index_function.outputs["weight"], hide=True)
 
         # prepare face selection
-        max_faces = get_from_kwargs(kwargs,"max_faces",4)
         face_selector = InputInteger(tree, label="FaceSelector", integer=max_faces, hide=True)
         index = Index(tree, hide=True)
 
-        face_appearance_order = get_from_kwargs(kwargs,"face_appearance_order",None)
-        face_index = NamedAttribute(tree, label="FaceIndex", data_type="INT", domain="FACE", name="FaceIndex", hide=True)
 
+        face_index = NamedAttribute(tree, label="FaceIndex", data_type="INT", domain="FACE", name="FaceIndex", hide=True)
         if not face_appearance_order:
             self.number_of_faces = 10
             selector_function = make_function(tree, name="SelectorFunction", functions={
@@ -6105,7 +6106,24 @@ class CustomUnfoldModifier(GeometryNodesModifier):
                                        vertex_material=in_vertex_material_node.std_out,root_material=in_root_material_node.std_out,**kwargs)
         out_loc = out.location
         poly_view.location= (out_loc[0]-200,out_loc[1])
-        create_geometry_line(tree,[join_geo,poly_view], out = out.inputs[0])
+
+        if projection:
+            position = Position(tree)
+            length = VectorMath(tree,operation="LENGTH",inputs0=position.std_out)
+
+            stereo= make_function(tree,name="StereographicProjection",
+                        functions={
+                            "projection":["pos_x,l,pos_z,-,/","pos_y,l,pos_z,-,/","0"]
+                        },inputs=["pos","l"],outputs=["projection"],
+                        scalars=["l"],vectors=["pos","projection"],hide=True)
+
+            links.new(position.std_out, stereo.inputs["pos"])
+            links.new(length.std_out, stereo.inputs["l"])
+            set_pos = SetPosition(tree,position=stereo.outputs["projection"],hide=True)
+
+            create_geometry_line(tree,[join_geo,set_pos,poly_view],out=out.inputs[0])
+        else:
+            create_geometry_line(tree,[join_geo,poly_view], out = out.inputs[0])
 
     def change_alpha(self, material_slot, from_value=1, to_value=0, begin_time=0,
                      transition_time=DEFAULT_ANIMATION_TIME):
@@ -6113,9 +6131,9 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         return ibpy.change_alpha_of_material(mat, from_value=from_value, to_value=to_value, begin_time=begin_time,
                                              transition_time=transition_time)
 
-    def unfold(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def unfold(self,begin_time=0,to_value=20,transition_time=DEFAULT_ANIMATION_TIME):
         progress = ibpy.get_geometry_node_from_modifier(self,"Progress")
-        ibpy.change_default_value(progress,from_value=0,to_value=20,begin_time=begin_time,transition_time=transition_time)
+        ibpy.change_default_value(progress,from_value=0,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
         return begin_time + transition_time
 
     def fold(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
@@ -6147,6 +6165,7 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         radius_node = ibpy.get_geometry_node_from_modifier(self,"VertexRadius")
         ibpy.change_default_value(radius_node,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
         return begin_time + transition_time
+
 
 class EdgePairingVisualizer(GeometryNodesModifier):
     def __init__(self, name="UnfoldModifier", **kwargs):

@@ -181,8 +181,7 @@ class Node:
             domain=attributes["domain"]
             return ScaleElements(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,domain=domain)
         if type=="TRANSFORM_GEOMETRY":
-            mode=attributes["mode"]
-            return TransformGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
+            return TransformGeometry(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="BOUNDING_BOX":
             return BoundingBox(tree, location=location, name=name, label=label, hide=hide, mute=mute,
                                      node_height=200)
@@ -2141,6 +2140,7 @@ class SetShadeSmooth(GreenNode):
 class TransformGeometry(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  geometry = None,
+                 mode = "Components",
                  translation_x=None,
                  translation_y=None,
                  translation_z=None,
@@ -2160,6 +2160,8 @@ class TransformGeometry(GreenNode):
 
         self.geometry_out = self.node.outputs["Geometry"]
         self.geometry_in = self.node.inputs["Geometry"]
+
+        self.node.inputs["Mode"].default_value=mode
 
         if geometry:
             tree.links.new(geometry, self.node.inputs["Geometry"])

@@ -134,6 +134,7 @@ def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_
     scn = bpy.context.scene
     scn.render.engine = 'CYCLES'
     scn.cycles.device = 'GPU'
+    scn.cycles.denoising_use_gpu=True
     scn.cycles.samples = SAMPLE_COUNT
     scn.cycles.preview_samples = SAMPLE_COUNT
     scn.cycles.light_sampling_threshold = LIGHT_SAMPLING_THRESHOLD
@@ -285,8 +286,6 @@ def define_materials():
         make_basic_material(rgb=deepcopy(col), name=name)
         name = 'creature_color' + str(i + 1)
         make_creature_material(rgb=deepcopy(col), name=name)
-        name = 'glass_' + col_name
-        make_translucent_material(rgb=deepcopy(col), name=name)
         name = 'fake_glass_' + col_name
         make_fake_glass_material(rgb=deepcopy(col), name=name)
         name = 'plastic_' + col_name

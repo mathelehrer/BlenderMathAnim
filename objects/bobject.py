@@ -678,8 +678,9 @@ class BObject(object):
                 child.appear(begin_time=begin_time,transition_time=transition_time)
         return begin_time + transition_time
 
-    def change_alpha(self, alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+    def change_alpha(self, slot = 0,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         """
+        only call this function, after changes in alpha due to appearance have settled
         :param transition_time:
         :param begin_time:
         :return:
@@ -690,7 +691,7 @@ class BObject(object):
         else:
             transition_frames = transition_time * FRAME_RATE
 
-        ibpy.change_alpha(self, begin_time*FRAME_RATE, transition_frames, alpha=alpha, **kwargs)
+        ibpy.change_alpha(self, begin_time*FRAME_RATE, transition_frames, alpha=alpha, slot=slot,**kwargs)
         return begin_time+transition_time
 
     def toggle_hide(self,begin_time=0):

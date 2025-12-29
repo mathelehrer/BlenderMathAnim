@@ -1235,6 +1235,9 @@ def create_composition(denoising=None):
 #######################
 # work with materials #
 #######################
+def add_material(bob,material):
+    obj = get_obj(bob)
+    obj.data.materials.append(material)
 
 def mix_color(bob, from_value, to_value, begin_frame, frame_duration):
     '''
@@ -1687,6 +1690,13 @@ def change_material_properties(bob, slot=0, begin_frame=0, frame_duration=1, **k
             insert_keyframe(bsdf_alpha, "default_value", begin_frame + frame_duration)
 
 
+def get_alpha_mixer(nodes):
+    alpha_mixers = []
+    for n in nodes:
+        if n.label=="AlphaMixer":
+            alpha_mixers.append(n)
+    return alpha_mixers
+
 def set_alpha_for_material(material, alpha, viewport = "material"):
     """
     If you want to access alpha channel and want to have fade in at the same time
@@ -1712,6 +1722,12 @@ def set_alpha_for_material(material, alpha, viewport = "material"):
             else:
                 bsdf.inputs['Alpha'].default_value = alpha  # standard material
                 return [bsdf.inputs['Alpha']]  # return for key_framing
+        elif alpha_mixer:=get_alpha_mixer(material.node_tree.nodes):
+            key_frame_sockets=[]
+            for mixer in alpha_mixer:
+                mixer.inputs[0].default_value=alpha
+                key_frame_sockets.append(mixer.inputs[0])
+            return key_frame_sockets
         elif 'Mix Shader' in material.node_tree.nodes:
             mix1 = material.node_tree.nodes['Mix Shader']
             mix2 = material.node_tree.nodes['Mix Shader.001']
@@ -1772,7 +1788,7 @@ def get_alpha_at_current_keyframe(obj, frame, slot=0):
     return 0
 
 
-def set_alpha_and_keyframe(obj, value, frame, offset_for_slots=None,slot=None, viewport = "material"):
+def set_alpha_and_keyframe(obj, value, frame, slot=None, offset_for_slots=None, viewport = "material"):
     """
     keyframe the alpha value of an object
     :param offset_for_slots:
@@ -2521,6 +2537,16 @@ def get_geometry_nodes_modifier(bob):
             break
     return gnmod
 
+def set_socket_data_for_geometry_node_modifier(bob, socket_data):
+    gnmod = get_geometry_nodes_modifier(bob)
+    socket_names = get_socket_names_from_modifier(gnmod)
+    for key,val in socket_data.items():
+        gnmod[socket_names[key]] = val
+        if isinstance(val, bpy.types.Material):
+            add_material(bob,val)
+
+
+
 def get_geometry_node_from_modifier(modifier, label):
     for n in modifier.nodes:
         if label in n.label or label in n.name:
@@ -3202,7 +3228,7 @@ def change_default_quaternion(slot,from_value,to_value,begin_time=None,transitio
     return begin_time+transition_time
 
 
-def change_default_vector(slot, from_value, to_value, begin_time=None, transition_time=None, data_path="vector",
+def change_default_vector(slot, from_value=None, to_value=Vector(), begin_time=None, transition_time=None, data_path="vector",
                           begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME * FRAME_RATE):
     if begin_time:
         begin_frame = begin_time * FRAME_RATE
@@ -6404,7 +6430,7 @@ def change_alpha_of_material(mat, from_value=0, to_value=1, begin_time=0, transi
         raise "Cannot change Alpha for non BSDF nodes"
 
 
-def change_alpha(b_obj, frame, frame_duration, alpha=0, viewport = "material"):
+def change_alpha(b_obj, frame, frame_duration, alpha=0,slot=0, viewport = "material"):
     """
     fade out b_object and hide it from scene
     it is recursively applied to all the children
@@ -6417,9 +6443,9 @@ def change_alpha(b_obj, frame, frame_duration, alpha=0, viewport = "material"):
     :return:
     """
     obj = get_obj(b_obj)
-    alpha0 = get_alpha_at_current_keyframe(obj, frame)
-    set_alpha_and_keyframe(obj, alpha0, frame, viewport=viewport)
-    set_alpha_and_keyframe(obj, alpha, frame + frame_duration, viewport=viewport)
+    alpha0 = get_alpha_at_current_keyframe(obj, frame,slot)
+    set_alpha_and_keyframe(obj, alpha0,frame,slot, viewport=viewport)
+    set_alpha_and_keyframe(obj, alpha,frame + frame_duration,slot, viewport=viewport)
 
 
 def change_shader_value(b_object, node, input, initial_value=0, final_value=1, frame=0,

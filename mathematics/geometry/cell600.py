@@ -7,14 +7,14 @@ from fractions import Fraction
 import numpy as np
 
 from interface.ibpy import Vector
-from mathematics.geometry.field_extensions import FQuaternion, QR5, FTensor, EpsilonTensor, FVector
+from mathematics.geometry.field_extensions import FQuaternion, QR, FTensor, EpsilonTensor, FVector
 from mathematics.zeros import chop
 from utils.constants import DATA_DIR
 
 
 # for the generation of the finite group, it is best to work with
 # exact values for r5 = 5**0.5
-# therefore, the field extension QR5 is implemented
+# therefore, the field extension QR is implemented
 
 PATH = "mathematics/geometry/data/"
 
@@ -23,17 +23,17 @@ PATH = "mathematics/geometry/data/"
 
 def generate_group():
     # generate 120 elements of the 600 cell
-    omega=gen_a = FQuaternion.from_vector(QR5.from_integers(-1,2,0,1),
-                                          QR5.from_integers(1,2,0,1),
-                                          QR5.from_integers(1,2,0,1),
-                                          QR5.from_integers(1,2,0,1))
-    q=gen_b = FQuaternion.from_vector(QR5.from_integers(0,1,0,1),
-                                      QR5.from_integers(1,2,0,1),
-                                      QR5.from_integers(1,4,1,4),
-                                      QR5.from_integers(-1,4,1,4))
+    omega=gen_a = FQuaternion.from_vector(QR.from_integers(-1,2,0,1),
+                                          QR.from_integers(1,2,0,1),
+                                          QR.from_integers(1,2,0,1),
+                                          QR.from_integers(1,2,0,1))
+    q=gen_b = FQuaternion.from_vector(QR.from_integers(0,1,0,1),
+                                      QR.from_integers(1,2,0,1),
+                                      QR.from_integers(1,4,1,4),
+                                      QR.from_integers(-1,4,1,4))
     # check group constraints
-    one = QR5.from_integers(1, 1, 0, 1)
-    zero = QR5.from_integers(0, 1, 0, 1)
+    one = QR.from_integers(1, 1, 0, 1)
+    zero = QR.from_integers(0, 1, 0, 1)
     q_one = FQuaternion.from_vector(one, zero, zero, zero)
     assert(q*q*q*q==q_one)
     assert(omega*omega*omega==q_one)

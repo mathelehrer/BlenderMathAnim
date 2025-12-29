@@ -351,6 +351,8 @@ def get_texture(material, **kwargs):
             return mix_texture(**kwargs)
         if material == 'image' and 'src' in kwargs:
             return make_image_material(**kwargs).copy()
+        elif "glass" in material:
+            return make_translucent_material(color_str=material[6:], **kwargs)
         elif material == 'movie' and 'src' in kwargs:
             return make_movie_material(**kwargs)
         elif material == 'gradient':
@@ -3888,57 +3890,74 @@ def make_creature_material(rgb=None, name=None):
     # which doesn't take alpha
     color.diffuse_color = rgb
 
-def make_translucent_material(rgb=None, name=None):
-    if rgb is None or name is None:
-        raise Warning('Need rgb and name to make translucent color')
-    for i in range(3):
-        # Range exactly 3 so a fourth component (alpha) isn't affected
-        rgb[i] /= 255
+def make_translucent_material(color_str, **kwargs):
+    color = get_color(color_str)
 
-    strength = 0.5  # Arbitrary, could make this a constant
-    # strength = 0.1
+    scatter_density = get_from_kwargs(kwargs, 'scatter_density', 0.05)
+    absorption_density = get_from_kwargs(kwargs, 'absorption_density', 0.05)
+    ior =get_from_kwargs(kwargs, 'ior', 1.5)
+    roughness=get_from_kwargs(kwargs,"roughness",0)
 
-    color = bpy.data.materials.new(name=name)
-    color.use_nodes = True
-    nodes = color.node_tree.nodes
-    links = color.node_tree.links
-    material = nodes['Material Output']
+    material = bpy.data.materials.new(name="glass_"+color_str)
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    material_output = nodes['Material Output']
     # color.node_tree.links.remove(nodes[0].inputs[0].links[0])
     bsdf = nodes['Principled BSDF']
     if bsdf:
         nodes.remove(bsdf)
 
-    # add mixed shader to allow for fading in and out
-    shader1 = nodes.new(type='ShaderNodeMixShader')
-    shader2 = nodes.new(type='ShaderNodeMixShader')
-    alpha = nodes.new(type='ShaderNodeBsdfTransparent')
-    alpha.inputs['Color'].default_value = rgb
-    links.new(alpha.outputs[0], shader1.inputs[1])
-    links.new(alpha.outputs[0], shader2.inputs[1])
-    shader1.inputs[0].default_value = 0  # transparent at the beginning
-    shader2.inputs[0].default_value = 0  # transparent
-    links.new(shader1.outputs[0], material.inputs['Surface'])
-    links.new(shader2.outputs[0], material.inputs['Volume'])
+    mix_alpha_surf = nodes.new(type='ShaderNodeMixShader')
+    mix_alpha_surf.label="AlphaMixer"
+    mix_alpha_vol = nodes.new(type='ShaderNodeMixShader')
+    mix_alpha_vol.label = "AlphaMixer"
+    mix_shader = nodes.new(type='ShaderNodeMixShader')
+    add_shader = nodes.new(type='ShaderNodeAddShader')
 
-    nodes.new(type='ShaderNodeAddShader')  # index 2
-    color.node_tree.links.new(nodes['Add Shader'].outputs[0], shader2.inputs[2])
-    nodes.new(type='ShaderNodeAddShader')  # index 3
-    color.node_tree.links.new(nodes['Add Shader.001'].outputs[0], nodes['Add Shader'].inputs[1])
-    nodes.new(type='ShaderNodeEmission')  # index 4
-    nodes['Emission'].inputs['Color'].default_value = rgb
-    nodes['Emission'].inputs['Strength'].default_value = strength
-    color.node_tree.links.new(nodes['Emission'].outputs[0], nodes['Add Shader'].inputs[0])
-    nodes.new(type='ShaderNodeVolumeScatter')  # index 5
-    nodes['Volume Scatter'].inputs['Color'].default_value = rgb
-    nodes['Volume Scatter'].inputs['Density'].default_value = strength
-    color.node_tree.links.new(nodes['Volume Scatter'].outputs['Volume'], nodes['Add Shader.001'].inputs[0])
-    absorption = nodes.new(type='ShaderNodeVolumeAbsorption')  # index 6
-    absorption.inputs['Color'].default_value = rgb
-    absorption.inputs['Density'].default_value = strength
-    color.node_tree.links.new(absorption.outputs['Volume'], nodes['Add Shader.001'].inputs[1])
-    glass = nodes.new(type='ShaderNodeBsdfGlass')
-    glass.inputs['Color'].default_value = [1, 1, 1, 1]
-    color.node_tree.links.new(glass.outputs['BSDF'], shader1.inputs[2])
+    trans_bsdf = nodes.new(type='ShaderNodeBsdfTransparent')
+    trans_bsdf.inputs['Color'].default_value = color
+    glass_bsdf = nodes.new(type='ShaderNodeBsdfGlass')
+    glass_bsdf.inputs['Color'].default_value = [1, 1, 1, 1]
+    glass_bsdf.inputs["Roughness"].default_value = roughness
+    glass_bsdf.inputs["IOR"].default_value = ior
+
+    fresnel= nodes.new(type='ShaderNodeFresnel')
+    fresnel.inputs["IOR"].default_value=ior
+
+    links.new(trans_bsdf.outputs[0], mix_shader.inputs[1])
+    links.new(glass_bsdf.outputs[0], mix_shader.inputs[2])
+    links.new(fresnel.outputs['Factor'], mix_shader.inputs[0])
+
+
+    vol_scatter = nodes.new(type='ShaderNodeVolumeScatter')  # index 5
+    vol_scatter.inputs['Color'].default_value = color
+    vol_scatter.inputs['Density'].default_value = scatter_density
+    links.new(nodes['Volume Scatter'].outputs['Volume'], add_shader.inputs[0])
+    vol_absorption = nodes.new(type='ShaderNodeVolumeAbsorption')  # index 6
+    vol_absorption.inputs['Color'].default_value = color
+    vol_absorption.inputs['Density'].default_value = absorption_density
+    links.new(vol_absorption.outputs['Volume'], add_shader.inputs[1])
+
+    links.new(mix_alpha_surf.outputs["Shader"],material_output.inputs["Surface"])
+    links.new(mix_shader.outputs["Shader"],mix_alpha_surf.inputs[2])
+    links.new(mix_alpha_vol.outputs["Shader"],material_output.inputs["Volume"])
+    links.new(add_shader.outputs["Shader"], mix_alpha_vol.inputs[2])
+
+    # locations
+    fresnel.location = (-400,-400)
+    trans_bsdf.location = (-400,-200)
+    glass_bsdf.location = (-400,-0)
+    vol_scatter.location = (-400,200)
+    vol_absorption.location = (-400,400)
+
+    mix_alpha_surf.location = (0,-200)
+    mix_alpha_vol.location = (0,200)
+    mix_shader.location = (-200,-200)
+    add_shader.location = (-200,200)
+
+    material_output.location=(200,0)
+    return material
 
 def mandel_on_riemann_sphere(**kwargs):
     if 'iterations' in kwargs:

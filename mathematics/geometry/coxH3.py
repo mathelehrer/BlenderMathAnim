@@ -146,7 +146,7 @@ class CoxH3:
             print("point cloud read from file")
         return list(point_cloud)
 
-    def get_real_point_cloud(self, signature=[1, 1, -1]):
+    def get_real_point_cloud(self, signature=[1,1,-1]):
         if isinstance(signature, tuple):
             signature = list(signature)
         return [p.real() for p in self.point_cloud(signature)]
