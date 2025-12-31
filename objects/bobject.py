@@ -174,6 +174,11 @@ class BObject(object):
         super().__init__()
         self.current_location = self.ref_obj.location  # keep track of the current location for fast moves without determining the location at a given frame
 
+        # if geometry nodes modifier is part of the kwargs
+        geo_node_modifier = get_from_kwargs(kwargs, "geo_node_modifier", None)
+        if geo_node_modifier is not None:
+            self.add_mesh_modifier(type="NODES",node_modifier=geo_node_modifier)
+
     @classmethod
     def from_name(cls, name=None, **kwargs):
         if name:

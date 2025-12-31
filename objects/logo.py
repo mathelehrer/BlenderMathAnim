@@ -366,5 +366,5 @@ class LogoFromInstances(BObject):
         self.appear(begin_time=begin_time,transition_time=0)
         super().grow(scale=self.scale, begin_time=begin_time,transition_time=0)
         for child in self.b_children:
-            child.grow(scale=child.scale, begin_time=begin_time, transition_time=transition_time)
+            child.grow(scale=child.intrinsic_scale, begin_time=begin_time, transition_time=transition_time)
         return begin_time+transition_time

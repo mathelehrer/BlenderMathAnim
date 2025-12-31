@@ -5984,7 +5984,7 @@ class SimpleFunctionModifier(GeometryNodesModifier):
 class CustomUnfoldModifier(GeometryNodesModifier):
     def __init__(self, name="UnfoldModifier", **kwargs):
         self.number = 0 # count the number of shown faces
-        super().__init__(name, automatic_layout=True, group_output=True, group_input=True, **kwargs)
+        super().__init__(name, automatic_layout=False, group_output=True, group_input=True, **kwargs)
 
     def create_node(self, tree, **kwargs):
         out = self.group_outputs
