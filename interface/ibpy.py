@@ -140,15 +140,17 @@ def add_light_probe(**kwargs):
     return probe
 
 
-def add_spot_light(energy):
+def add_spot_light(energy,**kwargs):
     '''
     :param kwargs: location,radius,scale,energy
     :return:
     '''
 
     bpy.ops.object.light_add(type='SPOT')
+    spot_size=get_from_kwargs(kwargs,"spot_size", np.pi / 4)
     spot = bpy.context.object
     spot.data.energy = energy
+    spot.data.spot_size=spot_size
     return spot
 
 
@@ -215,6 +217,13 @@ def switch_off(bob, begin_frame=0, frame_duration=1):
     obj.data.energy = get_energy_at_frame(bob, begin_frame)
     insert_keyframe(obj.data, 'energy', begin_frame)
     obj.data.energy = 0
+    insert_keyframe(obj.data, 'energy', begin_frame + np.maximum(1, frame_duration))
+
+def change_power(bob,from_value=0,to_value=5000,begin_frame=0,frame_duration=1):
+    obj = get_obj(bob)
+    obj.data.energy = from_value
+    insert_keyframe(obj.data, 'energy', begin_frame)
+    obj.data.energy = to_value
     insert_keyframe(obj.data, 'energy', begin_frame + np.maximum(1, frame_duration))
 
 
@@ -6109,7 +6118,7 @@ def add_sub_division_surface_modifier(b_obj, level=2, adaptive_subdivision=False
     modifier = obj.modifiers.new(name='smooth', type='SUBSURF')
     if modifier:
         modifier.render_levels = level
-        subdivision_type=get_from_kwargs(kwargs,"subdivision_type","CHATMULL_CLARK")
+        subdivision_type=get_from_kwargs(kwargs,"subdivision_type","CATMULL_CLARK")
         modifier.subdivision_type=subdivision_type
     return modifier
 

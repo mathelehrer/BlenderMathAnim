@@ -20,9 +20,11 @@ class DynkinDiagram(BObject):
         """
         self.name = get_from_kwargs(kwargs,"name","DynkinDiagram")
         center = 2*(dim-1) /2
+        self.dim = dim
         self.spheres = [Sphere(r=0.25, location=[-center+ i * 2, 0, 0], color='plastic_example') for i in range(dim)]
         self.cylinders = [Cylinder.from_start_to_end(start=[-center+i*2, 0, 0], end=[-center+(i+1)*2, 0,0], thickness=0.5, color='plastic_text') for i in range(len(labels))]
         self.rings = [Circle2(center=[-center+i*2,0,0],radius=0.5,num_points=20,color="plastic_example",thickness=1,rotation_euler=[pi/2,0,0]) for i in range(dim)]
+        self.labels_param = labels
         self.labels = []
         for i,l in enumerate(labels):
             if len(l)>0:
@@ -80,3 +82,5 @@ class DynkinDiagram(BObject):
 
         return begin_time+transition_time
 
+    def copy(self):
+        return DynkinDiagram(dim=self.dim, labels=self.labels_param, location=self.ref_obj.location.copy(),scale=self.ref_obj.scale)

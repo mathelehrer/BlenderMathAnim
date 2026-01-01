@@ -339,6 +339,11 @@ class LogoFromInstances(BObject):
             self.blue_instances.append(instance_blue( location=[x, y, 0],
                                                      name='blue_-' + str(i), **kwargs_blue, scale=[r] * 3))
 
+        special_instances = get_from_kwargs(kwargs,"special_instances",None)
+        if special_instances:
+            for instance,(type,index) in special_instances.items():
+                self.replace_instance(type,index,instance)
+
         super().__init__(children=self.blue_instances+self.red_instances+self.green_instances,
                          name= self.name, **kwargs)
 
@@ -353,6 +358,24 @@ class LogoFromInstances(BObject):
 
     def get_blue_instances(self):
         return self.blue_instances
+
+
+    def copy_location_and_scale(self,source,target):
+        target.ref_obj.location=source.ref_obj.location
+        target.ref_obj.scale=source.ref_obj.scale
+        return target
+
+    def replace_instance(self,type,index,instance):
+        if type=="red":
+            old_instance = self.red_instances[index]
+            self.red_instances[index]=self.copy_location_and_scale(old_instance,instance)
+        elif type=="green":
+            old_instance = self.green_instances[index]
+            self.green_instances[index]=self.copy_location_and_scale(old_instance, instance)
+        elif type=="blue":
+            old_instance = self.blue_instances[index]
+            self.blue_instances[index]=self.copy_location_and_scale(old_instance, instance)
+
 
     def appear(self,begin_time=0,
                transition_time=DEFAULT_ANIMATION_TIME,

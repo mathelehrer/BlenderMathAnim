@@ -66,7 +66,7 @@ def copy_properties(old_prop,new_prop):
     or "color_ramp" for the color ramp node
     """
     ignore_attributes = ("rna_type", "type", "dimensions", "inputs", "outputs", "internal_links", "select","asset_data","pixels",
-                         "color_tag","texture_mapping","color_mapping")
+                         "color_tag","texture_mapping","color_mapping","multilayer_layer","multilayer_pass","multilayer_view") # these are mostly read-only attributes
     attributes = []
     for attr in old_prop.bl_rna.properties:
         # check if the attribute should be copied and add it to the list of attributes to copy
@@ -79,7 +79,8 @@ def copy_properties(old_prop,new_prop):
             try:
                 # make recursion for selected attributes
                 copy = True
-                if attr=="image_user":
+                if attr=="image_user": # used for movies shown as light shows
+                    copy = False # the image_user attribute is read-only, but it's children can be copied
                     if hasattr(getattr(old_prop, attr), "bl_rna"):
                         copy_properties(getattr(old_prop, attr), getattr(new_prop, attr))
                 elif attr=="color_ramp":

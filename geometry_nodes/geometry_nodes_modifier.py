@@ -6000,14 +6000,16 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         edge_material = get_from_kwargs(kwargs, "edge_material", "example")
         vertex_material = get_from_kwargs(kwargs, "vertex_material", "red")
         root_material = get_from_kwargs(kwargs, "root_material", "example")
-        root_emission = get_from_kwargs(kwargs, "root_emission", 0)
+        root_emission = get_from_kwargs(kwargs, "root_emission", None)
+        if root_emission is not None:
+            kwargs["emission"]=root_emission # override default emission settings
         max_faces = get_from_kwargs(kwargs, "max_faces", 4)
         face_appearance_order = get_from_kwargs(kwargs, "face_appearance_order", None)
         projection = get_from_kwargs(kwargs,"projection",False)
 
 
         materials = [get_texture(mat,**kwargs) for mat in face_materials + [edge_material,vertex_material]]
-        materials.append(get_texture(root_material,emission=root_emission,**kwargs))
+        materials.append(get_texture(root_material,**kwargs))
         in_material_nodes = [InputMaterial(tree,material=material) for material in materials]
         in_face_material_nodes = in_material_nodes[:-3]
         in_edge_material_node = in_material_nodes[-3]

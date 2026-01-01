@@ -31,7 +31,8 @@ class SpotLight(BObject):
         name=self.get_from_kwargs('name','SpotLight')
 
         energy = get_from_kwargs(kwargs, "energy", 10)
-        light = ibpy.add_spot_light(energy)
+        light = ibpy.add_spot_light(energy,**kwargs)
+
 
         super().__init__(obj=light,name=name,**self.kwargs)
         target = get_from_kwargs(kwargs,"target",None)
@@ -53,6 +54,10 @@ class SpotLight(BObject):
 
     def off(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
         ibpy.switch_off(self,begin_frame = begin_time*FRAME_RATE,frame_duration=transition_time*FRAME_RATE)
+
+    def change_power(self,from_value=0,to_value=5000,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.change_power(self,from_value=from_value,to_value=to_value,begin_frame=begin_time * FRAME_RATE,frame_duration=transition_time * FRAME_RATE)
+        return begin_time+transition_time
 
 
 class AreaLight(BObject):

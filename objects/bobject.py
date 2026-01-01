@@ -496,14 +496,22 @@ class BObject(object):
 
     def copy(self, name=None, **kwargs):
         copy = ibpy.copy(self)
+        location =self.ref_obj.location.copy()
 
+        children = []
+        for child in self.b_children:
+            children.append(child.copy(name=child.name
+                                       ))
         if not name:
             name = "copy_of_" + self.ref_obj.name
         if 'scale' in kwargs:
             scale=kwargs.pop('scale')
         else:
             scale=self.intrinsic_scale
-        bcopy = BObject(obj=copy, name=name,scale=scale,  **kwargs)
+        if len(children)>0:
+            bcopy = BObject(children=children,scale=scale,name=name,location=location,**kwargs)
+        else:
+            bcopy = BObject(obj=copy, name=name,scale=scale,location=location,  **kwargs)
 
         bcopy.old_sk = self.old_sk
         bcopy.appeared = False
