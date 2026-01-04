@@ -22,9 +22,10 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     SubdivisionSurface, FilletCurve, FaceArea, SortElements, InputBoolean, BeveledCubeNode, CompareNode, \
     GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode, CornersOfFace, BoundingBox, CurveLine, \
     ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode, PolyhedronViewNode, \
-    ShowNormalsNode
+    ShowNormalsNode, Rotation, LinearMap
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material, get_geometry_node_from_modifier
+from mathematics.mathematica.mathematica import choose
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
 from objects.derived_objects.p_arrow import PArrow
@@ -32,6 +33,7 @@ from perform.scene import OLDSCHOOL
 from utils.constants import FRAME_RATE, TEMPLATE_TEXT_FILE, SVG_DIR, TEX_DIR, TEX_TEXT_TO_REPLACE, TEMPLATE_TEX_FILE, \
     TEX_LOCAL_SCALE_UP, DEFAULT_ANIMATION_TIME
 from utils.kwargs import get_from_kwargs
+from utils.utils import to_vector
 
 pi = np.pi
 tau = 2 * pi
@@ -6191,7 +6193,6 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         ibpy.change_default_value(radius_node,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
         return begin_time + transition_time
 
-
 class EdgePairingVisualizer(GeometryNodesModifier):
     def __init__(self, name="UnfoldModifier", **kwargs):
         """
@@ -6354,6 +6355,420 @@ class EdgePairingVisualizer(GeometryNodesModifier):
         ibpy.change_default_value(radius_node, from_value=from_value, to_value=to_value, begin_time=begin_time,
                                   transition_time=transition_time)
         return begin_time + transition_time
+
+class Poly600CellStereoModifier(GeometryNodesModifier):
+    def __init__(self, name="Poly600CellModifier",  csv_file=None, **kwargs):
+        """
+        A modifier for visualizing Poly600Cell, where the 4D vertex data is stored in a csv-file and the
+        geometry represents a stereographic projection of the polytope.
+
+        """
+        self.csv_file = csv_file
+        super().__init__(name, automatic_layout=False, group_input=True, **kwargs)
+
+    def create_node(self, tree, uv_geometry=None, **kwargs):
+        out = self.group_outputs
+        input = self.group_inputs
+        links = tree.links
+
+        # input data from csv-file
+        if self.csv_file is not None:
+            shift = 0
+            import_csv = ImportCSV(tree, path=os.path.join(DATA_DIR,self.csv_file), location=(shift, -2), hide=True)
+            shift += 1
+
+        # transfer four dimensional geometry into attributes
+
+        index = Index(tree,location=(shift-1,-1),hide=False)
+
+        labels = ["x","y","z","w","center_w","cell"]
+        attributes = []
+        for label in labels:
+            name_attribute = NamedAttribute(tree, location=(shift, -1.5), name=label, data_type="FLOAT", hide=True)
+            sample_index = SampleIndex(tree, location=(shift, -1), data_type="FLOAT", geometry = import_csv.geometry_out,
+                                       value = name_attribute.std_out,index=index.std_out, hide=True)
+            store_attribute = StoredNamedAttribute(tree, location=(shift, -0.5), data_type="FLOAT", domain="POINT", name=label, value=sample_index.std_out, hide=True)
+            attributes.append(store_attribute)
+            shift+=1
+
+        named_attributes = []
+        for i,label in enumerate(labels):
+            name_attribute = NamedAttribute(tree, location=(shift, -0.5*i), name=label, data_type="FLOAT", hide=True)
+            named_attributes.append(name_attribute)
+
+
+        # create rotations
+        angles = []
+        for i in range(6):
+            angle = InputValue(tree, location=(shift, 0.5+0.5*i), label="Theta"+str(i), name="Theta"+str(i), value=0, hide=True)
+            angles.append(angle)
+        shift += 1
+
+        vec1 = CombineXYZ(tree,location=(shift,0),x=named_attributes[0],y=named_attributes[1],z=named_attributes[2],hide=True)
+        vec2 = CombineXYZ(tree,location=(shift,-0.5),x=named_attributes[3],hide=True)
+        shift+=1
+        # rotation_matrices
+        rotations = []
+        dirs = choose(list(range(4)), 2)
+
+        for i,[dir,angle] in enumerate(zip(dirs,angles)):
+            rotations.append(Rotation(tree,location=(shift,i),dimension=4,u=dir[0],v=dir[1],angle=angle.std_out,label="Rot"+str(dirs),hide=True))
+
+        shift+=1
+        # linear maps
+        rot_labels = ["rotXYZ", "rotW"]
+        input_vec_sockets = []
+
+        last_vec_sockets = [vec1.std_out, vec2.std_out]
+        for j in range(6):
+            lm = LinearMap(tree, location=(shift+j,0), dimension=4,
+                           name="LinearMap"+str(5-j), label="LinearMap" + str(5 - j),
+                           hide=True)
+            for k in range(8):
+                tree.links.new(rotations[5 - j].outputs[k], lm.inputs[k + 1])
+            tree.links.new(last_vec_sockets[0], lm.inputs[9])
+            tree.links.new(last_vec_sockets[1], lm.inputs[10])
+            last_vec_sockets = [lm.outputs[0], lm.outputs[1]]
+            shift+=1
+        input_vec_sockets += last_vec_sockets
+
+        projection = make_function(tree,name="Projection",functions={
+            "position":["v_x,1,w_x,-,/","v_y,1,w_x,-,/","v_z,1,w_x,-,/"]},
+            inputs=["v","w"],outputs=["position"],hide=True,location=(shift,-1),
+                                   vectors =["v","w","position"])
+
+        links.new(last_vec_sockets[0],projection.inputs["v"])
+        links.new(last_vec_sockets[1],projection.inputs["w"])
+        shift+=1
+
+        set_pos = SetPosition(tree,location=(shift,-1),position=projection.outputs["position"],hide=True)
+        shift+=1
+        wire_frame = WireFrame(tree,location=(shift,0),radius=0.005,hide=True)
+        shift+=1
+        face_color=get_from_kwargs(kwargs,"face_color","eevee_glass_joker")
+        face_material =get_texture(face_color,emission=0.1)
+        self.materials.append(face_material)
+        set_face_material=SetMaterial(tree,location=(shift,0),material=face_material,hide=True)
+        edge_color=get_from_kwargs(kwargs,"edge_color","drawing")
+        edge_material =get_texture(edge_color,emission=1)
+        self.materials.append(edge_material)
+        set_edge_material=SetMaterial(tree,location=(shift,-1),material=edge_material,hide=True)
+        shift+=1
+        join_geometry = JoinGeometry(tree,location=(shift,0),label="JoinGeometry",hide=True)
+        shift+=1
+        out.location = ((shift + 1) * 200,0)
+
+
+        # create the growth function
+        shift = 2
+        w_min = InputValue(tree,location=(shift,4),value=-1,hide=False,label="WMin")
+        w_max = InputValue(tree,location=(shift,3),value=-1,hide=False,label="WMax")
+        index_range = InputInteger(tree,location=(shift,1.5),value=-1,hide=True,label="IndexRange")
+        center_w_attr = NamedAttribute(tree,location=(shift,0.5),name="center_w",hide=True)
+        cell_index = NamedAttribute(tree,location=(shift,2),name="cell",hide=True)
+        shift+=1
+        selector = make_function(tree,name="SelectorFunction",
+                                 functions={
+                                     "w_selector":"center_w,w_min,<",
+                                     "index_selector":"index,index_range,<,center_w,w_max,<,and"
+                                 },hide=True,location=(shift,3),
+                                 inputs=["index","index_range","center_w","w_min","w_max"],
+                                 outputs=["w_selector","index_selector"],
+                                 scalars=["index","index_range","center_w","w_min","w_max","w_selector","index_selector"],)
+        links.new(center_w_attr.std_out,selector.inputs["center_w"])
+        links.new(w_min.std_out,selector.inputs["w_min"])
+        links.new(w_max.std_out,selector.inputs["w_max"])
+        links.new(cell_index.std_out,selector.inputs["index"])
+        links.new(index_range.std_out,selector.inputs["index_range"])
+
+        shift+=1
+
+        sep_geo = SeparateGeometry(tree,location=(shift,3),selection=selector.outputs["w_selector"],domain="POINT",hide=True)
+        sep_geo2 = SeparateGeometry(tree,location=(shift,2),selection=selector.outputs["index_selector"],domain="POINT",hide=True)
+        shift+=1
+        join_selected_geo = JoinGeometry(tree,location=(shift,2.5),hide=True)
+
+        create_geometry_line(tree,attributes, ins=input.outputs[0])
+        create_geometry_line(tree,[attributes[-1],sep_geo,join_selected_geo])
+        create_geometry_line(tree,[attributes[-1],sep_geo2,join_selected_geo])
+
+        create_geometry_line(tree,  [join_selected_geo,set_pos, wire_frame, set_edge_material, join_geometry],
+                             out=out.inputs[0])
+        create_geometry_line(tree, [set_pos, set_face_material, join_geometry])
+
+class PolytopeViewerModifier(GeometryNodesModifier):
+    def __init__(self, name="PolytopViewerModifier", cell_sizes=[12,20,24,120], csv_file=None,
+                 colors = ["prism3","prism10","trunc_octa","trunc_icosidodeca"],**kwargs):
+        """
+        A modifier for visualizing a polytope,
+        where the 4D vertex data is stored in a csv-file
+        and the
+        geometry represents a stereographic projection
+        of the polytope.
+
+        """
+        self.csv_file = csv_file
+        super().__init__(name, automatic_layout=False, group_input=True, cell_sizes=cell_sizes,colors = colors,**kwargs)
+
+    def create_node(self, tree, uv_geometry=None, **kwargs):
+        out = self.group_outputs
+        input = self.group_inputs
+        links = tree.links
+
+        data_frame = Frame(tree,label = "Prepare Data",name="PrepareDataFrame",location=(0,0))
+
+        # input data from csv-file
+        shift = 1
+        if self.csv_file is not None:
+            vertex_import_csv = ImportCSV(tree, path=os.path.join(DATA_DIR,"vertex_"+self.csv_file), location=(shift, -2), hide=True,parent=data_frame)
+            face_import_csv = ImportCSV(tree, path=os.path.join(DATA_DIR,"face_"+self.csv_file), location=(shift, -3), hide=True,parent=data_frame)
+            shift += 1
+
+
+        # transfer four dimensional geometry into attributes
+        index = Index(tree,location=(shift-1,-1),hide=False,parent=data_frame)
+
+        labels = ["x","y","z","w"]
+        attributes = []
+        for label in labels:
+            name_attribute = NamedAttribute(tree, location=(shift, -1.5), name=label,label = "Read_"+label, data_type="FLOAT", hide=True,parent=data_frame)
+            sample_index = SampleIndex(tree, location=(shift, -1), data_type="FLOAT", geometry = vertex_import_csv.geometry_out,
+                                       value = name_attribute.std_out,index=index.std_out, hide=True,parent=data_frame)
+            store_attribute = StoredNamedAttribute(tree, location=(shift, -0.5), data_type="FLOAT", domain="POINT", name=label, label="store_"+label, value=sample_index.std_out, hide=True,parent=data_frame)
+            attributes.append(store_attribute)
+            shift+=1
+
+        labels2 = ["cell_size0", "cell_size1"]
+        for label in labels2:
+            name_attribute = NamedAttribute(tree, location=(shift, -1.5), name=label, label="Read_" + label,
+                                            data_type="INT", hide=True,parent=data_frame)
+            sample_index = SampleIndex(tree, location=(shift, -1), data_type="INT",
+                                       geometry=face_import_csv.geometry_out,
+                                       value=name_attribute.std_out, index=index.std_out, hide=True,parent=data_frame)
+            store_attribute = StoredNamedAttribute(tree, location=(shift, -0.5), data_type="INT", domain="FACE",
+                                                   name=label, label="store_" + label, value=sample_index.std_out,
+                                                   hide=True,parent=data_frame)
+            attributes.append(store_attribute)
+            shift += 1
+
+        last_geometry_out =attributes[-1]
+
+        shift=1
+        # create rotations
+        rotation_frame = Frame(tree, label="Rotations", name="RotationFrame", location=(0, -3))
+
+        named_attributes = []
+        for i, label in enumerate(labels):
+            name_attribute = NamedAttribute(tree, location=(shift, -0.5 * i), name=label, data_type="FLOAT", hide=True,parent=rotation_frame)
+            named_attributes.append(name_attribute)
+
+        angles = []
+        for i in range(6):
+            angle = InputValue(tree, location=(shift, 0.5+0.5*i), label="Theta"+str(i), name="Theta"+str(i), value=0, hide=True,parent=rotation_frame)
+            angles.append(angle)
+        shift += 1
+
+        vec1 = CombineXYZ(tree,location=(shift,0),x=named_attributes[0],y=named_attributes[1],z=named_attributes[2],hide=True,parent=rotation_frame)
+        vec2 = CombineXYZ(tree,location=(shift,-0.5),x=named_attributes[3],hide=True,parent=rotation_frame)
+        shift+=1
+
+        # rotation_matrices
+        rotations = []
+        dirs = choose(list(range(4)), 2)
+
+        for i,[dir,angle] in enumerate(zip(dirs,angles)):
+            rotations.append(Rotation(tree,location=(shift,i),dimension=4,u=dir[0],v=dir[1],angle=angle.std_out,label="Rot"+str(dirs),hide=True,parent=rotation_frame))
+
+        shift+=1
+        # linear maps
+        rot_labels = ["rotXYZ", "rotW"]
+        input_vec_sockets = []
+
+        last_vec_sockets = [vec1.std_out, vec2.std_out]
+        for j in range(6):
+            lm = LinearMap(tree, location=(shift+j,0), dimension=4,
+                           name="LinearMap"+str(5-j), label="LinearMap" + str(5 - j),
+                           hide=True,parent=rotation_frame)
+            for k in range(8):
+                tree.links.new(rotations[5 - j].outputs[k], lm.inputs[k + 1])
+            tree.links.new(last_vec_sockets[0], lm.inputs[9])
+            tree.links.new(last_vec_sockets[1], lm.inputs[10])
+            last_vec_sockets = [lm.outputs[0], lm.outputs[1]]
+
+        input_vec_sockets += last_vec_sockets
+
+        # cell specifications
+        shift=1
+        cell_join = JoinGeometry(tree,location=(shift+5,+5),hide=True)
+        cell_specification_frame = Frame(tree,location=(shift,5),label = "Cell Specifications",name="CellSpecificationFrame")
+
+        cell_sizes = get_from_kwargs(kwargs,"cell_sizes",[1,2,3,4])
+        materials = get_from_kwargs(kwargs,"colors",["drawing"]*len(cell_sizes))
+
+        y = 0
+        for cell_size,color in zip(cell_sizes,materials):
+            shift = 0
+            cell_size_node = InputInteger(tree,location=(shift+1,y),label="cell"+str(cell_size),integer=cell_size,parent = cell_specification_frame,
+                                          hide = False)
+            mat = get_texture(color, **kwargs)
+            self.materials.append(mat)
+            cell_material = InputMaterial(tree, location=(shift,y), label="cell"+str(cell_size)+"_material", material=mat,
+                                          hide=False, parent=cell_specification_frame)
+            y-=1
+            cell_visible = InputBoolean(tree,location=(shift,y),label="cell"+str(cell_size)+"_visible",value=True,
+                                        hide=False,parent=cell_specification_frame)
+            shift+=1
+            attr_labels = ["cell_size0","cell_size1"]
+            attribute_nodes = []
+            y-=1
+            for i,attr in enumerate(attr_labels):
+                attr_node = NamedAttribute(tree,location=(shift,y+i*0.5),data_type="INT",name=attr,label=attr,hide=True,parent=cell_specification_frame)
+                attribute_nodes.append(attr_node)
+            shift+=1
+            cell_size_selector = make_function(tree,name="CellSizeSelectionFunction",location =(shift,y+1),
+                        functions={
+                            "selection":"val,cellsize0,=,val,cellsize1,=,or,visible,and"
+                        },inputs=["val","cellsize0","cellsize1","visible"],outputs=["selection"],
+                        scalars=["val","cellsize0","cellsize1","selection","visible"],hide = True,parent = cell_specification_frame)
+
+            links.new(cell_size_node.std_out,cell_size_selector.inputs["val"])
+            links.new(attribute_nodes[0].std_out,cell_size_selector.inputs["cellsize0"])
+            links.new(attribute_nodes[1].std_out,cell_size_selector.inputs["cellsize1"])
+            links.new(cell_visible.std_out,cell_size_selector.inputs["visible"])
+
+            shift+=1
+            sep_geo = SeparateGeometry(tree,location=(shift,y+1),selection=cell_size_selector.outputs["selection"],domain="FACE",
+                                       hide=True,parent = cell_specification_frame)
+            shift+=1
+            set_material = SetMaterial(tree,location=(shift,y+1),material=cell_material.std_out,hide=True,
+                                       parent = cell_specification_frame)
+
+            create_geometry_line(tree,[last_geometry_out,sep_geo,set_material,cell_join])
+            y-=2
+
+        # stereographic projection
+        projection_frame = Frame(tree,location=(5,0),name="ProjectionFrame",label="Projection")
+
+        length = make_function(tree,name="length",functions={
+            "l":"v,v,dot,w_x,w_x,*,+,sqrt"
+        },inputs=["v","w"],outputs=["l"],vectors=["v","w"],scalars=["l"],hide=True,location=(shift,-2),parent=projection_frame)
+        links.new(last_vec_sockets[0],length.inputs["v"])
+        links.new(last_vec_sockets[1],length.inputs["w"])
+
+        projection = make_function(tree,name="Projection",functions={
+            "position":["v_x,1,w_x,l,/,-,/","v_y,1,w_x,l,/,-,/","v_z,1,w_x,l,/,-,/"]},
+            inputs=["v","w","l"],outputs=["position"],hide=True,location=(shift,-1),
+                                   vectors =["v","w","position"],scalars=["l"],parent=projection_frame)
+
+        links.new(last_vec_sockets[0],projection.inputs["v"])
+        links.new(last_vec_sockets[1],projection.inputs["w"])
+        links.new(length.outputs["l"],projection.inputs["l"])
+        shift+=1
+
+        set_pos = SetPosition(tree,location=(shift,-1),position=projection.outputs["position"],hide=True,parent=projection_frame)
+        shift+=1
+        wire_frame = WireFrame(tree,location=(shift,0),radius=0.005,hide=True,parent=projection_frame)
+        shift+=1
+        edge_color=get_from_kwargs(kwargs,"edge_color","drawing")
+        edge_material =get_texture(edge_color,emission=1)
+        self.materials.append(edge_material)
+        set_edge_material=SetMaterial(tree,location=(shift,-1),material=edge_material,hide=True,parent=projection_frame)
+        shift+=1
+        join_geometry = JoinGeometry(tree,location=(shift,0),label="JoinGeometry",hide=True,parent=projection_frame)
+        shift+=1
+        out.location = ((shift + 1) * 200,0)
+
+
+        # create the growth function
+        growth_frame = Frame(tree,location=(4,1),name="GrowthFrame", label="Growth Frame")
+        shift =0
+
+        position = Position(tree,location = (shift,1),hide=True,parent=growth_frame)
+        l_max = InputValue(tree,location=(shift,0.5),hide=False,value=10,label="MaxDistance",parent=growth_frame)
+
+        shift+=1
+        distance_selector = make_function(tree,name="DistanceSelector",functions={
+            "select":"pos,length,lmax,<"
+        },inputs=["pos","lmax"],vectors=["pos"],scalars=["lmax","select"],outputs=["select"],location=(shift,1),
+                                          hide=True,parent=growth_frame)
+        links.new(position.std_out,distance_selector.inputs["pos"])
+        links.new(l_max.std_out,distance_selector.inputs["lmax"])
+        sep_geo = SeparateGeometry(tree,location=(shift,3),selection=distance_selector.outputs["select"],domain="POINT",hide=True,parent=growth_frame)
+        shift+=1
+        join_selected_geo = JoinGeometry(tree,location=(shift,2.5),hide=True,parent=growth_frame)
+
+        # link geometry nodes,parent=growth_frame
+        create_geometry_line(tree,attributes, ins=input.outputs[0])
+        create_geometry_line(tree,[cell_join,sep_geo,join_selected_geo])
+        create_geometry_line(tree,  [join_selected_geo,set_pos, wire_frame, set_edge_material, join_geometry],
+                         out=out.inputs[0])
+        create_geometry_line(tree, [set_pos, join_geometry])
+
+        out.location=(20*200,0)
+
+class StereographicProjectionModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        """
+        A modifier that performs a stereographic projection on a given geometry
+        """
+        super().__init__(get_from_kwargs(kwargs, 'name', "StereographicProjectionModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "StereoProjection_node", **kwargs)
+
+    def grow_rays(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        ray_length_node=get_geometry_node_from_modifier(self,label="RayLengthFraction")
+        ibpy.change_default_value(ray_length_node,from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def change_ray_center_size(self,from_value=0,to_value=1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        ray_center_size_node=get_geometry_node_from_modifier(self,label="RayCenterSize")
+        ibpy.change_default_value(ray_center_size_node,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def change_sphere_thickness(self,from_value=300,to_value=300,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        sphere_thickness_node=get_geometry_node_from_modifier(self,label="SphereThickness")
+        ibpy.change_default_value(sphere_thickness_node,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def change_grid_size(self,from_value=300,to_value=300,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        grid_size_node=get_geometry_node_from_modifier(self,label="GridSize")
+        ibpy.change_default_value(grid_size_node,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def change_projection_thickness(self,from_value=0.1,to_value=0.1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        thickness_node=get_geometry_node_from_modifier(self,label="ProjectionRadius")
+        ibpy.change_default_value(thickness_node,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
+        return begin_time + transition_time
+
+    def rotate(self,from_value=[0,0,0],rotation_euler=[0,0,0],begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        rotation_node = get_geometry_node_from_modifier(self,label="RotationEuler")
+        ibpy.change_default_vector(rotation_node,from_value=from_value,to_value=to_vector(rotation_euler),begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+class PolyhedronViewModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(get_from_kwargs(kwargs, 'name', "PolyhedronViewModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "PolyhedronView_nodes", **kwargs)
+
+        edge_color = get_from_kwargs(kwargs, 'edge_color', 'example')
+        vertex_color = get_from_kwargs(kwargs, 'vertex_color', 'red')
+
+        edge_material = get_texture(edge_color, **kwargs)
+        vertex_material = get_texture(vertex_color, **kwargs)
+
+        self.materials.append(edge_material)
+        self.materials.append(vertex_material)
+
+        edge_node = ibpy.get_geometry_node_from_modifier(self.tree,"EdgeMaterial")
+        edge_node.material = edge_material
+        vertex_node = ibpy.get_geometry_node_from_modifier(self.tree,"VertexMaterial")
+        vertex_node.material = vertex_material
+
 
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes
