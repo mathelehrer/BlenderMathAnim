@@ -4894,6 +4894,38 @@ class PolyhedronViewNode(NodeGroup):
 
         create_from_xml(tree, "PolyhedronView_nodes", **kwargs)
 
+class ShowNormalsNode(NodeGroup):
+    def __init__(self,tree,thickness=0.1,length=1,material=None,**kwargs):
+        self.name = get_from_kwargs(kwargs, "name", "ShowNormalsNode")
+        super().__init__(tree, inputs={"Mesh": "GEOMETRY","Thickness": "FLOAT", "Length": "FLOAT","Material": "MATERIAL"},
+                         outputs={"Mesh": "GEOMETRY"}, auto_layout=False, name=self.name, **kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_in = self.node.inputs["Mesh"]
+        self.geometry_out = self.node.outputs["Mesh"]
+
+        if isinstance(thickness,(int,float)):
+            self.node.inputs["Thickness"].default_value =thickness
+        else:
+            tree.links.new(thickness,self.node.inputs["Thickness"])
+        if isinstance(length,(int,float)):
+            self.node.inputs["Length"].default_value =length
+        else:
+            tree.links.new(length,self.node.inputs["Length"])
+
+        if material is not None:
+            tree.links.new(material,self.node.inputs["Material"])
+
+    def fill_group_with_node(self, tree, **kwargs):
+        # remove any existing node
+        nodes = tree.nodes
+        for n in nodes:
+            nodes.remove(n)
+
+        create_from_xml(tree, "ShowNormals_nodes", **kwargs)
+
 # aux functions #
 
 def get_attributes(line):

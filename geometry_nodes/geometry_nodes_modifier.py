@@ -21,7 +21,8 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     CycleNode, FillCurve, AttributeStatistic, CoxeterReflectionNode, QuaternionToRotation, RotateVector, \
     SubdivisionSurface, FilletCurve, FaceArea, SortElements, InputBoolean, BeveledCubeNode, CompareNode, \
     GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode, CornersOfFace, BoundingBox, CurveLine, \
-    ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode, PolyhedronViewNode
+    ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode, PolyhedronViewNode, \
+    ShowNormalsNode
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material, get_geometry_node_from_modifier
 from mathematics.parsing.parser import ExpressionConverter
@@ -5984,7 +5985,7 @@ class SimpleFunctionModifier(GeometryNodesModifier):
 class CustomUnfoldModifier(GeometryNodesModifier):
     def __init__(self, name="UnfoldModifier", **kwargs):
         self.number = 0 # count the number of shown faces
-        super().__init__(name, automatic_layout=False, group_output=True, group_input=True, **kwargs)
+        super().__init__(name, automatic_layout=True, group_output=True, group_input=True, **kwargs)
 
     def create_node(self, tree, **kwargs):
         out = self.group_outputs
@@ -6001,25 +6002,38 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         vertex_material = get_from_kwargs(kwargs, "vertex_material", "red")
         root_material = get_from_kwargs(kwargs, "root_material", "example")
         root_emission = get_from_kwargs(kwargs, "root_emission", None)
-        if root_emission is not None:
-            kwargs["emission"]=root_emission # override default emission settings
+
         max_faces = get_from_kwargs(kwargs, "max_faces", 4)
         face_appearance_order = get_from_kwargs(kwargs, "face_appearance_order", None)
         projection = get_from_kwargs(kwargs,"projection",False)
 
+        show_normals= get_from_kwargs(kwargs,"show_normals",False)
+        if show_normals:
+            normal_length=get_from_kwargs(kwargs,"normal_length",1)
+            normal_thickness=get_from_kwargs(kwargs,"normal_thickness",0.1)
+            normal_material_str = get_from_kwargs(kwargs,"normal_material",None)
+            normal_material = get_texture(normal_material_str)
+            in_normal_material_node=InputMaterial(tree,material=normal_material,label="NormalMaterial")
 
         materials = [get_texture(mat,**kwargs) for mat in face_materials + [edge_material,vertex_material]]
-        materials.append(get_texture(root_material,**kwargs))
-        in_material_nodes = [InputMaterial(tree,material=material) for material in materials]
+
+        if root_emission is not None:
+            kwargs["emission"]=root_emission # override default emission settings
+        materials.append(get_texture(root_material, **kwargs))
+
+        in_material_nodes = [InputMaterial(tree, material=material) for material in materials]
         in_face_material_nodes = in_material_nodes[:-3]
         in_edge_material_node = in_material_nodes[-3]
         in_vertex_material_node = in_material_nodes[-2]
-        in_root_material_node=  in_material_nodes[-1]
-        in_vertex_material_node.label="VertexMaterial"
-        in_edge_material_node.label="EdgeMaterial"
-        in_root_material_node.label="RootMaterial"
+        in_root_material_node = in_material_nodes[-1]
+
+        in_vertex_material_node.label = "VertexMaterial"
+        in_edge_material_node.label = "EdgeMaterial"
 
         [self.materials.append(mat) for mat in materials]
+
+        if show_normals:
+            self.materials.append(normal_material)
 
         # store root vertex
 
@@ -6123,9 +6137,18 @@ class CustomUnfoldModifier(GeometryNodesModifier):
             links.new(length.std_out, stereo.inputs["l"])
             set_pos = SetPosition(tree,position=stereo.outputs["projection"],hide=True)
 
-            create_geometry_line(tree,[join_geo,set_pos,poly_view],out=out.inputs[0])
+            create_geometry_line(tree,[join_geo,set_pos,poly_view])
         else:
-            create_geometry_line(tree,[join_geo,poly_view], out = out.inputs[0])
+            create_geometry_line(tree,[join_geo,poly_view])
+
+        if show_normals:
+            show_normal_node=ShowNormalsNode(tree,length=normal_length,thickness=normal_thickness,
+                                             material=in_normal_material_node.std_out)
+            join_geo = JoinGeometry(tree)
+            create_geometry_line(tree,[poly_view,join_geo])
+            create_geometry_line(tree,[select_geo,show_normal_node,join_geo],out=out.inputs[0])
+        else:
+            create_geometry_line(tree,[poly_view],out=out.inputs[0])
 
     def change_alpha(self, material_slot, from_value=1, to_value=0, begin_time=0,
                      transition_time=DEFAULT_ANIMATION_TIME):

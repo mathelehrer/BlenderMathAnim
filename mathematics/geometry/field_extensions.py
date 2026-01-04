@@ -177,6 +177,9 @@ class QR:
         y = Fraction(np.random.randint(-range, range), 1)
         return QR(x, y,root_modulus=root_modulus,root_string=root_string)
 
+    def to_integer(self):
+        return [self.x.numerator,self.x.denominator,self.y.numerator,self.y.denominator]
+
     def __str__(self):
         if self.y>0:
             if self.x!=0:
@@ -352,6 +355,30 @@ class QR:
 
     def real(self):
         return float(self.x)+float(self.y)*np.sqrt(self.root_modulus)
+
+    def to_latex(self):
+        out = ""
+        if self.x.numerator!=0:
+            if self.x.numerator<0:
+                out+="-"
+            if self.x.denominator==1:
+                out+=str(np.abs(self.x.numerator))
+            else:
+                out+=(r"\frac{"+str(np.abs(self.x.numerator))+r"}{"+str(self.x.denominator)+r"}")
+        if self.y.numerator!=0:
+            if self.y.numerator<0:
+                out+="-"
+            else:
+                out+="+"
+            if self.y.denominator==1:
+                out+=str(np.abs(self.y.numerator))
+            else:
+                out+=(r"\frac{"+str(np.abs(self.y.numerator))+r"}{"+str(self.y.denominator)+r"}")
+            out+=r"\sqrt{"+str(self.root_modulus)+r"}"
+        if self.y.numerator==0 and self.x.numerator==0:
+            out+="0"
+        return out
+
 
 # the quaternions are constructed with the Cayley-Dickson construction
 # we need complex numbers over QR and from these complex numbers the
@@ -835,6 +862,25 @@ class FMatrix(FTensor):
             components.append(row)
 
         return cls(components)
+
+    def to_latex(self,prefix=""):
+        self.dims
+        col_string = r"{"
+        for i in range(self.dims[1]):
+            col_string+="r "
+        col_string=col_string[:-1]
+        col_string+="}"
+        out = prefix+r"\left(\begin{array}"+col_string+"\n"
+        for row in self.components:
+            for col in row:
+                out+=col.to_latex()+"&"
+            out=out[:-1] # remove last ampersand
+            out+=r"\\"
+            out+="\n"
+        out=out[:-3]
+        out+="\n"
+        out+=r"\end{array}\right)"
+        return out
 
 class EpsilonTensor(FTensor):
     def __init__(self,rank):
