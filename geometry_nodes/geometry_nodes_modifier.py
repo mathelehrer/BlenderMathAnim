@@ -31,7 +31,7 @@ from mathematics.spherical_harmonics import SphericalHarmonics
 from objects.derived_objects.p_arrow import PArrow
 from perform.scene import OLDSCHOOL
 from utils.constants import FRAME_RATE, TEMPLATE_TEXT_FILE, SVG_DIR, TEX_DIR, TEX_TEXT_TO_REPLACE, TEMPLATE_TEX_FILE, \
-    TEX_LOCAL_SCALE_UP, DEFAULT_ANIMATION_TIME
+    TEX_LOCAL_SCALE_UP, DEFAULT_ANIMATION_TIME, DATA_DIR
 from utils.kwargs import get_from_kwargs
 from utils.utils import to_vector
 

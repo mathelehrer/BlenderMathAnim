@@ -26,9 +26,13 @@ class DynkinDiagram(BObject):
         self.rings = [Circle2(center=[-center+i*2,0,0],radius=0.5,num_points=20,color="plastic_example",thickness=1,rotation_euler=[pi/2,0,0]) for i in range(dim)]
         self.labels_param = labels
         self.labels = []
+        self.without_threes = kwargs.get("without_threes", False)
         for i,l in enumerate(labels):
             if len(l)>0:
-                self.labels.append(Text(l,location=[-center+0.8+i*2,0,0.5],text_size="Large",aligned="center"))
+                if not self.without_threes:
+                    self.labels.append(Text(l,location=[-center+0.8+i*2,0,0.5],text_size="Large",aligned="center"))
+                elif self.labels_param[i]!='3':
+                    self.labels.append(Text(l,location=[-center+0.8+i*2,0,0.5],text_size="Large",aligned="center"))
 
         super().__init__(children=self.spheres+self.cylinders+self.labels+self.rings,name=self.name, **kwargs)
 
@@ -79,6 +83,7 @@ class DynkinDiagram(BObject):
         dt = transition_time / len(self.labels)
         for i,label in enumerate(self.labels):
             label.write(begin_time=begin_time+i*dt, transition_time=dt)
+
 
         return begin_time+transition_time
 
