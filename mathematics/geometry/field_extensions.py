@@ -841,7 +841,7 @@ class FMatrix(FTensor):
     def transpose(self):
         return FMatrix(np.transpose(self.components))
     @classmethod
-    def identity(cls,rank=3):
+    def identity(cls,rank=3,root_modulus=5,root_string="r5"):
         """
         return the identity matrix of the given rank
         >>> FMatrix.identity(3)
@@ -856,9 +856,9 @@ class FMatrix(FTensor):
             row = []
             for c in range(rank):
                 if c==r:
-                    row.append(QR.from_integers(1,1,0,1))
+                    row.append(QR.from_integers(1,1,0,1,root_modulus=root_modulus,root_string=root_string))
                 else:
-                    row.append(QR.from_integers(0,1,0,1))
+                    row.append(QR.from_integers(0,1,0,1,root_modulus=root_modulus,root_string=root_string))
             components.append(row)
 
         return cls(components)
@@ -883,16 +883,16 @@ class FMatrix(FTensor):
         return out
 
 class EpsilonTensor(FTensor):
-    def __init__(self,rank):
+    def __init__(self,rank,root_modulus=5,root_string="r5"):
         n = rank**rank
         comps = []
         for i in range(n):
-            comps.append(QR.from_integers(0,1,0,1))
+            comps.append(QR.from_integers(0,1,0,1,root_modulus=root_modulus,root_string=root_string))
         comps = np.array(comps)
         comps.shape = (rank,)*rank
         permutations =  list(itertools.permutations(range(rank)))
         for permutation in permutations:
             p = Permutation(permutation)
-            comps[permutation] = QR.from_integers(p.signature(),1,0,1)
+            comps[permutation] = QR.from_integers(p.signature(),1,0,1,root_modulus=root_modulus,root_string=root_string)
 
         super().__init__(comps.tolist())

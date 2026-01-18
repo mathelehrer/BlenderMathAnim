@@ -1191,5 +1191,6 @@ class IncidenceMatrix:
 
 
 if __name__ == '__main__':
-    im = IncidenceMatrix("o3o4x")
+    im = IncidenceMatrix("x3x3x3x")
     im.print_table()
+    im.print_latex_table()

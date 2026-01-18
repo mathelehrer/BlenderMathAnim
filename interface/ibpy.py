@@ -3747,6 +3747,7 @@ def create_color_mixing(material, color1, color2):
         mixer.inputs['Color1'].default_value = last_mixer.inputs['Color2'].default_value
     else:
         mixer.inputs['Color1'].default_value = get_color_from_string(color1)
+
     mixer.inputs['Color2'].default_value = get_color_from_string(color2)
 
     # link new mixer to the existing structure
@@ -5390,32 +5391,33 @@ def change_volume_scatter(bob, final_value, begin_time=0, transition_time=DEFAUL
     material = obj.data.materials[0]
     if material:
         nodes = material.node_tree.nodes
-        scatter_node = nodes["Volume Scatter"]
+        scatter_node = nodes.get("Volume Scatter")
         if scatter_node:
             density_socket = scatter_node.inputs['Density']
 
-        if frame > 0:
-            set_frame(frame - 1)
-            value_old = density_socket.default_value
-        else:
-            value_old = 0
-    density_socket.default_value = value_old
-    insert_keyframe(density_socket, 'default_value', frame - 1)
-    density_socket.default_value = final_value
-    insert_keyframe(density_socket, 'default_value', frame + int(transition_time * FRAME_RATE))
+            if frame > 0:
+                set_frame(frame - 1)
+                value_old = density_socket.default_value
+            else:
+                value_old = 0
+
+            density_socket.default_value = value_old
+            insert_keyframe(density_socket, 'default_value', frame - 1)
+            density_socket.default_value = final_value
+            insert_keyframe(density_socket, 'default_value', frame + int(transition_time * FRAME_RATE))
 
 
 def set_volume_absorption_of_material(material, value):
     if material:
         nodes = material.node_tree.nodes
-        scatter_node = nodes["Volume Absorption"]
+        scatter_node = nodes.get("Volume Absorption")
         if scatter_node:
             density_socket = scatter_node.inputs['Density']
             density_socket.default_value = value
-        else:
-            scatter_node = nodes.new(type="ShaderNodeVolumeAbsorption")
-            scatter_node.inputs['Density'].default_value = value
-            material.node_tree.links.new(scatter_node.outputs[0], nodes.get('Material Output').inputs['Volume'])
+        # else:
+        #     scatter_node = nodes.new(type="ShaderNodeVolumeAbsorption")
+        #     scatter_node.inputs['Density'].default_value = value
+        #     material.node_tree.links.new(scatter_node.outputs[0], nodes.get('Material Output').inputs['Volume'])
 
 
 def set_volume_scatter_of_material(material, value):
