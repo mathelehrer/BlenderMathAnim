@@ -488,7 +488,7 @@
 				<OUTPUT id="217" name="Rotation" type="ROTATION" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="45" type="DUAL_MESH" name="Dual Mesh" label="" location="(1.9,-0.1)" hide="False" mute="False" parent="Frame.001">
+		<NODE id="45" type="DUAL_MESH" name="Dual Mesh" label="" location="(1.9,-0.2)" hide="False" mute="False" parent="Frame.001">
 			<INPUTS>
 				<INPUT id="218" name="Mesh" type="GEOMETRY" is_linked="True"/>
 				<INPUT id="219" name="Keep Boundaries" type="BOOLEAN" is_linked="False" default_value="True"/>
@@ -766,7 +766,7 @@
 				<OUTPUT id="333" name="Index in Face" type="INT" is_linked="False" default_value="0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="72" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.009" label="" location="(-17.4,2.8)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="72" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.009" label="" location="(3.8,-0.1)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="Frame.002">
 			<INPUTS>
 				<INPUT id="334" name="Geometry" type="GEOMETRY" is_linked="True"/>
 				<INPUT id="335" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
@@ -777,7 +777,7 @@
 				<OUTPUT id="338" name="Geometry" type="GEOMETRY" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="73" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.010" label="" location="(-16.5,2.8)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="73" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.010" label="" location="(4.6,-0.1)" hide="False" mute="False" domain="FACE" data_type="FLOAT_VECTOR" parent="Frame.002">
 			<INPUTS>
 				<INPUT id="339" name="Geometry" type="GEOMETRY" is_linked="True"/>
 				<INPUT id="340" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
@@ -788,7 +788,7 @@
 				<OUTPUT id="343" name="Geometry" type="GEOMETRY" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="74" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.011" label="" location="(-15.7,2.8)" hide="False" mute="False" domain="FACE" data_type="FLOAT" parent="None">
+		<NODE id="74" type="STORE_NAMED_ATTRIBUTE" name="Store Named Attribute.011" label="" location="(5.4,-0.1)" hide="False" mute="False" domain="FACE" data_type="FLOAT" parent="Frame.002">
 			<INPUTS>
 				<INPUT id="344" name="Geometry" type="GEOMETRY" is_linked="True"/>
 				<INPUT id="345" name="Selection" type="BOOLEAN" is_linked="False" default_value="True"/>
@@ -799,7 +799,7 @@
 				<OUTPUT id="348" name="Geometry" type="GEOMETRY" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="75" type="MIX" name="Mix.001" label="" location="(-16.6,1.7)" hide="False" mute="False" data_type="VECTOR" factor_mode="UNIFORM" clamp_factor="True" parent="None">
+		<NODE id="75" type="MIX" name="Mix.001" label="" location="(4.5,-1.2)" hide="False" mute="False" data_type="VECTOR" factor_mode="UNIFORM" clamp_factor="True" parent="Frame.002">
 			<INPUTS>
 				<INPUT id="349" name="Factor" type="VALUE" is_linked="False" default_value="0.5"/>
 				<INPUT id="350" name="Factor" type="VECTOR" is_linked="False" default_value="[0.5, 0.5, 0.5]"/>
@@ -819,7 +819,7 @@
 				<OUTPUT id="362" name="Result" type="ROTATION" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="76" type="INPUT_NORMAL" name="Normal" label="" location="(-17.4,0.9)" hide="False" mute="False" parent="None">
+		<NODE id="76" type="INPUT_NORMAL" name="Normal" label="" location="(3.7,-2.0)" hide="False" mute="False" parent="Frame.002">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
@@ -827,7 +827,7 @@
 				<OUTPUT id="364" name="True Normal" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="77" type="VECT_MATH" name="Vector Math" label="" location="(-18.3,1.2)" hide="False" mute="False" operation="SUBTRACT" parent="None">
+		<NODE id="77" type="VECT_MATH" name="Vector Math" label="" location="(2.8,-1.7)" hide="False" mute="False" operation="SUBTRACT" parent="Frame.002">
 			<INPUTS>
 				<INPUT id="365" name="Vector" type="VECTOR" is_linked="True"/>
 				<INPUT id="366" name="Vector" type="VECTOR" is_linked="True"/>
@@ -839,14 +839,14 @@
 				<OUTPUT id="370" name="Value" type="VALUE" is_linked="False" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="78" type="POSITION" name="Position" label="" location="(-21.0,2.0)" hide="False" mute="False" parent="None">
+		<NODE id="78" type="POSITION" name="Position" label="" location="(0.1,-0.9)" hide="False" mute="False" parent="Frame.002">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
 				<OUTPUT id="371" name="Position" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="79" type="INPUT_ATTRIBUTE" name="Named Attribute.019" label="" location="(-21.0,1.7)" hide="False" mute="False" data_type="INT" parent="None">
+		<NODE id="79" type="INPUT_ATTRIBUTE" name="Named Attribute.019" label="" location="(0.1,-1.2)" hide="False" mute="False" data_type="INT" parent="Frame.002">
 			<INPUTS>
 				<INPUT id="372" name="Name" type="STRING" is_linked="False" default_value="C1 Parent"/>
 			</INPUTS>
@@ -855,7 +855,7 @@
 				<OUTPUT id="374" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="80" type="INPUT_ATTRIBUTE" name="Named Attribute.020" label="" location="(-21.0,2.8)" hide="False" mute="False" data_type="INT" parent="None">
+		<NODE id="80" type="INPUT_ATTRIBUTE" name="Named Attribute.020" label="" location="(0.1,-0.2)" hide="False" mute="False" data_type="INT" parent="Frame.002">
 			<INPUTS>
 				<INPUT id="375" name="Name" type="STRING" is_linked="False" default_value="C2 Parent"/>
 			</INPUTS>
@@ -864,7 +864,7 @@
 				<OUTPUT id="377" name="Exists" type="BOOLEAN" is_linked="False" default_value="False"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="81" type="FIELD_AT_INDEX" name="Evaluate at Index.004" label="" location="(-20.2,2.7)" hide="False" mute="False" domain="CORNER" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="81" type="FIELD_AT_INDEX" name="Evaluate at Index.004" label="" location="(0.9,-0.2)" hide="False" mute="False" domain="CORNER" data_type="FLOAT_VECTOR" parent="Frame.002">
 			<INPUTS>
 				<INPUT id="378" name="Value" type="VECTOR" is_linked="True"/>
 				<INPUT id="379" name="Index" type="INT" is_linked="True"/>
@@ -873,7 +873,7 @@
 				<OUTPUT id="380" name="Value" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="82" type="FIELD_AT_INDEX" name="Evaluate at Index.005" label="" location="(-20.2,1.9)" hide="False" mute="False" domain="CORNER" data_type="FLOAT_VECTOR" parent="None">
+		<NODE id="82" type="FIELD_AT_INDEX" name="Evaluate at Index.005" label="" location="(1.0,-1.0)" hide="False" mute="False" domain="CORNER" data_type="FLOAT_VECTOR" parent="Frame.002">
 			<INPUTS>
 				<INPUT id="381" name="Value" type="VECTOR" is_linked="True"/>
 				<INPUT id="382" name="Index" type="INT" is_linked="True"/>
@@ -1053,7 +1053,7 @@
 				<OUTPUT id="446" name="Rotation" type="ROTATION" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="101" type="AXES_TO_ROTATION" name="Axes to Rotation" label="" location="(-17.4,1.7)" primary_axis="X" secondary_axis="Z" hide="False" mute="False" parent="None">
+		<NODE id="101" type="AXES_TO_ROTATION" name="Axes to Rotation" label="" location="(3.7,-1.2)" primary_axis="X" secondary_axis="Z" hide="False" mute="False" parent="Frame.002">
 			<INPUTS>
 				<INPUT id="447" name="Primary Axis" type="VECTOR" is_linked="True"/>
 				<INPUT id="448" name="Secondary Axis" type="VECTOR" is_linked="True"/>
@@ -1062,13 +1062,19 @@
 				<OUTPUT id="449" name="Rotation" type="ROTATION" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="102" type="FRAME" name="Frame" label="Compute Corner Indices along which the folding is performed" location="(-24.7,0.3)" hide="False" mute="False" parent="None">
+		<NODE id="102" type="FRAME" name="Frame" label="Compute Corner Indices along which the folding is performed" location="(-24.8,0.3)" hide="False" mute="False" parent="None">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
 			</OUTPUTS>
 		</NODE>
 		<NODE id="103" type="FRAME" name="Frame.001" label="Compute Face Tree (Loop ID, F Parent)" location="(-28.7,0.6)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="104" type="FRAME" name="Frame.002" label="Define Rotation and Pivot Point (F Rot, F Pos)" location="(-21.9,3.6)" hide="False" mute="False" parent="None">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>

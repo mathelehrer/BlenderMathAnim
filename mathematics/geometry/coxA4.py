@@ -109,6 +109,12 @@ class CoxA4:
         else:
             self.elements = self.read_elements(self.name+"_elements.dat")
 
+    def suffix_from_seed(self,seed):
+        out=""
+        for i in seed:
+            out+=str(i)
+        return out
+
     def read_elements(self,filname):
         data = []
         with open(os.path.join(self.path,filname),"r") as f:
@@ -139,8 +145,9 @@ class CoxA4:
 
     def save(self,elements,filename):
         with open(os.path.join(self.path,filename),"w") as f:
-            for e in elements:
-                f.write(str(e)+"\n")
+            if len(elements)>0:
+                for e in elements:
+                    f.write(str(e)+"\n")
 
     def generate_elements(self):
         # generate the group from the generators
@@ -168,7 +175,7 @@ class CoxA4:
         return self.get_real_point_cloud(seed)[0].length
 
     def point_cloud(self,signature =[1,1,1,1],start = None):
-        filename = self.name+"_points" + str(signature).replace(",", "_") + ".dat"
+        filename = self.name+"_points" + self.suffix_from_seed(signature) + ".dat"
         if not os.path.exists(os.path.join(self.path, filename)):
             if start is None:
                 raise "No start point given for point cloud generation."
@@ -198,7 +205,7 @@ class CoxA4:
 
 
     def get_edges(self,seed=[1,1,1,1]):
-        filename=self.name+"_edges"+str(seed).replace(",","_")+".dat"
+        filename=self.name+"_edges"+self.suffix_from_seed(seed)+".dat"
         if not os.path.exists(os.path.join(self.path, filename)):
             point_cloud = self.point_cloud(seed)
             # find minimum distance between two points
@@ -224,8 +231,8 @@ class CoxA4:
             with Pool(processes=os.cpu_count()) as pool:
                 for res in pool.imap_unordered(worker,chunks,chunksize=1):
                     edges = edges + res
-
-            self.save(edges,filename)
+            if len(edges)>0:
+                self.save(edges,filename)
         else:
             edges = self.read_edges(filename)
             print("edge data read from file")
@@ -350,7 +357,7 @@ class CoxA4:
         """
 
         cells = {}
-        filename = self.name+"_cells" + str(seed).replace(",", "_") + ".dat"
+        filename = self.name+"_cells" + self.suffix_from_seed(seed) + ".dat"
         if os.path.exists(os.path.join(self.path, filename)):
             with open(os.path.join(self.path, filename), "r") as f:
                 for line in f:
@@ -407,11 +414,11 @@ class CoxA4:
                         if key not in cells:
                             cells[key] = val
 
-
-        with open(os.path.join(self.path,filename),"w") as f:
-            for key,val in cells.items():
-                f.write(f"{key}->{val}\n")
-                print(key,val,center(key,point_cloud))
+        if len(cells)>0:
+            with open(os.path.join(self.path,filename),"w") as f:
+                for key,val in cells.items():
+                    f.write(f"{key}->{val}\n")
+                    # print(key,val,center(key,point_cloud))
 
         return cells
 
@@ -435,11 +442,11 @@ class CoxA4:
             cell_faces = set(self.find_faces_of_cell(point_cloud, reduced_edge_map, cell_normal))
             faces = faces.union(cell_faces)
         return faces
-        return []
+
 
     def get_faces(self,seed=[1,1,1,1]):
         faces = set()
-        filename = self.name+"_faces" + str(seed).replace(",", "_") + ".dat"
+        filename = self.name+"_faces" + self.suffix_from_seed(seed) + ".dat"
         if os.path.exists(os.path.join(self.path, filename)):
             with open(os.path.join(self.path, filename), "r") as f:
                 for line in f:
@@ -474,10 +481,10 @@ class CoxA4:
             with Pool(processes=cpus) as pool:
                 for res in pool.imap_unordered(worker,cell_parts, chunksize=1):
                     faces = faces.union(res)
-
-            with open(os.path.join(self.path,filename),"w") as f:
-                for face in faces:
-                    f.write(f"{face}\n")
+            if len(faces)>0:
+                with open(os.path.join(self.path,filename),"w") as f:
+                    for face in faces:
+                        f.write(f"{face}\n")
         return faces
 
     def is_boundary(self,cell_points,face_points,face_normal):
@@ -654,7 +661,7 @@ class CoxA4:
         return list(faces.values())
 
     def get_faces_old(self,seed=[1,1,-1],max_length=10):
-        filename = self.name+"_faces" + str(seed).replace(",", "_") + ".dat"
+        filename = self.name+"_faces" + self.suffix_from_seed(seed) + ".dat"
         if not os.path.exists(os.path.join(self.path, filename)):
             point_cloud = self.point_cloud(seed)
             edges = self.get_edges(seed)
@@ -662,7 +669,8 @@ class CoxA4:
         else:
             faces = self.read_faces(filename)
             print("face data read from file")
-        self.save(faces,filename)
+        if len(faces)>0:
+            self.save(faces,filename)
         return faces
 
     def get_normals(self):
