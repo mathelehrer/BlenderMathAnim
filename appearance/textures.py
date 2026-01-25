@@ -25,11 +25,9 @@ from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_s
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
 
-
 def flatten(list_of_lists):
     list_flat = [entry for sublist in list_of_lists for entry in sublist]
     return list_flat
-
 
 def convert_strings_to_colors(color_names):
     if isinstance(color_names, str):
@@ -39,7 +37,6 @@ def convert_strings_to_colors(color_names):
         for l in color_names:
             return_list.append(convert_strings_to_colors(l))
         return return_list
-
 
 def get_color_from_name(color_name):
     return COLORS_SCALED[COLOR_NAMES.index(color_name)]
@@ -341,6 +338,17 @@ def create_old_paper_with_image(**kwargs):
 
     return material
 
+def create_crystal_material(**kwargs):
+    material = create_from_xml("crystal_shader")
+
+    color_string = get_from_kwargs(kwargs, "color", "drawing")
+    color = get_color_from_string(color_string)
+
+    color_node = get_node_from_shader(material, "BaseColor")
+    color_node.outputs["Color"].default_value = color
+
+    return material
+
 def get_texture(material, **kwargs):
     """
     this method is intended to supersed the get_material method
@@ -354,6 +362,9 @@ def get_texture(material, **kwargs):
             return make_image_material(**kwargs).copy()
         elif "glass" in material:
             return make_translucent_material(color_str=material[6:], **kwargs)
+        elif "crystal" in material:
+            color = material[8:]
+            return create_crystal_material(color=color,**kwargs)
         elif material == 'movie' and 'src' in kwargs:
             return make_movie_material(**kwargs)
         elif material == 'gradient':
@@ -412,7 +423,7 @@ def add_texture_to_material(material,new_color,**kwargs):
     links.new(mix_node.outputs[0],nodes["Material Output"].inputs[0])
 
 
-def create_from_xml(filename):
+def create_from_xml(filename,**kwargs):
     """
     import a shader node setup created in blender and stored as xml file
 
@@ -657,7 +668,6 @@ def get_default_value_for_socket(attributes):
             return None
         return ibpy.get_material(color)
 
-
 def apply_material(obj, col, shading=None, recursive=False, type_req=None, intensity=None, **kwargs):
     """
 
@@ -749,7 +759,6 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
     if obj.type in ['LIGHT']:
         obj.data.use_nodes=True
         copy_nodes_and_links_from_material(obj.data.node_tree,material)
-
 
 def vertex_color_material(**kwargs):
     vertex_color = bpy.data.materials.new(name="Vertex_Color")
@@ -1195,7 +1204,6 @@ def make_movie_material(src=None,**kwargs):
 
     return color
 
-
 def make_image_material_stretched_over_geometry(src, v_min, v_max):
     color = bpy.data.materials.new(name='image_' + src)
     color.use_nodes = True
@@ -1287,7 +1295,7 @@ def gradient_from_attribute(name="AngleDisplacement", **kwargs):
     function = get_from_kwargs(kwargs, "function", "fac,2,pi,*,/,0.5,+")
 
     attr = AttributeNode(tree, location=(-4, 0),
-                         attribute_name=attr_name, type=attr_type)
+                         attribute_name=attr_name, attribute_type=attr_type)
     trafo = make_function(tree, functions={
         "factor": function
     }, location=(-3, 0), name=attr_name + "_transform",
@@ -1310,7 +1318,8 @@ def gradient_from_attribute(name="AngleDisplacement", **kwargs):
         dict = kwargs.pop("alpha_function")
 
         key = str(next(iter(dict)))
-        attr2 = AttributeNode(tree, location=(-2, 2), attribute_name=key, std_out='Fac')
+        attr2 = AttributeNode(tree, location=(-2, 2), attribute_name=key,
+                              std_out='Fac')
         trafo = make_function(tree, functions={
             "alpha": dict[key]
         }, node_group_type="Shader", inputs=["alpha"], outputs=["alpha"], scalars=["alpha"], location=(-2, 1))
@@ -2086,8 +2095,10 @@ def cmb_logo_texture(circle_group="Red",ls = [2,3,5],color='drawing', powerspect
     material_out=nodes.get("Material Output")
 
     left = -10
-    theta_attr = AttributeNode(tree,attribute_name="Theta"+circle_group,location=(left,0))
-    phi_attr = AttributeNode(tree,attribute_name="Phi"+circle_group,location=(left,-1))
+    theta_attr = AttributeNode(tree,attribute_name="Theta"+circle_group,
+                               location=(left,0))
+    phi_attr = AttributeNode(tree,attribute_name="Phi"+circle_group,
+                             location=(left,-1))
     left+=1
 
     if powerspectrum is None:

@@ -23,13 +23,17 @@ def maybe_flatten(list_of_lists):
             result.append(part)
     return result
 
-
 def parse_location(location):
     location = location.replace("(", "")
     location = location.replace(")", "")
     coords = location.split(",")
     return (float(coords[0]), float(coords[1]))
 
+def parse_bool(bool_string):
+    if bool_string == "True":
+        return True
+    else:
+        return False
 
 class ShaderNode:
     def __init__(self, tree, location=(0, 0), width=200, height=100, **kwargs):
@@ -73,14 +77,23 @@ class ShaderNode:
             mute = True
 
         type = attributes["type"]
-
         if type == "ATTRIBUTE":
             attribute_name = attributes["attribute_name"]
-            return AttributeNode(tree, location=location, label=label, name=name, attribute_name=attribute_name,
+            attribute_type = attributes["attribute_type"]
+            return AttributeNode(tree, location=location, label=label,
+                                 name=name, attribute_name=attribute_name,
+                                 attribute_type=attribute_type,
                                  hide=hide, mute=mute, node_height=200)
         elif type == "BRIGHTCONTRAST":
             return BrightContrast(tree, location=location, label=label, name=name, hide=hide, mute=mute,
                                   node_height=200)
+        elif type == "BSDF_GLASS":
+            distribution = attributes["distribution"]
+            return BSDFGlass(tree, location=location,
+                             label=label, name=name,
+                             hide=hide, mute=mute,
+                             distribution=distribution,
+                             node_height=200)
         elif type == "BSDF_PRINCIPLED":
             return PrincipledBSDF(tree, location=location, label=label,
                                   name=name, hide=hide, mute=mute,
@@ -88,6 +101,10 @@ class ShaderNode:
         elif type == "BSDF_TRANSPARENT":
             return BSDFTransparent(tree, location=location, label=label, name=name, hide=hide, mute=mute,
                                    node_height=200)
+        elif type == "BUMP":
+            invert = parse_bool(attributes["invert"])
+            return Bump(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                        invert=invert, node_height=200)
         elif type == "COMBXYZ":
             return CombineXYZ(tree, location=location, label=label, name=name, hide=hide, mute=mute, node_height=200)
         elif type == "DISPLACEMENT":
@@ -96,6 +113,10 @@ class ShaderNode:
                                 space=space, node_height=400)
         elif type == "FRAME":
             return Frame(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200,
+                         node_width=200)
+        elif type == "HUE_SAT":
+            return HueSaturationValueNode(tree, location=location, name=name, label=label,
+                          hide=hide, mute=mute, node_height=200,
                          node_width=200)
         elif type == "MAPPING":
             vector_type = attributes["vector_type"]
@@ -113,6 +134,14 @@ class ShaderNode:
             return MixShader(tree, location=location, label=label, name=name, hide=hide, mute=mute, node_height=200)
         elif type == "OUTPUT_MATERIAL":
             return OutputMaterial(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                                  node_height=200)
+        elif type == "PRINCIPLED_VOLUME":
+            return PrincipledVolume(tree, location=location, label=label,
+                                    name=name, hide=hide, mute=mute,
+                                  node_height=200)
+        elif type == "RGB":
+            return RGB(tree, location=location, label=label,
+                                    name=name, hide=hide, mute=mute,
                                   node_height=200)
         elif type == "SEPXYZ":
             return SeparateXYZ(tree, location=location, label=label, name=name, hide=hide, mute=mute, node_height=200)
@@ -162,7 +191,10 @@ class ShaderNode:
 
 
 class AttributeNode(ShaderNode):
-    def __init__(self, tree, location=(0, 0), type='GEOMETRY', attribute_name=None, **kwargs):
+    def __init__(self, tree, location=(0, 0),
+                 attribute_name=None,
+                 attribute_type="GEOMETRY",
+                 **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeAttribute")
         super().__init__(tree, location, **kwargs)
 
@@ -173,8 +205,8 @@ class AttributeNode(ShaderNode):
 
         if attribute_name:
             self.node.attribute_name = attribute_name
-        self.node.attribute_type = type
-
+        if attribute_type:
+            self.node.attribute_type = attribute_type
 
 class BrightContrast(ShaderNode):
     def __init__(self, tree, location, color=None, bright=0, contrast=0, **kwargs):
@@ -200,12 +232,26 @@ class BrightContrast(ShaderNode):
         else:
             links.new(contrast, self.node.inputs["Contrast"])
 
+class BSDFGlass(ShaderNode):
+    def __init__(self, tree, location,
+                 distribution="MULTI_GGX",
+                 **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeBsdfGlass")
+        super().__init__(tree, location, **kwargs)
+
+        self.node.distribution = distribution
 
 class BSDFTransparent(ShaderNode):
     def __init__(self, tree, location, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeBsdfTransparent")
         super().__init__(tree, location, **kwargs)
 
+class Bump(ShaderNode):
+    def __init__(self,tree, location, invert=False, **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeBump")
+        super().__init__(tree, location, **kwargs)
+
+        self.node.invert = invert
 
 class ColorRamp(ShaderNode):
     def __init__(self, tree, location=(0, 0), factor=None, **kwargs):
@@ -321,7 +367,6 @@ class GradientTexture(ShaderNode):
 
         self.std_out = self.node.outputs[std_out]
 
-
 class HueSaturationValueNode(ShaderNode):
     def __init__(self, tree, location=(0, 0), hue=0, saturation=1, value=1, fac=1, color=[1, 0, 0, 0], **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeHueSaturation")
@@ -353,7 +398,6 @@ class HueSaturationValueNode(ShaderNode):
             self.tree.links.new(color, self.node.inputs["Color"])
 
         self.std_out = self.node.outputs[0]
-
 
 class ImageTexture(ShaderNode):
     def __init__(self, tree, location=(0, 0), image=None, vector=None,
@@ -550,6 +594,15 @@ class PrincipledBSDF(ShaderNode):
         self.node = tree.nodes.new(type="ShaderNodeBsdfPrincipled")
         super().__init__(tree, location=location, **kwargs)
 
+class PrincipledVolume(ShaderNode):
+    def __init__(self, tree, location=(0, 0), **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeVolumePrincipled")
+        super().__init__(tree, location=location, **kwargs)
+
+class RGB(ShaderNode):
+    def __init__(self, tree, location=(0, 0), **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeRGB")
+        super().__init__(tree, location=location, **kwargs)
 
 class SeparateXYZ(ShaderNode):
     def __init__(self, tree, location=(0, 0), vector=None, **kwargs):

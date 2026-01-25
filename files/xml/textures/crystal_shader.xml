@@ -1,0 +1,206 @@
+<NODE_XML>
+	<NODES>
+		<NODE id="0" type="OUTPUT_MATERIAL" name="Material Output" label="" location="(3.7,0.5)" hide="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="0" name="Surface" type="SHADER" is_linked="True"/>
+				<INPUT id="1" name="Volume" type="SHADER" is_linked="True"/>
+				<INPUT id="2" name="Displacement" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="3" name="Thickness" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="1" type="BSDF_GLASS" name="Glass BSDF" label="" location="(1.0,0.9)" distribution="MULTI_GGX" hide="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="4" name="Color" type="RGBA" is_linked="True"/>
+				<INPUT id="5" name="Roughness" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="6" name="IOR" type="VALUE" is_linked="False" default_value="1.5"/>
+				<INPUT id="7" name="Normal" type="VECTOR" is_linked="True"/>
+				<INPUT id="8" name="Weight" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="9" name="Thin Film Thickness" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="10" name="Thin Film IOR" type="VALUE" is_linked="False" default_value="1.3300000429153442"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="11" name="BSDF" type="SHADER" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="2" type="ATTRIBUTE" name="Attribute" label="" location="(1.0,1.9)" attribute_name="Cracks" attribute_type="GEOMETRY" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="12" name="Color" type="RGBA" is_linked="False" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
+				<OUTPUT id="13" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="14" name="Factor" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="15" name="Alpha" type="VALUE" is_linked="False" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="3" type="MIX_SHADER" name="Mix Shader" label="" location="(2.4,0.8)" hide="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="16" name="Factor" type="VALUE" is_linked="True"/>
+				<INPUT id="17" name="Shader" type="SHADER" is_linked="True"/>
+				<INPUT id="18" name="Shader" type="SHADER" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="19" name="Shader" type="SHADER" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="4" type="BSDF_GLASS" name="Glass BSDF.001" label="" location="(-0.3,-0.7)" distribution="MULTI_GGX" hide="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="20" name="Color" type="RGBA" is_linked="True"/>
+				<INPUT id="21" name="Roughness" type="VALUE" is_linked="False" default_value="0.5408163070678711"/>
+				<INPUT id="22" name="IOR" type="VALUE" is_linked="False" default_value="1.5"/>
+				<INPUT id="23" name="Normal" type="VECTOR" is_linked="True"/>
+				<INPUT id="24" name="Weight" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="25" name="Thin Film Thickness" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="26" name="Thin Film IOR" type="VALUE" is_linked="False" default_value="1.3300000429153442"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="27" name="BSDF" type="SHADER" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="5" type="TEX_NOISE" name="Noise Texture" label="" location="(-2.4,-1.1)" hide="False" mute="False" noise_dimensions="3D" noise_type="FBM" normalize="True" parent="None">
+			<INPUTS>
+				<INPUT id="28" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="29" name="W" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="30" name="Scale" type="VALUE" is_linked="False" default_value="36.5"/>
+				<INPUT id="31" name="Detail" type="VALUE" is_linked="False" default_value="15.0"/>
+				<INPUT id="32" name="Roughness" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="33" name="Lacunarity" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="34" name="Offset" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="35" name="Gain" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="36" name="Distortion" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="37" name="Factor" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="38" name="Color" type="RGBA" is_linked="False" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="6" type="BUMP" name="Bump" label="" location="(-1.3,-1.2)" hide="False" invert="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="39" name="Strength" type="VALUE" is_linked="False" default_value="0.30000001192092896"/>
+				<INPUT id="40" name="Distance" type="VALUE" is_linked="False" default_value="0.0010000000474974513"/>
+				<INPUT id="41" name="Filter Width" type="VALUE" is_linked="False" default_value="0.10000000149011612"/>
+				<INPUT id="42" name="Height" type="VALUE" is_linked="True"/>
+				<INPUT id="43" name="Normal" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="44" name="Normal" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="7" type="TEX_NOISE" name="Noise Texture.001" label="" location="(-1.6,2.1)" hide="False" mute="False" noise_dimensions="3D" noise_type="FBM" normalize="True" parent="None">
+			<INPUTS>
+				<INPUT id="45" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="46" name="W" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="47" name="Scale" type="VALUE" is_linked="False" default_value="36.5"/>
+				<INPUT id="48" name="Detail" type="VALUE" is_linked="False" default_value="15.0"/>
+				<INPUT id="49" name="Roughness" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="50" name="Lacunarity" type="VALUE" is_linked="False" default_value="2.0"/>
+				<INPUT id="51" name="Offset" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="52" name="Gain" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="53" name="Distortion" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="54" name="Factor" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="55" name="Color" type="RGBA" is_linked="False" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="8" type="BUMP" name="Bump.001" label="" location="(-0.6,1.9)" hide="False" invert="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="56" name="Strength" type="VALUE" is_linked="False" default_value="0.03999999910593033"/>
+				<INPUT id="57" name="Distance" type="VALUE" is_linked="False" default_value="0.0010000000474974513"/>
+				<INPUT id="58" name="Filter Width" type="VALUE" is_linked="False" default_value="0.10000000149011612"/>
+				<INPUT id="59" name="Height" type="VALUE" is_linked="True"/>
+				<INPUT id="60" name="Normal" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="61" name="Normal" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="9" type="HUE_SAT" name="Hue/Saturation/Value" label="" location="(-1.7,0.6)" hide="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="62" name="Hue" type="VALUE" is_linked="False" default_value="0.5"/>
+				<INPUT id="63" name="Saturation" type="VALUE" is_linked="False" default_value="0.33000001311302185"/>
+				<INPUT id="64" name="Value" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="65" name="Factor" type="VALUE" is_linked="False" default_value="1.0"/>
+				<INPUT id="66" name="Color" type="RGBA" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="67" name="Color" type="RGBA" is_linked="True" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="10" type="PRINCIPLED_VOLUME" name="Principled Volume" label="" location="(1.9,-0.5)" hide="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="68" name="Color" type="RGBA" is_linked="True"/>
+				<INPUT id="69" name="Color Attribute" type="STRING" is_linked="False" default_value=""/>
+				<INPUT id="70" name="Density" type="VALUE" is_linked="False" default_value="3.200000047683716"/>
+				<INPUT id="71" name="Density Attribute" type="STRING" is_linked="False" default_value="density"/>
+				<INPUT id="72" name="Anisotropy" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="73" name="Absorption Color" type="RGBA" is_linked="False" default_value="[0.0, 0.0, 0.0, 1.0]"/>
+				<INPUT id="74" name="Emission Strength" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="75" name="Emission Color" type="RGBA" is_linked="False" default_value="[1.0, 1.0, 1.0, 1.0]"/>
+				<INPUT id="76" name="Blackbody Intensity" type="VALUE" is_linked="False" default_value="0.0"/>
+				<INPUT id="77" name="Blackbody Tint" type="RGBA" is_linked="False" default_value="[1.0, 1.0, 1.0, 1.0]"/>
+				<INPUT id="78" name="Temperature" type="VALUE" is_linked="False" default_value="1000.0"/>
+				<INPUT id="79" name="Temperature Attribute" type="STRING" is_linked="False" default_value="temperature"/>
+				<INPUT id="80" name="Weight" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="81" name="Volume" type="SHADER" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="11" type="ATTRIBUTE" name="Attribute.001" label="" location="(-0.2,0.1)" attribute_name="CracksEdges" attribute_type="GEOMETRY" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="82" name="Color" type="RGBA" is_linked="False" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
+				<OUTPUT id="83" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<OUTPUT id="84" name="Factor" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="85" name="Alpha" type="VALUE" is_linked="False" default_value="0.0"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="12" type="MIX_SHADER" name="Mix Shader.001" label="" location="(1.0,0.0)" hide="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="86" name="Factor" type="VALUE" is_linked="True"/>
+				<INPUT id="87" name="Shader" type="SHADER" is_linked="True"/>
+				<INPUT id="88" name="Shader" type="SHADER" is_linked="True"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="89" name="Shader" type="SHADER" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="13" type="BSDF_TRANSPARENT" name="Transparent BSDF" label="" location="(-0.3,-1.6)" hide="False" mute="False" parent="None">
+			<INPUTS>
+				<INPUT id="90" name="Color" type="RGBA" is_linked="False" default_value="[1.0, 1.0, 1.0, 1.0]"/>
+				<INPUT id="91" name="Weight" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="92" name="BSDF" type="SHADER" is_linked="True"/>
+			</OUTPUTS>
+		</NODE>
+		<NODE id="14" type="RGB" name="Color" label="BaseColor" location="(-2.8,-0.1)" hide="False" mute="False" parent="None">
+			<INPUTS>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="93" name="Color" type="RGBA" is_linked="True" default_value="[1.0, 0.0, 0.6171463131904602, 1.0]"/>
+			</OUTPUTS>
+		</NODE>
+	</NODES>
+	<LINKS>
+		<LINK from_node="3" from_socket="19" to_node="0" to_socket="0"/>
+		<LINK from_node="9" from_socket="67" to_node="1" to_socket="4"/>
+		<LINK from_node="1" from_socket="11" to_node="3" to_socket="17"/>
+		<LINK from_node="2" from_socket="14" to_node="3" to_socket="16"/>
+		<LINK from_node="5" from_socket="37" to_node="6" to_socket="42"/>
+		<LINK from_node="6" from_socket="44" to_node="4" to_socket="23"/>
+		<LINK from_node="7" from_socket="54" to_node="8" to_socket="59"/>
+		<LINK from_node="8" from_socket="61" to_node="1" to_socket="7"/>
+		<LINK from_node="9" from_socket="67" to_node="4" to_socket="20"/>
+		<LINK from_node="10" from_socket="81" to_node="0" to_socket="1"/>
+		<LINK from_node="4" from_socket="27" to_node="12" to_socket="87"/>
+		<LINK from_node="11" from_socket="84" to_node="12" to_socket="86"/>
+		<LINK from_node="13" from_socket="92" to_node="12" to_socket="88"/>
+		<LINK from_node="12" from_socket="89" to_node="3" to_socket="18"/>
+		<LINK from_node="14" from_socket="93" to_node="10" to_socket="68"/>
+		<LINK from_node="14" from_socket="93" to_node="9" to_socket="66"/>
+	</LINKS>
+</NODE_XML>

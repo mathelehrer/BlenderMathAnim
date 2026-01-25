@@ -478,7 +478,6 @@ class BObject(object):
         """
         ibpy.replace_mesh_modifier(self, type=type, **kwargs)
 
-
     def add_constraint(self, type='COPY_LOCATION',name=None, **kwargs):
         """
         add modifier to mesh object
@@ -590,7 +589,6 @@ class BObject(object):
                                   transition_time * FRAME_RATE)
         return begin_time + transition_time
 
-
     def transform_mesh(self, transformation, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         """
         if there is only one transformation then the transformation can be performed immediately (backward compatability)
@@ -653,7 +651,7 @@ class BObject(object):
         return begin_time + transition_time
 
     def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,scale=1,
-               clear_data=False, silent=False,linked=False, nice_alpha=False,children=True,
+               clear_data=False, silent=False,linked=False, nice_alpha=False,children=True,sequentially=False,
                offset_for_slots=[0],**kwargs):
         """
         makes the object simply fade in with in the transition time
@@ -687,8 +685,13 @@ class BObject(object):
             self.appeared = True
 
         if children:
-            for child in self.b_children:
-                child.appear(begin_time=begin_time,transition_time=transition_time)
+            if not sequentially:
+                for child in self.b_children:
+                    child.appear(begin_time=begin_time,transition_time=transition_time)
+            else:
+                dt = transition_time / len(self.b_children)
+                for i, child in enumerate(self.b_children):
+                    child.appear(begin_time=begin_time + i * dt, transition_time=dt)
         return begin_time + transition_time
 
     def change_alpha(self, slot = 0,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):

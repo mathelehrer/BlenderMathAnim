@@ -1191,6 +1191,10 @@ class IncidenceMatrix:
 
 
 if __name__ == '__main__':
-    im = IncidenceMatrix("x3x3x3x")
-    im.print_table()
-    im.print_latex_table()
+    solids = ("o3o3o3x","o3o3x3o","o3o3x3x","x3o3o3x","o3x3o3x","o3x3x3o","o3x3x3x","x3o3x3x","x3x3x3x")
+    for solid in solids:
+        im = IncidenceMatrix(solid)
+        im.print_table()
+    for solid in solids:
+        im = IncidenceMatrix(solid)
+        im.print_latex_table()

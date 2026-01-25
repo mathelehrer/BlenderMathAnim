@@ -131,7 +131,7 @@ class Node:
         if type=="INPUT_SCENE_TIME":
             return SceneTime(tree,location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
 
-        # read nodes
+        # red nodes
         if type =="INDEX":
             return Index(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type =="POSITION":
@@ -145,6 +145,8 @@ class Node:
             material=attributes["material"]
             return InputMaterial(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200,
                                  material=material)
+        if type=="MESH_VERTEX_NEIGHBORS":
+            return VertexNeighbors(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         # geometry nodes
         if type=="MESH_LINE":
@@ -197,11 +199,9 @@ class Node:
             return MeshBoolean(tree, location=location, name=name, label=label, hide=hide, mute=mute,
                                operation=operation, solver=solver)
         if type=="MERGE_BY_DISTANCE":
-            mode = attributes["mode"]
             return MergeByDistance(tree,location=location,name=name,
                                    label=label,hide=hide,mute=mute,
-                                   node_height=200,
-                                   mode=mode)
+                                   node_height=200)
         if type=="OBJECT_INFO":
             transform_space=attributes["transform_space"]
             return ObjectInfo(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=400,transform_space=transform_space)
@@ -233,11 +233,15 @@ class Node:
             data_type = attributes["data_type"]
             domain=attributes["domain"]
             return AttributeStatistic(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type,domain=domain)
+
+        # Sample
         if type=="SAMPLE_INDEX":
             data_type = attributes["data_type"]
             domain=attributes["domain"]
             return SampleIndex(tree,location=location,name=name,label=label,hide=mute,node_height=200,data_type=data_type,domain=domain)
-
+        if type=="SAMPLE_NEAREST_SURFACE":
+            data_type = attributes["data_type"]
+            return SampleNearestSurface(tree,location=location,name=name,label=label,hide=mute,node_height=200,data_type=data_type)
         # points
         if type=="POINTS":
             return Points(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
@@ -246,6 +250,8 @@ class Node:
         if type == "EXTRUDE_MESH":
             mode = attributes["mode"]
             return ExtrudeMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
+        if type == "FLIP_FACES":
+            return FlipFaces(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="DUAL_MESH":
             return DualMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="SHORTEST_EDGE_PATHS":
@@ -515,7 +521,8 @@ class BlueNode(Node):
         # changed from self.std_out=self.outputs["Value"] to accomodate Vector outputs
         self.std_out = self.outputs[0]
 
-#   green nodes  #
+#   green nodes
+
 # mesh primitives
 class MeshLine(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -623,6 +630,21 @@ class ExtrudeMesh(GreenNode):
             self.tree.links.new(selection, self.node.inputs["Selection"])
         if mesh:
             self.tree.links.new(mesh, self.node.inputs["Mesh"])
+
+class FlipFaces(GreenNode):
+    def __init__(self, tree, location=(0, 0),selection=None, **kwargs):
+        """
+
+        """
+        self.node = tree.nodes.new(type="GeometryNodeFlipFaces")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Mesh"]
+
+        if selection is not None:
+            self.tree.links.new(selection, self.node.inputs["Selection"])
+
 
 class MeshToCurve(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -840,7 +862,6 @@ class CurveLine(GreenNode):
         else:
             self.tree.links.new(end, self.node.inputs["End"])
 
-
 class Quadrilateral(GreenNode):
     def  __init__(self, tree, location=(0, 0),
                   mode="RECTANGLE",
@@ -982,7 +1003,6 @@ class SampleCurve(GreenNode):
                 self.node.inputs["Factor"].default_value=factor
             else:
                 tree.links.new(factor,self.node.inputs["Factor"])
-
 
 # point operations
 class Points(GreenNode):
@@ -1582,7 +1602,6 @@ class ScaleInstances(GreenNode):
         if selection:
             self.tree.links.new(selection, self.node.inputs["Selection"])
 
-
 class SetPosition(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  geometry=None,
@@ -1938,9 +1957,9 @@ class MeshBoolean(GreenNode):
             else:
                 tree.links.new(hole_tolerant,self.node.inputs["Hole Tolerant"])
 
-#################
-## Attributes ###
-#################
+
+# Attributes
+
 class StoredNamedAttribute(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  data_type="FLOAT",
@@ -2092,7 +2111,7 @@ class SetMaterial(GreenNode):
 class MergeByDistance(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  geometry=None,
-                 mode="ALL",
+                 mode="All",
                  selection=None,
                  distance=0.001,
                  **kwargs
@@ -2104,8 +2123,7 @@ class MergeByDistance(GreenNode):
         self.geometry_out = self.node.outputs["Geometry"]
         self.geometry_in = self.node.inputs["Geometry"]
 
-        self.node.mode = mode
-
+        self.node.inputs["Mode"].default_value = mode
         if geometry:
             self.tree.links.new(geometry, self.node.inputs["Geometry"])
         if selection:
@@ -2192,7 +2210,6 @@ class TransformGeometry(GreenNode):
         else:
             self.tree.links.new(scale, self.inputs["Scale"])
 
-
 class DomainSize(GreenNode):
     """
     Geometry node DomainSize
@@ -2217,6 +2234,8 @@ class DomainSize(GreenNode):
             tree.links.new(geometry, self.node.inputs["Geometry"])
 
         self.geometry_in = self.node.inputs["Geometry"]
+
+# Sample nodes
 
 class SampleIndex(GreenNode):
     """
@@ -2252,9 +2271,40 @@ class SampleIndex(GreenNode):
         self.geometry_in = self.node.inputs["Geometry"]
         self.std_out = self.node.outputs["Value"]
 
-###################
-## Utility Nodes ##
-###################
+class SampleNearestSurface(GreenNode):
+    """
+    Geometry node SampleNearestSurfac
+    """
+
+    def __init__(self, tree, location=(0, 0),
+                 data_type="FLOAT", mesh=None, value=None,
+                 group_id=None, sample_position=None, sample_group_id=None,
+                 **kwargs
+                 ):
+
+        self.node = tree.nodes.new(type="GeometryNodeSampleNearestSurface")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.node.data_type = data_type
+        self.geometry_in = self.node.inputs["Mesh"]
+        self.std_out = self.node.outputs["Value"]
+
+        if mesh is not None:
+            tree.links.new(mesh, self.node.inputs["Geometry"])
+
+        if value is not None:
+            tree.links.new(value, self.node.inputs["Value"])
+
+        if group_id is not None:
+            tree.links.new(group_id, self.node.inputs["Group ID"])
+
+        if sample_position is not None:
+            tree.links.new(sample_position, self.node.inputs["Sample Position"])
+
+        if sample_group_id is not None:
+            tree.links.new(sample_group_id, self.node.inputs["Sample Group ID"])
+
+## Utility Nodes
 
 class EvaluateOnDomain(BlueNode):
     def __init__(self, tree, location=(0, 0), value=None,data_type="FLOAT_VECTOR",domain="FACE", **kwargs):
@@ -2308,7 +2358,7 @@ class EvaluateAtIndex(BlueNode):
             else:
                 tree.links.new(index, self.node.inputs["Index"])
 
-#  red nodes   #
+#  red nodes
 
 class Position(RedNode):
     def __init__(self, tree, location=(0, 0), **kwargs):
@@ -2355,6 +2405,12 @@ class Index(RedNode):
         self.node = tree.nodes.new(type="GeometryNodeInputIndex")
         super().__init__(tree, location=location, **kwargs)
         self.std_out = self.node.outputs["Index"]
+
+class VertexNeighbors(RedNode):
+    def __init__(self, tree, location=(0, 0), **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeInputMeshVertexNeighbors")
+        super().__init__(tree, location=location, **kwargs)
+        self.std_out = self.node.outputs["Vertex Count"]
 
 class EdgeVertices(RedNode):
     def __init__(self, tree, location=(0, 0), **kwargs):
@@ -2568,7 +2624,6 @@ class AxisAngleToRotation(BlueNode):
             self.node.inputs["Angle"].default_value=angle
         else:
             tree.links.new(angle,self.node.inputs["Angle"])
-
 
 class RotateVector(BlueNode):
     def __init__(self,tree,location=(0,0),vector=Vector(),rotation=Vector(), **kwargs):
@@ -3225,7 +3280,6 @@ class RepeatZone(GreenNode):
 
             self.tree.links.new(self.repeat_input.outputs["Geometry"], last.geometry_in)
 
-
 class SimulationInput(GreenNode):
     def __init__(self,tree,location=(0,0),**kwargs):
         self.node = tree.nodes.new(type="GeometryNodeSimulationInput")
@@ -3243,7 +3297,6 @@ class SimulationOutput(GreenNode):
         if socket_type=="VALUE":
             socket_type="FLOAT"
         self.node.state_items.new(socket_type,socket_name)
-
 
 class Simulation(GreenNode):
     def __init__(self, tree, location=(0, 0), node_width=5, geometry=None, **kwargs):
@@ -3339,7 +3392,6 @@ class ForEachZone(GreenNode):
             else:
                 self.tree.links.new(ins, last.geometry_in)
 
-
 class ForEachInput(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  geometry=None,selection=None, **kwargs):
@@ -3367,7 +3419,6 @@ class ForEachInput(GreenNode):
         if isinstance(output,Node):
             output = output.node
         self.node.pair_with_output(output)
-
 
 class ForEachOutput(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -3509,7 +3560,6 @@ class CurveWireFrame(GreenNode):
         create_geometry_line(tree, [curve2mesh],
                              ins=group_inputs.outputs["Curve"], out=group_outputs.inputs["Mesh"])
         return group
-
 
 class WireFrameRectangle(GreenNode):
     def __init__(self, tree, location=(0, 0),

@@ -698,8 +698,24 @@ def add_plane(name="Plane", smooth=True):
     return plane
 
 
-def create_mesh(vertices, edges=[], faces=[], name='mesh'):
+def create_mesh(vertices, edges=[], faces=[], name='mesh',orient_faces=False):
     mesh = bpy.data.meshes.new(name)
+
+    # make sure that normals point to the outside
+    if orient_faces:
+        obj_center = sum([to_vector(v) for v in vertices],Vector())/len(vertices)
+        for i in range(len(faces)):
+            face = faces[i]
+            face_center= sum([to_vector(vertices[i]) for i in face],Vector())/len(face)
+            e0 = to_vector(vertices[face[0]])
+            e1 = to_vector(vertices[face[1]])
+            e2 = to_vector(vertices[face[2]])
+            u = e1-e0
+            v = e2-e0
+            n = u.cross(v)
+            if (face_center-obj_center).dot(n)<0:
+                faces[i] = faces[i][::-1]
+
     mesh.from_pydata(vertices, edges, faces)
     mesh.update()
     return mesh
@@ -1202,6 +1218,7 @@ def empty_blender_view3d():
 # compositions #
 #######################
 
+
 def create_composition(denoising=None):
     """
     create after render image processing
@@ -1475,7 +1492,9 @@ def animate_sky_background(**kwargs):
 
 
 def set_hdri_background(filename='', ext='exr', simple=False, transparent=False, background="background", strength=0.2,
-                        no_transmission_ray=False, rotation_euler=None,reflections=True,reflection_color=[0,0,0,1]):
+                        no_transmission_ray=False, rotation_euler=None,
+                        reflections=True,reflection_color=[0,0,0,1],
+                        colorspace_settings="Linear Rec.709"):
     # remove lights
     for obj in bpy.data.objects:
         if 'Sun' in obj.name:
@@ -1496,6 +1515,7 @@ def set_hdri_background(filename='', ext='exr', simple=False, transparent=False,
     environment.location = (-700, 0)
     environment.image = bpy.data.images.load(RES_HDRI_DIR + "/" + filename + '.' + ext)
 
+    bpy.data.images[filename+"."+ext].colorspace_settings.name=colorspace_settings
     if rotation_euler is not None:
         tex = nodes.new(type='ShaderNodeTexCoord')
         tex.location = (-1200, 0)
@@ -7558,3 +7578,13 @@ def camera_alignment_quaternion(bob,camera_location,):
 
 def register_class(cls):
     bpy.utils.register_class(cls)
+
+
+def light_path_settings(total=12, diffuse=4, glossy=4, transmission=12, volume=0, transparency=8):
+    scn = get_scene()
+    scn.cycles.max_bounces=total
+    scn.cycles.diffuse_bounces=diffuse
+    scn.cycles.glossy_bounces=glossy
+    scn.cycles.transmission_bounces=transmission
+    scn.cycles.volume_bounces=volume
+    scn.cycles.transparent_max_bounces=transparency
