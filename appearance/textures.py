@@ -107,7 +107,7 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
     nodes = material.node_tree.nodes
 
     # names of old and new nodes can differ by a number, when there are the same nodes appearing in both materials
-    # create a name dictionary between old and new nodes
+    # create a name dictionary from old to new nodes
     name_dictionary ={}
     new_nodes = node_tree.nodes
     new_links = node_tree.links
@@ -119,14 +119,22 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
     for node in nodes:
         # create a new node in the group and find and copy its attributes
         if node.bl_idname not in exclude:
-            new_node = new_nodes.new(node.bl_idname)
 
-            name_dictionary[node.name]=new_node.name
+            new_node = new_nodes.new(node.bl_idname)
             if node.bl_idname == "NodeFrame":
                 frame_dictionary[node] =new_node
 
             # add relevant properties to the old node to the new node
             copy_properties(node,new_node)
+
+            # take care of unique naming after the properties have been copied, since the name is a property as well
+            if not first:
+                new_node.name = "second_" + node.name
+                new_node.label = "second_" + node.label
+            else:
+                new_node.name = node.name
+                new_node.label = node.label
+            name_dictionary[node.name] = new_node.name
 
             # copy the attributes for all inputs
             for i, inp in enumerate(node.inputs):
@@ -157,10 +165,13 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
 
             # find link to connect it to the mix shader
             # for mix_textures
-            mix = new_nodes.get("Mix Shader")
+            mix = new_nodes.get("FinalMixShader")
             if mix:
                 for link in node.inputs["Surface"].links:
-                    connected_node = new_nodes.get(name_dictionary[link.from_node.name])
+                    node_name=name_dictionary[link.from_node.name]
+                    if not first:
+                        node_name = "second_"+link.from_node.name
+                    connected_node = new_nodes.get(node_name)
                     identifier=link.from_socket.identifier
 
                     if first:
@@ -169,7 +180,11 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
                         mix_socket = 2
                     new_links.new(connected_node.outputs[identifier], mix.inputs[mix_socket])
                 for link in node.inputs["Displacement"].links:
-                    connected_node = new_nodes.get(name_dictionary[link.from_node.name])
+                    if not first:
+                        node_name = "second_"+link.from_node.name
+                    else:
+                        node_name = link.from_node.name
+                    connected_node = new_nodes.get(name_dictionary[node_name])
                     identifier=link.from_socket.identifier
                     new_links.new(connected_node.outputs[identifier], mat_out.inputs["Displacement"])
 
@@ -220,7 +235,8 @@ def mix_texture(**kwargs):
     out.location = (out.location[0]+(separation+1)*200,out.location[1])
     nodes.remove(nodes.get("Principled BSDF"))
 
-    mix_shader =MixShader(tree,location=(separation,0))
+    mix_shader =MixShader(tree,location=(separation,0),name="FinalMixShader")
+    mix_shader.label="FinalMixShader"
     links.new(mix_shader.outputs["Shader"],out.inputs["Surface"])
 
     # Copy nodes and links from first material

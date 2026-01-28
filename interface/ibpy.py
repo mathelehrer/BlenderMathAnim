@@ -1810,8 +1810,10 @@ def get_alpha_at_current_keyframe(obj, frame, slot=0):
         # Detect AlphaFactor node (book and pages for instance)
         elif 'Principled BSDF' in material.node_tree.nodes:
             alpha = material.node_tree.nodes["Principled BSDF"].inputs['Alpha'].default_value
-        else:
+        elif 'Mix Shader' in material.node_tree.nodes:
             alpha = material.node_tree.nodes['Mix Shader'].inputs[0].default_value
+        else:
+            alpha = None
         set_frame(current_frame)
         return alpha
     return 0

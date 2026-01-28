@@ -190,6 +190,10 @@ class Node:
         if type=="CONVEX_HULL":
             return ConvexHull(tree, location=location, name=name, label=label, hide=hide, mute=mute,
                                      node_height=200)
+        if type=="RAYCAST":
+            data_type=attributes["data_type"]
+            return RayCast(tree,data_type=data_type,location=location,name=name,label=label,hide=hide,mute=mute,
+                           node_height=200)
         if type=="SET_SHADE_SMOOTH":
             return SetShadeSmooth(tree, location=location, name=name, label=label, hide=hide, mute=mute,
                                      node_height=200)
@@ -1859,7 +1863,7 @@ class SortElements(GreenNode):
 class RayCast(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  data_type="FLOAT",
-                 mapping="INTERPOLATED",
+                 mapping="Interpolated",
                  target_geometry=None,
                  attribute=None,
                  source_position=None,
@@ -1881,7 +1885,7 @@ class RayCast(GreenNode):
 
         self.node = tree.nodes.new(type="GeometryNodeRaycast")
         self.node.data_type = data_type
-        self.node.mapping = mapping
+        self.node.inputs["Interpolation"].default_value = mapping
         super().__init__(tree, location=location, **kwargs)
 
         self.geometry_in = self.node.inputs["Target Geometry"]
@@ -2517,7 +2521,6 @@ class SceneTime(RedNode):
         self.std_out = self.node.outputs[std_out]
 
 # Function Nodes #
-
 class InvertRotation(RedNode):
     def __init__(self, tree, location=(0, 0), in_rotation=Vector()
                  , **kwargs):

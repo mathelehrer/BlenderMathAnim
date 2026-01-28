@@ -170,6 +170,10 @@ class ShaderNode:
             return NoiseTexture(tree, location=location, label=label, name=name, hide=hide, mute=mute,
                                 noise_type=noise_type, noise_dimensions=noise_dimensions, normalize=normalize,
                                 node_height=400)
+        elif type == "TEX_WHITE_NOISE":
+            noise_dimensions = attributes["noise_dimensions"]
+            return WhiteNoise(tree, location=location, label=label, name=name, hide=hide, mute=mute,
+                             noise_dimensions=noise_dimensions, node_height=200)
         elif type == "VALTORGB":
             color_dictionary = attributes["color_ramp"]
             interpolation = attributes["interpolation"]
@@ -672,3 +676,11 @@ class TextureImage(ShaderNode):
                 self.node.inputs["Vector"].default_value = vector
             else:
                 tree.links.new(vector, self.node.inputs["Vector"])
+
+class WhiteNoise(ShaderNode):
+    def __init__(self, tree, location=(0, 0), noise_dimensions="3D",std_out="Value", **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeTexWhiteNoise")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs[std_out]
+        self.node.noise_dimensions = noise_dimensions

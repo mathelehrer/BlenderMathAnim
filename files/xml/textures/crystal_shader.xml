@@ -10,11 +10,11 @@
 			<OUTPUTS>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="1" type="BSDF_GLASS" name="Glass BSDF" label="" location="(1.0,0.9)" distribution="MULTI_GGX" hide="False" mute="False" parent="None">
+		<NODE id="1" type="BSDF_GLASS" name="Glass BSDF Surface" label="Glass Surface" location="(1.0,0.9)" distribution="MULTI_GGX" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="4" name="Color" type="RGBA" is_linked="True"/>
 				<INPUT id="5" name="Roughness" type="VALUE" is_linked="False" default_value="0.0"/>
-				<INPUT id="6" name="IOR" type="VALUE" is_linked="False" default_value="1.5"/>
+				<INPUT id="6" name="IOR" type="VALUE" is_linked="False" default_value="1.7999999523162842"/>
 				<INPUT id="7" name="Normal" type="VECTOR" is_linked="True"/>
 				<INPUT id="8" name="Weight" type="VALUE" is_linked="False" default_value="0.0"/>
 				<INPUT id="9" name="Thin Film Thickness" type="VALUE" is_linked="False" default_value="0.0"/>
@@ -24,7 +24,7 @@
 				<OUTPUT id="11" name="BSDF" type="SHADER" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="2" type="ATTRIBUTE" name="Attribute" label="" location="(1.0,1.9)" attribute_name="Cracks" attribute_type="GEOMETRY" hide="False" mute="False" parent="None">
+		<NODE id="2" type="ATTRIBUTE" name="AttributeCracks" label="Cracks" location="(1.0,1.9)" attribute_name="Cracks" attribute_type="GEOMETRY" hide="False" mute="False" parent="None">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
@@ -34,7 +34,7 @@
 				<OUTPUT id="15" name="Alpha" type="VALUE" is_linked="False" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="3" type="MIX_SHADER" name="Mix Shader" label="" location="(2.4,0.8)" hide="False" mute="False" parent="None">
+		<NODE id="3" type="MIX_SHADER" name="MixShader2" label="MixShader2" location="(2.4,0.8)" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="16" name="Factor" type="VALUE" is_linked="True"/>
 				<INPUT id="17" name="Shader" type="SHADER" is_linked="True"/>
@@ -44,7 +44,7 @@
 				<OUTPUT id="19" name="Shader" type="SHADER" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="4" type="BSDF_GLASS" name="Glass BSDF.001" label="" location="(-0.3,-0.7)" distribution="MULTI_GGX" hide="False" mute="False" parent="None">
+		<NODE id="4" type="BSDF_GLASS" name="Glass BSDF Cracks" label="Glass Cracks" location="(-0.3,-0.7)" distribution="MULTI_GGX" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="20" name="Color" type="RGBA" is_linked="True"/>
 				<INPUT id="21" name="Roughness" type="VALUE" is_linked="False" default_value="0.5408163070678711"/>
@@ -58,7 +58,7 @@
 				<OUTPUT id="27" name="BSDF" type="SHADER" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="5" type="TEX_NOISE" name="Noise Texture" label="" location="(-2.4,-1.1)" hide="False" mute="False" noise_dimensions="3D" noise_type="FBM" normalize="True" parent="None">
+		<NODE id="5" type="TEX_NOISE" name="Noise Texture Cracks" label="NoiseCracks" location="(-2.4,-1.1)" hide="False" mute="False" noise_dimensions="3D" noise_type="FBM" normalize="True" parent="None">
 			<INPUTS>
 				<INPUT id="28" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
 				<INPUT id="29" name="W" type="VALUE" is_linked="False" default_value="0.0"/>
@@ -75,7 +75,7 @@
 				<OUTPUT id="38" name="Color" type="RGBA" is_linked="False" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="6" type="BUMP" name="Bump" label="" location="(-1.3,-1.2)" hide="False" invert="False" mute="False" parent="None">
+		<NODE id="6" type="BUMP" name="BumpCracks" label="BumpCracks" location="(-1.3,-1.2)" hide="False" invert="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="39" name="Strength" type="VALUE" is_linked="False" default_value="0.30000001192092896"/>
 				<INPUT id="40" name="Distance" type="VALUE" is_linked="False" default_value="0.0010000000474974513"/>
@@ -87,7 +87,7 @@
 				<OUTPUT id="44" name="Normal" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="7" type="TEX_NOISE" name="Noise Texture.001" label="" location="(-1.6,2.1)" hide="False" mute="False" noise_dimensions="3D" noise_type="FBM" normalize="True" parent="None">
+		<NODE id="7" type="TEX_NOISE" name="Noise Texture Surface" label="Noise Surface" location="(-1.6,2.1)" hide="False" mute="False" noise_dimensions="3D" noise_type="FBM" normalize="True" parent="None">
 			<INPUTS>
 				<INPUT id="45" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
 				<INPUT id="46" name="W" type="VALUE" is_linked="False" default_value="0.0"/>
@@ -104,7 +104,7 @@
 				<OUTPUT id="55" name="Color" type="RGBA" is_linked="False" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="8" type="BUMP" name="Bump.001" label="" location="(-0.6,1.9)" hide="False" invert="False" mute="False" parent="None">
+		<NODE id="8" type="BUMP" name="BumpSurface" label="BumpSurface" location="(-0.6,1.9)" hide="False" invert="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="56" name="Strength" type="VALUE" is_linked="False" default_value="0.03999999910593033"/>
 				<INPUT id="57" name="Distance" type="VALUE" is_linked="False" default_value="0.0010000000474974513"/>
@@ -132,7 +132,7 @@
 			<INPUTS>
 				<INPUT id="68" name="Color" type="RGBA" is_linked="True"/>
 				<INPUT id="69" name="Color Attribute" type="STRING" is_linked="False" default_value=""/>
-				<INPUT id="70" name="Density" type="VALUE" is_linked="False" default_value="3.200000047683716"/>
+				<INPUT id="70" name="Density" type="VALUE" is_linked="True"/>
 				<INPUT id="71" name="Density Attribute" type="STRING" is_linked="False" default_value="density"/>
 				<INPUT id="72" name="Anisotropy" type="VALUE" is_linked="False" default_value="0.0"/>
 				<INPUT id="73" name="Absorption Color" type="RGBA" is_linked="False" default_value="[0.0, 0.0, 0.0, 1.0]"/>
@@ -148,7 +148,7 @@
 				<OUTPUT id="81" name="Volume" type="SHADER" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="11" type="ATTRIBUTE" name="Attribute.001" label="" location="(-0.2,0.1)" attribute_name="CracksEdges" attribute_type="GEOMETRY" hide="False" mute="False" parent="None">
+		<NODE id="11" type="ATTRIBUTE" name="AttributeCracksEdges" label="CracksEdges" location="(-0.2,0.1)" attribute_name="CracksEdges" attribute_type="GEOMETRY" hide="False" mute="False" parent="None">
 			<INPUTS>
 			</INPUTS>
 			<OUTPUTS>
@@ -158,7 +158,7 @@
 				<OUTPUT id="85" name="Alpha" type="VALUE" is_linked="False" default_value="0.0"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="12" type="MIX_SHADER" name="Mix Shader.001" label="" location="(1.0,0.0)" hide="False" mute="False" parent="None">
+		<NODE id="12" type="MIX_SHADER" name="MixShader1" label="MixShader1" location="(1.0,0.0)" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="86" name="Factor" type="VALUE" is_linked="True"/>
 				<INPUT id="87" name="Shader" type="SHADER" is_linked="True"/>
@@ -184,6 +184,16 @@
 				<OUTPUT id="93" name="Color" type="RGBA" is_linked="True" default_value="[1.0, 0.0, 0.6171463131904602, 1.0]"/>
 			</OUTPUTS>
 		</NODE>
+		<NODE id="15" type="TEX_WHITE_NOISE" name="White Noise Texture" label="" location="(0.9,-0.9)" hide="False" mute="False" noise_dimensions="3D" parent="None">
+			<INPUTS>
+				<INPUT id="94" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
+				<INPUT id="95" name="W" type="VALUE" is_linked="False" default_value="0.0"/>
+			</INPUTS>
+			<OUTPUTS>
+				<OUTPUT id="96" name="Value" type="VALUE" is_linked="True" default_value="0.0"/>
+				<OUTPUT id="97" name="Color" type="RGBA" is_linked="False" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
+			</OUTPUTS>
+		</NODE>
 	</NODES>
 	<LINKS>
 		<LINK from_node="3" from_socket="19" to_node="0" to_socket="0"/>
@@ -202,5 +212,6 @@
 		<LINK from_node="12" from_socket="89" to_node="3" to_socket="18"/>
 		<LINK from_node="14" from_socket="93" to_node="10" to_socket="68"/>
 		<LINK from_node="14" from_socket="93" to_node="9" to_socket="66"/>
+		<LINK from_node="15" from_socket="96" to_node="10" to_socket="70"/>
 	</LINKS>
 </NODE_XML>
