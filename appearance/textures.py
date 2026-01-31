@@ -157,8 +157,9 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
             for i, inp in enumerate(node.inputs):
                 for link in inp.links:
                     # find the connected node for the link in the group
-                    # connected_node = new_nodes.get(name_dictionary[link.from_node.name])
-                    connected_node = new_nodes.get(link.from_node.name)
+                    connected_node = new_nodes.get(name_dictionary[link.from_node.name])
+
+                    #connected_node = new_nodes.get(link.from_node.name)
                     # connect the group nodes
                     new_links.new(connected_node.outputs[link.from_socket.name], new_node.inputs[i])
         if node.bl_idname == "ShaderNodeOutputMaterial":

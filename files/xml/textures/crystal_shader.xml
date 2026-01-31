@@ -116,7 +116,7 @@
 				<OUTPUT id="61" name="Normal" type="VECTOR" is_linked="True" default_value="[0.0, 0.0, 0.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="9" type="HUE_SAT" name="Hue/Saturation/Value" label="" location="(-1.7,0.6)" hide="False" mute="False" parent="None">
+		<NODE id="9" type="HUE_SAT" name="Hue/Saturation/Value" label="HueSaturationValue" location="(-1.7,0.6)" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="62" name="Hue" type="VALUE" is_linked="False" default_value="0.5"/>
 				<INPUT id="63" name="Saturation" type="VALUE" is_linked="False" default_value="0.33000001311302185"/>
@@ -128,7 +128,7 @@
 				<OUTPUT id="67" name="Color" type="RGBA" is_linked="True" default_value="[0.800000011920929, 0.800000011920929, 0.800000011920929, 1.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="10" type="PRINCIPLED_VOLUME" name="Principled Volume" label="" location="(1.9,-0.5)" hide="False" mute="False" parent="None">
+		<NODE id="10" type="PRINCIPLED_VOLUME" name="Principled Volume" label="PrincipledVolume" location="(1.9,-0.5)" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="68" name="Color" type="RGBA" is_linked="True"/>
 				<INPUT id="69" name="Color Attribute" type="STRING" is_linked="False" default_value=""/>
@@ -168,7 +168,7 @@
 				<OUTPUT id="89" name="Shader" type="SHADER" is_linked="True"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="13" type="BSDF_TRANSPARENT" name="Transparent BSDF" label="" location="(-0.3,-1.6)" hide="False" mute="False" parent="None">
+		<NODE id="13" type="BSDF_TRANSPARENT" name="Transparent BSDF" label="TransparentBSDF" location="(-0.3,-1.6)" hide="False" mute="False" parent="None">
 			<INPUTS>
 				<INPUT id="90" name="Color" type="RGBA" is_linked="False" default_value="[1.0, 1.0, 1.0, 1.0]"/>
 				<INPUT id="91" name="Weight" type="VALUE" is_linked="False" default_value="0.0"/>
@@ -184,7 +184,7 @@
 				<OUTPUT id="93" name="Color" type="RGBA" is_linked="True" default_value="[1.0, 0.0, 0.6171463131904602, 1.0]"/>
 			</OUTPUTS>
 		</NODE>
-		<NODE id="15" type="TEX_WHITE_NOISE" name="White Noise Texture" label="" location="(0.9,-0.9)" hide="False" mute="False" noise_dimensions="3D" parent="None">
+		<NODE id="15" type="TEX_WHITE_NOISE" name="White Noise Texture" label="WhiteNoiseTexture" location="(0.9,-0.9)" hide="False" mute="False" noise_dimensions="3D" parent="None">
 			<INPUTS>
 				<INPUT id="94" name="Vector" type="VECTOR" is_linked="False" default_value="[0.0, 0.0, 0.0]"/>
 				<INPUT id="95" name="W" type="VALUE" is_linked="False" default_value="0.0"/>
