@@ -6753,10 +6753,12 @@ class PolyhedronViewModifier(GeometryNodesModifier):
                          group_input=False, group_output=False, automatic_layout=False, **kwargs)
 
     def create_node(self, tree, **kwargs):
-        create_from_xml(tree, "PolyhedronView_nodes", **kwargs)
+        create_from_xml(tree, "PolyhedronViewModifier_nodes", **kwargs)
 
         edge_color = get_from_kwargs(kwargs, 'edge_color', 'example')
         vertex_color = get_from_kwargs(kwargs, 'vertex_color', 'red')
+        edge_radius = get_from_kwargs(kwargs, 'edge_radius', 0.05)
+        vertex_radius = get_from_kwargs(kwargs, 'vertex_radius', 0.1)
 
         edge_material = get_texture(edge_color, **kwargs)
         vertex_material = get_texture(vertex_color, **kwargs)
@@ -6768,7 +6770,10 @@ class PolyhedronViewModifier(GeometryNodesModifier):
         edge_node.material = edge_material
         vertex_node = ibpy.get_geometry_node_from_modifier(self.tree,"VertexMaterial")
         vertex_node.material = vertex_material
-
+        edge_radius_node = ibpy.get_geometry_node_from_modifier(self.tree,"EdgeRadius")
+        ibpy.change_default_value(edge_radius_node,from_value=0,to_value=edge_radius,begin_time=0,transition_time=0)
+        vertex_radius_node=ibpy.get_geometry_node_from_modifier(self.tree,"VertexRadius")
+        ibpy.change_default_value(vertex_radius_node,from_value=0,to_value=vertex_radius,begin_time=0,transition_time=0)
 
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes

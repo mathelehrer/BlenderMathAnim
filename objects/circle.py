@@ -78,7 +78,7 @@ class Circle2(Curve):
             Z = 0
         elif self.mode == 'XZ':
             X = self.center[0] + self.radius * np.cos(x)
-            Z = self.center[2] + self.radius * np.sin(x)
+            Z = self.center[1] + self.radius * np.sin(x)
             Y = 0
         return [X, Y, Z]
 

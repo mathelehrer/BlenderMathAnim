@@ -1191,11 +1191,23 @@ class IncidenceMatrix:
 
 
 if __name__ == '__main__':
+    # A4
     # solids = ("o3o3o3x","o3o3x3o","o3o3x3x","x3o3o3x","o3x3o3x","o3x3x3o","o3x3x3x","x3o3x3x","x3x3x3x")
-    solids = ("x3o3o4o","o3o3o4x","o3x3o4o","o3o3x4o",
-              "x3x3o4o","o3o3x4x","x3o3o4x","o3x3o4x","o3x3x4o","x3o3x4o",
-              "o3x3x4x","x3o3x4x","x3x3o4x","x3x3x4o",
-              "x3x3x4x")
+    # B4
+    # solids = ("x3o3o4o","o3o3o4x","o3x3o4o","o3o3x4o",
+    #           "x3x3o4o","o3o3x4x","x3o3o4x","o3x3o4x","o3x3x4o","x3o3x4o",
+    #           "o3x3x4x","x3o3x4x","x3x3o4x","x3x3x4o",
+    #           "x3x3x4x")
+    # D4
+    # solids = ("o3x3o *b3o","o3o3o *b3x","o3o3x *b3x","o3x3o *b3x","o3x3x *b3x","x3o3x *b3x","x3x3x *b3x")
+    # F4
+    # solids = ("o3o4o3x", "o3o4x3o", "o3o4x3x", "x3o4o3x", "o3x4o3x", "o3x4x3o", "o3x4x3x", "x3o4x3x", "x3x4x3x")
+    # H4
+    solids = ("x3o3o5o","o3o3o5x","o3x3o5o","o3o3x5o",
+              "x3x3o5o","o3o3x5x","x3o3o5x","o3x3o5x","o3x3x5o","x3o3x5o",
+              "o3x3x5x","x3o3x5x","x3x3o5x","x3x3x5o",
+              "x3x3x5x")
+
     for solid in solids:
         im = IncidenceMatrix(solid)
         im.print_table()
