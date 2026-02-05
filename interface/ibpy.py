@@ -1436,6 +1436,16 @@ def animate_glare(glare, **kwargs):
     glare.threshold = threshold_end
     insert_keyframe(glare, 'threshold', end_frame)
 
+def set_color_to_faces(bob, face2color_function):
+    """
+    assign a material slot value to each face separately, depending on a provided function
+    """
+    obj = get_obj(bob)
+    for face in obj.data.polygons:
+        face.material_index=min(len(obj.material_slots)-1,face2color_function(face.vertices))
+
+# Background
+
 def get_background():
     world = bpy.data.worlds['World']
     nodes = world.node_tree.nodes
@@ -7590,3 +7600,4 @@ def light_path_settings(total=12, diffuse=4, glossy=4, transmission=12, volume=0
     scn.cycles.transmission_bounces=transmission
     scn.cycles.volume_bounces=volume
     scn.cycles.transparent_max_bounces=transparency
+
