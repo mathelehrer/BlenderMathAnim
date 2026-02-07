@@ -162,6 +162,12 @@ COLOR_NAMES = [
     'prism8',
     'prism10',
     'dark_red',
+    'triangle', # colors for the polygons
+    'square',
+    'pentagon',
+    'hexagon',
+    'octagon',
+    'decagon',
 
     'gray_1', # gray always has to stay last in this list
     'gray_2',
@@ -277,6 +283,12 @@ if color_scheme == -1:
         [170,170,170,1],
         [145,145,145,1],
         [76,0,0,1],# dark red for vertex spheres
+        [0,255,0,1], # colors for the polygons
+        [127,127,127,1], # square
+        [10,158,115,1], # pentagon
+        [0,68,127,1], # hexagon
+        [160,127,50,1], # octagon
+        [255,0,255,1], # decagon
 
     ]
 

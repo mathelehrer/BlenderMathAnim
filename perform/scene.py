@@ -294,7 +294,8 @@ def define_materials():
         make_eevee_glass_material(rgb=deepcopy(col), name=name)
 
     # create checker material
-    make_checker_material()
+    # it's outdated to preload them
+    # it should be converted into functions that create materials on demand and should be called with **kwargs and get_texture()
     make_mirror_material()
     make_sand_material()
     make_gold_material()

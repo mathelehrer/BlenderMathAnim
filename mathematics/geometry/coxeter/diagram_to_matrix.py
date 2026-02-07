@@ -21,7 +21,7 @@ logging = []
 letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n']
 
 
-class Diagram:
+class CoxeterDynkinDiagram:
     def __init__(self, diagram_string):
         # convert diagram_string into graph
         self.diagram_string = diagram_string
@@ -32,7 +32,7 @@ class Diagram:
         self.create_graph()
 
     @classmethod
-    def from_graph(cls,graph:nx.Graph)->Diagram:
+    def from_graph(cls,graph:nx.Graph)->CoxeterDynkinDiagram:
         """
         create a diagram from a graph
         this is useful to convert sub-graphs into diagrams
@@ -176,7 +176,7 @@ class Diagram:
     def show_graph(self):
         """
         display the graph
-        >>> d=Diagram("x3o . x3x3x3x *c3x")
+        >>> d=CoxeterDynkinDiagram("x3o . x3x3x3x *c3x")
         >>> d.show_graph()
         """
         plt.figure(figsize=(10, 2))
@@ -197,19 +197,19 @@ class Diagram:
     def get_diagrams_from_connected_components(self) -> [str]:
         """
         create the diagram for each connected component of the graph
-        >>> d=Diagram("x3x3x3x3x *c3x")
+        >>> d=CoxeterDynkinDiagram("x3x3x3x3x *c3x")
         >>> d.get_diagrams_from_connected_components()
         ['x3x3x3x3x *c3x']
 
-        >>> d=Diagram("x3x5x")
+        >>> d=CoxeterDynkinDiagram("x3x5x")
         >>> d.get_diagrams_from_connected_components()
         ['x3x5x']
 
-        >>> d=Diagram("x . o5x")
+        >>> d=CoxeterDynkinDiagram("x . o5x")
         >>> d.get_diagrams_from_connected_components()
         ['x', 'o5x']
 
-        >>> d=Diagram("x3x . x3x *c3x")
+        >>> d=CoxeterDynkinDiagram("x3x . x3x *c3x")
         >>> d.get_diagrams_from_connected_components()
         ['x3x', 'x3x', 'x']
 
@@ -261,14 +261,14 @@ class Diagram:
 
         return comp_strings
 
-    def get_complement(self) -> Diagram:
+    def get_complement(self) -> CoxeterDynkinDiagram:
         """
         return a diagram that has the same structure as the unringed nodes of
         the given diagram
-        >>> d = Diagram("x3x3o5o")
+        >>> d = CoxeterDynkinDiagram("x3x3o5o")
         >>> d.get_complement().diagram_string
         '. . x5x'
-        >>> d=Diagram("o3o3o3o3x3x *c3o")
+        >>> d=CoxeterDynkinDiagram("o3o3o3o3x3x *c3o")
         >>> d.get_complement().diagram_string
         'x3x3x3x . . *c3x'
         """
@@ -288,16 +288,16 @@ class Diagram:
             else:
                 complement_str = complement_str[:dot_position - 1] + " . " + complement_str[dot_position + 2:]
             dot_position += 1
-        return Diagram(complement_str)
+        return CoxeterDynkinDiagram(complement_str)
 
     def is_connected(self) -> bool:
         """
         returns true, when a graph is connected, i.e. there is only one connected component
         and false otherwise
-        >>> d = Diagram("x3x3o5o")
+        >>> d = CoxeterDynkinDiagram("x3x3o5o")
         >>> d.is_connected()
         True
-        >>> d=Diagram("x3o3xo . . x3x")
+        >>> d=CoxeterDynkinDiagram("x3o3xo . . x3x")
         >>> d.is_connected()
         False
 
@@ -310,10 +310,10 @@ class Diagram:
 
     def is_linear_graph(self):
         """
-        >>> d = Diagram("x3x3o5o")
+        >>> d = CoxeterDynkinDiagram("x3x3o5o")
         >>> d.is_linear_graph()
         True
-        >>> d=Diagram("x3o3xo . . x3x")
+        >>> d=CoxeterDynkinDiagram("x3o3xo . . x3x")
         >>> d.is_linear_graph()
         False
 
@@ -424,76 +424,76 @@ class Diagram:
         The evaluation includes all compoments and when the algorithm fails it gives a warning
 
         # start with the simple cases
-        >>> d=Diagram("x o")
+        >>> d=CoxeterDynkinDiagram("x o")
         >>> d.is_connected()
         False
-        >>> d=Diagram("o3o")
+        >>> d=CoxeterDynkinDiagram("o3o")
         >>> d.get_vertex_count()
         0
         >>> d.get_vertex_count()
         0
-        >>> d = Diagram("x3x")
+        >>> d = CoxeterDynkinDiagram("x3x")
         >>> d.get_vertex_count()
         6
-        >>> d=Diagram("x3o")
+        >>> d=CoxeterDynkinDiagram("x3o")
         >>> d.get_vertex_count()
         3
-        >>> d=Diagram("x3x3x3x")
+        >>> d=CoxeterDynkinDiagram("x3x3x3x")
         >>> d.get_vertex_count()
         120
-        >>> d=Diagram("x4x3x3x")
+        >>> d=CoxeterDynkinDiagram("x4x3x3x")
         >>> d.get_vertex_count()
         384
-        >>> d=Diagram("x3x3x4x")
+        >>> d=CoxeterDynkinDiagram("x3x3x4x")
         >>> d.get_vertex_count()
         384
-        >>> d=Diagram("x3x4x3x")
+        >>> d=CoxeterDynkinDiagram("x3x4x3x")
         >>> d.get_vertex_count()
         1152
-        >>> d=Diagram("x3x3x5x")
+        >>> d=CoxeterDynkinDiagram("x3x3x5x")
         >>> d.get_vertex_count()
         14400
-        >>> d=Diagram("x3x3o5o")
+        >>> d=CoxeterDynkinDiagram("x3x3o5o")
         >>> d.get_vertex_count()
         1440
-        >>> d=Diagram("o3x4x5o")
+        >>> d=CoxeterDynkinDiagram("o3x4x5o")
         >>> d.get_vertex_count()
         288
-        >>> d=Diagram("x3x3x3x3x *c3x")
+        >>> d=CoxeterDynkinDiagram("x3x3x3x3x *c3x")
         >>> d.get_vertex_count()
         51840
-        >>> d=Diagram("o3o3o3x3x *c3x")
+        >>> d=CoxeterDynkinDiagram("o3o3o3x3x *c3x")
         >>> d.get_vertex_count()
         2160
-        >>> d=Diagram("x3o3o3o3o *c3o")
+        >>> d=CoxeterDynkinDiagram("x3o3o3o3o *c3o")
         >>> d.get_vertex_count()
         27
-        >>> d=Diagram("o3o3o3o3x *c3x")
+        >>> d=CoxeterDynkinDiagram("o3o3o3o3x *c3x")
         >>> d.get_vertex_count()
         432
-        >>> d=Diagram("x3x3x3x3x3x *c3x")
+        >>> d=CoxeterDynkinDiagram("x3x3x3x3x3x *c3x")
         >>> d.get_vertex_count()
         2903040
-        >>> d=Diagram("x3x3x3x3x3x *d3x")
+        >>> d=CoxeterDynkinDiagram("x3x3x3x3x3x *d3x")
         >>> d.get_vertex_count()
         2903040
-        >>> d=Diagram("x3x3x3x3x3x3x *c3x")
+        >>> d=CoxeterDynkinDiagram("x3x3x3x3x3x3x *c3x")
         >>> d.get_vertex_count()
         696729600
-        >>> d=Diagram("x3x3x3x3x3x3x *e3x")
+        >>> d=CoxeterDynkinDiagram("x3x3x3x3x3x3x *e3x")
         >>> d.get_vertex_count()
         696729600
 
         # check disconnected graphs
-        >>> d=Diagram("x3x . x")
+        >>> d=CoxeterDynkinDiagram("x3x . x")
         >>> d.get_vertex_count()
         12
-        >>> d=Diagram("o3x . x")
+        >>> d=CoxeterDynkinDiagram("o3x . x")
         >>> d.get_vertex_count()
         6
 
         # check D series
-        >>> d = Diagram("x3x3x *b3x")
+        >>> d = CoxeterDynkinDiagram("x3x3x *b3x")
         >>> d.get_vertex_count()
         192
         """
@@ -507,14 +507,14 @@ class Diagram:
     def get_subdiagrams(self):
         """
         Generate all possible sub diagrams of a given diagram by omitting nodes and their connections
-        >>> d=Diagram("x3o3o3o3o *c3o")
+        >>> d=CoxeterDynkinDiagram("x3o3o3o3o *c3o")
         >>> rows,subs,dimensions = d.get_subdiagrams()
         >>> [ddd.diagram_string for dd in subs.values() for ddd in dd],dimensions
         (['. . . . . .', 'x . . . . *c .', 'x3o . . . *c .', 'x3o3o . . *c .', 'x3o3o3o . *c .', 'x3o3o . . *c3o', 'x3o3o3o3o *c .', 'x3o3o3o . *c3o'], [1, 1, 1, 1, 2, 2])
         >>> d.get_vertex_count()
         27
 
-        >>> d=Diagram("x3x3x")
+        >>> d=CoxeterDynkinDiagram("x3x3x")
         >>> rows, subs,dimensions = d.get_subdiagrams()
         >>> [ddd.diagram_string for dd in subs.values() for ddd in dd],dimensions
         (['. . .', 'x . .', '. x .', '. . x', 'x3x .', 'x . x', '. x3x'], [1, 3, 3])
@@ -555,7 +555,7 @@ class Diagram:
                 row = re.sub(r"\.\d{1}", ". ", row)
 
                 # check that the vertex count is larger than 0
-                row_diagram = Diagram(row)
+                row_diagram = CoxeterDynkinDiagram(row)
                 vertex_count = row_diagram.get_vertex_count()
                 if vertex_count > 0:
                     count += 1
@@ -576,19 +576,19 @@ class Diagram:
         We need to find the vertex count of the subgraph that only contains "o" and is not connected to the 'x' of the diagram
 
         especially difficult case: a branching point becomes linear
-        >>> d = Diagram("x3o3o3o3o *c3o")
+        >>> d = CoxeterDynkinDiagram("x3o3o3o3o *c3o")
         >>> sub_rows,subs,sub_dimensions = d.get_subdiagrams()
         >>> d.get_maximal_orthogonal_contraction(subs[4][1])
         6
-        >>> d = Diagram("x3x3o3o")
+        >>> d = CoxeterDynkinDiagram("x3x3o3o")
         >>> sub_rows,subs,sub_dimensions = d.get_subdiagrams()
         >>> d.get_maximal_orthogonal_contraction(subs[1][0])
         6
-        >>> d = Diagram("x3x3o3o")
+        >>> d = CoxeterDynkinDiagram("x3x3o3o")
         >>> sub_rows,subs,sub_dimensions = d.get_subdiagrams()
         >>> d.get_maximal_orthogonal_contraction(subs[1][1])
         2
-        >>> d = Diagram("o5x")
+        >>> d = CoxeterDynkinDiagram("o5x")
         >>> sub_rows,subs,sub_dimensions = d.get_subdiagrams()
         >>> d.get_maximal_orthogonal_contraction(subs[1][0])
         1
@@ -609,7 +609,7 @@ class Diagram:
         if len(complement_nodes)==0:
             return 1
         sub_graph = self.graph.subgraph(complement_nodes)
-        sub_diagram = Diagram.from_graph(sub_graph)
+        sub_diagram = CoxeterDynkinDiagram.from_graph(sub_graph)
         return sub_diagram.get_complement().get_vertex_count()
 
 
@@ -621,8 +621,8 @@ class Diagram:
 
 class IncidenceMatrix:
     def __init__(self, diagram_string):
-        self.diagram = Diagram(diagram_string)
-        self.max_diagram = Diagram(self.diagram.get_maximal_diagram_string())
+        self.diagram = CoxeterDynkinDiagram(diagram_string)
+        self.max_diagram = CoxeterDynkinDiagram(self.diagram.get_maximal_diagram_string())
 
         self.max_matrix,self.max_dimensions = self.compute_largest_incidence_matrix()
         self.max_rows,self_max_sub_diagrams,self.max_dimensions = self.max_diagram.get_subdiagrams()

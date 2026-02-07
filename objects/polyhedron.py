@@ -4,6 +4,8 @@ import numpy as np
 from anytree import RenderTree
 from mathutils import Vector, Quaternion,Matrix
 
+from appearance.textures import get_texture
+from geometry_nodes.geometry_nodes_modifier import PolyhedronViewModifier
 from interface import ibpy
 from interface.ibpy import create_mesh, to_vector
 from mathematics.geometry.field_extensions import QR
@@ -11,6 +13,7 @@ from mathematics.lin_alg.subspace import Subspace
 from objects.bobject import BObject
 from objects.face import Face
 from objects.tex_bobject import SimpleTexBObject
+from utils import kwargs
 from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME
 from utils.kwargs import get_from_kwargs
 
@@ -18,6 +21,8 @@ from utils.kwargs import get_from_kwargs
 # Solid data data
 # ------------------------------------------------------------------------
 r5 = np.sqrt(5)
+color_dict = {3: "triangle", 4: "square", 5: "pentagon", 6: "hexagon", 8: "octagon", 10: "decagon"}
+
 
 def get_solid_data(solid_type: str):
 
@@ -532,7 +537,6 @@ def get_solid_data(solid_type: str):
         return verts, faces
     raise ValueError(f"Unknown solid_type: {solid_type}")
 
-
 def compute_similarity_transform(a0, a1, a2, p0, p1, p2):
     """
     Find scale s, rotation R, translation t so that
@@ -897,3 +901,34 @@ class Polyhedron(BObject):
     def change_emission(self,from_value=0,to_value=1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
         for face in self.faces:
             face.change_emission(from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
+
+class PolyhedronWithModifier(BObject):
+    def __init__(self,vertices,faces,**kwargs):
+        # assign a default color that creates a face-size dependent color
+        color = get_from_kwargs(kwargs,'color',"color_dict")
+        face_types = []
+        for face in faces:
+            face_types.append(len(face))
+        face_types = set(face_types)
+        face_types = sorted(list(face_types))
+
+        if color=="color_dict":
+            colors = []
+            for type in face_types:
+                colors.append(color_dict[type])
+        else:
+            colors = [color] * len(face_types)
+        super().__init__(mesh=create_mesh(vertices,faces=faces),**kwargs)
+
+        if color=="color_dict":
+            for i, col in enumerate(colors):
+                ibpy.set_material(self, get_texture(col, **kwargs), slot=i)
+            ibpy.set_color_to_faces(self, lambda x: face_types.index(len(x)))
+
+        modifier = PolyhedronViewModifier()
+        self.add_mesh_modifier(type="NODES", node_modifier=modifier)
+
+    @classmethod
+    def from_solid_type(cls,solid_type,**kwargs):
+        vertices, faces = get_solid_data(solid_type.upper())
+        return cls(vertices,faces,**kwargs)

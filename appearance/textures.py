@@ -410,6 +410,8 @@ def get_texture(material, **kwargs):
             material = create_from_xml("c600_material")
         elif material == "c600_gradient":
             material = create_from_xml("c600_gradient")
+        elif material == "checker":
+            material = make_checker_material(**kwargs)
         else:
             if material not in bpy.data.materials:
                 # return default drawing material
@@ -3366,17 +3368,19 @@ def make_eevee_glass_material(rgb=None, name=None):
     fresnel.inputs['IOR'].default_value = 1.3
     links.new(fresnel.outputs['Fac'], mix_shader.inputs['Fac'])
 
-def make_checker_material():
+def make_checker_material(**kwargs):
     color = bpy.data.materials.new(name='checker')
+    checker_scale=get_from_kwargs(kwargs,"checker_scale",0.2)
     color.use_nodes = True
     nodes = color.node_tree.nodes
     input = nodes.new('ShaderNodeNewGeometry')
     checker = nodes.new('ShaderNodeTexChecker')
     checker.inputs['Color1'].default_value = [0.57, 0.57, 0.57, 1]
     checker.inputs['Color2'].default_value = [0.27, 0.27, 0.27, 1]
-    checker.inputs['Scale'].default_value = 0.2
+    checker.inputs['Scale'].default_value = checker_scale
     color.node_tree.links.new(checker.outputs['Color'], nodes['Principled BSDF'].inputs['Base Color'])
     color.node_tree.links.new(input.outputs['Position'], checker.inputs['Vector'])
+    return color
 
 def make_mirror_material():
     color = bpy.data.materials.new(name='mirror')

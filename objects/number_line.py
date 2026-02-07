@@ -46,7 +46,7 @@ class NumberLine2(BObject):
 
     def grow(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, modus='from_center', pivot=None,
              initial_scale=0,alpha=1):
-        super().appear(alpha=alpha, begin_time=begin_time, transition_time=0, silent=True)
+        super().appear(alpha=alpha, begin_time=begin_time, transition_time=0, silent=True,children=True)
         length_node = ibpy.get_geometry_node_from_modifier(self.modifier,"AxisLength")
         radius_node = ibpy.get_geometry_node_from_modifier(self.modifier,"Radius")
         length = self.get_from_kwargs("length",1)
