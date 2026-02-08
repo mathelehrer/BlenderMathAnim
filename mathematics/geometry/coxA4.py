@@ -10,6 +10,7 @@ from multiprocessing import Pool
 import numpy as np
 
 from mathematics.geometry.field_extensions import QR, FMatrix, FVector, EpsilonTensor
+from objects.face import Face
 from utils.string_utils import show_inline_progress_in_terminal
 
 PATH = "data/"
@@ -18,55 +19,6 @@ one = QR.from_integers(1,1,0,1,root_modulus=5,root_string="r5")
 half = QR.from_integers(1,2,0,1,root_modulus=5,root_string="r5")
 epsilon = EpsilonTensor(4,root_modulus=5,root_string="r5")
 zero4 = FVector([zero,zero,zero,zero])
-
-class Face(list):
-    """
-    this is just a list of integers that is hashable, we want to make sure that
-    the ording of the indices is preserved and cyclicly rotated to have the smallest index
-    in the first position
-
-    However, the reverse of the list should have the same hash value as the original list
-    """
-
-
-    def __init__(self,elements):
-        """
-        hashable list that is equivalent with respect to cyclic permutations
-        >>> Face([1,2,3]) == Face([3,1,2])
-        True
-        >>> Face([1,2,3]) == Face([1,3,2])
-        True
-
-        """
-
-        super().__init__(elements)
-        smallest_index = min(self)
-
-        index = self.index(smallest_index)
-
-        for i in range(index):
-            elements.append(elements.pop(0))
-
-        self.reverse_elements = elements.copy()
-        self.reverse_elements.reverse()
-        self.reverse_elements.insert(0,self.reverse_elements.pop())
-        self.elements = elements
-
-    def __str__(self):
-        return f"Face("+super().__str__()+")"
-
-    def __rep__(self):
-        return str(self)
-
-    def __hash__(self):
-        """
-        """
-        return hash(tuple(self.elements))*hash(tuple(self.reverse_elements))
-
-    def __eq__(self,other):
-        first = self.elements == other.elements
-        second = self.elements == other.reverse_elements
-        return first or second
 
 def center(key, point_cloud):
     c = FVector([zero,zero,zero,zero])

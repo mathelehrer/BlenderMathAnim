@@ -1775,13 +1775,16 @@ def set_alpha_for_material(material, alpha, viewport="material"):
             alpha_node.inputs[0].default_value = alpha
             return [alpha_node.inputs[0]]
         elif 'Principled BSDF' in material.node_tree.nodes:
-            bsdf = material.node_tree.nodes['Principled BSDF']
-            if viewport == "solid":
-                bsdf.inputs['Base Color'].default_value[3] = alpha
-                return [bsdf.inputs['Base Color']]  # return for key_framing
-            else:
-                bsdf.inputs['Alpha'].default_value = alpha  # standard material
-                return [bsdf.inputs['Alpha']]  # return for key_framing
+            bsdfs = []
+            for n in material.node_tree.nodes:
+                if "Principled BSDF" in n.name:
+                    if viewport == "solid":
+                        n.inputs['Base Color'].default_value[3] = alpha
+                        bsdfs.append(n.inputs['Base Color'])
+                    else:
+                        n.inputs['Alpha'].default_value = alpha  # standard material
+                        bsdfs.append(n.inputs['Alpha'])
+            return bsdfs  # return for key_framing
         elif alpha_mixer := get_alpha_mixer(material.node_tree.nodes):
             key_frame_sockets = []
             for mixer in alpha_mixer:

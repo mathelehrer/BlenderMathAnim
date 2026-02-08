@@ -6,6 +6,7 @@ from multiprocessing import Pool
 from collections import defaultdict
 import numpy as np
 from interface.ibpy import Vector
+from mathematics.geometry.face import Face
 
 from mathematics.geometry.field_extensions import QR, FTensor, FMatrix, FVector
 
@@ -353,6 +354,34 @@ class CoxA3:
 
     def get_normals(self):
         return [n.real() for n in self.normals]
+
+    def get_faces_in_conjugacy_classes(self,signature=None):
+        if signature is None:
+            raise "function must be called with signature"
+        faces = self.get_faces(signature)
+        vertices = self.point_cloud(signature)
+
+        classes = {}
+
+        # get all faces of the first vertex
+        first_faces = []
+        for face in faces:
+            if 0 in face:
+                face=Face(face)
+                first_faces.append(face)
+                classes[face]={face}
+
+        for first_face in first_faces:
+            for element in self.elements:
+                mapped_face = []
+                for face_index in first_face:
+                    vertex = vertices[face_index]
+                    target = element @ vertex
+                    mapped_face.append(vertices.index(target))
+                classes[first_face].add(Face(mapped_face))
+
+        return classes
+
 
 
 

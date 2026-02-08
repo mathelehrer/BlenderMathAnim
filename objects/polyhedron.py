@@ -1,3 +1,4 @@
+from __future__ import annotations
 import itertools
 
 import numpy as np
@@ -904,6 +905,11 @@ class Polyhedron(BObject):
 
 class PolyhedronWithModifier(BObject):
     def __init__(self,vertices,faces,**kwargs):
+        self.vertices = vertices
+        self.faces = faces
+        self.kwargs = kwargs
+        self.name = get_from_kwargs(kwargs,"name","PolyhedronWithModifier")
+
         # assign a default color that creates a face-size dependent color
         color = get_from_kwargs(kwargs,'color',"color_dict")
         face_types = []
@@ -918,7 +924,7 @@ class PolyhedronWithModifier(BObject):
                 colors.append(color_dict[type])
         else:
             colors = [color] * len(face_types)
-        super().__init__(mesh=create_mesh(vertices,faces=faces),**kwargs)
+        super().__init__(mesh=create_mesh(vertices,faces=faces),name=self.name,**kwargs)
 
         if color=="color_dict":
             for i, col in enumerate(colors):
@@ -928,7 +934,18 @@ class PolyhedronWithModifier(BObject):
         modifier = PolyhedronViewModifier()
         self.add_mesh_modifier(type="NODES", node_modifier=modifier)
 
+    def copy(self)->PolyhedronWithModifier:
+        return PolyhedronWithModifier(self.vertices,self.faces,name="CopyOf"+self.name,**self.kwargs)
+
     @classmethod
     def from_solid_type(cls,solid_type,**kwargs):
         vertices, faces = get_solid_data(solid_type.upper())
+        return cls(vertices,faces,**kwargs)
+
+
+    @classmethod
+    def from_group_signature(cls,group,signature,**kwargs):
+        g =group()
+        vertices=g.get_real_point_cloud(signature)
+        faces = g.get_faces(signature)
         return cls(vertices,faces,**kwargs)
