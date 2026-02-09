@@ -934,6 +934,42 @@ class PolyhedronWithModifier(BObject):
         modifier = PolyhedronViewModifier()
         self.add_mesh_modifier(type="NODES", node_modifier=modifier)
 
+    def transform_colors(self,shape_key=1,face_classes={},begin_time=0,transition_time=0):
+        shape_keys = self.ref_obj.data.shape_keys
+        old_sk = [v.co for v in shape_keys.key_blocks[shape_key-1].data]
+        new_sk = [v.co for v in shape_keys.key_blocks[shape_key].data]
+        for old, new in zip(old_sk, new_sk):
+            print(old,new)
+        face_maps = {}
+        for face_index,raw_face in enumerate(self.faces):
+            if 0 in raw_face:
+                face = Face(raw_face)
+                old_vertices = [old_sk[i] for i in face]
+                new_vertices = [new_sk[i] for i in face]
+
+                # delete close-by vertices
+                unique_old_vertices = []
+                unique_new_vertices = []
+
+                for i in range(len(old_vertices)):
+                    diff =(old_vertices[i]-old_vertices[i-1]).length
+                    if diff>0.001:
+                        unique_old_vertices.append(old_vertices[i])
+                    diff =(new_vertices[i]-new_vertices[i-1]).length
+                    if diff>0.001:
+                        unique_new_vertices.append(new_vertices[i])
+
+                face_maps[face]=(len(unique_old_vertices),len(unique_new_vertices))
+
+        for key,(src,target) in face_maps.items():
+            slot = face_classes.keys().index(key)
+            if src!=target:
+                if target in [3,4,5]:
+                    ibpy.adjust_mixer(self,slot=slot,from_value=1,to_value=0,begin_time=begin_time,transition_time=transition_time)
+                else:
+                    ibpy.adjust_mixer(self,slot=slot,from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
+        pass
+
     def copy(self)->PolyhedronWithModifier:
         return PolyhedronWithModifier(self.vertices,self.faces,name="CopyOf"+self.name,**self.kwargs)
 

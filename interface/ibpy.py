@@ -7673,3 +7673,16 @@ def light_path_settings(total=12, diffuse=4, glossy=4, transmission=12, volume=0
     scn.cycles.transmission_bounces = transmission
     scn.cycles.volume_bounces = volume
     scn.cycles.transparent_max_bounces = transparency
+
+
+def adjust_mixer(bob, slot, from_value=0, to_value=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+    material = get_material_of(bob, slot)
+    mixer = get_node_from_shader(material, "FinalMixShader")
+    if mixer is not None:
+        change_default_value(mixer.inputs["Factor"],
+                             from_value=from_value,
+                             to_value=to_value,
+                             begin_time=begin_time,
+                             transition_time=transition_time)
+
+    return begin_time+transition_time
