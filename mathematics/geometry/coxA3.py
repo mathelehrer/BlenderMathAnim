@@ -6,7 +6,7 @@ from multiprocessing import Pool
 from collections import defaultdict
 import numpy as np
 from interface.ibpy import Vector
-from mathematics.geometry.face import Face
+from mathematics.geometry.meshface import MeshFace
 
 from mathematics.geometry.field_extensions import QR, FTensor, FMatrix, FVector
 
@@ -377,7 +377,7 @@ class CoxA3:
         first_faces = []
         for face in faces:
             if 0 in face:
-                face=Face(face)
+                face=MeshFace(face)
                 first_faces.append(face)
                 classes[face]={face}
 
@@ -388,7 +388,7 @@ class CoxA3:
                     vertex = vertices[face_index]
                     target = element @ vertex
                     mapped_face.append(vertices.index(target))
-                classes[first_face].add(Face(mapped_face))
+                classes[first_face].add(MeshFace(mapped_face))
 
         return classes
 

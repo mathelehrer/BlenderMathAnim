@@ -9,7 +9,7 @@ from multiprocessing import Pool
 
 import numpy as np
 
-from mathematics.geometry.face import Face
+from mathematics.geometry.meshface import MeshFace
 from mathematics.geometry.field_extensions import QR, FMatrix, FVector, EpsilonTensor
 from utils.string_utils import show_inline_progress_in_terminal
 
@@ -591,7 +591,7 @@ class CoxH4:
                     # normalize and store
                     canonical = tuple(sorted(face))
                     if canonical not in faces:
-                        faces[canonical]=Face(real_ordering)
+                        faces[canonical]=MeshFace(real_ordering)
 
                 visited.add((start,neighbor))
             if not silent:

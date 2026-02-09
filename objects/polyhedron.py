@@ -3,16 +3,20 @@ import itertools
 
 import numpy as np
 from anytree import RenderTree
-from mathutils import Vector, Quaternion,Matrix
+from mathutils import Vector, Quaternion, Matrix
 
 from appearance.textures import get_texture
 from geometry_nodes.geometry_nodes_modifier import PolyhedronViewModifier
 from interface import ibpy
 from interface.ibpy import create_mesh, to_vector
+from mathematics import geometry
 from mathematics.geometry.field_extensions import QR
+from mathematics.geometry.meshface import MeshFace
 from mathematics.lin_alg.subspace import Subspace
+from new_stuff.mathematics.unfolder import color_dict
 from objects.bobject import BObject
 from objects.face import Face
+
 from objects.tex_bobject import SimpleTexBObject
 from utils import kwargs
 from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME
@@ -22,11 +26,9 @@ from utils.kwargs import get_from_kwargs
 # Solid data data
 # ------------------------------------------------------------------------
 r5 = np.sqrt(5)
-color_dict = {3: "triangle", 4: "square", 5: "pentagon", 6: "hexagon", 8: "octagon", 10: "decagon"}
 
 
 def get_solid_data(solid_type: str):
-
     # --- Regular prisms  ---
     def make_prism(n: int):
         """
@@ -38,7 +40,7 @@ def get_solid_data(solid_type: str):
         ref_indices: pick first three bottom vertices (0,1,2).
         """
         # use radius, such that side length is equal to 1
-        r = 1.0 /2/ np.sin(np.pi / n)
+        r = 1.0 / 2 / np.sin(np.pi / n)
         z0, z1 = -0.5, 0.5
         verts = []
         # bottom ring (0..n-1)
@@ -52,9 +54,9 @@ def get_solid_data(solid_type: str):
 
         # Faces
         # Bottom: keep order 0..n-1 (CCW from +z gives outward -z normal, acceptable)
-        bottom = tuple(range(n-1, -1,-1))
+        bottom = tuple(range(n - 1, -1, -1))
         # Top: reverse to ensure outward +z normal when viewed from +z
-        top = tuple(range(n, 2*n, 1))
+        top = tuple(range(n, 2 * n, 1))
 
         faces = [bottom, top]
         # Side quads
@@ -77,9 +79,9 @@ def get_solid_data(solid_type: str):
 
     if solid_type == 'TETRA':
         verts = [
-            (1.0,  1.0,  1.0),
-            (-1.0, -1.0,  1.0),
-            (-1.0,  1.0, -1.0),
+            (1.0, 1.0, 1.0),
+            (-1.0, -1.0, 1.0),
+            (-1.0, 1.0, -1.0),
             (1.0, -1.0, -1.0),
         ]
         faces = [
@@ -93,13 +95,13 @@ def get_solid_data(solid_type: str):
     if solid_type == 'CUBE':
         verts = [
             (-1.0, -1.0, -1.0),
-            (-1.0, -1.0,  1.0),
-            (-1.0,  1.0, -1.0),
-            (-1.0,  1.0,  1.0),
+            (-1.0, -1.0, 1.0),
+            (-1.0, 1.0, -1.0),
+            (-1.0, 1.0, 1.0),
             (1.0, -1.0, -1.0),
-            (1.0, -1.0,  1.0),
-            (1.0,  1.0, -1.0),
-            (1.0,  1.0,  1.0),
+            (1.0, -1.0, 1.0),
+            (1.0, 1.0, -1.0),
+            (1.0, 1.0, 1.0),
         ]
         faces = [
             (0, 1, 3, 2),
@@ -137,25 +139,25 @@ def get_solid_data(solid_type: str):
         phi = (1.0 + r5) / 2.0
         a = 1.0
         verts = [
-            (0,  a,  phi),
-            (0, -a,  phi),
-            (0,  a, -phi),
+            (0, a, phi),
+            (0, -a, phi),
+            (0, a, -phi),
             (0, -a, -phi),
-            (a,  phi, 0),
+            (a, phi, 0),
             (-a, phi, 0),
             (a, -phi, 0),
             (-a, -phi, 0),
-            (phi, 0,  a),
-            (-phi, 0,  a),
+            (phi, 0, a),
+            (-phi, 0, a),
             (phi, 0, -a),
             (-phi, 0, -a),
         ]
         faces = [
-              (0, 8, 4),  (0, 4, 5),  (0, 5, 9),  (0, 9, 1),
-            (1, 6, 8),  (1, 7, 6),  (1, 9, 7),  (3, 2, 10), (2, 3, 11),
-            (5, 2, 11), (4, 2, 5),  (2, 4, 10 ),   (3, 7, 11),
-            (3, 6, 7),  (3, 10, 6), (4,  8,10),
-            (6, 10, 8), (9,5,11), (7,9,11),(0,1, 8)
+            (0, 8, 4), (0, 4, 5), (0, 5, 9), (0, 9, 1),
+            (1, 6, 8), (1, 7, 6), (1, 9, 7), (3, 2, 10), (2, 3, 11),
+            (5, 2, 11), (4, 2, 5), (2, 4, 10), (3, 7, 11),
+            (3, 6, 7), (3, 10, 6), (4, 8, 10),
+            (6, 10, 8), (9, 5, 11), (7, 9, 11), (0, 1, 8)
         ]
         return verts, faces
 
@@ -178,19 +180,19 @@ def get_solid_data(solid_type: str):
                 verts.append((s1 * phi, 0.0, s2 * inv_phi))
 
         faces = [
-            (8,4,15,9,0),
-            (15,5,11,1,9),
-            (4,16,19,5,15),
-            (8,14,6,16,4),
-            (0,10,2,14,8),
-            (9,1,13,10,0),
-            (7,18,12,3,17),
-            (3,13,1,11,17),
-            (12,2,10,13,3),
-            (18,6,14,2,12),
-            (7,19,16,6,18),
-            (17,11,5,19,7),
-            (3,13,1,11,17),
+            (8, 4, 15, 9, 0),
+            (15, 5, 11, 1, 9),
+            (4, 16, 19, 5, 15),
+            (8, 14, 6, 16, 4),
+            (0, 10, 2, 14, 8),
+            (9, 1, 13, 10, 0),
+            (7, 18, 12, 3, 17),
+            (3, 13, 1, 11, 17),
+            (12, 2, 10, 13, 3),
+            (18, 6, 14, 2, 12),
+            (7, 19, 16, 6, 18),
+            (17, 11, 5, 19, 7),
+            (3, 13, 1, 11, 17),
         ]
         return verts, faces
 
@@ -491,7 +493,7 @@ def get_solid_data(solid_type: str):
             # Normals: 12 Decagons, 20 Hexagons, 30 Squares
             # Same directions as Rhombicosidodecahedron
             # Decagons: Cyclic (0, ±1, ±phi)
-            normals.extend(get_cyclic_perms((0.0,  phi, 1.0)))
+            normals.extend(get_cyclic_perms((0.0, phi, 1.0)))
             # Hexagons: (±1,±1,±1) + Cyclic(0, ±1/phi, ±phi)
             for x in (-1, 1):
                 for y in (-1, 1):
@@ -512,7 +514,7 @@ def get_solid_data(solid_type: str):
             max_val = np.max(dots)
             # Find vertices close to max plane
             tol = 1e-5
-            indices = [i for i, d in enumerate(dots) if abs(d - max_val) < tol*max_val]
+            indices = [i for i, d in enumerate(dots) if abs(d - max_val) < tol * max_val]
 
             # Sort vertices angularly
             u = np.array([0.0, 0.0, 1.0])
@@ -538,6 +540,7 @@ def get_solid_data(solid_type: str):
         return verts, faces
     raise ValueError(f"Unknown solid_type: {solid_type}")
 
+
 def compute_similarity_transform(a0, a1, a2, p0, p1, p2):
     """
     Find scale s, rotation R, translation t so that
@@ -545,12 +548,12 @@ def compute_similarity_transform(a0, a1, a2, p0, p1, p2):
     """
     vA1 = to_vector(a1) - to_vector(a0)
     vA2 = to_vector(a2) - to_vector(a0)
-    if isinstance(p1,QR):
-        vP1 = p1.real()-p0
-        vP2 = p2.real()-p0
+    if isinstance(p1, QR):
+        vP1 = p1.real() - p0
+        vP2 = p2.real() - p0
     else:
-        vP1 = p1-p0
-        vP2 = p2-p0
+        vP1 = p1 - p0
+        vP2 = p2 - p0
 
     lenA1 = vA1.length
     lenP1 = vP1.length
@@ -584,6 +587,7 @@ def compute_similarity_transform(a0, a1, a2, p0, p1, p2):
 
     return scale, R, t
 
+
 def apply_similarity_to_vertices(verts, scale, R, t):
     result = []
     for v in verts:
@@ -607,12 +611,12 @@ class Polyhedron(BObject):
         :param kwargs:
         """
 
-        self.simple = get_from_kwargs(kwargs,'simple',False)
+        self.simple = get_from_kwargs(kwargs, 'simple', False)
         if self.simple:
             # short cut, when vertices and faces are given
-            self.vertices =vertices
+            self.vertices = vertices
             self.faces = faces
-            super().__init__(mesh=create_mesh(vertices= vertices,faces=faces),**kwargs)
+            super().__init__(mesh=create_mesh(vertices=vertices, faces=faces), **kwargs)
         else:
             self.counter = None  # dummy counter for growing the polyhedron
             self.root = None
@@ -646,7 +650,7 @@ class Polyhedron(BObject):
                 kwargs.pop('location')
 
             vertex_colors = self.get_from_kwargs('vertex_colors', ['example'])
-            face_colors=self.get_from_kwargs('face_colors',['drawing'])
+            face_colors = self.get_from_kwargs('face_colors', ['drawing'])
 
             for i, f in enumerate(faces):
                 face = Face(self.vertices, f, center, index=i, index_base=self.index_base,
@@ -660,10 +664,10 @@ class Polyhedron(BObject):
                 self.coordinate_system.add_object(self)
 
     @classmethod
-    def from_points(cls, vertices=None, solid_type="TETRA",**kwargs):
+    def from_points(cls, vertices=None, solid_type="TETRA", **kwargs):
         src_vertices, faces = get_solid_data(solid_type)
         if vertices is None:
-            bob =  Polyhedron(src_vertices,faces,name=solid_type,simple = True, **kwargs)
+            bob = Polyhedron(src_vertices, faces, name=solid_type, simple=True, **kwargs)
         else:
             # transform source vertices to align polyhedron with the given vertices
             # find appropriate face
@@ -673,14 +677,16 @@ class Polyhedron(BObject):
 
             n = len(vertices)
             for face in faces:
-                if len(face)==n:
+                if len(face) == n:
                     break
 
             # align three consecutive points
-            scale,rot,translation = compute_similarity_transform(src_vertices[face[0]],src_vertices[face[1]],src_vertices[face[2]],vertices[0],vertices[1],vertices[2])
+            scale, rot, translation = compute_similarity_transform(src_vertices[face[0]], src_vertices[face[1]],
+                                                                   src_vertices[face[2]], vertices[0], vertices[1],
+                                                                   vertices[2])
 
-            img_vertices = apply_similarity_to_vertices(src_vertices,scale,rot,translation)
-            bob =  Polyhedron(img_vertices,faces,name=solid_type,simple = True, **kwargs)
+            img_vertices = apply_similarity_to_vertices(src_vertices, scale, rot, translation)
+            bob = Polyhedron(img_vertices, faces, name=solid_type, simple=True, **kwargs)
         return bob
 
     @classmethod
@@ -702,8 +708,8 @@ class Polyhedron(BObject):
             # only append vertex if it is different from all others
             different = True
             for v in vertices:
-                diff = v-vertex
-                if diff.dot(diff)<0.1:
+                diff = v - vertex
+                if diff.dot(diff) < 0.1:
                     different = False
                     break
 
@@ -775,7 +781,7 @@ class Polyhedron(BObject):
         max_level = self.max_level(self.root, 0)
         dt = transition_time / len(self.faces)  # time per face
         self.grow_recursively(self.root, begin_time=begin_time, transition_time=dt, show_faces=show_faces)
-        return begin_time+transition_time
+        return begin_time + transition_time
 
     def grow_without_faces(self, index=0, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
         super().grow(index, begin_time, transition_time, faces=False)
@@ -840,7 +846,7 @@ class Polyhedron(BObject):
                 # center different from the origin
                 self.recursively_unfold(child, quaternion, translation, begin_time + r * dt, dt,
                                         fraction * r / resolution)
-        return begin_time+transition_time
+        return begin_time + transition_time
 
     def recursively_unfold(self, face, quaternion, translation, begin_time, transition_time, fraction):
         face.rotate(rotation_quaternion=quaternion, begin_time=begin_time, transition_time=transition_time)
@@ -899,51 +905,71 @@ class Polyhedron(BObject):
             self.coordinate_system.add_object(bword)
             bword.write(begin_time=begin_time, transition_time=transition_time)
 
-    def change_emission(self,from_value=0,to_value=1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def change_emission(self, from_value=0, to_value=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for face in self.faces:
-            face.change_emission(from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
+            face.change_emission(from_value=from_value, to_value=to_value, begin_time=begin_time,
+                                 transition_time=transition_time)
+
 
 class PolyhedronWithModifier(BObject):
-    def __init__(self,vertices,faces,**kwargs):
+    def __init__(self, vertices, faces, **kwargs):
         self.vertices = vertices
         self.faces = faces
         self.kwargs = kwargs
-        self.name = get_from_kwargs(kwargs,"name","PolyhedronWithModifier")
+        self.name = get_from_kwargs(kwargs, "name", "PolyhedronWithModifier")
+        self.group = get_from_kwargs(kwargs, "group", None)
+        self.signature = get_from_kwargs(kwargs, "signature", None)
+        self.shape_key=0
 
+        face_classes = get_from_kwargs(kwargs, 'face_classes', None)
+        self.face_classes = face_classes
         # assign a default color that creates a face-size dependent color
-        color = get_from_kwargs(kwargs,'color',"color_dict")
-        face_types = []
-        for face in faces:
-            face_types.append(len(face))
-        face_types = set(face_types)
-        face_types = sorted(list(face_types))
+        self.color = get_from_kwargs(kwargs, 'color', "color_dict")
 
-        if color=="color_dict":
+        if self.color == "color_dict":
             colors = []
-            for type in face_types:
-                colors.append(color_dict[type])
-        else:
-            colors = [color] * len(face_types)
-        super().__init__(mesh=create_mesh(vertices,faces=faces),name=self.name,**kwargs)
+            for key in face_classes.keys():
+                colors.append(color_dict[len(key)])
 
-        if color=="color_dict":
+        super().__init__(mesh=create_mesh(vertices, faces=faces), name=self.name,color=self.color, **kwargs)
+
+        def face2slot(raw_face):
+            face=MeshFace(raw_face)
+            for slot,conj_class in enumerate(face_classes.values()):
+                if face in conj_class:
+                    return slot
+
+            return 0
+
+        if self.color == "color_dict":
             for i, col in enumerate(colors):
                 ibpy.set_material(self, get_texture(col, **kwargs), slot=i)
-            ibpy.set_color_to_faces(self, lambda x: face_types.index(len(x)))
+            ibpy.set_color_to_faces(self, lambda x: face2slot(list(x)))
+
+            # initialize mixed colors
+            for raw_face in self.faces:
+                if 0 in raw_face:
+                    face = MeshFace(raw_face)
+                    slot = list(face_classes.keys()).index(face)
+                    if len(face) in [3, 4, 5]:
+                        ibpy.set_mixer(self, slot, value=1, begin_time=0)
+                    else:
+                        ibpy.set_mixer(self, slot, value=0, begin_time=0)
 
         modifier = PolyhedronViewModifier()
         self.add_mesh_modifier(type="NODES", node_modifier=modifier)
 
-    def transform_colors(self,shape_key=1,face_classes={},begin_time=0,transition_time=0):
+    def transform_colors(self, shape_key=1, face_classes={}, begin_time=0, transition_time=0):
         shape_keys = self.ref_obj.data.shape_keys
-        old_sk = [v.co for v in shape_keys.key_blocks[shape_key-1].data]
+        self.shape_key=shape_key
+        old_sk = [v.co for v in shape_keys.key_blocks[shape_key -1 ].data]
         new_sk = [v.co for v in shape_keys.key_blocks[shape_key].data]
         for old, new in zip(old_sk, new_sk):
-            print(old,new)
+            print(old, new)
         face_maps = {}
-        for face_index,raw_face in enumerate(self.faces):
+        for face_index, raw_face in enumerate(self.faces):
             if 0 in raw_face:
-                face = Face(raw_face)
+                face = MeshFace(raw_face)
                 old_vertices = [old_sk[i] for i in face]
                 new_vertices = [new_sk[i] for i in face]
 
@@ -952,36 +978,43 @@ class PolyhedronWithModifier(BObject):
                 unique_new_vertices = []
 
                 for i in range(len(old_vertices)):
-                    diff =(old_vertices[i]-old_vertices[i-1]).length
-                    if diff>0.001:
+                    diff = (old_vertices[i] - old_vertices[i - 1]).length
+                    if diff > 0.001:
                         unique_old_vertices.append(old_vertices[i])
-                    diff =(new_vertices[i]-new_vertices[i-1]).length
-                    if diff>0.001:
+                    diff = (new_vertices[i] - new_vertices[i - 1]).length
+                    if diff > 0.001:
                         unique_new_vertices.append(new_vertices[i])
 
-                face_maps[face]=(len(unique_old_vertices),len(unique_new_vertices))
+                face_maps[face] = (len(unique_old_vertices), len(unique_new_vertices))
 
-        for key,(src,target) in face_maps.items():
-            slot = face_classes.keys().index(key)
-            if src!=target:
-                if target in [3,4,5]:
-                    ibpy.adjust_mixer(self,slot=slot,from_value=1,to_value=0,begin_time=begin_time,transition_time=transition_time)
+        for key, (src, target) in face_maps.items():
+            slot = list(face_classes.keys()).index(key)
+            if src != target:
+                if target in [3, 4, 5]:
+                    ibpy.adjust_mixer(self, slot=slot, from_value=0, to_value=1, begin_time=begin_time,
+                                      transition_time=transition_time)
                 else:
-                    ibpy.adjust_mixer(self,slot=slot,from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
-        pass
+                    ibpy.adjust_mixer(self, slot=slot, from_value=1, to_value=0, begin_time=begin_time,
+                                      transition_time=transition_time)
 
-    def copy(self)->PolyhedronWithModifier:
-        return PolyhedronWithModifier(self.vertices,self.faces,name="CopyOf"+self.name,**self.kwargs)
+        return begin_time + transition_time
+
+    def copy(self) -> PolyhedronWithModifier:
+        if self.group is not None and self.signature is not None:
+            return PolyhedronWithModifier.from_group_signature(self.group,self.signature,name="CopyOf"+self.name,color=self.color,**self.kwargs)
+
+
+        return PolyhedronWithModifier(self.vertices, self.faces, name="CopyOf" + self.name, **self.kwargs)
 
     @classmethod
-    def from_solid_type(cls,solid_type,**kwargs):
+    def from_solid_type(cls, solid_type, **kwargs):
         vertices, faces = get_solid_data(solid_type.upper())
-        return cls(vertices,faces,**kwargs)
-
+        return cls(vertices, faces, **kwargs)
 
     @classmethod
-    def from_group_signature(cls,group,signature,**kwargs):
-        g =group()
-        vertices=g.get_real_point_cloud(signature)
+    def from_group_signature(cls, group, signature, **kwargs):
+        g = group()
+        vertices = g.get_real_point_cloud(signature)
         faces = g.get_faces(signature)
-        return cls(vertices,faces,**kwargs)
+        face_classes = g.get_faces_in_conjugacy_classes(signature)
+        return cls(vertices, faces, group = group,signature = signature, face_classes=face_classes, **kwargs)

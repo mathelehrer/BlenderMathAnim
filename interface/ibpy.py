@@ -3220,6 +3220,15 @@ def change_mixer(mixer, begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME 
 
     return begin_time + transition_time
 
+def set_default_value(slot, value=0, begin_time=0,data_path="default_value"):
+    if isinstance(slot, bpy.types.ShaderNodeValue):
+        slot = slot.outputs[0]
+
+    begin_frame = begin_time * FRAME_RATE
+    slot.default_value = value
+    insert_keyframe(slot, data_path, int(begin_frame))
+
+    return begin_time
 
 def change_default_value(slot, from_value, to_value, begin_time=None, transition_time=None, data_path="default_value",
                          begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME * FRAME_RATE):
@@ -7686,3 +7695,14 @@ def adjust_mixer(bob, slot, from_value=0, to_value=1, begin_time=0, transition_t
                              transition_time=transition_time)
 
     return begin_time+transition_time
+
+
+def set_mixer(bob, slot, value, begin_time):
+    material = get_material_of(bob, slot)
+    mixer = get_node_from_shader(material, "FinalMixShader")
+    if mixer is not None:
+        set_default_value(mixer.inputs["Factor"],
+                             value= value,
+                             begin_time=begin_time)
+
+    return begin_time

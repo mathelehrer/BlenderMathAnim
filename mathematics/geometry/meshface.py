@@ -1,4 +1,4 @@
-class Face(list):
+class MeshFace(list):
     """
         this is just a list of integers that is hashable, we want to make sure that
         the ording of the indices is preserved and cyclicly rotated to have the smallest index
@@ -10,11 +10,11 @@ class Face(list):
     def __init__(self, face_indices=[]):
         """
         hashable list that is equivalent with respect to cyclic permutations
-        >>> Face([1,2,3]) == Face([3,1,2])
+        >>> MeshFace([1,2,3]) == MeshFace([3,1,2])
         True
-        >>> Face([1,2,3]) == Face([1,3,2])
+        >>> MeshFace([1,2,3]) == MeshFace([1,3,2])
         True
-        >>> Face([1,2,4]) == Face([1,2,3])
+        >>> MeshFace([1,2,4]) == MeshFace([1,2,3])
         False
         """
         super().__init__(face_indices)
@@ -32,11 +32,11 @@ class Face(list):
 
     def __str__(self):
         """
-        >>> str(Face([1,2,3]))
+        >>> str(MeshFace([1,2,3]))
         'Face([1, 2, 3])'
-        >>> str(Face([2,3,1]))
+        >>> str(MeshFace([2,3,1]))
         'Face([1, 2, 3])'
-        >>> str(Face([2,1,3]))
+        >>> str(MeshFace([2,1,3]))
         'Face([1, 3, 2])'
 
         """
@@ -48,17 +48,17 @@ class Face(list):
     def __hash__(self):
         """
         It is assumed that the size of the elements are less than 20000
-        >>> hash(Face([1,0,2]))
+        >>> hash(MeshFace([1,0,2]))
         9050618495337975385
-        >>> hash(Face([0,1,2]))
+        >>> hash(MeshFace([0,1,2]))
         9050618495337975385
-        >>> hash(Face([1,2,0]))
+        >>> hash(MeshFace([1,2,0]))
         9050618495337975385
-        >>> hash(Face([0,1,2,3]))
+        >>> hash(MeshFace([0,1,2,3]))
         -4042512932752085617
-        >>> hash(Face([3,2,1,0]))
+        >>> hash(MeshFace([3,2,1,0]))
         -4042512932752085617
-        >>> hash(Face([1,2,3,0]))
+        >>> hash(MeshFace([1,2,3,0]))
         -4042512932752085617
         """
         return hash(tuple(self.elements))*hash(tuple(self.reverse_elements))
