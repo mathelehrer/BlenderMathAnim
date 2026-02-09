@@ -372,6 +372,8 @@ def get_texture(material, **kwargs):
     """
     if isinstance(material,bpy.types.Material):
         return material
+    if isinstance(material,tuple):
+        return mix_texture(material1=material[0],material2=material[1],**kwargs)
     if isinstance(material, str):
         if material=="mix_texture":
             return mix_texture(**kwargs)

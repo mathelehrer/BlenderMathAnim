@@ -1,3 +1,4 @@
+bpy
 numpy
 scipy
 sympy

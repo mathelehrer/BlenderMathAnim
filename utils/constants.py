@@ -163,7 +163,8 @@ COLOR_NAMES = [
     'prism10',
     'dark_red',
     'triangle', # colors for the polygons
-    'square',
+    'square', # square that corresponds to disconnected CD
+    'tetragon',# square that is a shrunk octagon
     'pentagon',
     'hexagon',
     'octagon',
@@ -285,6 +286,7 @@ if color_scheme == -1:
         [76,0,0,1],# dark red for vertex spheres
         [0,255,0,1], # colors for the polygons
         [127,127,127,1], # square
+        [255,255,0,1], #tetragon
         [10,158,115,1], # pentagon
         [0,68,127,1], # hexagon
         [160,127,50,1], # octagon
