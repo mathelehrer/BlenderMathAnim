@@ -63,7 +63,7 @@ class CoxA3:
         generators=[identity-(n*n)-(n*n) for n in normals]
         # cast to matrix for proper matrix multiplication
         self.generators = [FMatrix(g.components) for g in generators]
-        [print(g) for g in self.generators]
+        # [print(g) for g in self.generators]
 
         # load or generate the group from the generators
         if not os.path.exists(os.path.join(self.path, self.name+"_elements.dat")):
@@ -138,7 +138,7 @@ class CoxA3:
             self.save(point_cloud, filename)
         else:
             point_cloud = self.read_points(filename)
-            print("point cloud read from file")
+            # print("point cloud read from file")
         return list(point_cloud)
 
     def get_real_point_cloud(self, signature=[1, 1, -1]):
@@ -356,6 +356,16 @@ class CoxA3:
         return [n.real() for n in self.normals]
 
     def get_faces_in_conjugacy_classes(self,signature=None):
+        """
+        sort faces into their conjugacy classes
+        the representatives of the classes are the faces that contain the vertex
+        with index 0
+        >>> group = CoxA3("data")
+        >>> cc = group.get_faces_in_conjugacy_classes(COXA3_SIGNATURES["TRUNC_OCTA"])
+        >>> print(cc)
+        {[16, 6, 5, 21, 1, 0]: {[23, 4, 3, 19, 8, 9], [16, 6, 5, 21, 1, 0], [2, 20, 22, 18, 15, 10], [12, 7, 11, 17, 14, 13]}, [0, 1, 22, 18, 13, 14]: {[0, 1, 22, 18, 13, 14], [9, 8, 2, 20, 21, 5], [10, 15, 12, 7, 3, 19], [16, 6, 23, 4, 11, 17]}, [0, 14, 17, 16]: {[10, 19, 8, 2], [21, 20, 22, 1], [0, 14, 17, 16], [3, 7, 11, 4], [9, 5, 6, 23], [13, 18, 15, 12]}}
+
+        """
         if signature is None:
             raise "function must be called with signature"
         faces = self.get_faces(signature)
