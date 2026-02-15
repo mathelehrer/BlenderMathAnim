@@ -8,6 +8,7 @@ import numpy as np
 from interface.ibpy import Vector
 
 from mathematics.geometry.field_extensions import QR, FTensor, FMatrix, FVector
+from mathematics.geometry.meshface import MeshFace
 
 COXB3_SEEDS= {
     "OCTA":FVector.parse("[1, 0, -1]"),
@@ -68,7 +69,7 @@ class CoxB3:
         generators=[identity-(n*n)-(n*n) for n in normals]
         # cast to matrix for proper matrix multiplication
         self.generators = [FMatrix(g.components) for g in generators]
-        [print(g) for g in self.generators]
+        # [print(g) for g in self.generators]
 
         # load or generate the group from the generators
         if not os.path.exists(os.path.join(self.path, self.name+"_elements.dat")):
@@ -142,7 +143,7 @@ class CoxB3:
             self.save(point_cloud, filename)
         else:
             point_cloud = self.read_points(filename)
-            print("point cloud read from file")
+            # print("point cloud read from file")
         return list(point_cloud)
 
     def get_real_point_cloud(self, signature=[1, 1, -1]):
@@ -360,4 +361,40 @@ class CoxB3:
         return [n.real() for n in self.normals]
 
 
+    def get_faces_in_conjugacy_classes(self,signature=None):
+        """
+        sort faces into their conjugacy classes
+        the representatives of the classes are the faces that contain the vertex
+        with index 0
+        >>> group = CoxB3("data")
+        >>> cc = group.get_faces_in_conjugacy_classes(COXB3_SIGNATURES["TRUNC_CUBOCTA"])
+        >>> print(cc)
+        {Face([0, 43, 44, 2]): {Face([24, 36, 34, 42]), Face([4, 35, 38, 47]), Face([9, 39, 20, 41]), Face([0, 43, 44, 2]), Face([8, 10, 19, 14]), Face([12, 33, 18, 16]), Face([3, 27, 21, 5]), Face([11, 28, 31, 13]), Face([22, 23, 25, 26]), Face([1, 30, 46, 40]), Face([6, 7, 45, 37]), Face([15, 17, 32, 29])}, Face([0, 2, 46, 40, 32, 29, 45, 7]): {Face([12, 33, 15, 17, 24, 42, 19, 14]), Face([1, 36, 34, 27, 3, 22, 26, 30]), Face([4, 47, 6, 37, 18, 16, 9, 41]), Face([23, 25, 44, 43, 38, 35, 28, 31]), Face([0, 2, 46, 40, 32, 29, 45, 7]), Face([5, 21, 10, 8, 39, 20, 11, 13])}, Face([0, 7, 6, 47, 38, 43]): {Face([4, 41, 20, 11, 28, 35]), Face([15, 29, 45, 37, 18, 33]), Face([8, 39, 9, 16, 12, 14]), Face([3, 5, 13, 31, 23, 22]), Face([2, 44, 25, 26, 30, 46]), Face([1, 36, 24, 17, 32, 40]), Face([10, 21, 27, 34, 42, 19]), Face([0, 7, 6, 47, 38, 43])}}
+
+        """
+        if signature is None:
+            raise "function must be called with signature"
+        faces = self.get_faces(signature)
+        vertices = self.point_cloud(signature)
+
+        classes = {}
+
+        # get all faces of the first vertex
+        first_faces = []
+        for face in faces:
+            if 0 in face:
+                face=MeshFace(face)
+                first_faces.append(face)
+                classes[face]={face}
+
+        for first_face in first_faces:
+            for element in self.elements:
+                mapped_face = []
+                for face_index in first_face:
+                    vertex = vertices[face_index]
+                    target = element @ vertex
+                    mapped_face.append(vertices.index(target))
+                classes[first_face].add(MeshFace(mapped_face))
+
+        return classes
 

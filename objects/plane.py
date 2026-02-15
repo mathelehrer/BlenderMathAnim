@@ -55,9 +55,9 @@ class Plane(BObject):
         self.subdivide_boundary =self.get_from_kwargs('subdivide_boundary',False)
         self.create_mesh()
 
-
         if normal:
             quat = quaternion_from_normal(normal)
+            self.quaternion = quat
             super().__init__(obj=self.plane, name=self.name,rotation_quaternion=quat,**kwargs)
         else:
             super().__init__(obj=self.plane, name=self.name,**kwargs)

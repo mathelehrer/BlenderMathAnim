@@ -615,7 +615,13 @@ class Polyhedron(BObject):
         if self.simple:
             # short cut, when vertices and faces are given
             self.vertices = vertices
-            self.faces = faces
+            if isinstance(faces[0],list):
+                f = []
+                for face in faces:
+                    f.append(Face(self.vertices,face,Vector()))
+                self.faces = f
+            else:
+                self.faces = faces
             super().__init__(mesh=create_mesh(vertices=vertices, faces=faces), **kwargs)
         else:
             self.counter = None  # dummy counter for growing the polyhedron
@@ -964,8 +970,6 @@ class PolyhedronWithModifier(BObject):
         self.shape_key=shape_key
         old_sk = [v.co for v in shape_keys.key_blocks[shape_key -1 ].data]
         new_sk = [v.co for v in shape_keys.key_blocks[shape_key].data]
-        for old, new in zip(old_sk, new_sk):
-            print(old, new)
         face_maps = {}
         for face_index, raw_face in enumerate(self.faces):
             if 0 in raw_face:
@@ -1012,9 +1016,12 @@ class PolyhedronWithModifier(BObject):
         return cls(vertices, faces, **kwargs)
 
     @classmethod
-    def from_group_signature(cls, group, signature, **kwargs):
+    def from_group_signature(cls, group, signature,radius=None, **kwargs):
         g = group()
         vertices = g.get_real_point_cloud(signature)
+        if radius:
+            scale = radius/vertices[0].length
+            vertices = [v*scale for v in vertices]
         faces = g.get_faces(signature)
         face_classes = g.get_faces_in_conjugacy_classes(signature)
-        return cls(vertices, faces, group = group,signature = signature, face_classes=face_classes, **kwargs)
+        return cls( vertices, faces, group = group,signature = signature, face_classes=face_classes, **kwargs)

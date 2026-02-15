@@ -40,10 +40,10 @@ class MeshFace(list):
         'Face([1, 3, 2])'
 
         """
-        return f"Face("+str(self.elements)+")"
+        return f"MeshFace("+str(self.elements)+")"
 
     def __repr__(self):
-        return f"Face("+str(self.elements)+")"
+        return f"MeshFace("+str(self.elements)+")"
 
     def __hash__(self):
         """

@@ -3373,15 +3373,21 @@ def make_eevee_glass_material(rgb=None, name=None):
 def make_checker_material(**kwargs):
     color = bpy.data.materials.new(name='checker')
     checker_scale=get_from_kwargs(kwargs,"checker_scale",0.2)
+    coords = get_from_kwargs(kwargs,"coords",None)
     color.use_nodes = True
     nodes = color.node_tree.nodes
-    input = nodes.new('ShaderNodeNewGeometry')
+    if coords is None:
+        input = nodes.new('ShaderNodeNewGeometry')
+        input_out=input.outputs('Position')
+    else:
+        input = nodes.new('ShaderNodeTexCoord')
+        input_out = input.outputs[coords]
     checker = nodes.new('ShaderNodeTexChecker')
     checker.inputs['Color1'].default_value = [0.57, 0.57, 0.57, 1]
     checker.inputs['Color2'].default_value = [0.27, 0.27, 0.27, 1]
     checker.inputs['Scale'].default_value = checker_scale
     color.node_tree.links.new(checker.outputs['Color'], nodes['Principled BSDF'].inputs['Base Color'])
-    color.node_tree.links.new(input.outputs['Position'], checker.inputs['Vector'])
+    color.node_tree.links.new(input_out, checker.inputs['Vector'])
     return color
 
 def make_mirror_material():

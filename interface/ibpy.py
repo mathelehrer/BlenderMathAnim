@@ -2054,6 +2054,9 @@ def customize_material(material, **kwargs):
 
     return material
 
+def get_materials(bob):
+    obj = get_obj(bob)
+    return [slot.material for slot in obj.material_slots]
 
 def get_material(material, **kwargs):
     if isinstance(material, bpy.types.Material):
@@ -3185,7 +3188,8 @@ def make_iteration_material(**kwargs):
 
 def get_material_of(bob, slot=0):
     obj = get_obj(bob)
-    return obj.data.materials[slot]
+    if slot<len(obj.material_slots):
+        return obj.material_slots[slot].material
 
 
 def get_nodes_of_material(bob, name_part='Mix', slot=0):
@@ -5980,6 +5984,14 @@ def set_to_last_shape(blender_obj, appear_frame):
     return len(blender_obj.data.shape_keys.key_blocks)
 
 
+def set_to_first_shape(bob,begin_frame=0,transition_frames=0):
+    obj = get_obj(bob)
+    for i in range(0, len(obj.data.shape_keys.key_blocks)):  # set all following blocks to zero
+        obj.data.shape_keys.key_blocks[i].value = 0
+        insert_keyframe(obj.data.shape_keys.key_blocks[i], "value", begin_frame+transition_frames)
+    return 0
+
+
 ########################
 # Work with key frames #
 ########################
@@ -6800,7 +6812,7 @@ def grow(b_obj, scale, begin_frame, frame_duration, initial_scale=0, modus='from
     insert_keyframe(obj, "scale", begin_frame + np.maximum(1, frame_duration))
 
 
-def shrink(b_obj, scale, begin_frame, frame_duration, initial_scale=1, modus='from_center'):
+def shrink(b_obj, scale, begin_frame, frame_duration, initial_scale=None, modus='from_center'):
     obj = get_obj(b_obj)
     select(obj)
     if modus == 'from_center':
@@ -6824,21 +6836,25 @@ def shrink(b_obj, scale, begin_frame, frame_duration, initial_scale=1, modus='fr
         # move center of geometry to the smallest x-value
         pivot = find_center_of_furthest_vertices(obj)
 
-    print(
-        "Shrink " + obj.name + " at time " + str(begin_frame / FRAME_RATE) + " for " + str(
-            frame_duration / FRAME_RATE) + " seconds.")
-
     if pivot is not None:
         set_pivot(obj, pivot)
 
-    if isinstance(initial_scale, Vector):
-        obj.scale = [initial_scale[0], initial_scale[1], initial_scale[2]]
-    elif isinstance(initial_scale, list):
-        obj.scale = initial_scale
+    if initial_scale is not None:
+        if isinstance(initial_scale, Vector):
+            obj.scale = [initial_scale[0], initial_scale[1], initial_scale[2]]
+        elif isinstance(initial_scale, list):
+            obj.scale = initial_scale
+        else:
+            obj.scale = [initial_scale] * 3
     else:
-        obj.scale = [initial_scale] * 3
+        set_frame(begin_frame)# make sure that current scale is keyframed
 
     insert_keyframe(obj, "scale", begin_frame)
+    print(
+        "Shrink " + obj.name + " from scale " + str(obj.scale) + " at time " + str(
+            begin_frame / FRAME_RATE) + " for " + str(
+            frame_duration / FRAME_RATE) + " seconds.")
+
     if isinstance(scale, Vector):
         obj.scale = [scale[0], scale[1], scale[2]]
     elif isinstance(scale, list):
@@ -7699,10 +7715,12 @@ def adjust_mixer(bob, slot, from_value=0, to_value=1, begin_time=0, transition_t
 
 def set_mixer(bob, slot, value, begin_time):
     material = get_material_of(bob, slot)
-    mixer = get_node_from_shader(material, "FinalMixShader")
-    if mixer is not None:
-        set_default_value(mixer.inputs["Factor"],
-                             value= value,
-                             begin_time=begin_time)
+    if material:
+        mixer = get_node_from_shader(material, "FinalMixShader")
+        if mixer is not None:
+            set_default_value(mixer.inputs["Factor"],
+                                 value= value,
+                                 begin_time=begin_time)
 
     return begin_time
+

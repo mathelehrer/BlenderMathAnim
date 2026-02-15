@@ -636,6 +636,11 @@ class BObject(object):
         self.transformation_state -= 1
         return begin_time + transition_time
 
+    def transform_mesh_to_first_shape(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.set_to_first_shape(self,begin_time*FRAME_RATE,transition_time*FRAME_RATE)
+        self.transformation_state = 0
+        return begin_time+transition_time
+
     def change_color(self, new_color, slot = 0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
         ibpy.change_color(self, new_color, slot=0,begin_frame=begin_time * FRAME_RATE,
                           final_frame=(begin_time + transition_time) * FRAME_RATE,**kwargs)
@@ -859,14 +864,14 @@ class BObject(object):
         ibpy.grow(self, scale, begin_time * FRAME_RATE, transition_time * FRAME_RATE, initial_scale, modus)
         return begin_time + transition_time
 
-    def shrink(self,initial_scale=1,scale=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+    def shrink(self,scale=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         """
         shrink an object to 0
         :param begin_time: starting time
         :param transition_time: duration
         :return:
         """
-        ibpy.shrink(self,initial_scale=initial_scale, begin_frame=begin_time*FRAME_RATE, frame_duration=FRAME_RATE*transition_time,scale=scale)
+        ibpy.shrink(self, begin_frame=begin_time*FRAME_RATE, frame_duration=FRAME_RATE*transition_time,scale=scale)
         return begin_time+transition_time
 
     def next_to(self, parent, direction=RIGHT, buff=SMALL_BUFF, shift=0 * RIGHT):
@@ -962,6 +967,12 @@ class BObject(object):
         ibpy.change_default_value(slider.inputs[0],from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
 
         return begin_time+transition_time
+
+    def get_materials(self):
+        """
+        return all materials in all slots
+        """
+        return ibpy.get_materials(self)
 
 
 class AnimBObject(BObject):
