@@ -99,7 +99,7 @@ def copy_properties(old_prop,new_prop):
                 raise "Something went wrong with copying properties"
 
 
-def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0),first=True):
+def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0),first=True,suffix=""):
     """
     copy all nodes and links from one material to a new node_tree
     """
@@ -128,12 +128,8 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
             copy_properties(node,new_node)
 
             # take care of unique naming after the properties have been copied, since the name is a property as well
-            if not first:
-                new_node.name = "second_" + node.name
-                new_node.label = "second_" + node.label
-            else:
-                new_node.name = node.name
-                new_node.label = node.label
+            new_node.name = node.name + suffix
+            new_node.label = node.name + suffix
             name_dictionary[node.name] = new_node.name
 
             # copy the attributes for all inputs
@@ -166,28 +162,30 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
 
             # find link to connect it to the mix shader
             # for mix_textures
-            mix = new_nodes.get("FinalMixShader")
+            mix = new_nodes.get("FinalMixShader"+suffix)
             if mix:
                 for link in node.inputs["Surface"].links:
                     node_name=name_dictionary[link.from_node.name]
                     if not first:
-                        node_name = "second_"+link.from_node.name
+                        node_name = link.from_node.name+suffix
                     connected_node = new_nodes.get(node_name)
                     identifier=link.from_socket.identifier
-
-                    if first:
-                        mix_socket= 1
-                    else:
-                        mix_socket = 2
-                    new_links.new(connected_node.outputs[identifier], mix.inputs[mix_socket])
+                    new_links.new(connected_node.outputs[identifier], mix.inputs[2])
+                    old_shader_out=mix.outputs["Shader"]
                 for link in node.inputs["Displacement"].links:
                     if not first:
-                        node_name = "second_"+link.from_node.name
+                        node_name = link.from_node.name+suffix
                     else:
                         node_name = link.from_node.name
                     connected_node = new_nodes.get(name_dictionary[node_name])
                     identifier=link.from_socket.identifier
                     new_links.new(connected_node.outputs[identifier], mat_out.inputs["Displacement"])
+            else:
+                for link in node.inputs["Surface"].links:
+                    node_name=name_dictionary[link.from_node.name]
+                    connected_node = new_nodes.get(node_name)
+                    identifier=link.from_socket.identifier
+                    old_shader_out = connected_node.outputs[identifier]
 
             # deal with light sources
             light_out =new_nodes.get("Light Output")
@@ -217,16 +215,29 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
                     setattr(node,"parent",frame_dictionary[getattr(node,"parent")])
                     # print(node, ": ", getattr(node, "parent"))
 
+    return old_shader_out
+
 
 def mix_texture(**kwargs):
-    material1 = get_from_kwargs(kwargs,"material1", "joker")
-    mat1 = get_texture(material1, **kwargs)
-    material2 = get_from_kwargs(kwargs,"material2", "drawing")
-    mat2 = get_texture(material2, **kwargs)
+    colors = get_from_kwargs(kwargs, "colors", None)
+
+    if colors is None:
+        material1 = get_from_kwargs(kwargs,"material1", "joker")
+        mat1 = get_texture(material1, **kwargs)
+        material2 = get_from_kwargs(kwargs,"material2", "drawing")
+        mat2 = get_texture(material2, **kwargs)
+        mats = [mat1,mat2]
+        material_name = 'mix_' + material1 + "_" + material2
+    else:
+        mats = [get_texture(mat,**kwargs) for mat in colors]
+        material_name = 'mix_'
+        for material in colors:
+            material_name += material + "_"
+
 
     separation=get_from_kwargs(kwargs,"separation", 2)
 
-    material = bpy.data.materials.new(name='mix_' + material1 + "_" + material2)
+    material = bpy.data.materials.new(name=material_name)
     material.use_nodes = True
     tree = material.node_tree
     nodes = material.node_tree.nodes
@@ -236,17 +247,27 @@ def mix_texture(**kwargs):
     out.location = (out.location[0]+(separation+1)*200,out.location[1])
     nodes.remove(nodes.get("Principled BSDF"))
 
-    mix_shader =MixShader(tree,location=(separation,0),name="FinalMixShader")
-    mix_shader.label="FinalMixShader"
-    links.new(mix_shader.outputs["Shader"],out.inputs["Surface"])
+    last_shader = out.inputs["Surface"]
 
-    # Copy nodes and links from first material
-    copy_nodes_and_links_from_material(tree,mat1,exclude=["ShaderNodeOutputMaterial"],shift=(0,200*separation),first=True)
-    copy_nodes_and_links_from_material(tree,mat2,exclude=["ShaderNodeOutputMaterial"],shift=(0,-200*separation),first=False)
+    first=True
+    for i,mat in enumerate(mats):
+        # Copy nodes and links from first material
+        if first:
+            old_shader_out = copy_nodes_and_links_from_material(tree,mat,exclude=["ShaderNodeOutputMaterial"],shift=(0,200*separation),first=True)
+            first = False
+        else:
+            mix_shader = MixShader(tree, location=(separation, -i), name="FinalMixShader_"+str(i))
+            mix_shader.label = "FinalMixShader_"+str(i)
+            links.new(mix_shader.outputs["Shader"], last_shader)
+            tree.links.new(old_shader_out,mix_shader.inputs[1])
+            copy_nodes_and_links_from_material(tree, mat, exclude=["ShaderNodeOutputMaterial"],
+                                               shift=(0, -200 * i * separation), first=False, suffix="_" + str(i))
 
-    factor = get_from_kwargs(kwargs, "factor", None)
-    if factor is not None:
-        mix_shader.inputs[0].default_value=factor
+            old_shader_out = mix_shader.outputs["Shader"]
+            factor = get_from_kwargs(kwargs, "factor", None)
+            if factor is not None:
+                mix_shader.inputs[0].default_value=factor
+
 
     return material
 
@@ -3378,7 +3399,7 @@ def make_checker_material(**kwargs):
     nodes = color.node_tree.nodes
     if coords is None:
         input = nodes.new('ShaderNodeNewGeometry')
-        input_out=input.outputs('Position')
+        input_out=input.outputs('UV')
     else:
         input = nodes.new('ShaderNodeTexCoord')
         input_out = input.outputs[coords]

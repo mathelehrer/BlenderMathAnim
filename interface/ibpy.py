@@ -2635,6 +2635,15 @@ def get_node_from_shader(shader, label):
     for n in shader.node_tree.nodes:
         if label in n.label or label in n.name:
             return n
+    return None
+
+
+def get_all_nodes_from_shader(shader, label):
+    nodes = []
+    for n in shader.node_tree.nodes:
+        if label in n.label or label in n.name:
+            nodes.append(n)
+    return nodes
 
 
 def get_socket_names_from_modifier(modifier):
@@ -3252,7 +3261,7 @@ def change_default_value(slot, from_value, to_value, begin_time=None, transition
         slot.default_value = from_value
         insert_keyframe(slot, data_path, int(begin_frame))
     slot.default_value = to_value
-    insert_keyframe(slot, data_path, int(begin_frame) + transition_frames)
+    insert_keyframe(slot, data_path, int(begin_frame + transition_frames))
 
     return begin_time + transition_time
 
@@ -6511,7 +6520,13 @@ def disappear_all_copies_of_letters(begin_time=0, transition_time=DEFAULT_ANIMAT
             recursive_fade_out(obj, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
 
 
-def fade_in(b_obj, frame, frame_duration, **kwargs):
+def fade_in(b_obj, frame=0, frame_duration=60, **kwargs):
+    begin_time=get_from_kwargs(kwargs,"begin_time",None)
+    if begin_time is not None:
+        frame = begin_time * FRAME_RATE
+    transition_time=get_from_kwargs(kwargs,"transition_time",None)
+    if transition_time is not None:
+        frame_duration = transition_time * FRAME_RATE
     alpha = get_from_kwargs(kwargs, 'alpha', 1)
     offset_for_slots = get_from_kwargs(kwargs, 'offset_for_slots', None)
     viewport = get_from_kwargs(kwargs, 'viewport', "material")
@@ -6577,7 +6592,7 @@ def change_shader_value(b_object, node, input, initial_value=0, final_value=1, f
     insert_keyframe(node.inputs[input], 'default_value', frame + frame_duration)
 
 
-def fade_out(b_obj, frame, frame_duration, alpha=0, handwriting=False, slot=None, children=True, **kwargs):
+def fade_out(b_obj, frame=0, frame_duration=60, alpha=0, handwriting=False, slot=None, children=True, **kwargs):
     """
     fade out b_object and hide it from scene
     it is recursively applied to all the children
@@ -6590,6 +6605,13 @@ def fade_out(b_obj, frame, frame_duration, alpha=0, handwriting=False, slot=None
     :return: 
     """
     obj = get_obj(b_obj)
+
+    begin_time = get_from_kwargs(kwargs, "begin_time", None)
+    if begin_time is not None:
+        frame = begin_time * FRAME_RATE
+    transition_time = get_from_kwargs(kwargs, "transition_time", None)
+    if transition_time is not None:
+        frame_duration = transition_time * FRAME_RATE
 
     recursive_fade_out(obj, frame, frame_duration, handwriting=handwriting, alpha=alpha, slot=slot, children=children,
                        **kwargs)
