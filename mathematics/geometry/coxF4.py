@@ -82,6 +82,7 @@ class CoxF4:
 
         """
         self.name = "coxF4"
+        self.size = 1152
         if path is None:
             self.path=PATH
         else:

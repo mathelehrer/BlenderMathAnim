@@ -157,6 +157,7 @@ COLOR_NAMES = [
     'rhombicosidodeca',
     'trunc_icosidodeca',
     'prism3',
+    'prism4',
     'prism5',
     'prism6',
     'prism8',
@@ -303,7 +304,8 @@ if color_scheme == -1:
         [127, 64, 0, 1],
         [127, 0, 127, 1],
         [255, 0, 255, 1],
-        [175, 175, 175, 1],  # three prism
+        [225,225,225,1], # three prism
+        [175, 175, 175, 1],  #
         [125, 125, 125, 1],
         [80, 80, 80, 1],
         [43, 43, 43, 1],

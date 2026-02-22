@@ -2,6 +2,8 @@
 # see https://en.wikipedia.org/wiki/Coxeter_group#Table_of_all_Coxeter_groups
 from __future__ import annotations
 
+import concurrent
+import multiprocessing
 import os
 from collections import defaultdict
 from functools import partial
@@ -56,6 +58,8 @@ class CoxB4:
 
         """
         self.name = "coxB4"
+        self.size = 384
+
         if path is None:
             self.path = PATH
         else:
@@ -705,27 +709,55 @@ class CoxB4:
             cells = self.get_cells(signature)
             vertices = self.get_point_cloud(signature)
 
+            sorted_cells = [tuple(sorted(cell)) for cell in cells.keys()]
+
             classes = {}
-
+            vertex2index = {v: idx for idx, v in enumerate(vertices)}
             # get all faces of the first vertex
-            first_cells = []
-            for cell, normal in cells.items():
-                if 0 in cell:
-                    cell_set = tuple(sorted(cell))
-                    first_cells.append(cell_set)
-                    classes[cell_set] = {cell_set}
 
-            for first_cell in first_cells:
-                for element in self.elements:
-                    mapped_cell = []
-                    for cell_index in first_cell:
-                        vertex = vertices[cell_index]
-                        target = element @ vertex
-                        mapped_cell.append(vertices.index(target))
-                    classes[first_cell].add(tuple(sorted(mapped_cell)))
+            while len(sorted_cells)>0:
+                # find cell at 0
+                for cell in sorted_cells:
+                    if 0 in cell:
+                        rep_cell = cell
+                        classes[cell]={cell}
+                        sorted_cells.remove(cell)
+                        break
+
+                with multiprocessing.Pool(processes=os.cpu_count()) as pool:
+                    # split self.elements in os.cpu_count() parts
+                    total_elements = len(self.elements)
+                    num_processes = min(total_elements,os.cpu_count())
+
+                    chunk_size = max(1, total_elements // num_processes)  # Ensure at least 1 per chunk
+                    chunks = [self.elements[i * chunk_size: (i + 1) * chunk_size] for i in range(num_processes)]
+                    # Filter out empty chunks (in case of uneven division)
+                    chunks = [chunk for chunk in chunks if chunk]
+                    tasks = [(elements, rep_cell, vertices, vertex2index) for elements in chunks]
+                    results = pool.map(process_element, tasks)
+                    for result in results:
+                        classes[rep_cell]=classes[rep_cell].union(result)
+                        for cell in result:
+                            if cell in sorted_cells:
+                                sorted_cells.remove(cell)
+                        print(len(sorted_cells))
 
             self.save_dictionary(classes, filename)
         return classes
+
+
+def process_element(args):
+    elements, first_cell, vertices, vertex2index = args
+    mapped_cells = []
+    for element in elements:
+        mapped_cell = []
+        for cell_index in first_cell:
+            vertex = vertices[cell_index]
+            target = element @ vertex
+            mapped_cell.append(vertex2index[target])
+        mapped_cells.append(tuple(sorted(mapped_cell)))
+    return set(mapped_cells)
+
 
 
 if __name__ == '__main__':

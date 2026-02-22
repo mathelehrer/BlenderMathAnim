@@ -46,6 +46,7 @@ class CoxA4:
 
         """
         self.name = "coxA4"
+        self.size= 120
         if path is None:
             self.path=PATH
         else:

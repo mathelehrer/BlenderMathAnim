@@ -507,6 +507,11 @@ class CoxeterDynkinDiagram:
     def get_subdiagrams(self):
         """
         Generate all possible sub diagrams of a given diagram by omitting nodes and their connections
+        >>> d = CoxeterDynkinDiagram("x3x3o4x")
+        >>> rows, subs, dimensions = d.get_subdiagrams()
+        >>> [ddd.diagram_string for dd in subs.values() for ddd in dd],dimensions
+        (['. . . .', 'x . . .', '. x . .', '. . . x', 'x3x . .', 'x . . x', '. x3o .', '. x . x', '. . o4x', 'x3x3o .', 'x3x . x', 'x . o4x', '. x3o4x'], [1, 3, 5, 4])
+
         >>> d=CoxeterDynkinDiagram("x3o3o3o3o *c3o")
         >>> rows,subs,dimensions = d.get_subdiagrams()
         >>> [ddd.diagram_string for dd in subs.values() for ddd in dd],dimensions
@@ -611,7 +616,6 @@ class CoxeterDynkinDiagram:
         sub_graph = self.graph.subgraph(complement_nodes)
         sub_diagram = CoxeterDynkinDiagram.from_graph(sub_graph)
         return sub_diagram.get_complement().get_vertex_count()
-
 
     def __str__(self):
         return self.diagram_string

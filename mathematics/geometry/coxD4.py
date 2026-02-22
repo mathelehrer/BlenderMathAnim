@@ -75,14 +75,15 @@ class CoxH4:
 
         """
         self.name = "coxH4"
+        self.size = 192
         if path is None:
             self.path=PATH
         else:
             self.path = path
-        zero = QR5.from_integers(0,1,0,1)
-        one = QR5.from_integers(1,1,0,1)
-        half = QR5.from_integers(1,2,0,1)
-        two = QR5.from_integers(2,1,0,1)
+        zero = QR.from_integers(0,1,0,1)
+        one = QR.from_integers(1,1,0,1)
+        half = QR.from_integers(1,2,0,1)
+        two = QR.from_integers(2,1,0,1)
 
         # normal vectors: Computed in CoxH4.nb
         normals = [
@@ -90,9 +91,9 @@ class CoxH4:
                     FVector([half,half,half,half]),
                     FVector([zero, one,zero, zero]),
                    FVector([zero,
-                            QR5.from_integers(1,4,1,4),
+                            QR.from_integers(1,4,1,4),
                             -half,
-                            QR5.from_integers(1,4,-1,4)
+                            QR.from_integers(1,4,-1,4)
                             ]
                            ),
                    ]
