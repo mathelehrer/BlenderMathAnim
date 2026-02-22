@@ -20,7 +20,7 @@ from mathematics.spherical_harmonics import SphericalHarmonics
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import TextureCoordinate, Mapping, ColorRamp, AttributeNode, HueSaturationValueNode, \
     MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ, Displacement, ShaderNode, MixShader, \
-    BrightContrast
+    BrightContrast, RGB
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
@@ -217,7 +217,6 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
 
     return old_shader_out
 
-
 def mix_texture(**kwargs):
     colors = get_from_kwargs(kwargs, "colors", None)
 
@@ -233,6 +232,7 @@ def mix_texture(**kwargs):
         material_name = 'mix_'
         for material in colors:
             material_name += material + "_"
+        material_name=material_name[:-1]
 
 
     separation=get_from_kwargs(kwargs,"separation", 2)
@@ -376,6 +376,23 @@ def create_old_paper_with_image(**kwargs):
 
     return material
 
+def create_transparent_material():
+    material = bpy.data.materials.new(name="transparent")
+    material.use_nodes = True
+    tree = material.node_tree
+    nodes = tree.nodes
+    links = tree.links
+    out = nodes.get("Material Output")
+    out.location = (out.location[0]+200,out.location[1])
+    bsdf = nodes.get("Principled BSDF")
+
+    color_node = RGB(tree,color=[0,0,0,0],location=(-3,0))
+    links.new(color_node.std_out,bsdf.inputs["Base Color"])
+    links.new(color_node.std_out,bsdf.inputs["Alpha"])
+    return material
+
+
+
 def create_crystal_material(**kwargs):
     material = create_from_xml("crystal_shader")
 
@@ -387,6 +404,7 @@ def create_crystal_material(**kwargs):
 
     return material
 
+
 def get_texture(material, **kwargs):
     """
     this method is intended to supersed the get_material method
@@ -396,6 +414,8 @@ def get_texture(material, **kwargs):
     if isinstance(material,tuple):
         return mix_texture(material1=material[0],material2=material[1],**kwargs)
     if isinstance(material, str):
+        if material=="transparent":
+            return create_transparent_material()
         if material=="mix_texture":
             return mix_texture(**kwargs)
         if material == 'image' and 'src' in kwargs:

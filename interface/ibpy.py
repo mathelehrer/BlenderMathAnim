@@ -5938,10 +5938,11 @@ def morph_to_next_shape(blender_obj, current_shape_index, appear_frame, frame_du
 
 def zero_all_shape_keys(blender_obj, appear_frame):
     blender_obj = get_obj(blender_obj)
-    for i in range(len(blender_obj.data.shape_keys.key_blocks)):  # set all  blocks to zero
-        # set all values to zero at the end
-        blender_obj.data.shape_keys.key_blocks[i].value = 0.
-        insert_keyframe(blender_obj.data.shape_keys.key_blocks[i], "value", appear_frame)
+    if blender_obj.data.shape_keys is not None:
+        for i in range(len(blender_obj.data.shape_keys.key_blocks)):  # set all  blocks to zero
+            # set all values to zero at the end
+            blender_obj.data.shape_keys.key_blocks[i].value = 0.
+            insert_keyframe(blender_obj.data.shape_keys.key_blocks[i], "value", appear_frame)
 
 
 def morph_to_next_shape2(blender_obj, current_shape_index, appear_frame, frame_duration):
@@ -5970,6 +5971,29 @@ def morph_to_next_shape2(blender_obj, current_shape_index, appear_frame, frame_d
     blender_obj.data.shape_keys.key_blocks[next_shape].value = 1
     insert_keyframe(blender_obj.data.shape_keys.key_blocks[next_shape], "value", appear_frame + frame_duration)
     print("Transform to next mesh ", blender_obj.name)
+
+def morph_to_next_shape_with_pause(blender_obj, current_shape_index, appear_frame, frame_duration,pause_duration):
+    '''
+    In this version, always all but the current shape are set to zero
+    :param blender_obj:
+    :param current_shape_index:
+    :param appear_frame:
+    :param frame_duration:
+    :return:
+    '''
+    blender_obj = get_obj(blender_obj)
+
+    next_shape = current_shape_index + 1
+    for i in range(len(blender_obj.data.shape_keys.key_blocks)):  # set all following blocks to zero
+        # set all values to zero at the end
+        blender_obj.data.shape_keys.key_blocks[i].value = 0.
+        insert_keyframe(blender_obj.data.shape_keys.key_blocks[i], "value", appear_frame + frame_duration)
+
+    insert_keyframe(blender_obj.data.shape_keys.key_blocks[next_shape], "value", appear_frame)
+    blender_obj.data.shape_keys.key_blocks[next_shape].value = 1
+    insert_keyframe(blender_obj.data.shape_keys.key_blocks[next_shape], "value", appear_frame + frame_duration)
+    insert_keyframe(blender_obj.data.shape_keys.key_blocks[next_shape], "value", appear_frame + frame_duration+pause_duration)
+    print("Transform to next mesh and enforce pause ", blender_obj.name)
 
 
 def morph_to_previous_shape(blender_obj, current_shape_index, appear_frame, frame_duration):
@@ -6679,8 +6703,12 @@ def move_fast_from_to(b_obj, start=Vector(), end=Vector(), begin_frame=0,
     insert_keyframe(obj, "location", begin_frame + frame_duration)
 
 
-def move_to(b_obj, target, begin_frame, frame_duration, global_system=False, verbose=True):
-    location = get_location_at_frame(b_obj, begin_frame - 1)
+def move_to(b_obj, target, begin_frame, frame_duration, global_system=False, verbose=True,from_location=None):
+    if from_location is not None:
+        location = from_location
+    else:
+        # this is expensive, try to use from_location, if possible
+        location = get_location_at_frame(b_obj, begin_frame - 1)
     obj = get_obj(b_obj)
     obj.location = location
     insert_keyframe(obj, "location", begin_frame)
@@ -6771,13 +6799,21 @@ def shrink_from(b_obj, pivot, begin_frame, frame_duration):
     insert_keyframe(obj, "scale", int(begin_frame + np.maximum(1, frame_duration)))
 
 
-def rescale(b_obj, re_scale, begin_frame, frame_duration):
+def rescale(b_obj, re_scale, begin_frame, frame_duration,**kwargs):
     obj = get_obj(b_obj)
 
     if not isinstance(re_scale, list):
         re_scale = [re_scale] * 3
 
-    scale = get_scale_at_frame(b_obj, begin_frame)
+    from_scale=get_from_kwargs(kwargs,"from_scale",None)
+    if from_scale is not None:
+        if isinstance(from_scale,(int,float)):
+            from_scale=[from_scale]*3
+        scale=from_scale
+    else:
+        # this is expensive, use from_scale if possible
+        scale = get_scale_at_frame(b_obj, begin_frame)
+
     scale_new = [scale[0] * re_scale[0], scale[1] * re_scale[1], scale[2] * re_scale[2]]
     obj.scale = scale
     insert_keyframe(obj, "scale", begin_frame)

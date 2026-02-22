@@ -65,6 +65,9 @@ class BObject(object):
         if 'location' in kwargs:
             location = self.get_from_kwargs('location', [0, 0, 0])
             ref_obj.location = location
+            self.initial_location=location
+        else:
+            self.initial_location=Vector()
         if 'rotation_euler' in kwargs:
             ref_obj.rotation_mode = 'XYZ'
             ref_obj.rotation_euler = self.get_from_kwargs('rotation_euler', [0, 0, 0])
@@ -565,7 +568,7 @@ class BObject(object):
                              transition_time=transition_time)
         return begin_time + transition_time
 
-    def index_transform_mesh(self,transformations,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def index_transform_mesh(self,transformations,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,pause_time=None):
         """
         This transforms the mesh with a list of lambda functions.
         The lambda functions act on the index of the shape key rather than on the positions
@@ -585,8 +588,13 @@ class BObject(object):
         # set all shape keys to zero initially
         ibpy.zero_all_shape_keys(self,appear_frame=begin_time*FRAME_RATE-1)
         self.transformation_state += 1
-        ibpy.morph_to_next_shape2(self, self.transformation_state - 1, begin_time * FRAME_RATE,
-                                  transition_time * FRAME_RATE)
+        if pause_time is None:
+            ibpy.morph_to_next_shape2(self, self.transformation_state - 1, begin_time * FRAME_RATE,
+                                      transition_time * FRAME_RATE)
+        else:
+            ibpy.morph_to_next_shape_with_pause(self, self.transformation_state - 1, begin_time * FRAME_RATE,
+                                      transition_time * FRAME_RATE,pause_time*FRAME_RATE)
+
         return begin_time + transition_time
 
     def transform_mesh(self, transformation, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
@@ -621,11 +629,21 @@ class BObject(object):
         self.transformation_state += 1
         return begin_time + transition_time
 
-    def transform_mesh_to_next_shape2(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+    def transform_mesh_to_next_shape2(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+                                      pause_time=None,**kwargs):
+        """
+        This transformation is a more efficient way to set up multiple transformations.
+        It avoids to call set_frame. It requires the pause duration before the next transformations starts
+        """
         if 'state' in kwargs:
             self.transformation_state = kwargs.pop('state') - 1
-        ibpy.morph_to_next_shape2(self, self.transformation_state, begin_time * FRAME_RATE,
+
+        if pause_time is None:
+            ibpy.morph_to_next_shape2(self, self.transformation_state, begin_time * FRAME_RATE,
                                  transition_time * FRAME_RATE)
+        else:
+            ibpy.morph_to_next_shape_with_pause(self, self.transformation_state, begin_time * FRAME_RATE,
+                                 transition_time * FRAME_RATE,pause_time*FRAME_RATE)
 
         self.transformation_state += 1
         return begin_time + transition_time
@@ -757,6 +775,7 @@ class BObject(object):
         new_location=self.current_location+to_vector(direction)
         ibpy.move_fast_from_to(self,start=self.current_location,end=new_location,begin_frame=begin_time*FRAME_RATE,frame_duration=transition_time*FRAME_RATE)
         self.current_location = new_location
+
     def move_fast_to(self,new_location=Vector(),begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
         """
         move an object without checking its position before
@@ -785,7 +804,8 @@ class BObject(object):
         ibpy.move(self, direction, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
         return begin_time + transition_time
 
-    def move_to(self, target_location, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, global_system=False,verbose=True):
+    def move_to(self, target_location, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+                global_system=False,verbose=True,from_location=None):
         """
         move an object. !!! Make sure that the object has appeared before using this function otherwise there will be
         issues with visiblity
@@ -797,7 +817,7 @@ class BObject(object):
         """
 
         ibpy.move_to(self, target_location, begin_time * FRAME_RATE, transition_time * FRAME_RATE,
-                     global_system=global_system,verbose=verbose)
+                     global_system=global_system,verbose=verbose,from_location=from_location)
         return begin_time + transition_time
 
     def move_copy(self, direction=[0, 0, 0], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
@@ -838,8 +858,8 @@ class BObject(object):
                   initial_scale=initial_scale)
         return begin_time + transition_time
 
-    def rescale(self, rescale=[1, 1, 1], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
-        ibpy.rescale(self, rescale, begin_time * FRAME_RATE, np.maximum(1, transition_time * FRAME_RATE), **kwargs)
+    def rescale(self, rescale=[1, 1, 1], from_scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+        ibpy.rescale(self, rescale, begin_time * FRAME_RATE, np.maximum(1, transition_time * FRAME_RATE),from_scale=from_scale, **kwargs)
         return begin_time + transition_time
 
     def rename(self,name="BObject"):
@@ -897,6 +917,13 @@ class BObject(object):
         dist *= self.ref_obj.scale[dim]
         location_parent = ibpy.get_location(self)  # ibpy.get_location(parent)
         ibpy.set_location(self, location_parent + (dist + buff) * direction + shift)
+
+    def explode(self,explode_scale=2, begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        for child in self.b_children:
+            ibpy.set_origin(child)
+            child.initial_location = child.ref_obj.location
+            child.rescale(rescale=0.975,from_scale=1, begin_time=0, transition_time=0)
+            child.move_to(target_location=explode_scale*child.ref_obj.location,from_location=child.ref_obj.location,begin_time=begin_time,transition_time=transition_time)
 
     def get_location_at_frame(self, frame):
         ibpy.set_frame(frame)

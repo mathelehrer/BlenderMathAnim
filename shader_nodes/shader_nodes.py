@@ -604,9 +604,12 @@ class PrincipledVolume(ShaderNode):
         super().__init__(tree, location=location, **kwargs)
 
 class RGB(ShaderNode):
-    def __init__(self, tree, location=(0, 0), **kwargs):
+    def __init__(self, tree, location=(0, 0), color = [0,0,0,1],**kwargs):
         self.node = tree.nodes.new(type="ShaderNodeRGB")
         super().__init__(tree, location=location, **kwargs)
+
+        self.node.outputs["Color"].default_value=color
+        self.std_out = self.node.outputs["Color"]
 
 class SeparateXYZ(ShaderNode):
     def __init__(self, tree, location=(0, 0), vector=None, **kwargs):

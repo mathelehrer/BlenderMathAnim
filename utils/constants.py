@@ -288,14 +288,14 @@ if color_scheme == -1:
         # [145,145,145,1],
 
         [0, 255, 0, 1],  # tetra
-        [0, 127, 0, 1],
-        [0, 127, 0, 1],  # octa
-        [0, 127, 127, 1],  # cubocta
-        [0, 64, 127, 1],  # trunc octa
+        [127, 127, 0, 1],
+        [0, 127, 127, 1],  # octa
+        [0, 127, 255, 1],  # cubocta
+        [0, 255, 127, 1],  # trunc octa
         [0, 0, 255, 1],  # hexa
-        [0, 0, 127, 1],
-        [0, 127, 64, 1],
-        [0, 64, 64, 1],
+        [0, 255, 127, 1],
+        [0, 255, 255, 1],
+        [127, 0, 255, 1],
         [255, 0, 0, 1],  # dodeca
         [255, 127, 0, 1],  # icosa
         [255, 255, 0, 1],  # icosidodeca
@@ -308,7 +308,6 @@ if color_scheme == -1:
         [80, 80, 80, 1],
         [43, 43, 43, 1],
         [25, 25, 25, 1],
-
 
         [76,0,0,1],# dark red for vertex spheres
         [0,255,0,1], # colors for the polygons
@@ -324,6 +323,7 @@ if color_scheme == -1:
 # add gray values
 for i in range(1, 10):
     COLORS.append([i * 25, i * 25, i * 25, 1])
+
 
 COLORS_SCALED = []
 for color in COLORS:
