@@ -18,7 +18,8 @@ COXA4_SIGNATURES= {
     "o3o3o3x":[0,0,0,1], # 5
     "o3o3x3o":[0,1,0,0], # 10
     "o3o3x3x":[0,0,1,-1], # 20 (trunc_tetra, tetra)
-    "x3o3o3x":[-1,0,0,1], # 20 (tetra, prism3)
+    "x3o3o3x":[0,1,1,-1], # 20 (tetra, prism3)
+    #"x3o3o3x":[-1,0,0,1], # 20 (tetra, prism3)
     "o3x3x3o":[0,1,-1,0], # 30 (trunc_tetra)
     "o3x3o3x":[0,1,0,1], # 30 (prism3, cubocta, octa)
     "x3o3x3x":[1,0,-1,1], # 60 (trunc_tetra, cubocta, prism6,prism3)

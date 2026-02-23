@@ -89,6 +89,8 @@ class DynkinDiagram(BObject):
             super().__init__(children=self.spheres + self.cylinders + self.labels + self.rings, name=self.name,
                              scale=self.scale, **kwargs)
 
+        self.ring_tags = [False]*self.dim
+
     def appear_customized(self, nodes=[], labels=[], rings=[], edges=[], begin_time=0,
                           transition_time=DEFAULT_ANIMATION_TIME):
         if not self.appeared:
@@ -100,7 +102,9 @@ class DynkinDiagram(BObject):
             self.labels[label].write(begin_time=begin_time, transition_time=transition_time)
             self.cylinders[label].grow(begin_time=begin_time, transition_time=transition_time)
         for ring in rings:
-            self.rings[ring].grow(begin_time=begin_time, transition_time=transition_time)
+            if not self.ring_tags[ring]:
+                self.rings[ring].grow(begin_time=begin_time, transition_time=transition_time)
+                self.ring_tags[ring]=True
         for edge in edges:
             self.cylinders[edge].grow(begin_time=begin_time, transition_time=transition_time)
 
@@ -116,8 +120,21 @@ class DynkinDiagram(BObject):
         for label in labels:
             self.labels[label].disappear(begin_time=begin_time, transition_time=transition_time)
             self.cylinders[label].shrink(begin_time=begin_time, transition_time=transition_time)
+        t0 = begin_time
         for ring in rings:
-            self.rings[ring].shrink(begin_time=begin_time, transition_time=transition_time)
+            dt = transition_time/len(rings)
+            if self.ring_tags[ring]:
+                self.rings[ring].shrink(begin_time=begin_time, transition_time=transition_time)
+                self.ring_tags[ring]=False
+                if ring<self.dim-1:
+                    # adjust edge to the right of the ring
+                    self.cylinders[ring].rescale(rescale=[1,1,1.25],begin_time=t0,transition_time=dt)
+                    self.cylinders[ring].move(direction=[-0.25,0,0],begin_time=t0,transition_time=dt)
+                if ring>0:
+                    # adjust edge to the left of the ring
+                    self.cylinders[ring-1].rescale(rescale=[1,1,1.25],begin_time=t0,transition_time=dt)
+                    self.cylinders[ring-1].move(direction=[0.25,0,0],begin_time=t0,transition_time=dt)
+                t0 = t0+dt
         for edge in edges:
             self.cylinders[edge].shrink(begin_time=begin_time, transition_time=transition_time)
 
@@ -148,6 +165,7 @@ class DynkinDiagram(BObject):
             dt = transition_time / len(self.rings)
             for i, ring in enumerate(self.rings):
                 ring.grow(begin_time=begin_time + i * dt, transition_time=dt)
+                self.ring_tags[i]=True
 
         return begin_time + transition_time
 
@@ -216,7 +234,6 @@ class DynkinDiagram(BObject):
             self.locations.append(child_location)
             child_sphere = Sphere(r=0.25, location=child_location, color='plastic_example')
             self.spheres.append(child_sphere)
-            self._place_children(child, child_location)
             if child.name[1] == 1:
                 self.rings.append(Circle2(center=[child_location.x, child_location.z], radius=0.5,
                                           num_points=20, color="plastic_example",
@@ -242,6 +259,7 @@ class DynkinDiagram(BObject):
                                  text_size=self.text_size, aligned="center")
                         )
 
+            self._place_children(child, child_location)
         else:
             directions = []
             n = len(children)
