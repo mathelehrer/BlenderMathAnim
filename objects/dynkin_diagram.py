@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 from anytree import Node
 
@@ -89,7 +91,7 @@ class DynkinDiagram(BObject):
             super().__init__(children=self.spheres + self.cylinders + self.labels + self.rings, name=self.name,
                              scale=self.scale, **kwargs)
 
-        self.ring_tags = [False]*self.dim
+        self.ring_tags = [False] * self.dim
 
     def appear_customized(self, nodes=[], labels=[], rings=[], edges=[], begin_time=0,
                           transition_time=DEFAULT_ANIMATION_TIME):
@@ -101,10 +103,20 @@ class DynkinDiagram(BObject):
         for label in labels:
             self.labels[label].write(begin_time=begin_time, transition_time=transition_time)
             self.cylinders[label].grow(begin_time=begin_time, transition_time=transition_time)
+        t0 = begin_time
         for ring in rings:
+            dt = transition_time / len(rings)
             if not self.ring_tags[ring]:
-                self.rings[ring].grow(begin_time=begin_time, transition_time=transition_time)
-                self.ring_tags[ring]=True
+                self.rings[ring].grow(begin_time=t0, transition_time=dt)
+                self.ring_tags[ring] = True
+                if ring < self.dim - 1:
+                    # adjust edge to the right of the ring
+                    self.cylinders[ring].rescale(rescale=[1, 1, 0.8], begin_time=t0, transition_time=dt)
+                    self.cylinders[ring].move(direction=[0.25, 0, 0], begin_time=t0, transition_time=dt)
+                if ring > 0:
+                    # adjust edge to the left of the ring
+                    self.cylinders[ring - 1].rescale(rescale=[1, 1, 0.8], begin_time=t0, transition_time=dt)
+                t0 = t0 + dt
         for edge in edges:
             self.cylinders[edge].grow(begin_time=begin_time, transition_time=transition_time)
 
@@ -122,21 +134,67 @@ class DynkinDiagram(BObject):
             self.cylinders[label].shrink(begin_time=begin_time, transition_time=transition_time)
         t0 = begin_time
         for ring in rings:
-            dt = transition_time/len(rings)
+            dt = transition_time / len(rings)
             if self.ring_tags[ring]:
-                self.rings[ring].shrink(begin_time=begin_time, transition_time=transition_time)
-                self.ring_tags[ring]=False
-                if ring<self.dim-1:
+                self.rings[ring].shrink(begin_time=t0, transition_time=dt)
+                self.ring_tags[ring] = False
+                if ring < self.dim - 1:
                     # adjust edge to the right of the ring
-                    self.cylinders[ring].rescale(rescale=[1,1,1.25],begin_time=t0,transition_time=dt)
-                    self.cylinders[ring].move(direction=[-0.25,0,0],begin_time=t0,transition_time=dt)
-                if ring>0:
+                    self.cylinders[ring].rescale(rescale=[1, 1, 1.25], begin_time=t0, transition_time=dt)
+                    self.cylinders[ring].move(direction=[-0.25, 0, 0], begin_time=t0, transition_time=dt)
+                if ring > 0:
                     # adjust edge to the left of the ring
-                    self.cylinders[ring-1].rescale(rescale=[1,1,1.25],begin_time=t0,transition_time=dt)
-                    self.cylinders[ring-1].move(direction=[0.25,0,0],begin_time=t0,transition_time=dt)
-                t0 = t0+dt
+                    self.cylinders[ring - 1].rescale(rescale=[1, 1, 1.25], begin_time=t0, transition_time=dt)
+                t0 = t0 + dt
         for edge in edges:
             self.cylinders[edge].shrink(begin_time=begin_time, transition_time=transition_time)
+
+        return begin_time + transition_time
+
+    def change_state(self, from_state="", to_state="", begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        rescale_dict = {0: 0, -1: 0.8, -2: 0.64, 1: 1.25, 2: 2.25}
+
+        from_parts = re.findall(r"[(a-z)]", from_state)
+        from_on_flags = [True if p == 'x' else False for p in from_parts]
+
+        to_parts = re.findall(r"[(a-z)]", to_state)
+        to_on_flags = [True if p == 'x' else False for p in to_parts]
+
+        edge_changes = [0] * (min(len(from_parts), len(to_parts)) - 1)
+        for i, (from_flag, to_flag) in enumerate(zip(from_on_flags, to_on_flags)):
+            if from_flag == to_flag:
+                pass
+            elif from_flag is True and to_flag is False:
+                if i > 0:
+                    edge_changes[i - 1] += 1
+                if i < len(edge_changes):
+                    edge_changes[i] += 1
+            else:
+                if i > 0:
+                    edge_changes[i - 1] -= 1
+                if i < len(edge_changes):
+                    edge_changes[i] -= 1
+
+        print(from_state, to_state, from_on_flags, to_on_flags, edge_changes)
+
+        for i, (from_flag, to_flag) in enumerate(zip(from_on_flags, to_on_flags)):
+            print(from_flag, to_flag)
+            if from_flag is True and to_flag is False:
+                self.rings[i].shrink(begin_time=begin_time, transition_time=transition_time)
+                self.ring_tags[i] = False
+                if i < len(edge_changes):
+                    self.cylinders[i].move(direction=[-0.25, 0, 0], begin_time=begin_time,
+                                           transition_time=transition_time)
+
+            elif from_flag is False and to_flag is True:
+                self.rings[i].grow(begin_time=begin_time, transition_time=transition_time)
+                self.ring_tags[i] = True
+                if i < len(edge_changes):
+                    self.cylinders[i].move(direction=[0.25, 0, 0], begin_time=begin_time,
+                                           transition_time=transition_time)
+            if i < len(edge_changes):
+                self.cylinders[i].rescale(rescale=[1, 1, 1.25 ** edge_changes[i]], begin_time=begin_time,
+                                          transition_time=transition_time)
 
         return begin_time + transition_time
 
@@ -165,7 +223,7 @@ class DynkinDiagram(BObject):
             dt = transition_time / len(self.rings)
             for i, ring in enumerate(self.rings):
                 ring.grow(begin_time=begin_time + i * dt, transition_time=dt)
-                self.ring_tags[i]=True
+                self.ring_tags[i] = True
 
         return begin_time + transition_time
 
@@ -177,7 +235,7 @@ class DynkinDiagram(BObject):
     def d4(cls, **kwargs):
         rings = get_from_kwargs(kwargs, "rings", [1, 1, 1, 1])
         graph = Node((0, rings[0]))
-        for i in range(1,4):
+        for i in range(1, 4):
             node = Node((i, rings[i]))
             node.parent = graph
             node.weight = 3
@@ -185,20 +243,20 @@ class DynkinDiagram(BObject):
 
     @classmethod
     def from_string(cls, dynkin_string, **kwargs):
-        if dynkin_string=="x3x3x *b3x":
-            return DynkinDiagram.d4(rings=[1,1,1,1], **kwargs)
-        elif dynkin_string=="o3x3x *b3x":
-            return DynkinDiagram.d4(rings=[0, 1, 1,1], **kwargs)
-        elif dynkin_string=="x3o3x *b3x":
-            return DynkinDiagram.d4(rings=[1,0,1,1], **kwargs)
-        elif dynkin_string=="o3x3o *b3x":
-            return DynkinDiagram.d4(rings=[0,1,0,1], **kwargs)
-        elif dynkin_string=="o3o3x *b3x":
-            return DynkinDiagram.d4(rings=[1,0,1,0], **kwargs)
-        elif dynkin_string=="o3o3o *b3x":
-            return DynkinDiagram.d4(rings=[0,0,0,1], **kwargs)
-        elif dynkin_string=="o3x3o *b3o":
-            return DynkinDiagram.d4(rings=[0,1,0,0],**kwargs)
+        if dynkin_string == "x3x3x *b3x":
+            return DynkinDiagram.d4(rings=[1, 1, 1, 1], **kwargs)
+        elif dynkin_string == "o3x3x *b3x":
+            return DynkinDiagram.d4(rings=[0, 1, 1, 1], **kwargs)
+        elif dynkin_string == "x3o3x *b3x":
+            return DynkinDiagram.d4(rings=[1, 0, 1, 1], **kwargs)
+        elif dynkin_string == "o3x3o *b3x":
+            return DynkinDiagram.d4(rings=[0, 1, 0, 1], **kwargs)
+        elif dynkin_string == "o3o3x *b3x":
+            return DynkinDiagram.d4(rings=[1, 0, 1, 0], **kwargs)
+        elif dynkin_string == "o3o3o *b3x":
+            return DynkinDiagram.d4(rings=[0, 0, 0, 1], **kwargs)
+        elif dynkin_string == "o3x3o *b3o":
+            return DynkinDiagram.d4(rings=[0, 1, 0, 0], **kwargs)
         # deal with linear diagrams only
         dim = 0
         last = None

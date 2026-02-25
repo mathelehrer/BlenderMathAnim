@@ -1,3 +1,5 @@
+import time
+
 import bmesh
 import bpy
 
@@ -615,10 +617,10 @@ class BObject(object):
             self.old_sk = ibpy.create_shape_key_from_transformation(self, basis, state, t)
 
         if len(transformation) == 1:
-            self.transformation_state += 1
-            ibpy.morph_to_next_shape2(self, self.transformation_state - 1, begin_time * FRAME_RATE,
-                                      transition_time * FRAME_RATE)
-            return begin_time + transition_time
+            self.transformation_state = 1
+            ibpy.morph_to_first_shape(self, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
+
+        return begin_time + transition_time
 
     def transform_mesh_to_next_shape(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         if 'state' in kwargs:
@@ -859,7 +861,8 @@ class BObject(object):
         return begin_time + transition_time
 
     def rescale(self, rescale=[1, 1, 1], from_scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
-        ibpy.rescale(self, rescale, begin_time * FRAME_RATE, np.maximum(1, transition_time * FRAME_RATE),from_scale=from_scale, **kwargs)
+        ibpy.rescale(self, rescale, begin_time * FRAME_RATE, np.maximum(1, transition_time * FRAME_RATE),
+                     from_scale=from_scale, **kwargs)
         return begin_time + transition_time
 
     def rename(self,name="BObject"):
@@ -876,7 +879,7 @@ class BObject(object):
         :return:
         """
 
-        self.appear(alpha=alpha,begin_time=begin_time, transition_time=0)
+        self.appear(alpha=alpha,begin_time=0, transition_time=0)
         if pivot:
             ibpy.set_pivot(self, pivot)
         if scale is None:
@@ -920,10 +923,23 @@ class BObject(object):
 
     def explode(self,explode_scale=2, begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
         for child in self.b_children:
-            ibpy.set_origin(child)
             child.initial_location = child.ref_obj.location
             child.rescale(rescale=0.975,from_scale=1, begin_time=0, transition_time=0)
-            child.move_to(target_location=explode_scale*child.ref_obj.location,from_location=child.ref_obj.location,begin_time=begin_time,transition_time=transition_time)
+            # somehow, setting origin at this point is very expensive
+            # compute explosion manually for each child
+            start = time.time()
+            verts = [v.co for v in ibpy.get_vertices(child)]
+
+            center = sum(verts,Vector())/len(verts)
+
+            shift = (explode_scale-1)*center
+            child.transform_mesh(lambda v: v+shift,begin_time=begin_time,transition_time=transition_time)
+            end = time.time()
+            # print("Exlode child: ", child.name, (end - start))
+        return begin_time+transition_time
+
+
+
 
     def get_location_at_frame(self, frame):
         ibpy.set_frame(frame)

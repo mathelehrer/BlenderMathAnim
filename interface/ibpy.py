@@ -1,4 +1,5 @@
 import os
+import time
 from copy import deepcopy
 from datetime import date, datetime
 
@@ -518,6 +519,9 @@ def get_vertex_locations(bob):
         locations.append(obj.matrix_world @ v.co)
     return locations
 
+def get_vertices(bob):
+    obj = get_obj(bob)
+    return obj.data.vertices
 
 def smooth_mesh(bob):
     obj = get_obj(bob)
@@ -5861,7 +5865,7 @@ def set_curve_range(bob, factor, begin_time=0, transition_time=DEFAULT_ANIMATION
 
 def shrink_curve(bob, appear_frame, duration, inverted=False):
     curve = get_curve_for_object(get_obj(bob))
-    print("Grow curve: " + curve.name + " at time " + str(appear_frame / FRAME_RATE) + " for " + str(
+    print("Shrink curve: " + curve.name + " at time " + str(appear_frame / FRAME_RATE) + " for " + str(
         duration / FRAME_RATE))
     if not inverted:
         set_bevel_factor_and_keyframe(curve, 1, appear_frame)
@@ -5943,6 +5947,22 @@ def zero_all_shape_keys(blender_obj, appear_frame):
             # set all values to zero at the end
             blender_obj.data.shape_keys.key_blocks[i].value = 0.
             insert_keyframe(blender_obj.data.shape_keys.key_blocks[i], "value", appear_frame)
+
+
+def morph_to_first_shape(blender_obj,appear_frame,frame_duration):
+    blender_obj = get_obj(blender_obj)
+
+    next_shape = 1
+    for i in range(len(blender_obj.data.shape_keys.key_blocks)):  # set all following blocks to zero
+        blender_obj.data.shape_keys.key_blocks[i].value = 0
+        insert_keyframe(blender_obj.data.shape_keys.key_blocks[i], "value", appear_frame)
+        # set all values to zero at the end
+        blender_obj.data.shape_keys.key_blocks[i].value = 0.
+        insert_keyframe(blender_obj.data.shape_keys.key_blocks[i], "value", appear_frame + frame_duration)
+
+    blender_obj.data.shape_keys.key_blocks[next_shape].value = 1
+    insert_keyframe(blender_obj.data.shape_keys.key_blocks[next_shape], "value", appear_frame + frame_duration)
+    # print("Transform to second mesh ", blender_obj.name)
 
 
 def morph_to_next_shape2(blender_obj, current_shape_index, appear_frame, frame_duration):
@@ -6704,6 +6724,7 @@ def move_fast_from_to(b_obj, start=Vector(), end=Vector(), begin_frame=0,
 
 
 def move_to(b_obj, target, begin_frame, frame_duration, global_system=False, verbose=True,from_location=None):
+
     if from_location is not None:
         location = from_location
     else:
@@ -6720,6 +6741,8 @@ def move_to(b_obj, target, begin_frame, frame_duration, global_system=False, ver
         print(
             "MoveTo " + obj.name + " at time " + str(begin_frame / FRAME_RATE) + " for " + str(
                 frame_duration / FRAME_RATE) + " seconds.")
+
+
 
 
 def rotate_by(b_obj, rotation_euler):
