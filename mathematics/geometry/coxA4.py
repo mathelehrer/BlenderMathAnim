@@ -10,7 +10,7 @@ from multiprocessing import Pool
 
 import numpy as np
 
-from mathematics.geometry.field_extensions import QR, FMatrix, FVector, EpsilonTensor
+from mathematics.geometry.field_extensions import QR, FMatrix, FVector, EpsilonTensor, FTensor
 from mathematics.geometry.meshface import MeshFace
 from utils.string_utils import show_inline_progress_in_terminal
 
@@ -752,6 +752,47 @@ class CoxA4:
             self.save_dictionary(classes, filename)
         return classes
 
+    def check_normals(self, signature):
+        """
+        check normals for a given signature
+        """
+        if isinstance(signature, str):
+            signature = COXA4_SIGNATURES[signature]
+
+        vertices = self.point_cloud(signature)
+        cells = self.get_cells(signature)
+        faces = self.get_faces(signature)
+
+        for cell,normal in cells.items():
+            face1 = None
+            face2 = None
+            cell = set(cell)
+
+            # find two faces of the cell
+            for face in faces:
+                face = set(face)
+                if face<cell and face1 is None:
+                    face1 = list(face)
+                elif face<cell and face2 is None:
+                    face2 = list(face)
+                    break
+
+            v1 = vertices[face1[0]]
+            v2 = vertices[face1[1]]
+            v3 = vertices[face1[2]]
+            common = set(face1).intersection(set(face2))
+            different = set(face2).difference(common)
+            v4 = vertices[different.pop()]
+
+            # compute normal
+            e1 = v1-v4
+            e2 = v2-v4
+            e3 = v3-v4
+
+            tensor = e1*e2*e3
+            n = epsilon.contract(tensor, axes=[[1, 2, 3], [0, 1, 2]])
+
+            print(n,normal,normal.dot(e1),normal.dot(e2),normal.dot(e3),e1.dot(n),e2.dot(n),e3.dot(n))
 
 def process_element(args):
     elements, first_cell, vertices, vertex2index = args
@@ -764,6 +805,8 @@ def process_element(args):
             mapped_cell.append(vertex2index[target])
         mapped_cells.append(tuple(sorted(mapped_cell)))
     return set(mapped_cells)
+
+
 
 
 if __name__ == '__main__':
