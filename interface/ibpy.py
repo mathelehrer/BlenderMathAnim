@@ -519,9 +519,11 @@ def get_vertex_locations(bob):
         locations.append(obj.matrix_world @ v.co)
     return locations
 
+
 def get_vertices(bob):
     obj = get_obj(bob)
     return obj.data.vertices
+
 
 def smooth_mesh(bob):
     obj = get_obj(bob)
@@ -1054,7 +1056,7 @@ def link(obj, collection=None, recursively=True, **kwargs):
     obj = get_obj(obj)
     if collection is None:
         collection = bpy.context.scene.collection
-       # collection = 'Scene Collection'  # default collection
+    # collection = 'Scene Collection'  # default collection
     elif isinstance(collection, str):
         collection = bpy.data.collections[collection]
     # check, whether already linked object is added to the correct collection
@@ -1280,6 +1282,54 @@ def create_composition(denoising=None):
 def add_material(bob, material):
     obj = get_obj(bob)
     obj.data.materials.append(material)
+
+
+def append_materials(bobj, materials):
+    """
+    add additional materials to the material slots of an object
+    This function is used when a geometry nodes modifier is added to the object
+    add_mesh_modifier...
+
+    it can be used explicitly, when the materials are customized, after the geometry node has been created and added
+    """
+    obj = get_obj(bobj)
+    for mat in materials:
+        obj.data.materials.append(mat)
+
+
+def set_material(bob, material, slot=0):
+    obj = bob.ref_obj
+    if isinstance(material, str):
+        material = bpy.data.materials.get(material)
+
+    if material:
+        if len(obj.data.materials) == 0:
+            obj.data.materials.append(material)
+        else:
+            if len(obj.material_slots) <= slot:
+                obj.data.materials.append(material)
+            else:
+                obj.material_slots[slot].material = material
+    else:
+        print("No material found with name ", material)
+
+
+def assign_material_to_faces(bob, material_index, normal=Vector([0, 0, 1])):
+    """
+    asign the material to all faces with a given normal
+    :param bob:
+    :param material_index:
+    :param normal:
+    :return:
+    """
+
+    obj = get_obj(bob)
+    if len(obj.material_slots) <= material_index:
+        pass
+    else:
+        sel_faces = select_faces(obj.data.polygons, normal)
+        for face in sel_faces:
+            face.material_index = material_index
 
 
 def mix_color(bob, from_value, to_value, begin_frame, frame_duration):
@@ -2058,9 +2108,11 @@ def customize_material(material, **kwargs):
 
     return material
 
+
 def get_materials(bob):
     obj = get_obj(bob)
     return [slot.material for slot in obj.material_slots]
+
 
 def get_material(material, **kwargs):
     if isinstance(material, bpy.types.Material):
@@ -3201,7 +3253,7 @@ def make_iteration_material(**kwargs):
 
 def get_material_of(bob, slot=0):
     obj = get_obj(bob)
-    if slot<len(obj.material_slots):
+    if slot < len(obj.material_slots):
         return obj.material_slots[slot].material
 
 
@@ -3237,7 +3289,8 @@ def change_mixer(mixer, begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME 
 
     return begin_time + transition_time
 
-def set_default_value(slot, value=0, begin_time=0,data_path="default_value"):
+
+def set_default_value(slot, value=0, begin_time=0, data_path="default_value"):
     if isinstance(slot, bpy.types.ShaderNodeValue):
         slot = slot.outputs[0]
 
@@ -3246,6 +3299,7 @@ def set_default_value(slot, value=0, begin_time=0,data_path="default_value"):
     insert_keyframe(slot, data_path, int(begin_frame))
 
     return begin_time
+
 
 def change_default_value(slot, from_value, to_value, begin_time=None, transition_time=None, data_path="default_value",
                          begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME * FRAME_RATE):
@@ -3567,41 +3621,6 @@ def set_movie_start(bob, begin_frame=0):
     img = nodes['Image Texture']
     if img:
         img.image_user.frame_start = int(begin_frame)
-
-
-def set_material(bob, material, slot=0):
-    obj = bob.ref_obj
-    if isinstance(material, str):
-        material = bpy.data.materials.get(material)
-
-    if material:
-        if len(obj.data.materials) == 0:
-            obj.data.materials.append(material)
-        else:
-            if len(obj.material_slots) <= slot:
-                obj.data.materials.append(material)
-            else:
-                obj.material_slots[slot].material = material
-    else:
-        print("No material found with name ", material)
-
-
-def assign_material_to_faces(bob, material_index, normal=Vector([0, 0, 1])):
-    """
-    asign the material to all faces with a given normal
-    :param bob:
-    :param material_index:
-    :param normal:
-    :return:
-    """
-
-    obj = get_obj(bob)
-    if len(obj.material_slots) <= material_index:
-        pass
-    else:
-        sel_faces = select_faces(obj.data.polygons, normal)
-        for face in sel_faces:
-            face.material_index = material_index
 
 
 def select_faces(faces, normal):
@@ -5949,7 +5968,7 @@ def zero_all_shape_keys(blender_obj, appear_frame):
             insert_keyframe(blender_obj.data.shape_keys.key_blocks[i], "value", appear_frame)
 
 
-def morph_to_first_shape(blender_obj,appear_frame,frame_duration):
+def morph_to_first_shape(blender_obj, appear_frame, frame_duration):
     blender_obj = get_obj(blender_obj)
 
     next_shape = 1
@@ -5992,7 +6011,8 @@ def morph_to_next_shape2(blender_obj, current_shape_index, appear_frame, frame_d
     insert_keyframe(blender_obj.data.shape_keys.key_blocks[next_shape], "value", appear_frame + frame_duration)
     print("Transform to next mesh ", blender_obj.name)
 
-def morph_to_next_shape_with_pause(blender_obj, current_shape_index, appear_frame, frame_duration,pause_duration):
+
+def morph_to_next_shape_with_pause(blender_obj, current_shape_index, appear_frame, frame_duration, pause_duration):
     '''
     In this version, always all but the current shape are set to zero
     :param blender_obj:
@@ -6012,7 +6032,8 @@ def morph_to_next_shape_with_pause(blender_obj, current_shape_index, appear_fram
     insert_keyframe(blender_obj.data.shape_keys.key_blocks[next_shape], "value", appear_frame)
     blender_obj.data.shape_keys.key_blocks[next_shape].value = 1
     insert_keyframe(blender_obj.data.shape_keys.key_blocks[next_shape], "value", appear_frame + frame_duration)
-    insert_keyframe(blender_obj.data.shape_keys.key_blocks[next_shape], "value", appear_frame + frame_duration+pause_duration)
+    insert_keyframe(blender_obj.data.shape_keys.key_blocks[next_shape], "value",
+                    appear_frame + frame_duration + pause_duration)
     print("Transform to next mesh and enforce pause ", blender_obj.name)
 
 
@@ -6037,11 +6058,11 @@ def set_to_last_shape(blender_obj, appear_frame):
     return len(blender_obj.data.shape_keys.key_blocks)
 
 
-def set_to_first_shape(bob,begin_frame=0,transition_frames=0):
+def set_to_first_shape(bob, begin_frame=0, transition_frames=0):
     obj = get_obj(bob)
     for i in range(0, len(obj.data.shape_keys.key_blocks)):  # set all following blocks to zero
         obj.data.shape_keys.key_blocks[i].value = 0
-        insert_keyframe(obj.data.shape_keys.key_blocks[i], "value", begin_frame+transition_frames)
+        insert_keyframe(obj.data.shape_keys.key_blocks[i], "value", begin_frame + transition_frames)
     return 0
 
 
@@ -6487,19 +6508,6 @@ def add_mesh_modifier(bob, **kwargs):
             print("No node data was provided! You either need to add a 'node_group' or a  'node_modifier' keyword")
 
 
-def append_materials(bobj, materials):
-    """
-    add additional materials to the material slots of an object
-    This function is used when a geometry nodes modifier is added to the object
-    add_mesh_modifier...
-
-    it can be used explicitly, when the materials are customized, after the geometry node has been created and added
-    """
-    obj = get_obj(bobj)
-    for mat in materials:
-        obj.data.materials.append(mat)
-
-
 def replace_mesh_modifier(bob, **kwargs):
     '''
     This is a new start for a more generic modifier function
@@ -6565,10 +6573,10 @@ def disappear_all_copies_of_letters(begin_time=0, transition_time=DEFAULT_ANIMAT
 
 
 def fade_in(b_obj, frame=0, frame_duration=60, **kwargs):
-    begin_time=get_from_kwargs(kwargs,"begin_time",None)
+    begin_time = get_from_kwargs(kwargs, "begin_time", None)
     if begin_time is not None:
         frame = begin_time * FRAME_RATE
-    transition_time=get_from_kwargs(kwargs,"transition_time",None)
+    transition_time = get_from_kwargs(kwargs, "transition_time", None)
     if transition_time is not None:
         frame_duration = transition_time * FRAME_RATE
     alpha = get_from_kwargs(kwargs, 'alpha', 1)
@@ -6723,8 +6731,7 @@ def move_fast_from_to(b_obj, start=Vector(), end=Vector(), begin_frame=0,
     insert_keyframe(obj, "location", begin_frame + frame_duration)
 
 
-def move_to(b_obj, target, begin_frame, frame_duration, global_system=False, verbose=True,from_location=None):
-
+def move_to(b_obj, target, begin_frame, frame_duration, global_system=False, verbose=True, from_location=None):
     if from_location is not None:
         location = from_location
     else:
@@ -6741,8 +6748,6 @@ def move_to(b_obj, target, begin_frame, frame_duration, global_system=False, ver
         print(
             "MoveTo " + obj.name + " at time " + str(begin_frame / FRAME_RATE) + " for " + str(
                 frame_duration / FRAME_RATE) + " seconds.")
-
-
 
 
 def rotate_by(b_obj, rotation_euler):
@@ -6822,17 +6827,17 @@ def shrink_from(b_obj, pivot, begin_frame, frame_duration):
     insert_keyframe(obj, "scale", int(begin_frame + np.maximum(1, frame_duration)))
 
 
-def rescale(b_obj, re_scale, begin_frame, frame_duration,**kwargs):
+def rescale(b_obj, re_scale, begin_frame, frame_duration, **kwargs):
     obj = get_obj(b_obj)
 
     if not isinstance(re_scale, list):
         re_scale = [re_scale] * 3
 
-    from_scale=get_from_kwargs(kwargs,"from_scale",None)
+    from_scale = get_from_kwargs(kwargs, "from_scale", None)
     if from_scale is not None:
-        if isinstance(from_scale,(int,float)):
-            from_scale=[from_scale]*3
-        scale=from_scale
+        if isinstance(from_scale, (int, float)):
+            from_scale = [from_scale] * 3
+        scale = from_scale
     else:
         # this is expensive, use from_scale if possible
         scale = get_scale_at_frame(b_obj, begin_frame)
@@ -6928,7 +6933,7 @@ def shrink(b_obj, scale, begin_frame, frame_duration, initial_scale=None, modus=
         else:
             obj.scale = [initial_scale] * 3
     else:
-        set_frame(begin_frame)# make sure that current scale is keyframed
+        set_frame(begin_frame)  # make sure that current scale is keyframed
 
     insert_keyframe(obj, "scale", begin_frame)
     print(
@@ -7172,27 +7177,63 @@ Bounding boxes
 
 
 def get_bounding_box(bob):
-    o = get_obj(bob)
     x_min = np.Infinity
     x_max = -np.Infinity
     y_min = np.Infinity
     y_max = -np.Infinity
     z_min = np.Infinity
     z_max = -np.Infinity
-    bb = o.bound_box  # eight corner coordinates of the surrounding box
-    for b in bb:
-        if b[0] < x_min:
-            x_min = b[0]
-        if b[0] > x_max:
-            x_max = b[0]
-        if b[1] < y_min:
-            y_min = b[1]
-        if b[1] > y_max:
-            y_max = b[1]
-        if b[2] < z_min:
-            z_min = b[2]
-        if b[2] > z_max:
-            z_max = b[2]
+    if isinstance(bob, (list, tuple)):
+        for bo in bob:
+            obj = get_obj(bo)
+            bb = obj.bound_box
+            for b in bb:
+                if b[0] < x_min:
+                    x_min = b[0]
+                if b[0] > x_max:
+                    x_max = b[0]
+                if b[1] < y_min:
+                    y_min = b[1]
+                if b[1] > y_max:
+                    y_max = b[1]
+                if b[2] < z_min:
+                    z_min = b[2]
+                if b[2] > z_max:
+                    z_max = b[2]
+    else:
+        o = get_obj(bob)
+        if hasattr(o,"bound_box"):
+            bb = o.bound_box  # eight corner coordinates of the surrounding box
+            for b in bb:
+                if b[0] < x_min:
+                    x_min = b[0]
+                if b[0] > x_max:
+                    x_max = b[0]
+                if b[1] < y_min:
+                    y_min = b[1]
+                if b[1] > y_max:
+                    y_max = b[1]
+                if b[2] < z_min:
+                    z_min = b[2]
+                if b[2] > z_max:
+                    z_max = b[2]
+        else:
+            for child in bob.b_children:
+                obj = get_obj(child)
+                bb = obj.bound_box
+                for b in bb:
+                    if b[0] < x_min:
+                        x_min = b[0]
+                    if b[0] > x_max:
+                        x_max = b[0]
+                    if b[1] < y_min:
+                        y_min = b[1]
+                    if b[1] > y_max:
+                        y_max = b[1]
+                    if b[2] < z_min:
+                        z_min = b[2]
+                    if b[2] > z_max:
+                        z_max = b[2]
     return [x_min, y_min, z_min, x_max, y_max, z_max]
 
 
@@ -7744,7 +7785,7 @@ def camera_alignment_euler(bob, camera_location, ):
     return direction.to_track_quat('Z', 'Y').to_euler()
 
 
-def camera_alignment_quaternion(bob, camera_location, default = (0,0,1)):
+def camera_alignment_quaternion(bob, camera_location, default=(0, 0, 1)):
     """
     calculate the Euler angle that is needed to align an object to the camera perspective
     """
@@ -7757,12 +7798,12 @@ def camera_alignment_quaternion(bob, camera_location, default = (0,0,1)):
     direction.normalize()
 
     # no rotation would be needed, when the camera direction was (0,0,1)
-    if default == (0,0,1):
+    if default == (0, 0, 1):
         return direction.to_track_quat('Z', 'Y')
-    if default == (0,1,0):
-        return direction.to_track_quat('Y','Z')
-    if default == (0,-1,0):
-        return direction.to_track_quat('-Y','Z')
+    if default == (0, 1, 0):
+        return direction.to_track_quat('Y', 'Z')
+    if default == (0, -1, 0):
+        return direction.to_track_quat('-Y', 'Z')
 
 
 # work with operators
@@ -7791,7 +7832,7 @@ def adjust_mixer(bob, slot, from_value=0, to_value=1, begin_time=0, transition_t
                              begin_time=begin_time,
                              transition_time=transition_time)
 
-    return begin_time+transition_time
+    return begin_time + transition_time
 
 
 def set_mixer(bob, slot, value, begin_time):
@@ -7800,8 +7841,7 @@ def set_mixer(bob, slot, value, begin_time):
         mixer = get_node_from_shader(material, "FinalMixShader")
         if mixer is not None:
             set_default_value(mixer.inputs["Factor"],
-                                 value= value,
-                                 begin_time=begin_time)
+                              value=value,
+                              begin_time=begin_time)
 
     return begin_time
-

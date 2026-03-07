@@ -879,7 +879,8 @@ class BObject(object):
         :return:
         """
 
-        self.appear(alpha=alpha,begin_time=0, transition_time=0)
+        if not self.appeared:
+            self.appear(alpha=alpha,begin_time=0, transition_time=0)
         if pivot:
             ibpy.set_pivot(self, pivot)
         if scale is None:
