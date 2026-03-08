@@ -1097,8 +1097,8 @@ def make_image_material(src=None, **kwargs):
     brightness = get_from_kwargs(kwargs, "brightness", 0)
     contrast = get_from_kwargs(kwargs, "contrast", 0)
 
-    brightness_val = InputValue(tree,location=(-4.5,1),hide=True,value=brightness)
-    contrast_val = InputValue(tree,location=(-4.5,0.5),hide=True,value=contrast)
+    brightness_val = InputValue(tree,location=(-4.5,1),hide=True,value=brightness,name="Brightness",label="Brightness")
+    contrast_val = InputValue(tree,location=(-4.5,0.5),hide=True,value=contrast,name="Contrast",label="Contrast")
 
     brightness_node = BrightContrast(tree,location=(-2.5,0),
                                     color=img_out,bright=brightness_val.std_out,

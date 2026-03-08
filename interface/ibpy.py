@@ -3250,6 +3250,10 @@ def make_iteration_material(**kwargs):
 
     return material
 
+def change_brightness(mat,from_value=0,to_value=0.1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    bright= get_node_from_shader(mat,label="Brightness")
+    change_default_value(bright,from_value, to_value, begin_time, transition_time)
+    return begin_time+transition_time
 
 def get_material_of(bob, slot=0):
     obj = get_obj(bob)

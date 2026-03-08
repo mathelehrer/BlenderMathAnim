@@ -38,21 +38,21 @@ class Text(BObject):
         cube = ibpy.add_cube()
         self.kwargs = kwargs
 
-        #apply colors
-        color = get_from_kwargs(kwargs,'color',"text")
-        outline_color = get_from_kwargs(kwargs,'outline_color',color)
+        # this is all done in the modifier directly
+        # color = get_from_kwargs(kwargs,'color',"text")
+        # outline_color = get_from_kwargs(kwargs,'outline_color',color)
+        #
+        # mat = get_material(color,**kwargs)
+        # get_from_kwargs(kwargs,'emission',0) # just remove it from kwargs
+        # outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        # mat_outline = get_material(outline_color,emission=outline_emission,**kwargs)
+        # material_node = get_geometry_node_from_modifier(self.modifier,label="FontMaterial")
+        # outline_material_node = get_geometry_node_from_modifier(self.modifier,label="OutlineMaterial")
+        #
+        # material_node.inputs['Material'].default_value= mat
+        # outline_material_node.inputs['Material'].default_value = mat_outline
 
-        mat = get_material(color,**kwargs)
-        get_from_kwargs(kwargs,'emission',0) # just remove it from kwargs
-        outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
-        mat_outline = get_material(outline_color,emission=outline_emission,**kwargs)
-        material_node = get_geometry_node_from_modifier(self.modifier,label="FontMaterial")
-        outline_material_node = get_geometry_node_from_modifier(self.modifier,label="OutlineMaterial")
-        outline_radius = get_from_kwargs(kwargs,'outline_radius',0.01)
-
-        material_node.inputs['Material'].default_value= mat
-        outline_material_node.inputs['Material'].default_value = mat_outline
-
+        outline_radius = get_from_kwargs(kwargs, 'outline_radius', 0.01)
         keep_outline = get_from_kwargs(kwargs, 'keep_outline', False)
         keep_outline_node = get_geometry_node_from_modifier(self.modifier, "KeepOutline")
         if keep_outline:
