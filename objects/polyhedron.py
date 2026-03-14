@@ -962,7 +962,7 @@ class PolyhedronWithModifier(BObject):
                     else:
                         ibpy.set_mixer(self, slot, value=0, begin_time=0)
 
-        modifier = PolyhedronViewModifier()
+        modifier = PolyhedronViewModifier(**kwargs)
         self.add_mesh_modifier(type="NODES", node_modifier=modifier)
 
     def transform_colors(self, shape_key=1, face_classes={}, begin_time=0, transition_time=0):
@@ -997,7 +997,7 @@ class PolyhedronWithModifier(BObject):
                 if target in [3, 4, 5]:
                     ibpy.adjust_mixer(self, slot=slot, from_value=0, to_value=1, begin_time=begin_time,
                                       transition_time=transition_time)
-                else:
+                elif target in [6,8,10]: # ignore target 0
                     ibpy.adjust_mixer(self, slot=slot, from_value=1, to_value=0, begin_time=begin_time,
                                       transition_time=transition_time)
 

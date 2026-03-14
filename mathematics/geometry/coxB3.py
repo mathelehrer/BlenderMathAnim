@@ -10,6 +10,19 @@ from interface.ibpy import Vector
 from mathematics.geometry.field_extensions import QR, FTensor, FMatrix, FVector
 from mathematics.geometry.meshface import MeshFace
 
+COXB3_CD_LABELS = {
+    "o3o4x": [0, 1, 0],  # 8 (square)
+    "x3o4o": [1, 0, 0],  # 6 (triangle)
+    "o3x4o": [0, 0, 1],  # 12 (square,triangle)
+
+
+    "x3x4o": [1, 0,-1],  # 24 (hexagons,squares)
+    "x3o4x": [1, 1, 0],  # 24 (squares,hexagons)
+    "o3x4x": [1,  1, 1],  # 24 (triangles, octagons)
+
+    "x3x4x": [1, 1, -1]  # 48 (hexagon, squares,octagons)
+}
+
 COXB3_SEEDS= {
     "OCTA":FVector.parse("[1, 0, -1]"),
     "CUBE":FVector.parse("[0, 1,-r2]"),
@@ -33,9 +46,9 @@ COXB3_SIGNATURES= {
 COXB3_TYPES={
     (1,0,0):"OCTA",
     (0,1,0):"CUBE",
+    (0,0,1):"CUBOCTA",
     (1,0,-1):"TRUNC_OCTA",
     (1,1,1):"TRUNC_CUBE",
-    (0,0,1):"CUBOCTA",
     (1,1,0):"RHOMBICUBOCTA",
     (1,1,-1):"TRUNC_CUBOCTA"
 }

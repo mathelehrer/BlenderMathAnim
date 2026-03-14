@@ -29,6 +29,7 @@ class DynkinDiagram(BObject):
         self.scale = get_from_kwargs(kwargs, "scale", [1, 1, 1])
         self.text_size = get_from_kwargs(kwargs, "text_size", "Large")
         self.text_offset = Vector([-1.2, 0, 0.5])
+        self.active_rings = [False]*self.dim
         if self.text_size == "Huge":
             self.text_offset = Vector([-1.5, 0, 0.85])
         if isinstance(self.scale, (int, float)):
@@ -38,14 +39,16 @@ class DynkinDiagram(BObject):
             self.spheres = []
             self.cylinders = []
             self.labels = []
-            self.rings = []
+            self.rings = [None] * self.dim
             root = graph
             root_location = Vector([0, 0, 0])
             self.locations.append(root_location)
             root_sphere = Sphere(r=0.25, location=root_location, color='plastic_example')
             if root.name[1] == 1:
-                self.rings.append(Circle2(center=[root_location.x, root_location.z], radius=0.5, num_points=20,
-                                          color="plastic_example", thickness=1, rotation_euler=[0, 0, 0], mode="XZ"))
+                self.active_rings[root.name[0]]=True
+            self.rings[root.name[0]] = Circle2(center=[root_location.x, root_location.z], radius=0.5, num_points=20,
+                                               color="plastic_example", thickness=1, rotation_euler=[0, 0, 0],
+                                               mode="XZ")
             self.spheres.append(root_sphere)
             self._place_children(root, root_location)
 
@@ -175,25 +178,25 @@ class DynkinDiagram(BObject):
                 if i < len(edge_changes):
                     edge_changes[i] -= 1
 
-        print(from_state, to_state, from_on_flags, to_on_flags, edge_changes)
+        # print(from_state, to_state, from_on_flags, to_on_flags, edge_changes)
 
         for i, (from_flag, to_flag) in enumerate(zip(from_on_flags, to_on_flags)):
-            print(from_flag, to_flag)
+            # print(from_flag, to_flag)
             if from_flag is True and to_flag is False:
                 self.rings[i].shrink(begin_time=begin_time, transition_time=transition_time)
                 self.ring_tags[i] = False
                 if i < len(edge_changes):
-                    self.cylinders[i].move(direction=[-0.25, 0, 0], begin_time=begin_time,
+                    self.cylinders[i].move(direction=[-0.5, 0, 0], begin_time=begin_time,
                                            transition_time=transition_time)
 
             elif from_flag is False and to_flag is True:
                 self.rings[i].grow(begin_time=begin_time, transition_time=transition_time)
                 self.ring_tags[i] = True
                 if i < len(edge_changes):
-                    self.cylinders[i].move(direction=[0.25, 0, 0], begin_time=begin_time,
+                    self.cylinders[i].move(direction=[0.5, 0, 0], begin_time=begin_time,
                                            transition_time=transition_time)
             if i < len(edge_changes):
-                self.cylinders[i].rescale(rescale=[1, 1, 1.25 ** edge_changes[i]], begin_time=begin_time,
+                self.cylinders[i].rescale(rescale=[1, 1, 1.4 ** edge_changes[i]], begin_time=begin_time,
                                           transition_time=transition_time)
 
         return begin_time + transition_time
@@ -222,8 +225,9 @@ class DynkinDiagram(BObject):
         if len(self.rings) > 0:
             dt = transition_time / len(self.rings)
             for i, ring in enumerate(self.rings):
-                ring.grow(begin_time=begin_time + i * dt, transition_time=dt)
-                self.ring_tags[i] = True
+                if self.active_rings[i]:
+                    ring.grow(begin_time=begin_time + i * dt, transition_time=dt)
+                    self.ring_tags[i] = True
 
         return begin_time + transition_time
 
@@ -293,9 +297,10 @@ class DynkinDiagram(BObject):
             child_sphere = Sphere(r=0.25, location=child_location, color='plastic_example')
             self.spheres.append(child_sphere)
             if child.name[1] == 1:
-                self.rings.append(Circle2(center=[child_location.x, child_location.z], radius=0.5,
-                                          num_points=20, color="plastic_example",
-                                          thickness=1, rotation_euler=[0, 0, 0], mode="XZ"))
+                self.active_rings[child.name[0]] = True
+            self.rings[child.name[0]] = Circle2(center=[child_location.x, child_location.z], radius=0.5,
+                                                num_points=20, color="plastic_example",
+                                                thickness=1, rotation_euler=[0, 0, 0], mode="XZ")
             if hasattr(child, "weight"):
                 if child.weight > 2:
                     ring_size = 0.5
@@ -331,9 +336,10 @@ class DynkinDiagram(BObject):
                 child_sphere = Sphere(r=0.25, location=child_location, color='plastic_example')
                 self.spheres.append(child_sphere)
                 if child.name[1] == 1:
-                    self.rings.append(Circle2(center=[child_location.x, child_location.z], radius=0.5,
-                                              num_points=20, color="plastic_example",
-                                              thickness=1, rotation_euler=[0, 0, 0], mode="XZ"))
+                    self.active_rings[child.name[0]]=True
+                self.rings[child.name[0]] = Circle2(center=[child_location.x, child_location.z], radius=0.5,
+                                                    num_points=20, color="plastic_example",
+                                                    thickness=1, rotation_euler=[0, 0, 0], mode="XZ")
                 if hasattr(child, "weight"):
                     if child.weight > 2:
                         ring_size = 0.5

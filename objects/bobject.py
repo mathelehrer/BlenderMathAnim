@@ -89,7 +89,8 @@ class BObject(object):
                         ibpy.set_parent(obj,self)
             elif parenting:
                 for obj in self.b_children:
-                    ibpy.set_parent(obj,self)
+                    if obj is not None:
+                        ibpy.set_parent(obj,self)
 
 
         # set color
