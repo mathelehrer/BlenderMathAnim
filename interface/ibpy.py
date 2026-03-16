@@ -6618,7 +6618,7 @@ def change_alpha_of_material(mat, from_value=0, to_value=1, begin_time=0, transi
         raise "Cannot change Alpha for non BSDF nodes"
 
 
-def change_alpha(b_obj, frame, frame_duration, alpha=0, slot=0, viewport="material"):
+def change_alpha(b_obj, frame, frame_duration,from_value=None, to_value=None, alpha=0, slot=0, viewport="material"):
     """
     fade out b_object and hide it from scene
     it is recursively applied to all the children
@@ -6631,9 +6631,14 @@ def change_alpha(b_obj, frame, frame_duration, alpha=0, slot=0, viewport="materi
     :return:
     """
     obj = get_obj(b_obj)
-    alpha0 = get_alpha_at_current_keyframe(obj, frame, slot)
+    if from_value is None:
+        alpha0 = get_alpha_at_current_keyframe(obj, frame, slot)
+    else:
+        alpha0 = from_value
+    if to_value is None:
+        to_value = alpha
     set_alpha_and_keyframe(obj, alpha0, frame, slot, viewport=viewport)
-    set_alpha_and_keyframe(obj, alpha, frame + frame_duration, slot, viewport=viewport)
+    set_alpha_and_keyframe(obj, to_value, frame + frame_duration, slot, viewport=viewport)
 
 
 def change_shader_value(b_object, node, input, initial_value=0, final_value=1, frame=0,

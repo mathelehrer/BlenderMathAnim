@@ -720,7 +720,7 @@ class BObject(object):
                     child.appear(begin_time=begin_time + i * dt, transition_time=dt)
         return begin_time + transition_time
 
-    def change_alpha(self, slot = 0,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+    def change_alpha(self, slot = 0,from_value=None, to_value=None , alpha=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         """
         only call this function, after changes in alpha due to appearance have settled
         :param transition_time:
@@ -728,12 +728,23 @@ class BObject(object):
         :return:
         """
 
+        if alpha is not None:
+            to_value = alpha
+
+        children = get_from_kwargs(kwargs,"children",True)
         if transition_time == 0:
             transition_frames = 1
         else:
             transition_frames = transition_time * FRAME_RATE
 
-        ibpy.change_alpha(self, begin_time*FRAME_RATE, transition_frames, alpha=alpha, slot=slot,**kwargs)
+        ibpy.change_alpha(self, begin_time*FRAME_RATE, transition_frames, from_value=from_value,to_value=to_value,
+                          alpha=alpha, slot=slot,**kwargs)
+
+        if children:
+            for child in self.b_children:
+                child.change_alpha(slot=slot, from_value=from_value,to_value=to_value, alpha=alpha,
+                                   begin_time=begin_time,transition_time=transition_time,children =children, **kwargs)
+
         return begin_time+transition_time
 
     def toggle_hide(self,begin_time=0):
