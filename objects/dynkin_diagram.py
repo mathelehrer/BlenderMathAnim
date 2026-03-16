@@ -8,7 +8,7 @@ from objects.circle import Circle2
 from objects.cylinder import Cylinder
 from objects.geometry.sphere import Sphere
 from objects.text import Text
-from utils.constants import DEFAULT_ANIMATION_TIME
+from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
 from utils.kwargs import get_from_kwargs
 from interface.ibpy import Vector, to_vector
 
@@ -220,6 +220,7 @@ class DynkinDiagram(BObject):
         if len(self.labels) > 0:
             dt = transition_time / len(self.labels)
             for i, label in enumerate(self.labels):
+                label.appear(begin_time=begin_time + i * dt, transition_time=0)
                 label.write(begin_time=begin_time + i * dt, transition_time=dt)
 
         if len(self.rings) > 0:
