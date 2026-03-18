@@ -429,6 +429,8 @@ def get_texture(material, **kwargs):
             return make_movie_material(**kwargs)
         elif material == 'gradient':
             material = make_gradient_material(**kwargs)
+        elif material == "frosty":
+            material = make_frosty_material(**kwargs)
         elif material == 'dashed':
             material = make_dashed_material(**kwargs)
         elif material == 'magnet':
@@ -989,6 +991,30 @@ def light_up_material(material, brighter):
 
     bsdf.inputs['Base Color'].default_value = color
     return mat
+
+def make_frosty_material(**kwargs):
+    material = bpy.data.materials.new(name="frosty")
+    material.use_nodes = True
+    tree = material.node_tree
+
+    nodes = tree.nodes
+    links = tree.links
+
+    bsdf = nodes['Principled BSDF']
+    ramp = ColorRamp(tree,location=(-4,0),color_dictionary={0:[0.375,0.388,0.5,1],1:[0.375,0.5,0.5,1]})
+    hsv = HueSaturationValueNode(tree,location =(-2,0),
+                                 hue=0.5,saturation=0.75,value=1,color=ramp.std_out)
+
+    links.new(hsv.outputs['Color'], bsdf.inputs['Base Color'])
+
+    bsdf.inputs["Roughness"].default_value=0.25
+    bsdf.inputs["IOR"].default_value=1.45
+    bsdf.inputs["Transmission Weight"].default_value=1
+    bsdf.inputs["Coat Weight"].default_value=0.2
+    bsdf.inputs["Coat Roughness"].default_value=0.75
+    bsdf.inputs["Coat IOR"].default_value=1.45
+
+    return material
 
 def make_colorscript_bezier_curve(bob, osl_script, scale=[1, 1, 1], emission_strength=0.3):
     """

@@ -191,6 +191,6 @@ class Cylinder(GeoBObject):
         self.move(direction=direction,begin_time=begin_time,transition_time=transition_time)
         self.rescale(rescale=[1,1,new_dir.length/dir.length],begin_time=begin_time,transition_time=transition_time)
         quaternion = get_rotation_quaternion_from_start_and_end(start, end)
-        self.rotate(rotation_quaternion =quaternion,begin_time=begin_time,transition_time=transition_time)
+        self.rotate(rotation_quaternion = quaternion,begin_time=begin_time,transition_time=transition_time)
         self.start = start
         self.end = end

@@ -270,34 +270,34 @@ class ColorRamp(ShaderNode):
 
         if "color_dictionary" in kwargs:
             color_dictionary = kwargs["color_dictionary"]
-            # remove curly braces
-            color_dictionary = color_dictionary[1:-1]
-            dict = {}
-            key_flag = True
-            string = False
-            key_str = ""
-            val_str = ""
-            for l in color_dictionary:
-                if l == ':' and not string:
-                    key_flag = False
-                elif l == "'":
-                    if string:
-                        string = False
-                    else:
-                        string = True
-                elif l == ',' and not string:
-                    key_flag = True
-                    dict[float(key_str)] = parse_vector(val_str)
-                    key_str = ""
-                    val_str = ""
-                else:
-                    if key_flag:
-                        key_str += l
-                    else:
-                        val_str += l
-            # add last element
-            dict[float(key_str)] = parse_vector(val_str)
-            color_dictionary = dict
+            # # remove curly braces
+            # color_dictionary = color_dictionary[1:-1]
+            # dict = {}
+            # key_flag = True
+            # string = False
+            # key_str = ""
+            # val_str = ""
+            # for l in color_dictionary:
+            #     if l == ':' and not string:
+            #         key_flag = False
+            #     elif l == "'":
+            #         if string:
+            #             string = False
+            #         else:
+            #             string = True
+            #     elif l == ',' and not string:
+            #         key_flag = True
+            #         dict[float(key_str)] = parse_vector(val_str)
+            #         key_str = ""
+            #         val_str = ""
+            #     else:
+            #         if key_flag:
+            #             key_str += l
+            #         else:
+            #             val_str += l
+            # # add last element
+            # dict[float(key_str)] = parse_vector(val_str)
+            # color_dictionary = dict
             values = list(color_dictionary.keys())
             colors = list(color_dictionary.values())
         else:
