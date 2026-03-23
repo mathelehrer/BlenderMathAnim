@@ -1005,6 +1005,12 @@ class BObject(object):
     def un_hide(self, begin_time=0):
         ibpy.unhide(self, begin_time=begin_time)
 
+    def make_invisible(self,begin_time=0):
+        ibpy.hide(self,begin_time=begin_time)
+
+    def make_visible(self,begin_time=0):
+        ibpy.unhide(self,begin_time=begin_time)
+
     def change_emission(self, from_value=0, to_value=1, slot=0,slots=None,begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         ibpy.change_emission(self, from_value=from_value, to_value=to_value, slot=slot,slots=slots,begin_frame=begin_time * FRAME_RATE,
                         frame_duration=transition_time * FRAME_RATE)

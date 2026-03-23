@@ -520,16 +520,26 @@ class Mapping(ShaderNode):
 
 class NoiseTexture(ShaderNode):
     def __init__(self, tree, location=(0, 0), noise_dimensions='3D', noise_type='FBM', normalize=True,
-                 color_dictionary={}, **kwargs):
+                 color_dictionary={},std_out="Color",
+                 scale=5,detail=2,**kwargs):
         self.node = tree.nodes.new(type="ShaderNodeTexNoise")
 
         super().__init__(tree, location, **kwargs)
 
+        self.std_out = self.node.outputs[std_out]
         self.node.noise_dimensions = noise_dimensions
         self.node.noise_type = noise_type
         self.node.normalize = normalize
         for key, value in color_dictionary.items():
             self.node.color_ramp.elements[key].color = parse_vector(value)
+
+        if isinstance(scale, (int, float)):
+            self.node.inputs['Scale'].default_value = scale
+        else:
+            self.tree.links.new(scale, self.node.inputs['Scale'])
+
+        if isinstance(detail, (int, float)):
+            self.node.inputs['Detail'].default_value = detail
 
 
 class MixNode(ShaderNode):

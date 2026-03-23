@@ -248,6 +248,7 @@ class DynkinDiagram(BObject):
 
     @classmethod
     def from_string(cls, dynkin_string, **kwargs):
+        dynkin_string = dynkin_string.replace(".", "2")
         if dynkin_string == "x3x3x *b3x":
             return DynkinDiagram.d4(rings=[1, 1, 1, 1], **kwargs)
         elif dynkin_string == "o3x3x *b3x":
@@ -284,7 +285,7 @@ class DynkinDiagram(BObject):
                     weight = None
             else:
                 weight = int(char)
-        return DynkinDiagram(dim=dim, graph=first, move_to_center=True, **kwargs)
+        return DynkinDiagram(dim=dim, graph=first, name=dynkin_string,move_to_center=True, **kwargs)
 
     def _place_children(self, node, node_location):
         children = node.children

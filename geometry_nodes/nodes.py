@@ -1961,6 +1961,24 @@ class MeshBoolean(GreenNode):
             else:
                 tree.links.new(hole_tolerant,self.node.inputs["Hole Tolerant"])
 
+class DistributePointsOnFaces(GreenNode):
+    def __init__(self,tree,location=(0,0),distribute_method="RANDOM",density=10,seed=0,selection=None,**kwargs):
+        self.node=tree.nodes.new(type="GeometryNodeDistributePointsOnFaces")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.geometry_out=self.node.outputs["Points"]
+        self.geometry_in=self.node.inputs["Mesh"]
+
+        if selection is not None:
+            tree.links.new(selection,self.node.inputs["Selection"])
+        if isinstance(density,(float,int)):
+            self.node.inputs["Density"].default_value=density
+        else:
+            tree.links.new(density,self.node.inputs["Density"])
+        if isinstance(seed,(int,float)):
+            self.node.inputs["Seed"].default_value=seed
+        else:
+            tree.links.new(seed,self.node.inputs["Seed"])
 
 # Attributes
 
@@ -2695,7 +2713,7 @@ class RandomValue(BlueNode):
         if data_type == "FLOAT_VECTOR":
             self.std_out = self.node.outputs[0]
         else:
-            self.std_out == self.node.outputs[1]
+            self.std_out = self.node.outputs[1]
 
         if self.node.data_type == "FLOAT":
             if isinstance(min, (int, float)):

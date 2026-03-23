@@ -25,9 +25,11 @@ from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_s
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
 
+
 def flatten(list_of_lists):
     list_flat = [entry for sublist in list_of_lists for entry in sublist]
     return list_flat
+
 
 def convert_strings_to_colors(color_names):
     if isinstance(color_names, str):
@@ -38,23 +40,26 @@ def convert_strings_to_colors(color_names):
             return_list.append(convert_strings_to_colors(l))
         return return_list
 
+
 def get_color_from_name(color_name):
     return COLORS_SCALED[COLOR_NAMES.index(color_name)]
+
 
 def copy_attributes(attributes, old_prop, new_prop):
     """copies the list of attributes from the old to the new prop if the attribute exists"""
 
     #check if the attribute exists and copy it
     for attr in attributes:
-        if hasattr( new_prop, attr ):
+        if hasattr(new_prop, attr):
             try:
                 # catch attributes that are readonly
-                setattr( new_prop, attr, getattr( old_prop, attr ) )
+                setattr(new_prop, attr, getattr(old_prop, attr))
             except AttributeError:
                 pass
             pass
 
-def copy_properties(old_prop,new_prop):
+
+def copy_properties(old_prop, new_prop):
     """
     This function recursively copies all properties from the old node to the new node
     Unfortunately the recursion doesn't work full
@@ -62,8 +67,10 @@ def copy_properties(old_prop,new_prop):
     as for instance "image_user" for the image texture node
     or "color_ramp" for the color ramp node
     """
-    ignore_attributes = ("rna_type", "type", "dimensions", "inputs", "outputs", "internal_links", "select","asset_data","pixels",
-                         "color_tag","texture_mapping","color_mapping","multilayer_layer","multilayer_pass","multilayer_view") # these are mostly read-only attributes
+    ignore_attributes = ("rna_type", "type", "dimensions", "inputs", "outputs", "internal_links", "select",
+                         "asset_data", "pixels",
+                         "color_tag", "texture_mapping", "color_mapping", "multilayer_layer", "multilayer_pass",
+                         "multilayer_view")  # these are mostly read-only attributes
     attributes = []
     for attr in old_prop.bl_rna.properties:
         # check if the attribute should be copied and add it to the list of attributes to copy
@@ -76,20 +83,20 @@ def copy_properties(old_prop,new_prop):
             try:
                 # make recursion for selected attributes
                 copy = True
-                if attr=="image_user": # used for movies shown as light shows
-                    copy = False # the image_user attribute is read-only, but it's children can be copied
+                if attr == "image_user":  # used for movies shown as light shows
+                    copy = False  # the image_user attribute is read-only, but it's children can be copied
                     if hasattr(getattr(old_prop, attr), "bl_rna"):
                         copy_properties(getattr(old_prop, attr), getattr(new_prop, attr))
-                elif attr=="color_ramp":
-                    if hasattr(getattr(old_prop,attr),"bl_rna"):
-                        copy_properties(getattr(old_prop,attr), getattr(new_prop, attr))
-                        copy=False
-                elif attr=="elements":
+                elif attr == "color_ramp":
+                    if hasattr(getattr(old_prop, attr), "bl_rna"):
+                        copy_properties(getattr(old_prop, attr), getattr(new_prop, attr))
+                        copy = False
+                elif attr == "elements":
                     # if hasattr(getattr(old_prop,attr),"bl_rna"):
                     #     copy_properties(getattr(old_prop,attr), getattr(new_prop, attr))
-                    for i,item in enumerate(getattr(old_prop,attr)):
-                        getattr(new_prop,attr)[i].position=item.position
-                        getattr(new_prop,attr)[i].color=item.color
+                    for i, item in enumerate(getattr(old_prop, attr)):
+                        getattr(new_prop, attr)[i].position = item.position
+                        getattr(new_prop, attr)[i].color = item.color
                         copy = False
 
                 if copy:
@@ -99,7 +106,7 @@ def copy_properties(old_prop,new_prop):
                 raise "Something went wrong with copying properties"
 
 
-def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0),first=True,suffix=""):
+def copy_nodes_and_links_from_material(node_tree, material, exclude=[], shift=(0, 0), first=True, suffix=""):
     """
     copy all nodes and links from one material to a new node_tree
     """
@@ -108,7 +115,7 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
 
     # names of old and new nodes can differ by a number, when there are the same nodes appearing in both materials
     # create a name dictionary from old to new nodes
-    name_dictionary ={}
+    name_dictionary = {}
     new_nodes = node_tree.nodes
     new_links = node_tree.links
     mat_out = new_nodes.get("Material Output")
@@ -122,10 +129,10 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
 
             new_node = new_nodes.new(node.bl_idname)
             if node.bl_idname == "NodeFrame":
-                frame_dictionary[node] =new_node
+                frame_dictionary[node] = new_node
 
             # add relevant properties to the old node to the new node
-            copy_properties(node,new_node)
+            copy_properties(node, new_node)
 
             # take care of unique naming after the properties have been copied, since the name is a property as well
             new_node.name = node.name + suffix
@@ -134,14 +141,14 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
 
             # copy the attributes for all inputs
             for i, inp in enumerate(node.inputs):
-                copy_attributes(("default_value","name"),inp,new_node.inputs[i])
+                copy_attributes(("default_value", "name"), inp, new_node.inputs[i])
 
             # copy the attributes for all outputs
             for i, out in enumerate(node.outputs):
-                copy_attributes(("default_value","name"), out, new_node.outputs[i])
+                copy_attributes(("default_value", "name"), out, new_node.outputs[i])
 
             #adjust location
-            new_node.location = (node.location[0]+shift[0], node.location[1]+shift[1])
+            new_node.location = (node.location[0] + shift[0], node.location[1] + shift[1])
 
     # copy the links between the nodes to the created groups nodes
     for node in nodes:
@@ -162,33 +169,33 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
 
             # find link to connect it to the mix shader
             # for mix_textures
-            mix = new_nodes.get("FinalMixShader"+suffix)
+            mix = new_nodes.get("FinalMixShader" + suffix)
             if mix:
                 for link in node.inputs["Surface"].links:
-                    node_name=name_dictionary[link.from_node.name]
+                    node_name = name_dictionary[link.from_node.name]
                     if not first:
-                        node_name = link.from_node.name+suffix
+                        node_name = link.from_node.name + suffix
                     connected_node = new_nodes.get(node_name)
-                    identifier=link.from_socket.identifier
+                    identifier = link.from_socket.identifier
                     new_links.new(connected_node.outputs[identifier], mix.inputs[2])
-                    old_shader_out=mix.outputs["Shader"]
+                    old_shader_out = mix.outputs["Shader"]
                 for link in node.inputs["Displacement"].links:
                     if not first:
-                        node_name = link.from_node.name+suffix
+                        node_name = link.from_node.name + suffix
                     else:
                         node_name = link.from_node.name
                     connected_node = new_nodes.get(name_dictionary[node_name])
-                    identifier=link.from_socket.identifier
+                    identifier = link.from_socket.identifier
                     new_links.new(connected_node.outputs[identifier], mat_out.inputs["Displacement"])
             else:
                 for link in node.inputs["Surface"].links:
-                    node_name=name_dictionary[link.from_node.name]
+                    node_name = name_dictionary[link.from_node.name]
                     connected_node = new_nodes.get(node_name)
-                    identifier=link.from_socket.identifier
+                    identifier = link.from_socket.identifier
                     old_shader_out = connected_node.outputs[identifier]
 
             # deal with light sources
-            light_out =new_nodes.get("Light Output")
+            light_out = new_nodes.get("Light Output")
             if light_out:
                 # get emission node
                 emission_node = new_nodes.get("Emission")
@@ -198,7 +205,7 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
                     last_shader = nodes.get(link.from_node.name)
                     for link in last_shader.inputs["Base Color"].links:
                         connected_node = new_nodes.get(name_dictionary[link.from_node.name])
-                        identifier=link.from_socket.identifier
+                        identifier = link.from_socket.identifier
                         new_links.new(connected_node.outputs[identifier], emission_node.inputs["Color"])
 
                 new_nodes.remove(new_nodes.get(name_dictionary[node.name]))
@@ -206,36 +213,36 @@ def copy_nodes_and_links_from_material(node_tree,material,exclude=[],shift=(0,0)
 
     # redo parent attributes
     # if there are frames, the parent attributes are set to the old frames
-    if len(frame_dictionary)>0:
+    if len(frame_dictionary) > 0:
         for node in new_nodes:
             # print(node)
-            if getattr(node,"parent") is not None:
+            if getattr(node, "parent") is not None:
                 # print(node,": ", getattr(node,"parent"))
-                if getattr(node,"parent") in frame_dictionary:
-                    setattr(node,"parent",frame_dictionary[getattr(node,"parent")])
+                if getattr(node, "parent") in frame_dictionary:
+                    setattr(node, "parent", frame_dictionary[getattr(node, "parent")])
                     # print(node, ": ", getattr(node, "parent"))
 
     return old_shader_out
+
 
 def mix_texture(**kwargs):
     colors = get_from_kwargs(kwargs, "colors", None)
 
     if colors is None:
-        material1 = get_from_kwargs(kwargs,"material1", "joker")
+        material1 = get_from_kwargs(kwargs, "material1", "joker")
         mat1 = get_texture(material1, **kwargs)
-        material2 = get_from_kwargs(kwargs,"material2", "drawing")
+        material2 = get_from_kwargs(kwargs, "material2", "drawing")
         mat2 = get_texture(material2, **kwargs)
-        mats = [mat1,mat2]
+        mats = [mat1, mat2]
         material_name = 'mix_' + material1 + "_" + material2
     else:
-        mats = [get_texture(mat,**kwargs) for mat in colors]
+        mats = [get_texture(mat, **kwargs) for mat in colors]
         material_name = 'mix_'
         for material in colors:
             material_name += material + "_"
-        material_name=material_name[:-1]
+        material_name = material_name[:-1]
 
-
-    separation=get_from_kwargs(kwargs,"separation", 2)
+    separation = get_from_kwargs(kwargs, "separation", 2)
 
     material = bpy.data.materials.new(name=material_name)
     material.use_nodes = True
@@ -244,105 +251,107 @@ def mix_texture(**kwargs):
     links = material.node_tree.links
 
     out = nodes.get("Material Output")
-    out.location = (out.location[0]+(separation+1)*200,out.location[1])
+    out.location = (out.location[0] + (separation + 1) * 200, out.location[1])
     nodes.remove(nodes.get("Principled BSDF"))
 
     last_shader = out.inputs["Surface"]
 
-    first=True
-    for i,mat in enumerate(mats):
+    first = True
+    for i, mat in enumerate(mats):
         # Copy nodes and links from first material
         if first:
-            old_shader_out = copy_nodes_and_links_from_material(tree,mat,exclude=["ShaderNodeOutputMaterial"],shift=(0,200*separation),first=True)
+            old_shader_out = copy_nodes_and_links_from_material(tree, mat, exclude=["ShaderNodeOutputMaterial"],
+                                                                shift=(0, 200 * separation), first=True)
             first = False
         else:
-            mix_shader = MixShader(tree, location=(separation, -i), name="FinalMixShader_"+str(i))
-            mix_shader.label = "FinalMixShader_"+str(i)
+            mix_shader = MixShader(tree, location=(separation, -i), name="FinalMixShader_" + str(i))
+            mix_shader.label = "FinalMixShader_" + str(i)
             links.new(mix_shader.outputs["Shader"], last_shader)
-            tree.links.new(old_shader_out,mix_shader.inputs[1])
+            tree.links.new(old_shader_out, mix_shader.inputs[1])
             copy_nodes_and_links_from_material(tree, mat, exclude=["ShaderNodeOutputMaterial"],
                                                shift=(0, -200 * i * separation), first=False, suffix="_" + str(i))
 
             old_shader_out = mix_shader.outputs["Shader"]
             factor = get_from_kwargs(kwargs, "factor", None)
             if factor is not None:
-                mix_shader.inputs[0].default_value=factor
-
+                mix_shader.inputs[0].default_value = factor
 
     return material
+
 
 def create_old_paper(**kwargs):
     material = create_from_xml("old_paper")
-    uv_shift =get_from_kwargs(kwargs,"uv_shift", None)
+    uv_shift = get_from_kwargs(kwargs, "uv_shift", None)
     if uv_shift is not None:
-        shift_x = get_node_from_shader(material,"UVShiftX")
-        change_default_value(shift_x,from_value=0,to_value=uv_shift[0],begin_time=0,transition_time=0)
-        shift_y = get_node_from_shader(material,"UVShiftY")
-        change_default_value(shift_y,from_value=0,to_value=uv_shift[1],begin_time=0,transition_time=0)
-        shift_z = get_node_from_shader(material,"UVShiftZ")
-        change_default_value(shift_z,from_value=0,to_value=uv_shift[2],begin_time=0,transition_time=0)
+        shift_x = get_node_from_shader(material, "UVShiftX")
+        change_default_value(shift_x, from_value=0, to_value=uv_shift[0], begin_time=0, transition_time=0)
+        shift_y = get_node_from_shader(material, "UVShiftY")
+        change_default_value(shift_y, from_value=0, to_value=uv_shift[1], begin_time=0, transition_time=0)
+        shift_z = get_node_from_shader(material, "UVShiftZ")
+        change_default_value(shift_z, from_value=0, to_value=uv_shift[2], begin_time=0, transition_time=0)
 
-    uv_scale = get_from_kwargs(kwargs,"uv_scale", None)
+    uv_scale = get_from_kwargs(kwargs, "uv_scale", None)
     if uv_scale is not None:
-        scale_x = get_node_from_shader(material,"UVScaleX")
-        scale_y = get_node_from_shader(material,"UVScaleY")
-        scale_z = get_node_from_shader(material,"UVScaleZ")
-        change_default_value(scale_x,from_value=0,to_value=uv_scale[0],begin_time=0,transition_time=0)
-        change_default_value(scale_y,from_value=0,to_value=uv_scale[1],begin_time=0,transition_time=0)
-        change_default_value(scale_z,from_value=0,to_value=uv_scale[2],begin_time=0,transition_time=0)
+        scale_x = get_node_from_shader(material, "UVScaleX")
+        scale_y = get_node_from_shader(material, "UVScaleY")
+        scale_z = get_node_from_shader(material, "UVScaleZ")
+        change_default_value(scale_x, from_value=0, to_value=uv_scale[0], begin_time=0, transition_time=0)
+        change_default_value(scale_y, from_value=0, to_value=uv_scale[1], begin_time=0, transition_time=0)
+        change_default_value(scale_z, from_value=0, to_value=uv_scale[2], begin_time=0, transition_time=0)
 
-    right_side = get_from_kwargs(kwargs,"right_side", None)
+    right_side = get_from_kwargs(kwargs, "right_side", None)
     if right_side is not None:
-        right_side_node = get_node_from_shader(material,"RightSide")
-        change_default_value(right_side_node,from_value=0,to_value=right_side,begin_time=0,transition_time=0)
-    darkness = get_from_kwargs(kwargs,"darkness", None)
+        right_side_node = get_node_from_shader(material, "RightSide")
+        change_default_value(right_side_node, from_value=0, to_value=right_side, begin_time=0, transition_time=0)
+    darkness = get_from_kwargs(kwargs, "darkness", None)
     if darkness is not None:
-        darkness_node = get_node_from_shader(material,"Darkness")
-        change_default_value(darkness_node,from_value=-0.1,to_value=-darkness)
+        darkness_node = get_node_from_shader(material, "Darkness")
+        change_default_value(darkness_node, from_value=-0.1, to_value=-darkness)
 
-    wear = get_from_kwargs(kwargs,"wear", None)
+    wear = get_from_kwargs(kwargs, "wear", None)
     if wear is not None:
-        wear_node = get_node_from_shader(material,"Wear")
-        change_default_value(wear_node,from_value=0.05,to_value=wear,begin_time=0,transition_time=0)
+        wear_node = get_node_from_shader(material, "Wear")
+        change_default_value(wear_node, from_value=0.05, to_value=wear, begin_time=0, transition_time=0)
     return material
+
 
 def create_old_paper_with_image(**kwargs):
     material = create_from_xml("old_paper_with_image")
-    src=get_from_kwargs(kwargs,"src", None)
+    src = get_from_kwargs(kwargs, "src", None)
     if src is not None:
-        image_node = get_node_from_shader(material,"ImageTexture")
-        image_node.image=bpy.data.images.load(os.path.join(IMG_DIR, src))
-    uv_shift =get_from_kwargs(kwargs,"uv_shift", None)
+        image_node = get_node_from_shader(material, "ImageTexture")
+        image_node.image = bpy.data.images.load(os.path.join(IMG_DIR, src))
+    uv_shift = get_from_kwargs(kwargs, "uv_shift", None)
     if uv_shift is not None:
-        shift_x = get_node_from_shader(material,"UVShiftX")
-        change_default_value(shift_x,from_value=0,to_value=uv_shift[0],begin_time=0,transition_time=0)
-        shift_y = get_node_from_shader(material,"UVShiftY")
-        change_default_value(shift_y,from_value=0,to_value=uv_shift[1],begin_time=0,transition_time=0)
-        shift_z = get_node_from_shader(material,"UVShiftZ")
-        change_default_value(shift_z,from_value=0,to_value=uv_shift[2],begin_time=0,transition_time=0)
+        shift_x = get_node_from_shader(material, "UVShiftX")
+        change_default_value(shift_x, from_value=0, to_value=uv_shift[0], begin_time=0, transition_time=0)
+        shift_y = get_node_from_shader(material, "UVShiftY")
+        change_default_value(shift_y, from_value=0, to_value=uv_shift[1], begin_time=0, transition_time=0)
+        shift_z = get_node_from_shader(material, "UVShiftZ")
+        change_default_value(shift_z, from_value=0, to_value=uv_shift[2], begin_time=0, transition_time=0)
 
-    uv_scale = get_from_kwargs(kwargs,"uv_scale", None)
+    uv_scale = get_from_kwargs(kwargs, "uv_scale", None)
     if uv_scale is not None:
-        scale_x = get_node_from_shader(material,"UVScaleX")
-        scale_y = get_node_from_shader(material,"UVScaleY")
-        scale_z = get_node_from_shader(material,"UVScaleZ")
-        change_default_value(scale_x,from_value=0,to_value=uv_scale[0],begin_time=0,transition_time=0)
-        change_default_value(scale_y,from_value=0,to_value=uv_scale[1],begin_time=0,transition_time=0)
-        change_default_value(scale_z,from_value=0,to_value=uv_scale[2],begin_time=0,transition_time=0)
+        scale_x = get_node_from_shader(material, "UVScaleX")
+        scale_y = get_node_from_shader(material, "UVScaleY")
+        scale_z = get_node_from_shader(material, "UVScaleZ")
+        change_default_value(scale_x, from_value=0, to_value=uv_scale[0], begin_time=0, transition_time=0)
+        change_default_value(scale_y, from_value=0, to_value=uv_scale[1], begin_time=0, transition_time=0)
+        change_default_value(scale_z, from_value=0, to_value=uv_scale[2], begin_time=0, transition_time=0)
 
-    right_side = get_from_kwargs(kwargs,"right_side", None)
+    right_side = get_from_kwargs(kwargs, "right_side", None)
     if right_side is not None:
-        right_side_node = get_node_from_shader(material,"RightSide")
-        change_default_value(right_side_node,from_value=0,to_value=right_side,begin_time=0,transition_time=0)
-    darkness = get_from_kwargs(kwargs,"darkness", None)
+        right_side_node = get_node_from_shader(material, "RightSide")
+        change_default_value(right_side_node, from_value=0, to_value=right_side, begin_time=0, transition_time=0)
+    darkness = get_from_kwargs(kwargs, "darkness", None)
     if darkness is not None:
-        darkness_node = get_node_from_shader(material,"Darkness")
-        change_default_value(darkness_node,from_value=-0.1,to_value=-darkness)
+        darkness_node = get_node_from_shader(material, "Darkness")
+        change_default_value(darkness_node, from_value=-0.1, to_value=-darkness)
 
-    wear = get_from_kwargs(kwargs,"wear", None)
+    wear = get_from_kwargs(kwargs, "wear", None)
     if wear is not None:
-        wear_node = get_node_from_shader(material,"Wear")
-        change_default_value(wear_node,from_value=0.05,to_value=wear,begin_time=0,transition_time=0)
+        wear_node = get_node_from_shader(material, "Wear")
+        change_default_value(wear_node, from_value=0.05, to_value=wear, begin_time=0, transition_time=0)
 
     # adjusting the image texture
     location = get_from_kwargs(kwargs, 'location', [0, 0, 0])
@@ -351,30 +360,31 @@ def create_old_paper_with_image(**kwargs):
     extension = get_from_kwargs(kwargs, 'extension', 'EXTEND')
     coordinates = get_from_kwargs(kwargs, 'coordinates', 'Generated')
 
-    map = get_node_from_shader(material,"ImageMapping")
+    map = get_node_from_shader(material, "ImageMapping")
     map.inputs[1].default_value = location
     map.inputs[2].default_value = rotation
     map.inputs[3].default_value = scale
 
-    image_tex_node = get_node_from_shader(material,"ImageTexCoords")
+    image_tex_node = get_node_from_shader(material, "ImageTexCoords")
     if image_tex_node is not None:
-        material.node_tree.links.new(image_tex_node.outputs[coordinates],map.inputs[0])
+        material.node_tree.links.new(image_tex_node.outputs[coordinates], map.inputs[0])
 
-    image_node = get_node_from_shader(material,"ImageTexture")
+    image_node = get_node_from_shader(material, "ImageTexture")
     if image_node is not None:
-        image_node.extension =extension
+        image_node.extension = extension
 
-    factor = get_from_kwargs(kwargs,"factor", None)
+    factor = get_from_kwargs(kwargs, "factor", None)
     if factor is not None:
-        mixer = get_node_from_shader(material,"ImageMixer")
-        mixer.inputs[0].default_value=factor
+        mixer = get_node_from_shader(material, "ImageMixer")
+        mixer.inputs[0].default_value = factor
 
-    bump_scale = get_from_kwargs(kwargs,"bump_scale", None)
+    bump_scale = get_from_kwargs(kwargs, "bump_scale", None)
     if bump_scale is not None:
-        bump_scale_node = get_node_from_shader(material,"BumpScale")
-        change_default_value(bump_scale_node,from_value=0,to_value=bump_scale,begin_time=0,transition_time=0)
+        bump_scale_node = get_node_from_shader(material, "BumpScale")
+        change_default_value(bump_scale_node, from_value=0, to_value=bump_scale, begin_time=0, transition_time=0)
 
     return material
+
 
 def create_transparent_material():
     material = bpy.data.materials.new(name="transparent")
@@ -383,20 +393,19 @@ def create_transparent_material():
     nodes = tree.nodes
     links = tree.links
     out = nodes.get("Material Output")
-    out.location = (out.location[0]+200,out.location[1])
+    out.location = (out.location[0] + 200, out.location[1])
     bsdf = nodes.get("Principled BSDF")
 
-    color_node = RGB(tree,color=[0,0,0,0],location=(-3,0))
-    links.new(color_node.std_out,bsdf.inputs["Base Color"])
-    links.new(color_node.std_out,bsdf.inputs["Alpha"])
+    color_node = RGB(tree, color=[0, 0, 0, 0], location=(-3, 0))
+    links.new(color_node.std_out, bsdf.inputs["Base Color"])
+    links.new(color_node.std_out, bsdf.inputs["Alpha"])
     return material
 
 
-
 def create_crystal_material(**kwargs):
-    material = create_from_xml("crystal_shader")
-
     color_string = get_from_kwargs(kwargs, "color", "drawing")
+    material = create_from_xml("crystal_shader",name=color_string,**kwargs)
+
     color = get_color_from_string(color_string)
 
     color_node = get_node_from_shader(material, "BaseColor")
@@ -409,14 +418,14 @@ def get_texture(material, **kwargs):
     """
     this method is intended to supersed the get_material method
     """
-    if isinstance(material,bpy.types.Material):
+    if isinstance(material, bpy.types.Material):
         return material
-    if isinstance(material,tuple):
-        return mix_texture(material1=material[0],material2=material[1],**kwargs)
+    if isinstance(material, tuple):
+        return mix_texture(material1=material[0], material2=material[1], **kwargs)
     if isinstance(material, str):
-        if material=="transparent":
+        if material == "transparent":
             return create_transparent_material()
-        if material=="mix_texture":
+        if material == "mix_texture":
             return mix_texture(**kwargs)
         if material == 'image' and 'src' in kwargs:
             return make_image_material(**kwargs).copy()
@@ -424,7 +433,7 @@ def get_texture(material, **kwargs):
             return make_translucent_material(color_str=material[6:], **kwargs)
         elif "crystal" in material:
             color = material[8:]
-            return create_crystal_material(color=color,**kwargs)
+            return create_crystal_material(color=color, **kwargs)
         elif material == 'movie' and 'src' in kwargs:
             return make_movie_material(**kwargs)
         elif material == 'gradient':
@@ -443,15 +452,15 @@ def get_texture(material, **kwargs):
             material = make_hue_material(**kwargs)
         elif material == 'gold':
             material = make_gold_material(**kwargs)
-        elif material =="billiards_cloth_material":
+        elif material == "billiards_cloth_material":
             material = billiards_cloth_material(**kwargs)
-        elif material =="billiard_ball_material":
+        elif material == "billiard_ball_material":
             material = real_billiard_ball_material(**kwargs)
-        elif material =="old_paper":
+        elif material == "old_paper":
             material = create_old_paper(**kwargs)
-        elif material=="old_paper_with_image":
+        elif material == "old_paper_with_image":
             material = create_old_paper_with_image(**kwargs)
-        elif material =="c600_material":
+        elif material == "c600_material":
             material = create_from_xml("c600_material")
         elif material == "c600_gradient":
             material = create_from_xml("c600_gradient")
@@ -468,13 +477,15 @@ def get_texture(material, **kwargs):
 
         return material
 
-def add_texture_to_material(material,new_color,**kwargs):
+
+def add_texture_to_material(material, new_color, **kwargs):
     """
     add a second material to an existing material and combine the two materials with a MixShaderNode
     """
 
-    new_material = get_texture(new_color,**kwargs)
-    copy_nodes_and_links_from_material(material.node_tree, new_material,exclude=["ShaderNodeOutputMaterial"],shift = (0,-500))
+    new_material = get_texture(new_color, **kwargs)
+    copy_nodes_and_links_from_material(material.node_tree, new_material, exclude=["ShaderNodeOutputMaterial"],
+                                       shift=(0, -500))
 
     tree = material.node_tree
     nodes = tree.nodes
@@ -482,17 +493,17 @@ def add_texture_to_material(material,new_color,**kwargs):
 
     mix_node = nodes.new(type="ShaderNodeMixShader")
     mix_node.label = "MaterialMixer"
-    links.new(nodes["Principled BSDF"].outputs[0],mix_node.inputs[1])
-    links.new(nodes["Principled BSDF.001"].outputs[0],mix_node.inputs[2])
-    links.new(mix_node.outputs[0],nodes["Material Output"].inputs[0])
+    links.new(nodes["Principled BSDF"].outputs[0], mix_node.inputs[1])
+    links.new(nodes["Principled BSDF.001"].outputs[0], mix_node.inputs[2])
+    links.new(mix_node.outputs[0], nodes["Material Output"].inputs[0])
 
 
-def create_from_xml(filename,**kwargs):
+def create_from_xml(filename,name="FromXML", **kwargs):
     """
     import a shader node setup created in blender and stored as xml file
 
     """
-    mat = bpy.data.materials.new(name=filename)
+    mat = bpy.data.materials.new(name=name)
     mat.use_nodes = True
     tree = mat.node_tree
 
@@ -644,60 +655,64 @@ def create_from_xml(filename,**kwargs):
 
     return mat
 
+
 def get_attributes(line):
-    tag_label_ended=false
+    tag_label_ended = false
     leftside = True
     keys = []
     values = []
-    key=""
-    val=""
-    value_started=False
+    key = ""
+    val = ""
+    value_started = False
     for letter in line:
-        if letter=='<':
+        if letter == '<':
             pass
-        elif letter=='>':
-            break # ignore anything after the end
-        elif letter==' ' and not value_started: # only use spaces outside of String expressions as tag separator
+        elif letter == '>':
+            break  # ignore anything after the end
+        elif letter == ' ' and not value_started:  # only use spaces outside of String expressions as tag separator
             if not tag_label_ended:
-                tag_label_ended=True
+                tag_label_ended = True
         else:
             if not tag_label_ended:
-                pass # part of the tag label, can be ignored
+                pass  # part of the tag label, can be ignored
             else:
-                if letter=='=' and not value_started:
-                    leftside=False
-                    value_started=False
+                if letter == '=' and not value_started:
+                    leftside = False
+                    value_started = False
                 else:
                     if leftside:
-                        key+=letter
+                        key += letter
                     else:
-                        if letter=='"':
+                        if letter == '"':
                             if value_started:
-                                value_started=False
+                                value_started = False
                                 keys.append(key)
                                 values.append(val)
-                                key=""
-                                val=""
-                                leftside=True
+                                key = ""
+                                val = ""
+                                leftside = True
                             else:
-                                value_started=True
+                                value_started = True
                         else:
-                            val+=letter
-    attributes={}
-    for key,val in zip(keys,values):
-        attributes[key]=val
+                            val += letter
+    attributes = {}
+    for key, val in zip(keys, values):
+        attributes[key] = val
     return attributes
+
 
 def parse_default_attribute(attribute):
     """
     unfortunately, we have capture some invalid data
     math nodes like Compare have VECTOR sockets that are not used but are filled with <bpy_float[3]...> stuff that cannot be parsed
     """
-    if (attribute.startswith("(") and attribute.endswith(")")) or (attribute.startswith("[") and attribute.endswith("]")):
+    if (attribute.startswith("(") and attribute.endswith(")")) or (
+            attribute.startswith("[") and attribute.endswith("]")):
         attribute = attribute[1:-1]
         parts = attribute.split(",")
         comps = [float(part) for part in parts]
         return tuple(comps)
+
 
 def get_default_value_for_socket(attributes):
     socket_type = attributes['type']
@@ -718,19 +733,20 @@ def get_default_value_for_socket(attributes):
         return Vector(parsed)
     elif socket_type == 'STRING':
         return str(attributes['default_value'])
-    elif socket_type =='RGBA':
+    elif socket_type == 'RGBA':
         parsed = parse_default_attribute(attributes['default_value'])
         # print("color: ",list(parsed))
         return list(parsed)
-    elif socket_type=='ROTATION':
+    elif socket_type == 'ROTATION':
         parsed = parse_default_attribute(attributes['default_value'])
         # print("rotation: ",list(parsed))
         return list(parsed)
-    elif socket_type=='MATERIAL':
+    elif socket_type == 'MATERIAL':
         color = attributes['default_value']
-        if color=='None' or len(color)==0:
+        if color == 'None' or len(color) == 0:
             return None
         return ibpy.get_material(color)
+
 
 def apply_material(obj, col, shading=None, recursive=False, type_req=None, intensity=None, **kwargs):
     """
@@ -763,8 +779,8 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
                 material = get_texture(col, **kwargs)
             elif callable(col):
                 material = col(**kwargs)
-            else: # assuming that the color is already a material
-                material =col
+            else:  # assuming that the color is already a material
+                material = col
 
             if shading is None:
                 obj.active_material = material
@@ -801,7 +817,7 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
     # settings for eevee
     for slot in obj.material_slots:
         slot.material.blend_method = 'HASHED'
-        if blender_version()<(4,3):
+        if blender_version() < (4, 3):
             slot.material.shadow_method = 'HASHED'
 
     if 'uv_alpha_frame' in kwargs:
@@ -821,8 +837,9 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
 
     # add material to lights
     if obj.type in ['LIGHT']:
-        obj.data.use_nodes=True
-        copy_nodes_and_links_from_material(obj.data.node_tree,material)
+        obj.data.use_nodes = True
+        copy_nodes_and_links_from_material(obj.data.node_tree, material)
+
 
 def vertex_color_material(**kwargs):
     vertex_color = bpy.data.materials.new(name="Vertex_Color")
@@ -831,14 +848,16 @@ def vertex_color_material(**kwargs):
     links = vertex_color.node_tree.links
     bsdf = nodes["Principled BSDF"]
     col_att = nodes.new('ShaderNodeVertexColor')
-    attribute = get_from_kwargs(kwargs,"attribute","default")
+    attribute = get_from_kwargs(kwargs, "attribute", "default")
     col_att.layer_name = attribute
     links.new(col_att.outputs['Color'], bsdf.inputs['Base Color'])
     links.new(col_att.outputs['Alpha'], bsdf.inputs[TRANSMISSION])
     return vertex_color
 
+
 def get_default_material():
     return bpy.data.materials['text']
+
 
 def color2rgb(color):
     rgb = deepcopy(color)
@@ -846,10 +865,12 @@ def color2rgb(color):
         rgb[i] /= 255
     return rgb
 
+
 def phase2rgb2(phase):
     hue = phase / 2 / np.pi % 1
     col = colorsys.hsv_to_rgb(hue, 1, 1)
     return col[0], col[1], col[2], 1
+
 
 def phase2rgb(phase, v=1, s=1):
     '''
@@ -895,6 +916,7 @@ def phase2rgb(phase, v=1, s=1):
     map = linear_to_srgb(rp + m, gp + m, bp + m)
     return *map, 1
 
+
 def linear_to_srgb(r, g, b):
     def srgb(c):
         a = .055
@@ -904,6 +926,7 @@ def linear_to_srgb(r, g, b):
             return (1 + a) * c ** (1 / 2.4) - a
 
     return tuple(srgb(c) for c in (r, g, b))
+
 
 def srgb_to_linear(r, g, b):
     def srgb(c):
@@ -915,10 +938,12 @@ def srgb_to_linear(r, g, b):
 
     return tuple(srgb(c) for c in (r, g, b))
 
+
 def clear_material(material):
     if material.node_tree:
         material.node_tree.links.clear()
         material.node_tree.nodes.clear()
+
 
 def shade_material(material, shading):
     if isinstance(material, str):
@@ -953,15 +978,16 @@ def shade_material(material, shading):
         color[1] *= down
         color[2] *= down
     elif shading == 'darker2':
-        color[0] *= down**2
-        color[1] *= down**2
-        color[2] *= down**2
+        color[0] *= down ** 2
+        color[1] *= down ** 2
+        color[2] *= down ** 2
 
     for i in range(3):
         color[i] = np.minimum(1, color[i])
 
     bsdf.inputs['Base Color'].default_value = color
     return mat
+
 
 def light_up_material(material, brighter):
     if isinstance(material, str):
@@ -992,6 +1018,7 @@ def light_up_material(material, brighter):
     bsdf.inputs['Base Color'].default_value = color
     return mat
 
+
 def make_frosty_material(**kwargs):
     material = bpy.data.materials.new(name="frosty")
     material.use_nodes = True
@@ -1001,20 +1028,21 @@ def make_frosty_material(**kwargs):
     links = tree.links
 
     bsdf = nodes['Principled BSDF']
-    ramp = ColorRamp(tree,location=(-4,0),color_dictionary={0:[0.375,0.388,0.5,1],1:[0.375,0.5,0.5,1]})
-    hsv = HueSaturationValueNode(tree,location =(-2,0),
-                                 hue=0.5,saturation=0.75,value=1,color=ramp.std_out)
+    ramp = ColorRamp(tree, location=(-4, 0), color_dictionary={0: [0.375, 0.388, 0.5, 1], 1: [0.375, 0.5, 0.5, 1]})
+    hsv = HueSaturationValueNode(tree, location=(-2, 0),
+                                 hue=0.5, saturation=0.75, value=0.25, color=ramp.std_out)
 
     links.new(hsv.outputs['Color'], bsdf.inputs['Base Color'])
 
-    bsdf.inputs["Roughness"].default_value=0.25
-    bsdf.inputs["IOR"].default_value=1.45
-    bsdf.inputs["Transmission Weight"].default_value=1
-    bsdf.inputs["Coat Weight"].default_value=0.2
-    bsdf.inputs["Coat Roughness"].default_value=0.75
-    bsdf.inputs["Coat IOR"].default_value=1.45
+    bsdf.inputs["Roughness"].default_value = 0.25
+    bsdf.inputs["IOR"].default_value = 1.45
+    bsdf.inputs["Transmission Weight"].default_value = 1
+    bsdf.inputs["Coat Weight"].default_value = 0.2
+    bsdf.inputs["Coat Roughness"].default_value = 0.75
+    bsdf.inputs["Coat IOR"].default_value = 1.45
 
     return material
+
 
 def make_colorscript_bezier_curve(bob, osl_script, scale=[1, 1, 1], emission_strength=0.3):
     """
@@ -1036,6 +1064,7 @@ def make_colorscript_bezier_curve(bob, osl_script, scale=[1, 1, 1], emission_str
                                    scale=scale, emission_strength=emission_strength)
     # assign material
     ibpy.set_material(bob, material)
+
 
 def make_voronoi_bezier_curve(bob, colors, emission_strength=0.3, scale=[1, 1, 1]):
     """
@@ -1063,6 +1092,7 @@ def make_voronoi_bezier_curve(bob, colors, emission_strength=0.3, scale=[1, 1, 1
     ibpy.set_material(bob, material)
     return dialer
 
+
 def make_colorful_bezier_curve(bob, hue_functions, emission_strength=0.3, scale=[1, 1, 1], input='geometry_position'):
     """
     create a material, where the coloring converts the (x,y) - position of the object into a hue-value
@@ -1088,8 +1118,9 @@ def make_colorful_bezier_curve(bob, hue_functions, emission_strength=0.3, scale=
     ibpy.set_material(bob, material)
     return dialer
 
+
 def make_image_material(src=None, **kwargs):
-    name = get_from_kwargs(kwargs,"name","image_"+src)
+    name = get_from_kwargs(kwargs, "name", "image_" + src)
     color = bpy.data.materials.new(name=name)
     color.use_nodes = True
     nodes = color.node_tree.nodes
@@ -1101,7 +1132,7 @@ def make_image_material(src=None, **kwargs):
     img = nodes.new('ShaderNodeTexImage')
     img.location = (-900, 0)
     coords = nodes.new('ShaderNodeTexCoord')
-    coords.location = (-1400,0)
+    coords.location = (-1400, 0)
     map = nodes.new('ShaderNodeMapping')
     map.location = (-1100, 0)
     location = get_from_kwargs(kwargs, 'location', [0, 0, 0])
@@ -1109,26 +1140,30 @@ def make_image_material(src=None, **kwargs):
     rotation = get_from_kwargs(kwargs, 'rotation', [0, 0, 0])
     extension = get_from_kwargs(kwargs, 'extension', 'EXTEND')
     coordinates = get_from_kwargs(kwargs, 'coordinates', 'Generated')
-
+    projection = get_from_kwargs(kwargs,'projection',"LINEAR")
+    projection_blend = get_from_kwargs(kwargs,'projection',0)
     map.inputs[1].default_value = location
     map.inputs[2].default_value = rotation
     map.inputs[3].default_value = scale
     if src:
         img.image = bpy.data.images.load(os.path.join(IMG_DIR, src))
         img.extension = extension
-        img_out = img.outputs['Color']
+        img.projection=projection
+        img.projection_blend=projection_blend
+        img_out = img.outputs[('Color')]
     else:
         img_out = None
 
     brightness = get_from_kwargs(kwargs, "brightness", 0)
     contrast = get_from_kwargs(kwargs, "contrast", 0)
 
-    brightness_val = InputValue(tree,location=(-4.5,1),hide=True,value=brightness,name="Brightness",label="Brightness")
-    contrast_val = InputValue(tree,location=(-4.5,0.5),hide=True,value=contrast,name="Contrast",label="Contrast")
+    brightness_val = InputValue(tree, location=(-4.5, 1), hide=True, value=brightness, name="Brightness",
+                                label="Brightness")
+    contrast_val = InputValue(tree, location=(-4.5, 0.5), hide=True, value=contrast, name="Contrast", label="Contrast")
 
-    brightness_node = BrightContrast(tree,location=(-2.5,0),
-                                    color=img_out,bright=brightness_val.std_out,
-                                contrast=contrast_val.std_out)
+    brightness_node = BrightContrast(tree, location=(-2.5, 0),
+                                     color=img_out, bright=brightness_val.std_out,
+                                     contrast=contrast_val.std_out)
     links.new(brightness_node.std_out, bsdf.inputs['Base Color'])
     links.new(brightness_node.std_out, bsdf.inputs[EMISSION])
 
@@ -1147,8 +1182,8 @@ def make_image_material(src=None, **kwargs):
     emission = get_from_kwargs(kwargs, 'emission', 0)
     bsdf.inputs['Emission Strength'].default_value = emission
 
-    displacement = get_from_kwargs(kwargs,'displacement',None)
-    if displacement=='color':
+    displacement = get_from_kwargs(kwargs, 'displacement', None)
+    if displacement == 'color':
         sep = nodes.new(type='ShaderNodeSeparateXYZ')
         links.new(img.outputs['Color'], sep.inputs['Vector'])
         sep.location = (0, -300)
@@ -1157,25 +1192,25 @@ def make_image_material(src=None, **kwargs):
         #convert red blue into height
         displacement = nodes.new(type="ShaderNodeMath")
         displacement.operation = 'SUBTRACT'
-        displacement.hide=True
-        displacement.location=(50,-400)
-        links.new(sep.outputs[0],displacement.inputs[0])
-        links.new(sep.outputs[2],displacement.inputs[1])
+        displacement.hide = True
+        displacement.location = (50, -400)
+        links.new(sep.outputs[0], displacement.inputs[0])
+        links.new(sep.outputs[2], displacement.inputs[1])
 
         displace = nodes.new(type="ShaderNodeDisplacement")
-        displace.location=(100,-500)
-        displace.inputs["Midlevel"].default_value=0
-        displacement_scale = get_from_kwargs(kwargs,'displacement_scale',1)
-        displace.inputs["Scale"].default_value=displacement_scale
-        links.new(displacement.outputs[0],displace.inputs['Height'])
+        displace.location = (100, -500)
+        displace.inputs["Midlevel"].default_value = 0
+        displacement_scale = get_from_kwargs(kwargs, 'displacement_scale', 1)
+        displace.inputs["Scale"].default_value = displacement_scale
+        links.new(displacement.outputs[0], displace.inputs['Height'])
 
         color.displacement_method = "DISPLACEMENT"
         links.new(displace.outputs[0], mat.inputs["Displacement"])
 
-
     return color
 
-def make_movie_material(src=None,**kwargs):
+
+def make_movie_material(src=None, **kwargs):
     name = get_from_kwargs(kwargs, "name", "movie_" + src)
     color = bpy.data.materials.new(name=name)
     color.use_nodes = True
@@ -1210,9 +1245,9 @@ def make_movie_material(src=None,**kwargs):
         img.extension = extension
         img.image_user.frame_duration = int(duration * FRAME_RATE)
         img.image_user.use_auto_refresh = True
-        if begin_time==0:
-            img.image_user.use_cyclic=True
-        img.image_user.frame_start = begin_time*FRAME_RATE
+        if begin_time == 0:
+            img.image_user.use_cyclic = True
+        img.image_user.frame_start = begin_time * FRAME_RATE
         img_out = img.outputs['Color']
     else:
         img_out = None
@@ -1292,6 +1327,7 @@ def make_movie_material(src=None,**kwargs):
 
     return color
 
+
 def make_image_material_stretched_over_geometry(src, v_min, v_max):
     color = bpy.data.materials.new(name='image_' + src)
     color.use_nodes = True
@@ -1334,6 +1370,7 @@ def make_image_material_stretched_over_geometry(src, v_min, v_max):
 
     return color
 
+
 def pie_checker_material(colors=['drawing', 'joker'], name='PieChecker', **kwargs):
     """
     :param colors:
@@ -1357,6 +1394,7 @@ def pie_checker_material(colors=['drawing', 'joker'], name='PieChecker', **kwarg
     mixer.location = (-200, 200)
     links.new(mixer.outputs[0], bsdf.inputs['Base Color'])
     return mat
+
 
 def gradient_from_attribute(name="AngleDisplacement", **kwargs):
     """
@@ -1416,6 +1454,7 @@ def gradient_from_attribute(name="AngleDisplacement", **kwargs):
         links.new(trafo.outputs["alpha"], bsdf.inputs["Alpha"])
     return mat
 
+
 def z_gradient(name="zGradient", **kwargs):
     """
     create a color gradient
@@ -1449,6 +1488,7 @@ def z_gradient(name="zGradient", **kwargs):
     links.new(ramp.std_out, bsdf.inputs[EMISSION])
     return mat
 
+
 def x_gradient(name="xGradient", **kwargs):
     """
     create a color gradient
@@ -1481,6 +1521,7 @@ def x_gradient(name="xGradient", **kwargs):
     links.new(ramp.std_out, bsdf.inputs["Base Color"])
     links.new(ramp.std_out, bsdf.inputs[EMISSION])
     return mat
+
 
 def camera_gradient_rainbow(name="Rainbow", **kwargs):
     """
@@ -1517,6 +1558,7 @@ def camera_gradient_rainbow(name="Rainbow", **kwargs):
     links.new(ramp.std_out, bsdf.inputs[EMISSION])
     return mat
 
+
 def image_over_text(name="ImageOverText", **kwargs):
     """
     create an image texture across text
@@ -1546,6 +1588,7 @@ def image_over_text(name="ImageOverText", **kwargs):
         links.new(image_texture.std_out, bsdf.inputs[EMISSION])
     return mat
 
+
 def polar_grid(**kwargs):
     mat = bpy.data.materials.new(name="PolarGridLines")
     mat.use_nodes = True
@@ -1572,6 +1615,7 @@ def polar_grid(**kwargs):
 
     links.new(color_ramp.std_out, bsdf.inputs["Base Color"])
     return mat
+
 
 def multipole_texture(l_max=5, **kwargs):
     """
@@ -1701,7 +1745,9 @@ def multipole_texture(l_max=5, **kwargs):
     customize_material(mat, **kwargs)
     return mat
 
-def double_gradient(functions={"uv":["uv_x","uv_y","0"],"abs_uv":["uv_x,abs","uv_y,abs","uv_z,abs"]},name="DoubleGradient",direction='x', **kwargs):
+
+def double_gradient(functions={"uv": ["uv_x", "uv_y", "0"], "abs_uv": ["uv_x,abs", "uv_y,abs", "uv_z,abs"]},
+                    name="DoubleGradient", direction='x', **kwargs):
     """
        this texture creates a coordinate-dependent gradient that is different for positive and negative values
        @type direction: str
@@ -1715,33 +1761,32 @@ def double_gradient(functions={"uv":["uv_x","uv_y","0"],"abs_uv":["uv_x,abs","uv
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
 
-
     left = -10
 
-    coords = TextureCoordinate(tree, location=(left, 0),std_out="Generated")
+    coords = TextureCoordinate(tree, location=(left, 0), std_out="Generated")
     left += 1
-    trafo= make_function(nodes, functions=functions,
-                          inputs=["uv"], vectors=["uv","abs_uv"],
-                          outputs=["uv","abs_uv"],
+    trafo = make_function(nodes, functions=functions,
+                          inputs=["uv"], vectors=["uv", "abs_uv"],
+                          outputs=["uv", "abs_uv"],
                           node_group_type='ShaderNodes',
-                          location=(left, -1),name="Trafo")
+                          location=(left, -1), name="Trafo")
     links.new(coords.std_out, trafo.inputs["uv"])
 
     left += 1
 
     # positive branch
-    sep = SeparateXYZ(tree,location=(left,0),vector=trafo.outputs["uv"])
-    abs_sep = SeparateXYZ(tree,location=(left,-0.5),vector=trafo.outputs["abs_uv"])
+    sep = SeparateXYZ(tree, location=(left, 0), vector=trafo.outputs["uv"])
+    abs_sep = SeparateXYZ(tree, location=(left, -0.5), vector=trafo.outputs["abs_uv"])
 
-    left+=1
-    if direction=='x':
-        factor=sep.std_out_x
+    left += 1
+    if direction == 'x':
+        factor = sep.std_out_x
         abs_factor = abs_sep.std_out_x
-    elif direction=='y':
-        factor=sep.std_out_y
+    elif direction == 'y':
+        factor = sep.std_out_y
         abs_factor = abs_sep.std_out_y
     else:
-        factor=sep.std_out_z
+        factor = sep.std_out_z
         abs_factor = abs_sep.std_out_z
     # color ramp for the nice color gradient
     ramp_pos = ColorRamp(tree, location=(left, 1), factor=abs_factor,
@@ -1753,9 +1798,9 @@ def double_gradient(functions={"uv":["uv_x","uv_y","0"],"abs_uv":["uv_x,abs","uv
                          colors=[[0, 1, 0, 1], [0, 0, 1, 1], [1, 0, 1, 1]], hide=False)
 
     left += 2
-    sign = MathNode(tree,location=(left,0),operation='SIGN',input0 = factor,input1=0)
+    sign = MathNode(tree, location=(left, 0), operation='SIGN', input0=factor, input1=0)
 
-    left+=1
+    left += 1
     mix = MixRGB(tree, location=(left, 0), factor=sign.std_out,
                  color1=ramp_pos.std_out, color2=ramp_neg.std_out)
 
@@ -1767,6 +1812,7 @@ def double_gradient(functions={"uv":["uv_x","uv_y","0"],"abs_uv":["uv_x,abs","uv
 
     return mat
 
+
 def dipole_texture(**kwargs):
     mat = bpy.data.materials.new(name="DipoleTexture" + str(type))
     mat.use_nodes = True
@@ -1775,7 +1821,7 @@ def dipole_texture(**kwargs):
     tree = mat.node_tree
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
-    material_out=nodes.get("Material Output")
+    material_out = nodes.get("Material Output")
 
     y11 = SphericalHarmonics(1, 1, "theta", "phi")
     y10 = SphericalHarmonics(1, 0, "theta", "phi")
@@ -1804,9 +1850,9 @@ def dipole_texture(**kwargs):
                           location=(left, -1))
     links.new(coords.std_out, polar.inputs["uv"])
 
-    a = InputValue(tree, location=(left, 1.5), value=get_from_kwargs(kwargs,"x",0),name="xValue")
-    alpha = InputValue(tree, location=(left, 1), value=get_from_kwargs(kwargs,"y",0),name="yValue")
-    b = InputValue(tree, location=(left, 0.5), value=get_from_kwargs(kwargs,"z",0), name="zValue")
+    a = InputValue(tree, location=(left, 1.5), value=get_from_kwargs(kwargs, "x", 0), name="xValue")
+    alpha = InputValue(tree, location=(left, 1), value=get_from_kwargs(kwargs, "y", 0), name="yValue")
+    b = InputValue(tree, location=(left, 0.5), value=get_from_kwargs(kwargs, "z", 0), name="zValue")
     left += 1
 
     in_sockets = [a.std_out, alpha.std_out, b.std_out, polar.outputs["theta"], polar.outputs["phi"]]
@@ -1851,32 +1897,33 @@ def dipole_texture(**kwargs):
     links.new(mix.std_out, bsdf.inputs[EMISSION])
 
     # introduce displacement
-    scale=InputValue(tree,location=(left-1,-2),name="DisplacementScale",value=0)
+    scale = InputValue(tree, location=(left - 1, -2), name="DisplacementScale", value=0)
 
-    displace = Displacement(tree,location=(left,-2),height=abs_temp.outputs["abs"],scale=scale.std_out)
-    mat.displacement_method="DISPLACEMENT"
+    displace = Displacement(tree, location=(left, -2), height=abs_temp.outputs["abs"], scale=scale.std_out)
+    mat.displacement_method = "DISPLACEMENT"
 
-    links.new(displace.std_out,material_out.inputs["Displacement"])
+    links.new(displace.std_out, material_out.inputs["Displacement"])
     customize_material(mat, **kwargs)
     return mat
 
-def multipole_texture(l=6,**kwargs):
+
+def multipole_texture(l=6, **kwargs):
     mat = bpy.data.materials.new(name="MultipolePoleTexture_l=" + str(l))
     mat.use_nodes = True
     tree = mat.node_tree
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
-    material_out=nodes.get("Material Output")
+    material_out = nodes.get("Material Output")
 
-    harmonics = [SphericalHarmonics(l,m,"theta","phi") for m in range(l+1)]
-    symbols = [Symbol("a"+str(idx), real=True) for idx in range(0,2*l+1)]
+    harmonics = [SphericalHarmonics(l, m, "theta", "phi") for m in range(l + 1)]
+    symbols = [Symbol("a" + str(idx), real=True) for idx in range(0, 2 * l + 1)]
 
-    multipole = symbols[0]*harmonics[0].poly
+    multipole = symbols[0] * harmonics[0].poly
 
     for i in range(l):
-        multipole = multipole+(symbols[2*i+1]+symbols[2*i+2]*1j)*harmonics[i+1].poly
+        multipole = multipole + (symbols[2 * i + 1] + symbols[2 * i + 2] * 1j) * harmonics[i + 1].poly
 
-    multipole=multipole.expand(func=True)
+    multipole = multipole.expand(func=True)
     print(re(multipole))
     print(im(multipole))
 
@@ -1895,12 +1942,12 @@ def multipole_texture(l=6,**kwargs):
                           name="PolarCoordinates")
     links.new(coords.std_out, polar.inputs["uv"])
 
-    inputValues = [InputValue(tree,location=(left,0+0.25*i),name="a"+str(i)) for i  in range(2*l+1)]
+    inputValues = [InputValue(tree, location=(left, 0 + 0.25 * i), name="a" + str(i)) for i in range(2 * l + 1)]
     left += 1
 
-    in_sockets = [inputValue.std_out for inputValue in inputValues]+[ polar.outputs["theta"], polar.outputs["phi"]]
-    expr = ExpressionConverter(str(re(multipole))+str(im(multipole))).postfix()
-    ins = ["a"+str(i) for i in range(2*l+1)]+["theta", "phi"]
+    in_sockets = [inputValue.std_out for inputValue in inputValues] + [polar.outputs["theta"], polar.outputs["phi"]]
+    expr = ExpressionConverter(str(re(multipole)) + str(im(multipole))).postfix()
+    ins = ["a" + str(i) for i in range(2 * l + 1)] + ["theta", "phi"]
     outs = ["temp"]
     temperature = make_function(nodes, functions={
         "temp": expr
@@ -1940,23 +1987,23 @@ def multipole_texture(l=6,**kwargs):
     links.new(mix.std_out, bsdf.inputs[EMISSION])
 
     # introduce displacement
-    scale=InputValue(tree,location=(left-1,-2),name="DisplacementScale",value=0)
+    scale = InputValue(tree, location=(left - 1, -2), name="DisplacementScale", value=0)
 
-    displace = Displacement(tree,location=(left,-2),height=abs_temp.outputs["abs"],scale=scale.std_out)
-    mat.displacement_method="DISPLACEMENT"
+    displace = Displacement(tree, location=(left, -2), height=abs_temp.outputs["abs"], scale=scale.std_out)
+    mat.displacement_method = "DISPLACEMENT"
 
-    links.new(displace.std_out,material_out.inputs["Displacement"])
+    links.new(displace.std_out, material_out.inputs["Displacement"])
     customize_material(mat, **kwargs)
     return mat
 
-def multipole_texture_optimized(ms=[0,1,2],ns=[0,1,2],**kwargs):
+
+def multipole_texture_optimized(ms=[0, 1, 2], ns=[0, 1, 2], **kwargs):
     mat = bpy.data.materials.new(name="MultipolePoleTexture_l=" + str(200))
     mat.use_nodes = True
     tree = mat.node_tree
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
-    material_out=nodes.get("Material Output")
-
+    material_out = nodes.get("Material Output")
 
     left = -10
     coords = TextureCoordinate(tree, location=(left, 0))
@@ -1972,23 +2019,23 @@ def multipole_texture_optimized(ms=[0,1,2],ns=[0,1,2],**kwargs):
                           location=(left, -1),
                           name="PolarCoordinates")
     links.new(coords.std_out, polar.inputs["uv"])
-    left+=1
-
-    temperature = SphericalHarmonics200(tree, ms=ms, ns=ns, location=(left, 0),hide=True)
-
-    tree.links.new(polar.outputs["theta"],temperature.theta)
-    tree.links.new(polar.outputs["phi"],temperature.phi)
-
-    inputValues = [InputValue(tree, location=(left-1, 0 + 0.25 * m/10), name="a_" + str(m)) for m in ms]
-    inputValues2 = [InputValue(tree, location=(left-2, 0 + 0.25 * n/10), name="b_" + str(n)) for n in ns]
     left += 1
 
-    for m,input in zip(ms,inputValues):
-        links.new(input.std_out, temperature.inputs["a_"+str(m)])
+    temperature = SphericalHarmonics200(tree, ms=ms, ns=ns, location=(left, 0), hide=True)
+
+    tree.links.new(polar.outputs["theta"], temperature.theta)
+    tree.links.new(polar.outputs["phi"], temperature.phi)
+
+    inputValues = [InputValue(tree, location=(left - 1, 0 + 0.25 * m / 10), name="a_" + str(m)) for m in ms]
+    inputValues2 = [InputValue(tree, location=(left - 2, 0 + 0.25 * n / 10), name="b_" + str(n)) for n in ns]
+    left += 1
+
+    for m, input in zip(ms, inputValues):
+        links.new(input.std_out, temperature.inputs["a_" + str(m)])
         left += 1
 
-    for n,input in zip(ns,inputValues2):
-        links.new(input.std_out, temperature.inputs["b_"+str(n)])
+    for n, input in zip(ns, inputValues2):
+        links.new(input.std_out, temperature.inputs["b_" + str(n)])
         left += 1
 
     abs_temp = make_function(nodes, functions={
@@ -2020,23 +2067,23 @@ def multipole_texture_optimized(ms=[0,1,2],ns=[0,1,2],**kwargs):
     links.new(mix.std_out, bsdf.inputs[EMISSION])
 
     # introduce displacement
-    scale=InputValue(tree,location=(left-1,-2),name="DisplacementScale",value=0)
+    scale = InputValue(tree, location=(left - 1, -2), name="DisplacementScale", value=0)
 
-    displace = Displacement(tree,location=(left,-2),height=abs_temp.outputs["abs"],scale=scale.std_out)
-    mat.displacement_method="DISPLACEMENT"
+    displace = Displacement(tree, location=(left, -2), height=abs_temp.outputs["abs"], scale=scale.std_out)
+    mat.displacement_method = "DISPLACEMENT"
 
-    links.new(displace.std_out,material_out.inputs["Displacement"])
+    links.new(displace.std_out, material_out.inputs["Displacement"])
     customize_material(mat, **kwargs)
     return mat
 
-def cmb_texture(ls = [2,3,5], powerspectrum=None,displacement=True, **kwargs):
+
+def cmb_texture(ls=[2, 3, 5], powerspectrum=None, displacement=True, **kwargs):
     mat = bpy.data.materials.new(name="CMBTexture_l")
     mat.use_nodes = True
     tree = mat.node_tree
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
-    material_out=nodes.get("Material Output")
-
+    material_out = nodes.get("Material Output")
 
     left = -10
     coords = TextureCoordinate(tree, location=(left, 0))
@@ -2052,7 +2099,7 @@ def cmb_texture(ls = [2,3,5], powerspectrum=None,displacement=True, **kwargs):
                           location=(left, -1),
                           name="PolarCoordinates")
     links.new(coords.std_out, polar.inputs["uv"])
-    left+=1
+    left += 1
 
     if powerspectrum is None:
         # artificial power_spectrum
@@ -2064,41 +2111,41 @@ def cmb_texture(ls = [2,3,5], powerspectrum=None,displacement=True, **kwargs):
     # The Cell are related to the Dell by 1/l/(l+1)
     # the amplitude is the square root of the Cell
     # since we only plot one m instead of (2l+1) possible ones, we increase the power again by (2*l+1)
-    amplitudes = [np.sqrt(p/l/(l+1)*(2*l+1)) for (p, l) in zip(powerspectrum, ls)]
+    amplitudes = [np.sqrt(p / l / (l + 1) * (2 * l + 1)) for (p, l) in zip(powerspectrum, ls)]
     coefficients = []
-    for i,ampl in enumerate(amplitudes):
-        coefficients.append(InputValue(tree,location=(left,0.25*i),value=ampl,name="a"+str(i)))
-    left+=1
+    for i, ampl in enumerate(amplitudes):
+        coefficients.append(InputValue(tree, location=(left, 0.25 * i), value=ampl, name="a" + str(i)))
+    left += 1
 
-    temperature = CMBNode(tree,ls=ls,powerspectrum=powerspectrum, location=(left, 0),hide=True,**kwargs)
+    temperature = CMBNode(tree, ls=ls, powerspectrum=powerspectrum, location=(left, 0), hide=True, **kwargs)
 
-    tree.links.new(polar.outputs["theta"],temperature.theta)
-    tree.links.new(polar.outputs["phi"],temperature.phi)
+    tree.links.new(polar.outputs["theta"], temperature.theta)
+    tree.links.new(polar.outputs["phi"], temperature.phi)
     for i in range(len(amplitudes)):
-        tree.links.new(coefficients[i].std_out,temperature.inputs["a"+str(i)])
+        tree.links.new(coefficients[i].std_out, temperature.inputs["a" + str(i)])
 
     scale = InputValue(tree, location=(left, 1.5), value=0.04)
-    left+=1
+    left += 1
 
-    abs_temp = make_function(nodes,name="Extractor", functions={
+    abs_temp = make_function(nodes, name="Extractor", functions={
         "abs": "temp,abs,s,*",
         "positive": "temp,0,>"
-    }, inputs=["temp","s"], outputs=["abs", "positive"], scalars=["s","temp", "abs", "positive"],
+    }, inputs=["temp", "s"], outputs=["abs", "positive"], scalars=["s", "temp", "abs", "positive"],
                              location=(left, 0), node_group_type='ShaderNodes')
     links.new(temperature.outputs["Y"], abs_temp.inputs["temp"])
-    links.new(scale.std_out,abs_temp.inputs["s"])
+    links.new(scale.std_out, abs_temp.inputs["s"])
 
     left += 1
 
     # positive branch
     # color ramp for the nice color gradient
     ramp_pos = ColorRamp(tree, location=(left, 2), factor=abs_temp.outputs["abs"],
-                         values=[0, 0.5, 1], colors=[[1,0.9,0.8, 1], [0.1,0.7,0.8, 1], [0,0,0.9, 1]], hide=False)
+                         values=[0, 0.5, 1], colors=[[1, 0.9, 0.8, 1], [0.1, 0.7, 0.8, 1], [0, 0, 0.9, 1]], hide=False)
 
     # negative branch
     ramp_neg = ColorRamp(tree, location=(left, -1), factor=abs_temp.outputs["abs"],
                          values=[0, 0.5, 1],
-                         colors=[[1,0.9,0.8, 1], [1,0.77,0.28, 1], [0.75,0,0, 1]], hide=False)
+                         colors=[[1, 0.9, 0.8, 1], [1, 0.77, 0.28, 1], [0.75, 0, 0, 1]], hide=False)
 
     left += 2
 
@@ -2110,24 +2157,26 @@ def cmb_texture(ls = [2,3,5], powerspectrum=None,displacement=True, **kwargs):
     links.new(mix.std_out, bsdf.inputs[EMISSION])
 
     # introduce displacement
-    scale=InputValue(tree,location=(left-1,-2),name="DisplacementScale",value=0)
+    scale = InputValue(tree, location=(left - 1, -2), name="DisplacementScale", value=0)
 
     left += 1
-    displace_function = make_function(tree,name="Color2Displacement",
-                functions={
-                    "height":"v_x,v_z,-"
+    displace_function = make_function(tree, name="Color2Displacement",
+                                      functions={
+                                          "height": "v_x,v_z,-"
 
-                },inputs=["v"],outputs=["height"],node_group_type='Shader',
-                scalars=["height"],vectors=["v"])
-    links.new(mix.std_out,displace_function.inputs["v"])
+                                      }, inputs=["v"], outputs=["height"], node_group_type='Shader',
+                                      scalars=["height"], vectors=["v"])
+    links.new(mix.std_out, displace_function.inputs["v"])
 
-    left+=1
-    displace = Displacement(tree,location=(left,-2),height=displace_function.outputs["height"],midlevel=0,scale=0.025)
-    mat.displacement_method="DISPLACEMENT"
+    left += 1
+    displace = Displacement(tree, location=(left, -2), height=displace_function.outputs["height"], midlevel=0,
+                            scale=0.025)
+    mat.displacement_method = "DISPLACEMENT"
     if displacement:
-        links.new(displace.std_out,material_out.inputs["Displacement"])
+        links.new(displace.std_out, material_out.inputs["Displacement"])
     customize_material(mat, **kwargs)
     return mat
+
 
 def cmb_infrared(src, **kwargs):
     mat = bpy.data.materials.new(name="CMBInfrared")
@@ -2135,59 +2184,60 @@ def cmb_infrared(src, **kwargs):
     tree = mat.node_tree
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
-    material_out=nodes.get("Material Output")
+    material_out = nodes.get("Material Output")
     bsdf = nodes['Principled BSDF']
 
     left = -10
 
-    coords = TextureCoordinate(tree,location=(left,0),std_out="Generated")
-    left+=1
-    img = ImageTexture(tree,location=(left,0),
-                       image=bpy.data.images.load(os.path.join(IMG_DIR,src)),
-                    vector=coords.std_out)
-    left+=1
-    links.new(img.alpha,bsdf.inputs["Alpha"])
+    coords = TextureCoordinate(tree, location=(left, 0), std_out="Generated")
+    left += 1
+    img = ImageTexture(tree, location=(left, 0),
+                       image=bpy.data.images.load(os.path.join(IMG_DIR, src)),
+                       vector=coords.std_out)
+    left += 1
+    links.new(img.alpha, bsdf.inputs["Alpha"])
 
-    conversion = make_function(nodes,location=(left,0),functions={
-        "fac":"1,col_x,col_y,-,-"
+    conversion = make_function(nodes, location=(left, 0), functions={
+        "fac": "1,col_x,col_y,-,-"
     },
                                node_group_type="Shader",
-                               inputs=["col"],outputs=["fac"],
+                               inputs=["col"], outputs=["fac"],
                                vectors=["col"],
-                               scalars=["fac"],name="ColorConversion")
+                               scalars=["fac"], name="ColorConversion")
 
-    links.new(img.std_out,conversion.inputs["col"])
-    left +=1
+    links.new(img.std_out, conversion.inputs["col"])
+    left += 1
 
-    ramp = ColorRamp(tree,location=(left,0),
+    ramp = ColorRamp(tree, location=(left, 0),
                      factor=conversion.outputs["fac"],
-                     values=[0,0.447,0.532,0.640,0.924],
+                     values=[0, 0.447, 0.532, 0.640, 0.924],
                      colors=[[0.0, 0.0, 1.0],
                              [0.0, 0.6549019607843137, 1.0],
-                             [1.0, 0.9215686274509803, 0.8274509803921568],[1.0, 0.49019607843137253, 0.0],[0.39215686274509803, 0.0, 0.0]],
-    )
-    links.new(ramp.std_out,bsdf.inputs["Base Color"])
-    links.new(ramp.std_out,bsdf.inputs[EMISSION])
-
-
+                             [1.0, 0.9215686274509803, 0.8274509803921568], [1.0, 0.49019607843137253, 0.0],
+                             [0.39215686274509803, 0.0, 0.0]],
+                     )
+    links.new(ramp.std_out, bsdf.inputs["Base Color"])
+    links.new(ramp.std_out, bsdf.inputs[EMISSION])
 
     customize_material(mat, **kwargs)
     return mat
 
-def cmb_logo_texture(circle_group="Red",ls = [2,3,5],color='drawing', powerspectrum=None,displacement=True, **kwargs):
-    mat = bpy.data.materials.new(name="CMBTexture_"+color)
+
+def cmb_logo_texture(circle_group="Red", ls=[2, 3, 5], color='drawing', powerspectrum=None, displacement=True,
+                     **kwargs):
+    mat = bpy.data.materials.new(name="CMBTexture_" + color)
     mat.use_nodes = True
     tree = mat.node_tree
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
-    material_out=nodes.get("Material Output")
+    material_out = nodes.get("Material Output")
 
     left = -10
-    theta_attr = AttributeNode(tree,attribute_name="Theta"+circle_group,
-                               location=(left,0))
-    phi_attr = AttributeNode(tree,attribute_name="Phi"+circle_group,
-                             location=(left,-1))
-    left+=1
+    theta_attr = AttributeNode(tree, attribute_name="Theta" + circle_group,
+                               location=(left, 0))
+    phi_attr = AttributeNode(tree, attribute_name="Phi" + circle_group,
+                             location=(left, -1))
+    left += 1
 
     if powerspectrum is None:
         # artificial power_spectrum
@@ -2199,29 +2249,29 @@ def cmb_logo_texture(circle_group="Red",ls = [2,3,5],color='drawing', powerspect
     # The Cell are related to the Dell by 1/l/(l+1)
     # the amplitude is the square root of the Cell
     # since we only plot one m instead of (2l+1) possible ones, we increase the power again by (2*l+1)
-    amplitudes = [np.sqrt(p/l/(l+1)*(2*l+1)) for (p, l) in zip(powerspectrum, ls)]
+    amplitudes = [np.sqrt(p / l / (l + 1) * (2 * l + 1)) for (p, l) in zip(powerspectrum, ls)]
     coefficients = []
-    for i,ampl in enumerate(amplitudes):
-        coefficients.append(InputValue(tree,location=(left,0.25*i),value=ampl,name="a"+str(i)))
-    left+=1
+    for i, ampl in enumerate(amplitudes):
+        coefficients.append(InputValue(tree, location=(left, 0.25 * i), value=ampl, name="a" + str(i)))
+    left += 1
 
-    temperature = CMBNode(tree,ls=ls,powerspectrum=powerspectrum, location=(left, 0),hide=True,**kwargs)
+    temperature = CMBNode(tree, ls=ls, powerspectrum=powerspectrum, location=(left, 0), hide=True, **kwargs)
 
-    tree.links.new(theta_attr.std_out,temperature.theta)
-    tree.links.new(phi_attr.std_out,temperature.phi)
+    tree.links.new(theta_attr.std_out, temperature.theta)
+    tree.links.new(phi_attr.std_out, temperature.phi)
     for i in range(len(amplitudes)):
-        tree.links.new(coefficients[i].std_out,temperature.inputs["a"+str(i)])
+        tree.links.new(coefficients[i].std_out, temperature.inputs["a" + str(i)])
 
     scale = InputValue(tree, location=(left, 1.5), value=0.04)
-    left+=1
+    left += 1
 
-    abs_temp = make_function(nodes,name="Extractor", functions={
+    abs_temp = make_function(nodes, name="Extractor", functions={
         "abs": "temp,abs,s,*",
         "positive": "temp,0,>"
-    }, inputs=["temp","s"], outputs=["abs", "positive"], scalars=["s","temp", "abs", "positive"],
+    }, inputs=["temp", "s"], outputs=["abs", "positive"], scalars=["s", "temp", "abs", "positive"],
                              location=(left, 0), node_group_type='ShaderNodes')
     links.new(temperature.outputs["Y"], abs_temp.inputs["temp"])
-    links.new(scale.std_out,abs_temp.inputs["s"])
+    links.new(scale.std_out, abs_temp.inputs["s"])
 
     left += 1
 
@@ -2230,7 +2280,7 @@ def cmb_logo_texture(circle_group="Red",ls = [2,3,5],color='drawing', powerspect
     rgb = ibpy.get_color_from_string(color)
     hsv = rgb2hsv(*rgb[0:3])
 
-    hue =hsv[0]
+    hue = hsv[0]
     max = list(hsv2rgb(hue, 1, 1))
     maxhalf = list(hsv2rgb(hue, 0.75, 1))
     zero = list(hsv2rgb(hue, 0.5, 1))
@@ -2238,12 +2288,12 @@ def cmb_logo_texture(circle_group="Red",ls = [2,3,5],color='drawing', powerspect
     min = list(hsv2rgb(hue, 1, 0.5))
     ramp_pos = ColorRamp(tree, location=(left, 2), factor=abs_temp.outputs["abs"],
                          values=[0, 0.5, 1],
-                         colors=[zero+[1], maxhalf+[1], max+[1]], hide=False)
+                         colors=[zero + [1], maxhalf + [1], max + [1]], hide=False)
 
     # negative branch
     ramp_neg = ColorRamp(tree, location=(left, -1), factor=abs_temp.outputs["abs"],
                          values=[0, 0.5, 1],
-                         colors=[zero+[1], minhalf+[1], min+[1]], hide=False)
+                         colors=[zero + [1], minhalf + [1], min + [1]], hide=False)
 
     left += 2
 
@@ -2255,46 +2305,48 @@ def cmb_logo_texture(circle_group="Red",ls = [2,3,5],color='drawing', powerspect
     links.new(mix.std_out, bsdf.inputs[EMISSION])
 
     # introduce displacement
-    scale=InputValue(tree,location=(left-1,-2),name="DisplacementScale",value=0)
+    scale = InputValue(tree, location=(left - 1, -2), name="DisplacementScale", value=0)
 
     left += 1
-    displace_function = make_function(tree,name="Color2Displacement",
-                functions={
-                    "height":"v_x,v_z,-"
+    displace_function = make_function(tree, name="Color2Displacement",
+                                      functions={
+                                          "height": "v_x,v_z,-"
 
-                },inputs=["v"],outputs=["height"],node_group_type='Shader',
-                scalars=["height"],vectors=["v"])
-    links.new(mix.std_out,displace_function.inputs["v"])
+                                      }, inputs=["v"], outputs=["height"], node_group_type='Shader',
+                                      scalars=["height"], vectors=["v"])
+    links.new(mix.std_out, displace_function.inputs["v"])
 
-    left+=1
-    displace = Displacement(tree,location=(left,-2),height=displace_function.outputs["height"],midlevel=0,scale=0.025)
-    mat.displacement_method="DISPLACEMENT"
+    left += 1
+    displace = Displacement(tree, location=(left, -2), height=displace_function.outputs["height"], midlevel=0,
+                            scale=0.025)
+    mat.displacement_method = "DISPLACEMENT"
     if displacement:
-        links.new(displace.std_out,material_out.inputs["Displacement"])
+        links.new(displace.std_out, material_out.inputs["Displacement"])
     customize_material(mat, **kwargs)
     return mat
 
-def multipole_range_texture(l_min=2,l_max=6,**kwargs):
 
-    mat = bpy.data.materials.new(name="MultipolePoleTexture_l_between_" + str(l_min)+"_and_"+str(l_max))
+def multipole_range_texture(l_min=2, l_max=6, **kwargs):
+    mat = bpy.data.materials.new(name="MultipolePoleTexture_l_between_" + str(l_min) + "_and_" + str(l_max))
     mat.use_nodes = True
     tree = mat.node_tree
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
-    material_out=nodes.get("Material Output")
+    material_out = nodes.get("Material Output")
 
-    harmonics_list = [[SphericalHarmonics(l,m,"theta","phi") for m in range(l+1)] for l in range(l_min,l_max+1)]
-    symbols_list = [[Symbol("a"+str(l)+"m"+str(idx), real=True) for idx in range(0,2*l+1)] for l in range(l_min,l_max+1)]
+    harmonics_list = [[SphericalHarmonics(l, m, "theta", "phi") for m in range(l + 1)] for l in range(l_min, l_max + 1)]
+    symbols_list = [[Symbol("a" + str(l) + "m" + str(idx), real=True) for idx in range(0, 2 * l + 1)] for l in
+                    range(l_min, l_max + 1)]
 
-    multipole=0
+    multipole = 0
     l = l_min
-    for harmonics,symbols in zip(harmonics_list,symbols_list):
-        multipole = multipole+symbols[0]*harmonics[0].poly
+    for harmonics, symbols in zip(harmonics_list, symbols_list):
+        multipole = multipole + symbols[0] * harmonics[0].poly
         for i in range(l):
-            multipole = multipole+(symbols[2*i+1]+symbols[2*i+2]*1j)*harmonics[i+1].poly
-        l+=1
+            multipole = multipole + (symbols[2 * i + 1] + symbols[2 * i + 2] * 1j) * harmonics[i + 1].poly
+        l += 1
 
-    multipole=multipole.expand(func=True)
+    multipole = multipole.expand(func=True)
     print(re(multipole))
     print(im(multipole))
 
@@ -2313,12 +2365,14 @@ def multipole_range_texture(l_min=2,l_max=6,**kwargs):
                           name="PolarCoordinates")
     links.new(coords.std_out, polar.inputs["uv"])
 
-    inputValues = flatten([[InputValue(tree,location=(left+l,0+0.25*i),name="a"+str(l)+"m"+str(i)) for i  in range(2*l+1)] for l in range(l_min,l_max+1)])
-    left += 1+(l_max-l_min)
+    inputValues = flatten([[InputValue(tree, location=(left + l, 0 + 0.25 * i), name="a" + str(l) + "m" + str(i)) for i
+                            in range(2 * l + 1)] for l in range(l_min, l_max + 1)])
+    left += 1 + (l_max - l_min)
 
-    in_sockets = [inputValue.std_out for inputValue in inputValues]+[ polar.outputs["theta"], polar.outputs["phi"]]
-    expr = ExpressionConverter(str(re(multipole))+str(im(multipole))).postfix()
-    ins = flatten([["a"+str(l)+"m"+str(i) for i in range(2*l+1)] for l in range(l_min,l_max+1)])+["theta", "phi"]
+    in_sockets = [inputValue.std_out for inputValue in inputValues] + [polar.outputs["theta"], polar.outputs["phi"]]
+    expr = ExpressionConverter(str(re(multipole)) + str(im(multipole))).postfix()
+    ins = flatten([["a" + str(l) + "m" + str(i) for i in range(2 * l + 1)] for l in range(l_min, l_max + 1)]) + [
+        "theta", "phi"]
     outs = ["temp"]
     temperature = make_function(nodes, functions={
         "temp": expr
@@ -2358,14 +2412,15 @@ def multipole_range_texture(l_min=2,l_max=6,**kwargs):
     links.new(mix.std_out, bsdf.inputs[EMISSION])
 
     # introduce displacement
-    scale=InputValue(tree,location=(left-1,-2),name="DisplacementScale",value=0)
+    scale = InputValue(tree, location=(left - 1, -2), name="DisplacementScale", value=0)
 
-    displace = Displacement(tree,location=(left,-2),height=abs_temp.outputs["abs"],scale=scale.std_out)
-    mat.displacement_method="DISPLACEMENT"
+    displace = Displacement(tree, location=(left, -2), height=abs_temp.outputs["abs"], scale=scale.std_out)
+    mat.displacement_method = "DISPLACEMENT"
 
-    links.new(displace.std_out,material_out.inputs["Displacement"])
+    links.new(displace.std_out, material_out.inputs["Displacement"])
     customize_material(mat, **kwargs)
     return mat
+
 
 def rgb_color(rgb=[1, 1, 1, 1], **kwargs):
     if rgb is None:
@@ -2381,6 +2436,7 @@ def rgb_color(rgb=[1, 1, 1, 1], **kwargs):
     bsdf.inputs['Base Color'].default_value = color
     bsdf.inputs[EMISSION].default_value = color
     return mat
+
 
 def decay_mode_material(**kwargs):
     mat = bpy.data.materials.new(name="DecayModeColor" + str(type))
@@ -2420,6 +2476,7 @@ def decay_mode_material(**kwargs):
     customize_material(mat, **kwargs)
     return mat
 
+
 def glow_at_appearance(**kwargs):
     mat = bpy.data.materials.new(name="GlowAtAppearance")
     mat.use_nodes = True
@@ -2431,17 +2488,18 @@ def glow_at_appearance(**kwargs):
 
     left = -10
 
-    color = get_from_kwargs(kwargs,"color","drawing")
+    color = get_from_kwargs(kwargs, "color", "drawing")
     rgb = get_color(color)
 
-    bsdf.inputs["Base Color"].default_value=rgb
-    bsdf.inputs[EMISSION].default_value=rgb
+    bsdf.inputs["Base Color"].default_value = rgb
+    bsdf.inputs[EMISSION].default_value = rgb
 
-    attr = AttributeNode(tree,attribute_name="Glow",type="INSTANCER")
-    links.new(attr.fac_out,bsdf.inputs["Emission Strength"])
+    attr = AttributeNode(tree, attribute_name="Glow", type="INSTANCER")
+    links.new(attr.fac_out, bsdf.inputs["Emission Strength"])
 
     customize_material(mat, **kwargs)
     return mat
+
 
 def star_color(temp=None, type=None, **kwargs):
     mat = bpy.data.materials.new(name="StarColor" + str(type))
@@ -2463,6 +2521,7 @@ def star_color(temp=None, type=None, **kwargs):
     bsdf.inputs['Emission Strength'].default_value = emission
 
     return mat
+
 
 def eight_dimensional_color(u_dim=0, v_dim=1, **kwargs):
     mat = bpy.data.materials.new(name="material_for_e8")
@@ -2508,6 +2567,7 @@ def eight_dimensional_color(u_dim=0, v_dim=1, **kwargs):
     customize_material(mat, **kwargs)
     return mat
 
+
 def phase2hue_material(attribute_names=None, **kwargs):
     mat = bpy.data.materials.new(name="Phase2HueMaterial")
     mat.use_nodes = True
@@ -2541,6 +2601,7 @@ def phase2hue_material(attribute_names=None, **kwargs):
         links.new(attr2.fac_out, trafo.inputs["alpha"])
         links.new(trafo.outputs["alpha"], bsdf.inputs["Alpha"])
     return mat
+
 
 def create_material_for_e8_visuals(attribute_names=None, **kwargs):
     """
@@ -2597,6 +2658,7 @@ def create_material_for_e8_visuals(attribute_names=None, **kwargs):
 
     return mat
 
+
 def create_material_from_geometry_attribute(bob, attr_name='', **kwargs):
     """
     This is new stuff that I don't know where this will go to (18.2.2024)
@@ -2630,6 +2692,7 @@ def create_material_from_geometry_attribute(bob, attr_name='', **kwargs):
     for slot in bob.ref_obj.material_slots:
         slot.material.blend_method = 'HASHED'
         slot.material.shadow_method = 'HASHED'
+
 
 def region_indicator(region_functions=['x,1,<', 'x,1,>'], colors=['text', 'background'],
                      name=None, parameters=[], scalar_parameters=[], **kwargs):
@@ -2701,6 +2764,7 @@ def region_indicator(region_functions=['x,1,<', 'x,1,>'], colors=['text', 'backg
         links.new(fcn_nodes[0].outputs[0], alpha_factor.inputs[1])
 
     return customize_material(mat, **kwargs)
+
 
 def instance_indicator_material(colors=['drawing', 'important'],
                                 name='Indicator', **kwargs):
@@ -2809,6 +2873,7 @@ def instance_indicator_material(colors=['drawing', 'important'],
 
     return mat
 
+
 def mandelbrot_indicator_material(colors=['drawing', 'important'], name='MandelBrotSetIndicator', **kwargs):
     """
     create a material that indicates the location inside or outside the Mandelbrot set
@@ -2900,6 +2965,7 @@ def mandelbrot_indicator_material(colors=['drawing', 'important'], name='MandelB
         links.new(object_node.outputs['Location'], indicator.inputs['In'])
 
     return mat
+
 
 def make_complex_function_material(bob, functions, shape=True, name='complex_material', **kwargs):
     """
@@ -3040,6 +3106,7 @@ def make_complex_function_material(bob, functions, shape=True, name='complex_mat
 
     return mixer_dialers
 
+
 def make_transformations_and_complex_material(bob, transformations, name='complex_material'):
     """
     allows for arbitrary vertex transformations
@@ -3165,6 +3232,7 @@ def make_transformations_and_complex_material(bob, transformations, name='comple
 
     return mixer_dialers
 
+
 def make_conformal_transformation_material(bob, conformal_transformations, name='complex_material'):
     """
     add texture that color-codes the phases of a complex bobject
@@ -3277,6 +3345,7 @@ def make_conformal_transformation_material(bob, conformal_transformations, name=
 
     return mixer_dialers
 
+
 def make_solid_material(bob, color_index):
     mat_name = "solid_" + str(color_index + 1)
 
@@ -3295,6 +3364,7 @@ def make_solid_material(bob, color_index):
         ref.data.materials.append(material)
     else:
         ref.material_slots[0].material = material
+
 
 def make_glossy_material(bob, color_index):
     mat_name = "glossy_" + str(color_index + 1)
@@ -3322,6 +3392,7 @@ def make_glossy_material(bob, color_index):
     else:
         ref.material_slots[0].material = material
 
+
 def make_basic_material(rgb=None, name=None):
     if rgb is None or name is None:
         raise Warning('Need rgb and name to make basic color')
@@ -3334,6 +3405,7 @@ def make_basic_material(rgb=None, name=None):
     nodes = color.node_tree.nodes
     nodes['Principled BSDF'].inputs['Base Color'].default_value = rgb
     color.diffuse_color = rgb
+
 
 def make_fake_glass_material(rgb=None, name=None, absorption_density=0.5, ior=1):
     if rgb is None or name is None:
@@ -3385,6 +3457,7 @@ def make_fake_glass_material(rgb=None, name=None, absorption_density=0.5, ior=1)
     bsdf.location = (-400, 0)
     color.diffuse_color = rgb
 
+
 def make_plastic_material(rgb=None, name=None):
     if rgb is None or name is None:
         raise Warning('Need rgb and name to make basic color')
@@ -3402,6 +3475,7 @@ def make_plastic_material(rgb=None, name=None):
     bsdf.inputs['Roughness'].default_value = 0.1
     # bsdf.inputs['Specular Tint'].default_value=0.
 
+
 def make_eevee_glass_material(rgb=None, name=None):
     if rgb is None or name is None:
         raise Warning('Need rgb and name to make basic color')
@@ -3417,8 +3491,8 @@ def make_eevee_glass_material(rgb=None, name=None):
     bsdf.inputs['Base Color'].default_value = rgb
     bsdf.inputs['Roughness'].default_value = 0
     bsdf.inputs[TRANSMISSION].default_value = 1
-    color.use_raytrace_refraction=True
-    color.thickness_mode="SLAB"
+    color.use_raytrace_refraction = True
+    color.thickness_mode = "SLAB"
 
     # frenel and transparent bsdf
 
@@ -3437,15 +3511,16 @@ def make_eevee_glass_material(rgb=None, name=None):
     fresnel.inputs['IOR'].default_value = 1.3
     links.new(fresnel.outputs['Fac'], mix_shader.inputs['Fac'])
 
+
 def make_checker_material(**kwargs):
     color = bpy.data.materials.new(name='checker')
-    checker_scale=get_from_kwargs(kwargs,"checker_scale",0.2)
-    coords = get_from_kwargs(kwargs,"coords",None)
+    checker_scale = get_from_kwargs(kwargs, "checker_scale", 0.2)
+    coords = get_from_kwargs(kwargs, "coords", None)
     color.use_nodes = True
     nodes = color.node_tree.nodes
     if coords is None:
         input = nodes.new('ShaderNodeNewGeometry')
-        input_out=input.outputs('UV')
+        input_out = input.outputs('UV')
     else:
         input = nodes.new('ShaderNodeTexCoord')
         input_out = input.outputs[coords]
@@ -3457,6 +3532,7 @@ def make_checker_material(**kwargs):
     color.node_tree.links.new(input_out, checker.inputs['Vector'])
     return color
 
+
 def make_mirror_material():
     color = bpy.data.materials.new(name='mirror')
     color.use_nodes = True
@@ -3467,6 +3543,7 @@ def make_mirror_material():
     bsdf.inputs['Metallic'].default_value = 1
     bsdf.inputs['Roughness'].default_value = 0
     bsdf.inputs['IOR'].default_value = 0
+
 
 def make_magnet_material():
     for name in {"maget", "magnetX", "magnetY"}:
@@ -3573,6 +3650,7 @@ def make_magnet_material():
         coords.location = (-1200, 0)
         links.new(coords.outputs['Generated'], sep_xyz.inputs['Vector'])
 
+
 def make_sign_material():
     material = bpy.data.materials.new(name="sign")
     material.use_nodes = True
@@ -3608,6 +3686,7 @@ def make_sign_material():
     val.location = (-700, 0)
     links.new(val.outputs['Value'], range.inputs['Value'])
 
+
 def make_sand_material():
     color = bpy.data.materials.new(name='sand')
     color.use_nodes = True
@@ -3641,6 +3720,7 @@ def make_sand_material():
     links.new(coords.outputs['Generated'], wave.inputs['Vector'])
     links.new(coords.outputs['Generated'], noise.inputs['Vector'])
 
+
 def make_silk_material():
     color = bpy.data.materials.new(name='silk')
     color.use_nodes = True
@@ -3669,12 +3749,13 @@ def make_silk_material():
     coords = nodes.new(type='ShaderNodeTexCoord')
     links.new(coords.outputs['UV'], mapping.inputs['Vector'])
 
+
 def make_cloud_material():
-    color=bpy.data.materials.new(name='clouds')
-    color.use_nodes=True
-    nodes=color.node_tree.nodes
-    links=color.node_tree.links
-    bsdf=nodes['Principled BSDF']
+    color = bpy.data.materials.new(name='clouds')
+    color.use_nodes = True
+    nodes = color.node_tree.nodes
+    links = color.node_tree.links
+    bsdf = nodes['Principled BSDF']
     nodes.remove(bsdf)
 
     noise = nodes.new(type='ShaderNodeTexNoise')
@@ -3686,17 +3767,18 @@ def make_cloud_material():
     ramp = nodes.new(type='ShaderNodeValToRGB')
     ramp.color_ramp.elements[0].position = 0.3
     links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
-    div= nodes.new(type='ShaderNodeMath')
-    div.label="CloudDensityFactor"
-    div.name="CloudDensityFactor"
-    div.operation='DIVIDE'
-    div.inputs[1].default_value=100
-    links.new(ramp.outputs['Color'],div.inputs[0])
+    div = nodes.new(type='ShaderNodeMath')
+    div.label = "CloudDensityFactor"
+    div.name = "CloudDensityFactor"
+    div.operation = 'DIVIDE'
+    div.inputs[1].default_value = 100
+    links.new(ramp.outputs['Color'], div.inputs[0])
 
     absorption = nodes.new(type='ShaderNodeVolumeAbsorption')
-    links.new(div.outputs[0],absorption.inputs['Density'])
+    links.new(div.outputs[0], absorption.inputs['Density'])
     mat = nodes.get('Material Output')
-    links.new(absorption.outputs['Volume'],mat.inputs['Volume'])
+    links.new(absorption.outputs['Volume'], mat.inputs['Volume'])
+
 
 def make_gold_material(**kwargs):
     color = bpy.data.materials.new(name='gold')
@@ -3708,14 +3790,14 @@ def make_gold_material(**kwargs):
     bsdf.inputs['Metallic'].default_value = 1
     bsdf.inputs['Roughness'].default_value = 0.27
 
-    bumpiness=nodes.new(type='ShaderNodeValue')
-    bumpiness.name="Bumpiness"
-    bumpiness.label="Bumpiness"
+    bumpiness = nodes.new(type='ShaderNodeValue')
+    bumpiness.name = "Bumpiness"
+    bumpiness.label = "Bumpiness"
 
-    bump_strength=get_from_kwargs(kwargs,'bump_strength',0.2)
+    bump_strength = get_from_kwargs(kwargs, 'bump_strength', 0.2)
     bumpiness.outputs['Value'].default_value = bump_strength
     bump = nodes.new(type='ShaderNodeBump')
-    links.new(bumpiness.outputs['Value'],bump.inputs['Strength'])
+    links.new(bumpiness.outputs['Value'], bump.inputs['Strength'])
     links.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
 
     ramp = nodes.new(type='ShaderNodeValToRGB')
@@ -3744,6 +3826,7 @@ def make_gold_material(**kwargs):
     links.new(coords.outputs['Object'], noise2.inputs['Vector'])
     return color
 
+
 def make_screen_material():
     color = bpy.data.materials.new(name='screen')
     color.use_nodes = True
@@ -3769,6 +3852,7 @@ def make_screen_material():
     coords = nodes.new(type='ShaderNodeTexCoord')
     coords.location = (-600, 0)
     links.new(coords.outputs['Generated'], movie.inputs['Vector'])
+
 
 def make_silver_material():
     color = bpy.data.materials.new(name='silver')
@@ -3814,6 +3898,7 @@ def make_silver_material():
     links.new(coords.outputs['Generated'], noise.inputs['Vector'])
     links.new(coords.outputs['Generated'], noise2.inputs['Vector'])
 
+
 def make_scattering_material(**kwargs):
     color = bpy.data.materials.new(name='scatter_volume')
     color.use_nodes = True
@@ -3833,6 +3918,7 @@ def make_scattering_material(**kwargs):
     links.new(scatter.outputs['Volume'], material.inputs['Volume'])
 
     return color
+
 
 def make_marble_material():
     color = bpy.data.materials.new(name='marble')
@@ -3872,10 +3958,12 @@ def make_marble_material():
     coords = nodes.new(type='ShaderNodeTexCoord')
     links.new(coords.outputs['Generated'], noise2.inputs['Vector'])
 
+
 def make_metal_materials():
     for i in range(1, 10):
         gray = i / 10
         make_metal_material(gray=gray)
+
 
 def make_six_color_ramp_material(**kwargs):
     color = bpy.data.materials.new(name='six_color_ramp')
@@ -3912,6 +4000,7 @@ def make_six_color_ramp_material(**kwargs):
     links.new(attr.outputs['Fac'], div.inputs[0])
     links.new(div.outputs['Value'], ramp.inputs['Fac'])
 
+
 def make_metal_material(gray=0.5):
     color = bpy.data.materials.new(name='metal_' + str(gray))
     color.use_nodes = True
@@ -3920,6 +4009,7 @@ def make_metal_material(gray=0.5):
     bsdf.inputs['Metallic'].default_value = 1
     bsdf.inputs['Roughness'].default_value = 0.1
     bsdf.inputs['Base Color'].default_value = [gray, gray, gray, 1]
+
 
 def make_wood_material():
     color = bpy.data.materials.new(name='wood')
@@ -3981,6 +4071,7 @@ def make_wood_material():
     coords = nodes.new(type='ShaderNodeTexCoord')
     links.new(coords.outputs['Generated'], mapping.inputs['Vector'])
 
+
 def make_creature_material(rgb=None, name=None):
     if rgb is None or name is None:
         raise Warning('Need rgb and name to make creature color')
@@ -3998,15 +4089,16 @@ def make_creature_material(rgb=None, name=None):
     # which doesn't take alpha
     color.diffuse_color = rgb
 
+
 def make_translucent_material(color_str, **kwargs):
     color = get_color(color_str)
 
     scatter_density = get_from_kwargs(kwargs, 'scatter_density', 0.05)
     absorption_density = get_from_kwargs(kwargs, 'absorption_density', 0.05)
-    ior =get_from_kwargs(kwargs, 'ior', 1.5)
-    roughness=get_from_kwargs(kwargs,"roughness",0)
+    ior = get_from_kwargs(kwargs, 'ior', 1.5)
+    roughness = get_from_kwargs(kwargs, "roughness", 0)
 
-    material = bpy.data.materials.new(name="glass_"+color_str)
+    material = bpy.data.materials.new(name="glass_" + color_str)
     material.use_nodes = True
     nodes = material.node_tree.nodes
     links = material.node_tree.links
@@ -4017,7 +4109,7 @@ def make_translucent_material(color_str, **kwargs):
         nodes.remove(bsdf)
 
     mix_alpha_surf = nodes.new(type='ShaderNodeMixShader')
-    mix_alpha_surf.label="AlphaMixer"
+    mix_alpha_surf.label = "AlphaMixer"
     mix_alpha_vol = nodes.new(type='ShaderNodeMixShader')
     mix_alpha_vol.label = "AlphaMixer"
     mix_shader = nodes.new(type='ShaderNodeMixShader')
@@ -4030,13 +4122,12 @@ def make_translucent_material(color_str, **kwargs):
     glass_bsdf.inputs["Roughness"].default_value = roughness
     glass_bsdf.inputs["IOR"].default_value = ior
 
-    fresnel= nodes.new(type='ShaderNodeFresnel')
-    fresnel.inputs["IOR"].default_value=ior
+    fresnel = nodes.new(type='ShaderNodeFresnel')
+    fresnel.inputs["IOR"].default_value = ior
 
     links.new(trans_bsdf.outputs[0], mix_shader.inputs[1])
     links.new(glass_bsdf.outputs[0], mix_shader.inputs[2])
     links.new(fresnel.outputs['Factor'], mix_shader.inputs[0])
-
 
     vol_scatter = nodes.new(type='ShaderNodeVolumeScatter')  # index 5
     vol_scatter.inputs['Color'].default_value = color
@@ -4047,25 +4138,26 @@ def make_translucent_material(color_str, **kwargs):
     vol_absorption.inputs['Density'].default_value = absorption_density
     links.new(vol_absorption.outputs['Volume'], add_shader.inputs[1])
 
-    links.new(mix_alpha_surf.outputs["Shader"],material_output.inputs["Surface"])
-    links.new(mix_shader.outputs["Shader"],mix_alpha_surf.inputs[2])
-    links.new(mix_alpha_vol.outputs["Shader"],material_output.inputs["Volume"])
+    links.new(mix_alpha_surf.outputs["Shader"], material_output.inputs["Surface"])
+    links.new(mix_shader.outputs["Shader"], mix_alpha_surf.inputs[2])
+    links.new(mix_alpha_vol.outputs["Shader"], material_output.inputs["Volume"])
     links.new(add_shader.outputs["Shader"], mix_alpha_vol.inputs[2])
 
     # locations
-    fresnel.location = (-400,-400)
-    trans_bsdf.location = (-400,-200)
-    glass_bsdf.location = (-400,-0)
-    vol_scatter.location = (-400,200)
-    vol_absorption.location = (-400,400)
+    fresnel.location = (-400, -400)
+    trans_bsdf.location = (-400, -200)
+    glass_bsdf.location = (-400, -0)
+    vol_scatter.location = (-400, 200)
+    vol_absorption.location = (-400, 400)
 
-    mix_alpha_surf.location = (0,-200)
-    mix_alpha_vol.location = (0,200)
-    mix_shader.location = (-200,-200)
-    add_shader.location = (-200,200)
+    mix_alpha_surf.location = (0, -200)
+    mix_alpha_vol.location = (0, 200)
+    mix_shader.location = (-200, -200)
+    add_shader.location = (-200, 200)
 
-    material_output.location=(200,0)
+    material_output.location = (200, 0)
     return material
+
 
 def mandel_on_riemann_sphere(**kwargs):
     if 'iterations' in kwargs:
@@ -4307,6 +4399,7 @@ def mandel_on_riemann_sphere(**kwargs):
 
     return material
 
+
 def coarse_graining(bob, **kwargs):
     obj = get_obj(bob)
     # select the channel that should be coarse grained
@@ -4370,6 +4463,7 @@ def coarse_graining(bob, **kwargs):
 
     return material
 
+
 def monte_carlo_mandel(bob, **kwargs):
     obj = get_obj(bob)
 
@@ -4385,6 +4479,7 @@ def monte_carlo_mandel(bob, **kwargs):
     # for cycles
     material.cycles.displacement_method = 'DISPLACEMENT'  # for real displacement
     material.use_nodes = True
+
 
 def penrose_material(base_color, contrast=1, **kwargs):
     material = bpy.data.materials.new(name='Penrose')
@@ -4480,11 +4575,13 @@ def penrose_material(base_color, contrast=1, **kwargs):
 
     return material
 
+
 def material_clean_up():
     # Function for removing some duplicate materials from repeated imports
     for mat in bpy.data.materials:
         if 'color' not in mat.name:
             bpy.data.materials.remove(mat)
+
 
 def get_alpha_of_material(material):
     if isinstance(material, str):
@@ -4492,6 +4589,7 @@ def get_alpha_of_material(material):
     nodes = material.node_tree.nodes
     bsdf = nodes.get('Principled BSDF')
     return bsdf.inputs['Alpha']
+
 
 def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('drawing', 0.5)}):
     """
@@ -4517,11 +4615,11 @@ def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('draw
 
     # global definition can be overriden for each highlight
     if direction == 'Y':
-        sep_out=sep_y
-    elif direction=='X':
-        sep_out=sep_x
+        sep_out = sep_y
+    elif direction == 'X':
+        sep_out = sep_x
     else:
-        sep_out=sep_z
+        sep_out = sep_z
 
     left += 1
 
@@ -4537,13 +4635,13 @@ def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('draw
                                node_group_type='Shader')
 
         # individually highlighting
-        if len(val)>2:
-            if val[2]=='X':
-                sep_out=sep_x
-            elif val[2]=='Y':
-                sep_out=sep_y
+        if len(val) > 2:
+            if val[2] == 'X':
+                sep_out = sep_x
+            elif val[2] == 'Y':
+                sep_out = sep_y
             else:
-                sep_out=sep_z
+                sep_out = sep_z
 
         links.new(sep_out, filter.inputs['coord'])
         lleft += 1
@@ -4575,7 +4673,8 @@ def highlighting_for_material(page_material, direction='Y', data={(0, 1): ('draw
 
     return mixers
 
-def box_highlighting_for_material(page_material, data={(0,0,0.5,0.5): ('drawing', 0.5)}):
+
+def box_highlighting_for_material(page_material, data={(0, 0, 0.5, 0.5): ('drawing', 0.5)}):
     """
         highlights a rectangular domain (x0,y0, x1,y1)
         in UV coordinates of the original object
@@ -4603,8 +4702,9 @@ def box_highlighting_for_material(page_material, data={(0,0,0.5,0.5): ('drawing'
         minY = key[1]
         maxY = key[3]
         filter = make_function(tree, functions={
-            "filter": "v_x," + str(minX) + ",>,v_x," + str(maxX) + ",<,*,v_y,"+str(minY)+",>,*,v_y,"+str(maxY)+",<,*"
-        }, location=(lleft, top), scalars=["filter"], inputs=["v"], outputs=["filter"],vectors=["v"],
+            "filter": "v_x," + str(minX) + ",>,v_x," + str(maxX) + ",<,*,v_y," + str(minY) + ",>,*,v_y," + str(
+                maxY) + ",<,*"
+        }, location=(lleft, top), scalars=["filter"], inputs=["v"], outputs=["filter"], vectors=["v"],
                                node_group_type='Shader')
 
         links.new(mapping_out, filter.inputs['v'])
@@ -4639,30 +4739,30 @@ def box_highlighting_for_material(page_material, data={(0,0,0.5,0.5): ('drawing'
 
 
 def real_billiard_ball_material(**kwargs):
-    color_name = get_from_kwargs(kwargs,"color", 'white')
-    if isinstance(color_name,list):
-        color =color_name
-    elif isinstance(color_name,str):
+    color_name = get_from_kwargs(kwargs, "color", 'white')
+    if isinstance(color_name, list):
+        color = color_name
+    elif isinstance(color_name, str):
         if color_name == 'white':
             color = [1, 1, 1, 1]
         elif color_name == 'black':
             color = [0, 0, 0, 1]
-        elif color_name=="blue":
+        elif color_name == "blue":
             color = [0.1, 0.1, 0.8, 1]
-        elif color_name=="red":
+        elif color_name == "red":
             color = [0.8, 0.1, 0.1, 1]
-        elif color_name=="green":
+        elif color_name == "green":
             color = [0.1, 0.8, 0.1, 1]
-        elif color_name=="yellow":
+        elif color_name == "yellow":
             color = [0.8, 0.8, 0.1, 1]
-        elif color_name=="orange":
+        elif color_name == "orange":
             color = [0.8, 0.4, 0.1, 1]
-        elif color_name=="purple":
+        elif color_name == "purple":
             color = [0.4, 0.1, 0.8, 1]
-        elif color_name=="cyan":
+        elif color_name == "cyan":
             color = [0.1, 0.8, 0.8, 1]
     else:
-        color = [0.5,0.5,0.5,1]
+        color = [0.5, 0.5, 0.5, 1]
 
     material = bpy.data.materials.new(name='BilliardBall')
     material.use_nodes = True
@@ -4691,8 +4791,8 @@ def real_billiard_ball_material(**kwargs):
     # glossy_shader.inputs["Color"].default_value = color
     # links.new(glossy_shader.outputs[0], mix_shader.inputs[2])
 
-
     return material
+
 
 def billiards_cloth_material(**kwargs):
     color = bpy.data.materials.new(name='BilliardCloth')
@@ -4703,37 +4803,37 @@ def billiards_cloth_material(**kwargs):
     bsdf = nodes['Principled BSDF']
     mat = nodes["Material Output"]
 
-    tex_coords =nodes.new(type='ShaderNodeTexCoord')
+    tex_coords = nodes.new(type='ShaderNodeTexCoord')
     tex_coords.location = (-700, 0)
 
     noise = nodes.new(type='ShaderNodeTexNoise')
-    noise.location=(-500,0)
+    noise.location = (-500, 0)
     noise.inputs['Scale'].default_value = 50
     noise.inputs['Detail'].default_value = 2
     noise.inputs['Roughness'].default_value = 0.5
     links.new(tex_coords.outputs['Object'], noise.inputs["Vector"])
 
     ramp = nodes.new(type='ShaderNodeValToRGB')
-    ramp.location=(-300,0)
+    ramp.location = (-300, 0)
     ramp.color_ramp.elements[0].position = 0
-    ramp.color_ramp.elements[0].color = [0.011,0.133,0, 1]
+    ramp.color_ramp.elements[0].color = [0.011, 0.133, 0, 1]
     ramp.color_ramp.elements[1].position = 1
-    ramp.color_ramp.elements[1].color = [0.117,0.403,0, 1]
+    ramp.color_ramp.elements[1].color = [0.117, 0.403, 0, 1]
     links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
     links.new(ramp.outputs['Color'], bsdf.inputs['Base Color'])
 
-
     mapping = nodes.new(type='ShaderNodeMath')
-    mapping.location=(-300,300)
+    mapping.location = (-300, 300)
     mapping.operation = 'MULTIPLY'
-    mapping.inputs[1].default_value =0.020
+    mapping.inputs[1].default_value = 0.020
     links.new(noise.outputs["Fac"], mapping.inputs[0])
 
     displacement = nodes.new(type='ShaderNodeDisplacement')
-    displacement.location=(-0,500)
+    displacement.location = (-0, 500)
     links.new(mapping.outputs["Value"], displacement.inputs["Height"])
     links.new(displacement.outputs["Displacement"], mat.inputs["Displacement"])
     return color
+
 
 def billiards_ball_material(**kwargs):
     color = ibpy.get_material("plastic_custom1")
@@ -4744,31 +4844,32 @@ def billiards_ball_material(**kwargs):
     bsdf = nodes['Principled BSDF']
     mat = nodes["Material Output"]
 
-    tex_coords =nodes.new(type='ShaderNodeTexCoord')
+    tex_coords = nodes.new(type='ShaderNodeTexCoord')
     tex_coords.location = (-700, 0)
 
     noise = nodes.new(type='ShaderNodeTexNoise')
-    noise.location=(-500,0)
+    noise.location = (-500, 0)
     noise.inputs['Scale'].default_value = 10
     noise.inputs['Detail'].default_value = 2
     noise.inputs['Roughness'].default_value = 0.5
     links.new(tex_coords.outputs['Generated'], noise.inputs["Vector"])
 
     ramp = nodes.new(type='ShaderNodeValToRGB')
-    ramp.location=(-300,-300)
+    ramp.location = (-300, -300)
     ramp.color_ramp.elements[0].position = 0.5
-    ramp.color_ramp.elements[0].color = [0.905,0.040,0.205,1]
+    ramp.color_ramp.elements[0].color = [0.905, 0.040, 0.205, 1]
     links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
 
     mul = nodes.new(type='ShaderNodeMath')
-    mul.operation='MULTIPLY'
-    mul.location=(-300,0)
-    mul.inputs[1].default_value=0.5
-    links.new(noise.outputs["Fac"],mul.inputs[0])
+    mul.operation = 'MULTIPLY'
+    mul.location = (-300, 0)
+    mul.inputs[1].default_value = 0.5
+    links.new(noise.outputs["Fac"], mul.inputs[0])
 
-    links.new(mul.outputs[0],bsdf.inputs["Roughness"])
-    links.new(ramp.outputs["Color"],bsdf.inputs["Base Color"])
+    links.new(mul.outputs[0], bsdf.inputs["Roughness"])
+    links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
     return color
+
 
 #################
 # backgrounds ###
@@ -4803,7 +4904,7 @@ def set_sky_background(**kwargs):
     sky.dust_density = dust
     sky.ozone_density = ozone
 
-    sun_disc=get_from_kwargs(kwargs, 'sun_disc', False)
+    sun_disc = get_from_kwargs(kwargs, 'sun_disc', False)
     sky.sun_disc = sun_disc
 
     sun_rotation = get_from_kwargs(kwargs, 'sun_rotation', 0)
@@ -4821,4 +4922,3 @@ def set_sky_background(**kwargs):
     links.new(background.outputs['Background'], out.inputs["Surface"])
 
     animate_sky_background(**kwargs)
-

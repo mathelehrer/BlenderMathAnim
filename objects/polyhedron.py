@@ -68,6 +68,8 @@ def get_solid_data(solid_type: str):
 
     if solid_type in {'PRISM3', 'PRISM_3'}:
         return make_prism(3)
+    if solid_type in {'PRISM4', 'PRISM_4'}:
+        return make_prism(4)
     if solid_type in {'PRISM5', 'PRISM_5'}:
         return make_prism(5)
     if solid_type in {'PRISM6', 'PRISM_6'}:
@@ -92,7 +94,7 @@ def get_solid_data(solid_type: str):
         ]
         return verts, faces
 
-    if solid_type == 'CUBE':
+    if solid_type == 'CUBE' :
         verts = [
             (-1.0, -1.0, -1.0),
             (-1.0, -1.0, 1.0),
@@ -196,8 +198,8 @@ def get_solid_data(solid_type: str):
         ]
         return verts, faces
 
-    if solid_type in {'TRUNC_OCTA', 'CUBOCTAHEDRON', 'TRUNC_TETRA',
-                      'TRUNC_CUBOCTA', 'RHOMBICUBOCTA', 'TRUNC_HEXA',
+    if solid_type in {'TRUNC_OCTA', 'CUBOCTAHEDRON', "CUBOCTA", 'TRUNC_TETRA',
+                      'TRUNC_CUBOCTA', 'RHOMBICUBOCTA', 'TRUNC_HEXA', "TRUNC_CUBE",
                       'ICOSIDODECA', 'TRUNC_ICOSA', 'TRUNC_DODECA',
                       'RHOMBICOSIDODECA', 'TRUNC_ICOSIDODECA'
                       }:
@@ -219,7 +221,7 @@ def get_solid_data(solid_type: str):
                             res.add((p[0] * s1, p[1] * s2, p[2] * s3))
             return list(res)
 
-        if solid_type == 'CUBOCTAHEDRON':
+        if solid_type == 'CUBOCTAHEDRON' or solid_type == "CUBOCTA":
             # Vertices: Permutations of (±1, ±1, 0)
             for i in range(3):
                 for s1 in (-1, 1):
@@ -354,7 +356,7 @@ def get_solid_data(solid_type: str):
                     for z in (-1, 1):
                         normals.append((x, y, z))
 
-        elif solid_type == 'TRUNC_HEXA':
+        elif solid_type == 'TRUNC_HEXA' or solid_type == "TRUNC_CUBE":
             # Truncated Cube
             # Vertices: Permutations of (±1, ±1, ±(√2 - 1))
             # Or typically (±1, ±1, ±(√2 - 1)) scaled.
@@ -615,10 +617,10 @@ class Polyhedron(BObject):
         if self.simple:
             # short cut, when vertices and faces are given
             self.vertices = vertices
-            if isinstance(faces[0],list):
+            if isinstance(faces[0], list):
                 f = []
                 for face in faces:
-                    f.append(Face(self.vertices,face,Vector()))
+                    f.append(Face(self.vertices, face, Vector()))
                 self.faces = f
             else:
                 self.faces = faces
@@ -671,9 +673,10 @@ class Polyhedron(BObject):
 
     @classmethod
     def from_points(cls, vertices=None, solid_type="TETRA", **kwargs):
-        src_vertices, faces = get_solid_data(solid_type)
+        src_vertices, faces = get_solid_data(solid_type.upper())
+        name = get_from_kwargs(kwargs, 'name', 'Polyhedron_' + solid_type.upper())
         if vertices is None:
-            bob = Polyhedron(src_vertices, faces, name=solid_type, simple=True, **kwargs)
+            bob = Polyhedron(src_vertices, faces, name=name, simple=True, **kwargs)
         else:
             # transform source vertices to align polyhedron with the given vertices
             # find appropriate face
@@ -925,7 +928,7 @@ class PolyhedronWithModifier(BObject):
         self.name = get_from_kwargs(kwargs, "name", "PolyhedronWithModifier")
         self.group = get_from_kwargs(kwargs, "group", None)
         self.signature = get_from_kwargs(kwargs, "signature", None)
-        self.shape_key=0
+        self.shape_key = 0
 
         face_classes = get_from_kwargs(kwargs, 'face_classes', None)
         self.face_classes = face_classes
@@ -937,11 +940,11 @@ class PolyhedronWithModifier(BObject):
             for key in face_classes.keys():
                 colors.append(color_dict[len(key)])
 
-        super().__init__(mesh=create_mesh(vertices, faces=faces), name=self.name,color=self.color, **kwargs)
+        super().__init__(mesh=create_mesh(vertices, faces=faces), name=self.name, color=self.color, **kwargs)
 
         def face2slot(raw_face):
-            face=MeshFace(raw_face)
-            for slot,conj_class in enumerate(face_classes.values()):
+            face = MeshFace(raw_face)
+            for slot, conj_class in enumerate(face_classes.values()):
                 if face in conj_class:
                     return slot
 
@@ -967,8 +970,8 @@ class PolyhedronWithModifier(BObject):
 
     def transform_colors(self, shape_key=1, face_classes={}, begin_time=0, transition_time=0):
         shape_keys = self.ref_obj.data.shape_keys
-        self.shape_key=shape_key
-        old_sk = [v.co for v in shape_keys.key_blocks[shape_key -1 ].data]
+        self.shape_key = shape_key
+        old_sk = [v.co for v in shape_keys.key_blocks[shape_key - 1].data]
         new_sk = [v.co for v in shape_keys.key_blocks[shape_key].data]
         face_maps = {}
         for face_index, raw_face in enumerate(self.faces):
@@ -997,7 +1000,7 @@ class PolyhedronWithModifier(BObject):
                 if target in [3, 4, 5]:
                     ibpy.adjust_mixer(self, slot=slot, from_value=0, to_value=1, begin_time=begin_time,
                                       transition_time=transition_time)
-                elif target in [6,8,10]: # ignore target 0
+                elif target in [6, 8, 10]:  # ignore target 0
                     ibpy.adjust_mixer(self, slot=slot, from_value=1, to_value=0, begin_time=begin_time,
                                       transition_time=transition_time)
 
@@ -1005,8 +1008,8 @@ class PolyhedronWithModifier(BObject):
 
     def copy(self) -> PolyhedronWithModifier:
         if self.group is not None and self.signature is not None:
-            return PolyhedronWithModifier.from_group_signature(self.group,self.signature,name="CopyOf"+self.name,color=self.color,**self.kwargs)
-
+            return PolyhedronWithModifier.from_group_signature(self.group, self.signature, name="CopyOf" + self.name,
+                                                               color=self.color, **self.kwargs)
 
         return PolyhedronWithModifier(self.vertices, self.faces, name="CopyOf" + self.name, **self.kwargs)
 
@@ -1016,12 +1019,12 @@ class PolyhedronWithModifier(BObject):
         return cls(vertices, faces, **kwargs)
 
     @classmethod
-    def from_group_signature(cls, group, signature,radius=None, **kwargs):
+    def from_group_signature(cls, group, signature, radius=None, **kwargs):
         g = group()
         vertices = g.get_real_point_cloud(signature)
         if radius:
-            scale = radius/vertices[0].length
-            vertices = [v*scale for v in vertices]
+            scale = radius / vertices[0].length
+            vertices = [v * scale for v in vertices]
         faces = g.get_faces(signature)
         face_classes = g.get_faces_in_conjugacy_classes(signature)
-        return cls( vertices, faces, group = group,signature = signature, face_classes=face_classes, **kwargs)
+        return cls(vertices, faces, group=group, signature=signature, face_classes=face_classes, **kwargs)

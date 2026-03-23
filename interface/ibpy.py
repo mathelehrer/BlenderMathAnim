@@ -3250,10 +3250,12 @@ def make_iteration_material(**kwargs):
 
     return material
 
-def change_brightness(mat,from_value=0,to_value=0.1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
-    bright= get_node_from_shader(mat,label="Brightness")
-    change_default_value(bright,from_value, to_value, begin_time, transition_time)
-    return begin_time+transition_time
+
+def change_brightness(mat, from_value=0, to_value=0.1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+    bright = get_node_from_shader(mat, label="Brightness")
+    change_default_value(bright, from_value, to_value, begin_time, transition_time)
+    return begin_time + transition_time
+
 
 def get_material_of(bob, slot=0):
     obj = get_obj(bob)
@@ -6233,11 +6235,11 @@ def set_origin(bob, type='ORIGIN_GEOMETRY'):
     bpy.ops.object.origin_set(type=type)
 
 
-def set_origin_of_objects_with_name(name=None, type='ORIGIN_GEOMETRY'):
+def set_origin_of_objects_with_name(name=None, type='ORIGIN_CENTER_OF_VOLUME'):
     for o in bpy.data.objects:
         if name in o.name:
             select(o)
-            set_origin(o, type="ORIGIN_CENTER_OF_VOLUME")
+            set_origin(o, type=type)
 
 
 def set_pivot(obj, origin):
@@ -6618,7 +6620,7 @@ def change_alpha_of_material(mat, from_value=0, to_value=1, begin_time=0, transi
         raise "Cannot change Alpha for non BSDF nodes"
 
 
-def change_alpha(b_obj, frame, frame_duration,from_value=None, to_value=None, alpha=0, slot=0, viewport="material"):
+def change_alpha(b_obj, frame, frame_duration, from_value=None, to_value=None, alpha=0, slot=0, viewport="material"):
     """
     fade out b_object and hide it from scene
     it is recursively applied to all the children
@@ -7211,7 +7213,7 @@ def get_bounding_box(bob):
                     z_max = b[2]
     else:
         o = get_obj(bob)
-        if hasattr(o,"bound_box"):
+        if hasattr(o, "bound_box"):
             bb = o.bound_box  # eight corner coordinates of the surrounding box
             for b in bb:
                 if b[0] < x_min:
@@ -7471,6 +7473,7 @@ def key_frame_rigid_body_properties(bob, type='dynamic', value=True, begin_time=
 
 def make_rigid_body(bob, dynamic=True, kinematic=False, friction=0.1, bounciness=0.5,
                     all_similar_objects=False, use_margin=False, collision_margin=0.04, **kwargs):
+    collision_shape = get_from_kwargs(kwargs, "collision_shape", "CONVEX_HULL")
     obj = get_obj(bob)
     set_active(obj)
     set_select(obj, value=True)
@@ -7489,6 +7492,7 @@ def make_rigid_body(bob, dynamic=True, kinematic=False, friction=0.1, bounciness
         obj.rigid_body.restitution = bounciness
         obj.rigid_body.friction = friction
         obj.rigid_body.collision_margin = collision_margin
+        obj.rigid_body.collision_shape = collision_shape
 
     if len(similar_objects) > 0:
         bpy.ops.rigidbody.object_settings_copy()
@@ -7854,3 +7858,16 @@ def set_mixer(bob, slot, value, begin_time):
                               begin_time=begin_time)
 
     return begin_time
+
+
+def get_child_with_name(bob, child_name):
+    for child in bob.b_children:
+        if child.ref_obj.name == child_name:
+            return child
+    return None
+
+
+def apply_scale(bob):
+    obj = get_obj(bob)
+    set_select(obj, value=True)
+    bpy.ops.object.transform_apply(rotation=False,location=False,scale=True)
