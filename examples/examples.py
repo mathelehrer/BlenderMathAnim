@@ -18,6 +18,7 @@ from objects.empties import EmptyCube
 from objects.logo import GeometryLogo
 from objects.number_line import NumberLine2
 from objects.platonic_solids import SubdividedPentagon, Icosahedron, Dodecahedron
+from objects.polyhedron import Polyhedron
 from objects.slider import BSlider
 from objects.tex_bobject import SimpleTexBObject
 from objects.text import Text, MorphText
@@ -38,6 +39,7 @@ class Examples(Scene):
         self.construction_counter = 0
         self.old = None
         self.sub_scenes = OrderedDict([
+            ('solids', {'duration': 10}),
             ('icosahedron_and_dodecahedron', {'duration': 10}),
             ('logo', {'duration': 10}),
             ('slider', {'duration': 10}),
@@ -50,6 +52,12 @@ class Examples(Scene):
             ('move_letters_and_move_copies_of_letters',{'duration': 15})
         ])
         super().__init__(light_energy=2, transparent=False)
+
+    def solids(self):
+        t0 = 0
+        polyhedron = Polyhedron.from_points(solid_type="TRUNC_ICOSA")
+        polyhedron.appear(begin_time=t0,transition_time=0)
+        self.t0 = t0
 
     def icosahedron_and_dodecahedron(self):
         t0  = 0

@@ -710,14 +710,27 @@ class BObject(object):
                          offset_for_slots=offset_for_slots,**kwargs)
             self.appeared = True
 
+        if not silent and len(self.b_children) > 10:
+            silent = True
+            concise=True
+        else:
+            concise=False
         if children:
             if not sequentially:
                 for child in self.b_children:
-                    child.appear(begin_time=begin_time,transition_time=transition_time)
+                    if concise:
+                        print("\r",end="")
+                        print("Appear children of " + child.name, end="")
+                    child.appear(begin_time=begin_time,transition_time=transition_time,silent=silent)
             else:
                 dt = transition_time / len(self.b_children)
                 for i, child in enumerate(self.b_children):
-                    child.appear(begin_time=begin_time + i * dt, transition_time=dt)
+                    if concise:
+                        print("\r")
+                        print("Appear children of " + child.name, end="")
+                    child.appear(begin_time=begin_time + i * dt, transition_time=dt,silent=silent)
+        if concise:
+            print()
         return begin_time + transition_time
 
     def change_alpha(self, slot = 0,from_value=None, to_value=None , alpha=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):

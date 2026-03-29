@@ -394,7 +394,7 @@ def get_solid_data(solid_type: str):
 
             # Normals: 12 Pentagons (Icosahedron verts), 20 Triangles (Dodecahedron verts)
             # Pentagons: Cyclic (0, ±1, ±phi)
-            normals.extend(get_cyclic_perms((0.0, 1.0, phi)))
+            normals.extend(get_cyclic_perms((0.0, phi, -1)))
             # Triangles: (±1, ±1, ±1) and Cyclic (0, ±1/phi, ±phi)
             for x in (-1, 1):
                 for y in (-1, 1):
@@ -415,13 +415,13 @@ def get_solid_data(solid_type: str):
 
             # Normals: 12 Pentagons (from Icosa verts), 20 Hexagons (from Icosa faces/Dodeca verts)
             # Pentagons: Cyclic (0, ±1, ±phi)
-            normals.extend(get_cyclic_perms((0.0, 1.0, phi)))
+            normals.extend(get_cyclic_perms((0.0, -1.0, phi)))
             # Hexagons: (±1, ±1, ±1) and Cyclic (0, ±1/phi, ±phi)
             for x in (-1, 1):
                 for y in (-1, 1):
                     for z in (-1, 1):
                         normals.append((x, y, z))
-            normals.extend(get_cyclic_perms((0.0, 1.0 / phi, phi)))
+            normals.extend(get_cyclic_perms((0.0, phi, 1.0 / phi)))
 
         elif solid_type == 'TRUNC_DODECA':
             # Vertices: 60
@@ -435,7 +435,7 @@ def get_solid_data(solid_type: str):
 
             # Normals: 12 Decagons (from Dodeca faces/Icosa verts), 20 Triangles (from Dodeca verts)
             # Decagons: Cyclic (0, ±1, ±phi)
-            normals.extend(get_cyclic_perms((0.0, 1.0, phi)))
+            normals.extend(get_cyclic_perms((0.0, 1.0, 1 / phi)))
             # Triangles: (±1, ±1, ±1) and Cyclic (0, ±1/phi, ±phi)
             for x in (-1, 1):
                 for y in (-1, 1):

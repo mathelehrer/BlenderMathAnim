@@ -6699,7 +6699,8 @@ def recursive_fade_out(obj, frame, frame_duration, handwriting=False, alpha=0, s
                        viewport="material"):
     # retrieve current alpha state  to fade out from the current state
     if not "hand_written" in obj.name or handwriting:
-        alpha0 = get_alpha_at_current_keyframe(obj, frame, slot=slot)
+        # alpha0 = get_alpha_at_current_keyframe(obj, frame, slot=slot) # for speed up
+        alpha0 = 1
         set_alpha_and_keyframe(obj, alpha0, frame, viewport=viewport, slot=slot)
         set_alpha_and_keyframe(obj, alpha, frame + frame_duration, viewport=viewport, slot=slot)
 
@@ -7471,19 +7472,19 @@ def key_frame_rigid_body_properties(bob, type='dynamic', value=True, begin_time=
         insert_keyframe(obj.rigid_body, data_path='kinematic', frame=begin_time * FRAME_RATE)
 
 
-def make_rigid_body(bob, dynamic=True, kinematic=False, friction=0.1, bounciness=0.5,
-                    all_similar_objects=False, use_margin=False, collision_margin=0.04, **kwargs):
+def make_rigid_body(bob, dynamic=True, kinematic=False, friction=0.1, bounciness=0.5, all_similar_objects=False, use_margin=False, collision_margin=0.04, **kwargs):
     collision_shape = get_from_kwargs(kwargs, "collision_shape", "CONVEX_HULL")
+    mass = get_from_kwargs(kwargs,"mass",1)
     obj = get_obj(bob)
     set_active(obj)
     set_select(obj, value=True)
     # bpy.ops.rigidbody.world_add()
-    similar_objects = []
-    if all_similar_objects:
-        for o in bpy.data.objects:
-            if remove_digits(obj.name) in o.name:
-                similar_objects.append(o)
-        set_several_select(similar_objects, True)
+    # similar_objects = []
+    # if all_similar_objects:
+    #     for o in bpy.data.objects:
+    #         if remove_digits(obj.name) in o.name:
+    #             similar_objects.append(o)
+    #     set_several_select(similar_objects, True)
     bpy.ops.rigidbody.objects_add(**kwargs)
     if obj.rigid_body is not None:
         obj.rigid_body.enabled = dynamic
@@ -7491,12 +7492,35 @@ def make_rigid_body(bob, dynamic=True, kinematic=False, friction=0.1, bounciness
         obj.rigid_body.use_margin = use_margin
         obj.rigid_body.restitution = bounciness
         obj.rigid_body.friction = friction
+        obj.rigid_body.mass = mass
         obj.rigid_body.collision_margin = collision_margin
         obj.rigid_body.collision_shape = collision_shape
 
-    if len(similar_objects) > 0:
-        bpy.ops.rigidbody.object_settings_copy()
-        bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY")
+    # if len(similar_objects) > 0:
+    #     bpy.ops.rigidbody.object_settings_copy()
+    #     bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY")
+
+
+def make_rigid_bodies(bob_list, dynamic=True, kinematic=False, friction=0.1, bounciness=0.5, all_similar_objects=False, use_margin=False, collision_margin=0.04, **kwargs):
+    collision_shape = get_from_kwargs(kwargs, "collision_shape", "CONVEX_HULL")
+    mass = get_from_kwargs(kwargs,"mass",1)
+
+    set_several_select(bob_list,True)
+    set_active(bob_list[0])
+
+    bpy.ops.rigidbody.objects_add(**kwargs)
+    obj = get_obj(bob_list[0])
+    if obj.rigid_body is not None:
+        obj.rigid_body.enabled = dynamic
+        obj.rigid_body.kinematic = kinematic
+        obj.rigid_body.use_margin = use_margin
+        obj.rigid_body.restitution = bounciness
+        obj.rigid_body.friction = friction
+        obj.rigid_body.mass = mass
+        obj.rigid_body.collision_margin = collision_margin
+        obj.rigid_body.collision_shape = collision_shape
+
+    bpy.ops.rigidbody.object_settings_copy()
 
 
 def set_simulation(begin_time=0, transition_time=250 / FRAME_RATE):
@@ -7860,8 +7884,11 @@ def set_mixer(bob, slot, value, begin_time):
     return begin_time
 
 
-def get_child_with_name(bob, child_name):
+def get_child_with_name(bob, child_name,starts_with=False):
     for child in bob.b_children:
+        if starts_with:
+            if child.ref_obj.name.startswith(child_name):
+                return child
         if child.ref_obj.name == child_name:
             return child
     return None

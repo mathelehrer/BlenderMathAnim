@@ -28,6 +28,7 @@ class DynkinDiagram(BObject):
         self.locations = []
         self.scale = get_from_kwargs(kwargs, "scale", [1, 1, 1])
         self.text_size = get_from_kwargs(kwargs, "text_size", "Large")
+        self.dynkin_label_shift = get_from_kwargs(kwargs, "dynkin_label_shift", Vector([0, 0, 0]))
         self.text_offset = Vector([-1.2, 0, 0.5])
         self.active_rings = [False]*self.dim
         if self.text_size == "Huge":
@@ -75,11 +76,11 @@ class DynkinDiagram(BObject):
                 if len(l) > 0:
                     if not self.without_threes:
                         self.labels.append(
-                            Text(l, location=Vector([-center + (i + 1) * 2, 0, 0]) + self.text_offset,
+                            Text(l, location=Vector([-center + (i + 1) * 2, 0, 0]) + self.text_offset+self.dynkin_label_shift,
                                  text_size=self.text_size, aligned="center"))
                     elif self.labels_param[i] != '3':
                         self.labels.append(
-                            Text(l, location=Vector([-center + 0.8 + (i + 1) * 2, 0, 0.5]) + self.text_offset,
+                            Text(l, location=Vector([-center + 0.8 + (i + 1) * 2, 0, 0.5]) + self.text_offset+self.dynkin_label_shift,
                                  text_size=self.text_size, aligned="center"))
 
         if move_to_center:
@@ -320,7 +321,7 @@ class DynkinDiagram(BObject):
                     self.cylinders.append(edge)
                     if child.weight > 3:
                         self.labels.append(
-                            Text(str(child.weight), location=child_location + self.text_offset,
+                            Text(str(child.weight), location=child_location + self.text_offset+self.dynkin_label_shift,
                                  text_size=self.text_size, aligned="center")
                         )
 
