@@ -404,7 +404,7 @@ def create_transparent_material():
 
 def create_crystal_material(**kwargs):
     color_string = get_from_kwargs(kwargs, "color", "drawing")
-    material = create_from_xml("crystal_shader",name=color_string,**kwargs)
+    material = create_from_xml("crystal_shader",name=color_string)
 
     color = get_color_from_string(color_string)
 

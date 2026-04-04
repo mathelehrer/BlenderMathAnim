@@ -149,8 +149,6 @@ class Node:
             return VertexNeighbors(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
 
         # geometry nodes
-        if type=="MESH_LINE":
-            return MeshLine(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="MESH_TO_CURVE":
             return MeshToCurve(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="MESH_TO_POINTS":
@@ -279,7 +277,9 @@ class Node:
         if type=="MESH_PRIMITIVE_GRID":
             return Grid(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="MESH_PRIMITIVE_LINE":
-            return MeshLine(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+            mode=attributes["mode"]
+            return MeshLine(tree,location=location,name=name,label=label,hide=hide,
+                            mute=mute,node_height=200,mode=mode)
         if type=="MESH_PRIMITIVE_CYLINDER":
             return CylinderMesh(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type == "MESH_PRIMITIVE_CONE":
