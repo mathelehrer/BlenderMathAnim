@@ -92,12 +92,10 @@ class BObject(object):
                     if obj is not None:
                         ibpy.set_parent(obj,self)
 
-
         # set color
         if not no_material:
             self.color = self.get_from_kwargs('color',None)
             self.colors = self.get_from_kwargs('colors', None)
-
 
             if self.colors is not None:
                 apply_material(self.ref_obj, self.color, colors=self.colors, **kwargs)

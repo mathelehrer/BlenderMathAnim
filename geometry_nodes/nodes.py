@@ -3095,7 +3095,7 @@ class VectorMath(BlueNode):
         self.node = tree.nodes.new(type="ShaderNodeVectorMath")
         super().__init__(tree, location=location, **kwargs)
 
-        if operation in ("DOT", "LENGTH"):
+        if operation in ("DOT_PRODUCT", "LENGTH"):
             self.std_out = self.node.outputs[1]
         else:
             self.std_out = self.node.outputs["Vector"]

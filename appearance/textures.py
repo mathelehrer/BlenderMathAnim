@@ -475,6 +475,7 @@ def get_texture(material, **kwargs):
         # override default values
         material = customize_material(material, **kwargs)
 
+        material.use_backface_culling=True
         return material
 
 

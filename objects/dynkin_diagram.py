@@ -29,6 +29,7 @@ class DynkinDiagram(BObject):
         self.scale = get_from_kwargs(kwargs, "scale", [1, 1, 1])
         self.text_size = get_from_kwargs(kwargs, "text_size", "Large")
         self.dynkin_label_shift = get_from_kwargs(kwargs, "dynkin_label_shift", Vector([0, 0, 0]))
+        no_threes = get_from_kwargs(kwargs, "no_threes", False)
         self.text_offset = Vector([-1.2, 0, 0.5])
         self.active_rings = [False]*self.dim
         if self.text_size == "Huge":
@@ -36,11 +37,12 @@ class DynkinDiagram(BObject):
         if isinstance(self.scale, (int, float)):
             self.scale = [self.scale] * 3
 
+        self.spheres = []
+        self.cylinders = []
+        self.labels = []
+        self.rings = [None] * self.dim
+
         if graph is not None:
-            self.spheres = []
-            self.cylinders = []
-            self.labels = []
-            self.rings = [None] * self.dim
             root = graph
             root_location = Vector([0, 0, 0])
             self.locations.append(root_location)
@@ -51,7 +53,7 @@ class DynkinDiagram(BObject):
                                                color="plastic_example", thickness=1, rotation_euler=[0, 0, 0],
                                                mode="XZ")
             self.spheres.append(root_sphere)
-            self._place_children(root, root_location)
+            self._place_children(root, root_location,no_threes=no_threes)
 
         else:  # linear diagram
             center = 2 * (dim - 1) / 2
@@ -269,6 +271,7 @@ class DynkinDiagram(BObject):
         last = None
         first = None
         weight = None
+        name = get_from_kwargs(kwargs, "name", dynkin_string)
         for char in dynkin_string:
             if char == 'x' or char == 'o':
                 if char == 'x':
@@ -286,9 +289,9 @@ class DynkinDiagram(BObject):
                     weight = None
             else:
                 weight = int(char)
-        return DynkinDiagram(dim=dim, graph=first, name=dynkin_string,move_to_center=True, **kwargs)
+        return DynkinDiagram(dim=dim, graph=first,name=name,move_to_center=True, **kwargs)
 
-    def _place_children(self, node, node_location):
+    def _place_children(self, node, node_location,no_threes=False):
         children = node.children
 
         if len(children) == 1:
@@ -324,8 +327,13 @@ class DynkinDiagram(BObject):
                             Text(str(child.weight), location=child_location + self.text_offset+self.dynkin_label_shift,
                                  text_size=self.text_size, aligned="center")
                         )
+                    elif child.weight == 3 and not no_threes:
+                        self.labels.append(
+                            Text(str(child.weight), location=child_location + self.text_offset+self.dynkin_label_shift,
+                                 text_size=self.text_size, aligned="center",color="background")
+                        )
 
-            self._place_children(child, child_location)
+            self._place_children(child, child_location,no_threes=no_threes)
         else:
             directions = []
             n = len(children)
@@ -362,6 +370,12 @@ class DynkinDiagram(BObject):
                             self.labels.append(
                                 Text(str(child.weight), location=child_location + self.text_offset,
                                      text_size=self.text_size, aligned="center")
+                            )
+                        elif child.weight == 3 and not no_threes:
+                            self.labels.append(
+                                Text(str(child.weight),
+                                     location=child_location + self.text_offset + self.dynkin_label_shift,
+                                     text_size=self.text_size, aligned="center", color="background")
                             )
 
                 self._place_children(child, child_location)

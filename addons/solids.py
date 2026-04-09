@@ -52,7 +52,7 @@ SOLID_FACE_SIDES = {
 # Colors for each regular solid type (RGBA)
 SOLID_COLORS = {
     'TETRA': (0,1,0, 1.0),
-    'TRUNC_TETRA': (0,0.5,0,1),
+    'TRUNC_TETRA': (0.5,0.5,0,1),
     'OCTA':  (0,0.5,1, 1.0),
     'CUBOCTAHEDRON': (0,0.5,0.5, 1.0),
     'TRUNC_OCTA': (0, 0.25, 0.25, 1.0),

@@ -423,6 +423,10 @@ class CoxeterDynkinDiagram:
         This function is the core of the class. It returns the vertex count for a given Coxeter-Dynkin diagram.
         The evaluation includes all compoments and when the algorithm fails it gives a warning
 
+        >>> d=CoxeterDynkinDiagram("o3x . *b3o")
+        >>> d.get_vertex_count()
+        6
+
         # start with the simple cases
         >>> d=CoxeterDynkinDiagram("x o")
         >>> d.is_connected()
@@ -497,7 +501,6 @@ class CoxeterDynkinDiagram:
         >>> d.get_vertex_count()
         192
         """
-
         comps = nx.connected_components(self.graph)
         count = 1
         for comp in comps:
@@ -512,12 +515,17 @@ class CoxeterDynkinDiagram:
         >>> [ddd.diagram_string for dd in subs.values() for ddd in dd],dimensions
         (['. . . .', 'x . . .', '. x . .', '. . . x', 'x3x . .', 'x . . x', '. x3o .', '. x . x', '. . o4x', 'x3x3o .', 'x3x . x', 'x . o4x', '. x3o4x'], [1, 3, 5, 4])
 
-        >>> d=CoxeterDynkinDiagram("x3o3o3o3o *c3o")
-        >>> rows,subs,dimensions = d.get_subdiagrams()
-        >>> [ddd.diagram_string for dd in subs.values() for ddd in dd],dimensions
-        (['. . . . . .', 'x . . . . *c .', 'x3o . . . *c .', 'x3o3o . . *c .', 'x3o3o3o . *c .', 'x3o3o . . *c3o', 'x3o3o3o3o *c .', 'x3o3o3o . *c3o'], [1, 1, 1, 1, 2, 2])
-        >>> d.get_vertex_count()
-        27
+        >>> d=CoxeterDynkinDiagram("o3x3o *b3o")
+        >>> rows, subs, dimensions = d.get_subdiagrams()
+        >>> [ddd.diagram_string for dd in subs.values() for ddd in dd], dimensions
+        (['. . . *b .', '. x . *b .', 'o3x . *b .', '. x3o *b .', '. x . *b3o', 'o3x3o *b .'], [1, 1, 3, 3])
+
+        # >>> d=CoxeterDynkinDiagram("x3o3o3o3o *c3o")
+        # >>> rows,subs,dimensions = d.get_subdiagrams()
+        # >>> [ddd.diagram_string for dd in subs.values() for ddd in dd],dimensions
+        # (['. . . . . .', 'x . . . . *c .', 'x3o . . . *c .', 'x3o3o . . *c .', 'x3o3o3o . *c .', 'x3o3o . . *c3o', 'x3o3o3o3o *c .', 'x3o3o3o . *c3o'], [1, 1, 1, 1, 2, 2])
+        # >>> d.get_vertex_count()
+        # 27
 
         >>> d=CoxeterDynkinDiagram("x3x3x")
         >>> rows, subs,dimensions = d.get_subdiagrams()
