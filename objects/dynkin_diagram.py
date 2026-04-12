@@ -29,7 +29,7 @@ class DynkinDiagram(BObject):
         self.scale = get_from_kwargs(kwargs, "scale", [1, 1, 1])
         self.text_size = get_from_kwargs(kwargs, "text_size", "Large")
         self.dynkin_label_shift = get_from_kwargs(kwargs, "dynkin_label_shift", Vector([0, 0, 0]))
-        no_threes = get_from_kwargs(kwargs, "no_threes", False)
+        self.no_threes = get_from_kwargs(kwargs, "no_threes", False)
         self.text_offset = Vector([-1.2, 0, 0.5])
         self.active_rings = [False]*self.dim
         if self.text_size == "Huge":
@@ -41,6 +41,7 @@ class DynkinDiagram(BObject):
         self.cylinders = []
         self.labels = []
         self.rings = [None] * self.dim
+        self.graph = graph
 
         if graph is not None:
             root = graph
@@ -53,7 +54,7 @@ class DynkinDiagram(BObject):
                                                color="plastic_example", thickness=1, rotation_euler=[0, 0, 0],
                                                mode="XZ")
             self.spheres.append(root_sphere)
-            self._place_children(root, root_location,no_threes=no_threes)
+            self._place_children(root, root_location,no_threes=self.no_threes)
 
         else:  # linear diagram
             center = 2 * (dim - 1) / 2
@@ -235,9 +236,13 @@ class DynkinDiagram(BObject):
 
         return begin_time + transition_time
 
-    def copy(self):
-        return DynkinDiagram(dim=self.dim, labels=self.labels_param,
-                             location=self.ref_obj.location.copy(), scale=self.ref_obj.scale)
+    def copy(self,**kwargs):
+        scale = get_from_kwargs(kwargs,"scale",self.ref_obj.scale)
+        return DynkinDiagram(dim=self.dim,
+                             # labels=self.labels_param,
+                             labels =[],
+                             graph = self.graph,
+                             location=self.ref_obj.location.copy(), scale=scale,no_threes=self.no_threes,**kwargs)
 
     @classmethod
     def d4(cls, **kwargs):
@@ -255,17 +260,17 @@ class DynkinDiagram(BObject):
         if dynkin_string == "x3x3x *b3x":
             return DynkinDiagram.d4(rings=[1, 1, 1, 1], **kwargs)
         elif dynkin_string == "o3x3x *b3x":
-            return DynkinDiagram.d4(rings=[0, 1, 1, 1], **kwargs)
-        elif dynkin_string == "x3o3x *b3x":
             return DynkinDiagram.d4(rings=[1, 0, 1, 1], **kwargs)
+        elif dynkin_string == "x3o3x *b3x":
+            return DynkinDiagram.d4(rings=[0, 1, 1, 1], **kwargs)
         elif dynkin_string == "o3x3o *b3x":
-            return DynkinDiagram.d4(rings=[0, 1, 0, 1], **kwargs)
+            return DynkinDiagram.d4(rings=[1, 0, 0, 1], **kwargs)
         elif dynkin_string == "o3o3x *b3x":
-            return DynkinDiagram.d4(rings=[1, 0, 1, 0], **kwargs)
+            return DynkinDiagram.d4(rings=[0, 0, 1, 1], **kwargs)
         elif dynkin_string == "o3o3o *b3x":
             return DynkinDiagram.d4(rings=[0, 0, 0, 1], **kwargs)
         elif dynkin_string == "o3x3o *b3o":
-            return DynkinDiagram.d4(rings=[0, 1, 0, 0], **kwargs)
+            return DynkinDiagram.d4(rings=[1, 0, 0, 0], **kwargs)
         # deal with linear diagrams only
         dim = 0
         last = None

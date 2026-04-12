@@ -195,8 +195,7 @@ if color_scheme == -1:
     COLORS = [
         [0, 0, 0, 1],  # black background
         [225, 225, 225, 1],  # white for text
-        [255, 0, 255, 1],
-        # [86, 180, 233, 1],  # sky blue for drawing
+        [86, 180, 233, 1],  # sky blue for drawing
         [240, 228, 66, 1],  # yellow for example
         [213, 94, 10, 1],  # vermillion for important
         [10, 158, 115, 1],  # joker

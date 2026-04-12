@@ -661,7 +661,7 @@ class BObject(object):
         return begin_time+transition_time
 
     def change_color(self, new_color, slot = 0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
-        ibpy.change_color(self, new_color, slot=0,begin_frame=begin_time * FRAME_RATE,
+        ibpy.change_color(self, new_color, slot=slot,begin_frame=begin_time * FRAME_RATE,
                           final_frame=(begin_time + transition_time) * FRAME_RATE,**kwargs)
 
         return begin_time + transition_time
@@ -845,8 +845,8 @@ class BObject(object):
                      global_system=global_system,verbose=verbose,from_location=from_location)
         return begin_time + transition_time
 
-    def move_copy(self, direction=[0, 0, 0], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        obj_copy = self.copy()
+    def move_copy(self, direction=[0, 0, 0], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
+        obj_copy = self.copy(**kwargs)
         ibpy.clear_animation_data(obj_copy)
         obj_copy.appeared=False# remove animation data to make it appear independently of the src object
         obj_copy.appear(begin_time=begin_time, transition_time=0)  # make copy appear

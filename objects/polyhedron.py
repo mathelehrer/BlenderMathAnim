@@ -785,11 +785,13 @@ class Polyhedron(BObject):
 
     def grow(self, index=0, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME, show_faces=True):
         super().appear(begin_time=begin_time, transition_time=0)  # needed for linking
+
         self.create_face_tree(index)
         self.counter = 0  # counts the number of faces that have been grown already, (unskillful hack with a global variable)
         max_level = self.max_level(self.root, 0)
         dt = transition_time / len(self.faces)  # time per face
         self.grow_recursively(self.root, begin_time=begin_time, transition_time=dt, show_faces=show_faces)
+
         return begin_time + transition_time
 
     def grow_without_faces(self, index=0, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):

@@ -82,6 +82,15 @@ def get_obj_from_name(name=None):
                 return o
 
 
+def get_objects_from_name(name=None):
+    objects = []
+    if name:
+        for o in bpy.data.objects:
+            if name in o.name:
+                objects.append(o)
+    return objects
+
+
 def rename(bob, name):
     obj = get_obj(bob)
     obj.name = name
@@ -7506,21 +7515,23 @@ def make_rigid_bodies(bob_list, dynamic=True, kinematic=False, friction=0.1, bou
     mass = get_from_kwargs(kwargs,"mass",1)
 
     set_several_select(bob_list,True)
-    set_active(bob_list[0])
 
-    bpy.ops.rigidbody.objects_add(**kwargs)
-    obj = get_obj(bob_list[0])
-    if obj.rigid_body is not None:
-        obj.rigid_body.enabled = dynamic
-        obj.rigid_body.kinematic = kinematic
-        obj.rigid_body.use_margin = use_margin
-        obj.rigid_body.restitution = bounciness
-        obj.rigid_body.friction = friction
-        obj.rigid_body.mass = mass
-        obj.rigid_body.collision_margin = collision_margin
-        obj.rigid_body.collision_shape = collision_shape
+    if len(bob_list) > 0:
+        set_active(bob_list[0])
 
-    bpy.ops.rigidbody.object_settings_copy()
+        bpy.ops.rigidbody.objects_add(**kwargs)
+        obj = get_obj(bob_list[0])
+        if obj.rigid_body is not None:
+            obj.rigid_body.enabled = dynamic
+            obj.rigid_body.kinematic = kinematic
+            obj.rigid_body.use_margin = use_margin
+            obj.rigid_body.restitution = bounciness
+            obj.rigid_body.friction = friction
+            obj.rigid_body.mass = mass
+            obj.rigid_body.collision_margin = collision_margin
+            obj.rigid_body.collision_shape = collision_shape
+
+        bpy.ops.rigidbody.object_settings_copy()
 
 
 def set_simulation(begin_time=0, transition_time=250 / FRAME_RATE):
