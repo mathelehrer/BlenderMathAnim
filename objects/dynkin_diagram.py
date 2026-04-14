@@ -247,30 +247,57 @@ class DynkinDiagram(BObject):
     @classmethod
     def d4(cls, **kwargs):
         rings = get_from_kwargs(kwargs, "rings", [1, 1, 1, 1])
+        return DynkinDiagram.dn(n=4, rings=rings, **kwargs)
+
+    @classmethod
+    def dn(cls, n, rings=None, **kwargs):
+        """Create a D_n Dynkin diagram for any n >= 4.
+
+        Ring index mapping:
+          rings[0]: center 'b' node (2nd node in Wythoff linear part)
+          rings[1]: branch 'a'     (1st node in Wythoff linear part)
+          rings[2..n-2]: linear chain 'c', 'd', ... (3rd node onward)
+          rings[n-1]: second branch (the *b3x node)
+        """
+        if rings is None:
+            rings = [1] * n
         graph = Node((0, rings[0]))
-        for i in range(1, 4):
+        node_a = Node((1, rings[1]))
+        node_a.parent = graph
+        node_a.weight = 3
+        prev = graph
+        for i in range(2, n - 1):
             node = Node((i, rings[i]))
-            node.parent = graph
+            node.parent = prev
             node.weight = 3
-        return DynkinDiagram(dim=4, graph=graph, **kwargs)
+            prev = node
+        node_extra = Node((n - 1, rings[n - 1]))
+        node_extra.parent = graph
+        node_extra.weight = 3
+        return DynkinDiagram(dim=n, graph=graph, **kwargs)
 
     @classmethod
     def from_string(cls, dynkin_string, **kwargs):
         dynkin_string = dynkin_string.replace(".", "2")
-        if dynkin_string == "x3x3x *b3x":
-            return DynkinDiagram.d4(rings=[1, 1, 1, 1], **kwargs)
-        elif dynkin_string == "o3x3x *b3x":
-            return DynkinDiagram.d4(rings=[1, 0, 1, 1], **kwargs)
-        elif dynkin_string == "x3o3x *b3x":
-            return DynkinDiagram.d4(rings=[0, 1, 1, 1], **kwargs)
-        elif dynkin_string == "o3x3o *b3x":
-            return DynkinDiagram.d4(rings=[1, 0, 0, 1], **kwargs)
-        elif dynkin_string == "o3o3x *b3x":
-            return DynkinDiagram.d4(rings=[0, 0, 1, 1], **kwargs)
-        elif dynkin_string == "o3o3o *b3x":
-            return DynkinDiagram.d4(rings=[0, 0, 0, 1], **kwargs)
-        elif dynkin_string == "o3x3o *b3o":
-            return DynkinDiagram.d4(rings=[1, 0, 0, 0], **kwargs)
+        if ' *b3' in dynkin_string:
+            # D-type diagram: "x3x3x *b3x", "x3x3x3x *b3x", "x3x3x3x3x *b3x", ...
+            main_part, branch_suffix = dynkin_string.split(' *b3', 1)
+            branch_char = branch_suffix[0]
+            linear_nodes = [c for c in main_part if c in 'xo']
+            m = len(linear_nodes)
+            n = m + 1
+            # rings[0] = 'b' state (2nd linear node → center)
+            # rings[1] = 'a' state (1st linear node)
+            # rings[2..m-1] = 'c', 'd', ... states (3rd onward)
+            # rings[m] = branch state (*b3x node)
+            rings = [0] * n
+            rings[0] = 1 if linear_nodes[1] == 'x' else 0
+            rings[1] = 1 if linear_nodes[0] == 'x' else 0
+            for i in range(2, m):
+                rings[i] = 1 if linear_nodes[i] == 'x' else 0
+            rings[m] = 1 if branch_char == 'x' else 0
+            name = get_from_kwargs(kwargs, "name", dynkin_string)
+            return DynkinDiagram.dn(n=n, rings=rings, name=name, **kwargs)
         # deal with linear diagrams only
         dim = 0
         last = None
@@ -340,12 +367,22 @@ class DynkinDiagram(BObject):
 
             self._place_children(child, child_location,no_threes=no_threes)
         else:
+
             directions = []
             n = len(children)
+
+            # check, whether the diagram is symmetric
+            if self.dim==n+1:
+                symmetric = True # rotate one node up
+            else:
+                symmetric = False # diagram is long in some direction
             for i, child in enumerate(children):
-                u = np.sin(2 * pi * i / n)
-                v = np.cos(2 * pi * i / n)
-                child_direction = Vector([u, 0, v])
+                u = np.sin(2 * pi * (i-1) / n)
+                v = np.cos(2 * pi * (i-1) / n)
+                if symmetric:
+                    child_direction = Vector([u, 0, v])
+                else:
+                    child_direction = Vector([v, 0, u])
                 directions.append(child_direction)
                 child_location = node_location + 2 * child_direction
                 self.locations.append(child_location)
@@ -383,4 +420,4 @@ class DynkinDiagram(BObject):
                                      text_size=self.text_size, aligned="center", color="background")
                             )
 
-                self._place_children(child, child_location)
+                self._place_children(child, child_location,no_threes=no_threes)
