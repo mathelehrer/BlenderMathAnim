@@ -434,6 +434,14 @@ class Node:
             if "Position Transform" in name:
                 return TransformPositionNode(tree,location=location,name=name,label=label,hide=hide,mute=mute,height=400)
 
+        # Generic: GROUP node referencing an already-created node tree by name
+        if type=="GROUP" and "node_tree" in attributes:
+            node_tree_name = attributes["node_tree"]
+            existing = bpy.data.node_groups.get(node_tree_name)
+            if existing is not None:
+                return ExistingNodeGroup(tree, node_tree_name, location=location,
+                                         name=name, label=label, hide=hide, mute=mute)
+
     def set_parent(self,parent):
         self.node.parent=parent.node
 
@@ -484,6 +492,23 @@ class Frame(Node):
                 n.parent=self.node
         else:
             node.parent=self.node
+
+class ExistingNodeGroup(Node):
+    """
+    A GROUP node that references an already-existing node group tree by name.
+    Used by create_from_xml when a GROUP node carries a node_tree="..." attribute
+    pointing to a tree that was pre-created (e.g. by a GeometryNodesModifier
+    sub-group setup).
+    """
+    def __init__(self, tree, node_tree_name, location=(0, 0), hide=False, mute=False, **kwargs):
+        self.node = tree.nodes.new('GeometryNodeGroup')
+        existing = bpy.data.node_groups.get(node_tree_name)
+        if existing is not None:
+            self.node.node_tree = existing
+        self.node.hide = hide
+        self.node.mute = mute
+        super().__init__(tree, location, **kwargs)
+
 
 class GreenNode(Node):
     """

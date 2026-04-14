@@ -7152,3 +7152,48 @@ def add_lists_by_element(list1, list2, subtract=False):
         for i in range(len(list3)):
             list3[i] *= -1
     return list(map(sum, zip(list1, list3)))
+
+
+# Show120_Matrices video
+
+def _ensure_sub_group(name, xml_filename):
+    """Create a geometry node group tree from XML if it doesn't already exist."""
+    import bpy
+    existing = bpy.data.node_groups.get(name)
+    if existing is not None:
+        return existing
+    tree = bpy.data.node_groups.new(name, type='GeometryNodeTree')
+    create_from_xml(tree, xml_filename, unpublished=True)
+    return tree
+
+
+class Show120MatricesModifier(GeometryNodesModifier):
+    """
+    Geometry nodes modifier that reads matrix data from a CSV file and displays
+    each row as a 4×4 matrix of fractions with opening and closing brackets.
+
+    Node hierarchy (leaf-first):
+      Show120_MakeFraction  ← Show120_MakeFraction_node.xml
+      Show120_Number        ← Show120_Number_node.xml        (uses MakeFraction ×2)
+      Show120_MatrixRow0    ← Show120_MatrixRow0_node.xml    (uses Number ×4, cols c0-c15)
+      Show120_MatrixRow1    ← Show120_MatrixRow1_node.xml    (uses Number ×4, cols c16-c31)
+      Show120_MatrixRow2    ← Show120_MatrixRow2_node.xml    (uses Number ×4, cols c32-c47)
+      Show120_MatrixRow3    ← Show120_MatrixRow3_node.xml    (uses Number ×4, cols c48-c63)
+      main tree             ← Show120_Matrices_node.xml
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(get_from_kwargs(kwargs, 'name', "Show120MatricesModifier"),
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        # Build sub-group trees in dependency order (leaves first) so that
+        # ExistingNodeGroup in create_from_xml can find them by name.
+        _ensure_sub_group("Show120_MakeFraction", "Show120_MakeFraction_node")
+        _ensure_sub_group("Show120_Number",        "Show120_Number_node")
+        _ensure_sub_group("Show120_MatrixRow0",    "Show120_MatrixRow0_node")
+        _ensure_sub_group("Show120_MatrixRow1",    "Show120_MatrixRow1_node")
+        _ensure_sub_group("Show120_MatrixRow2",    "Show120_MatrixRow2_node")
+        _ensure_sub_group("Show120_MatrixRow3",    "Show120_MatrixRow3_node")
+        # Load the main modifier tree
+        create_from_xml(tree, "Show120_Matrices_node", unpublished=True, **kwargs)
