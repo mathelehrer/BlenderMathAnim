@@ -681,6 +681,7 @@ class FTensor:
         """
         return hash(tuple(self.components.flatten().tolist()))
 
+
 class FVector(FTensor):
     def __init__(self, components:list):
         self.dim = len(components)
@@ -789,6 +790,15 @@ class FVector(FTensor):
     def real(self):
         return Vector([self.components[i].real() for i in range(self.dim)])
 
+    def to_latex(self, prefix=""):
+        out = prefix + r"\left("
+        for col in self.components:
+            out += col.to_latex() + ","
+        out = out[:-1]  # remove last ampersand
+        out += r"\right)"
+        return out
+
+
 class FMatrix(FTensor):
     def __init__(self, components:list):
         super().__init__(components)
@@ -823,7 +833,6 @@ class FMatrix(FTensor):
             components.append(comp_row)
         return cls(components)
 
-
     def __mul__(self,other):
         """
         >>> I = FMatrix([[0,1],[1,0]])
@@ -840,6 +849,43 @@ class FMatrix(FTensor):
 
     def transpose(self):
         return FMatrix(np.transpose(self.components))
+
+    def determinant(self):
+        """
+        Compute the determinant using the Leibniz formula:
+            det(A) = sum_{sigma in S_n} sgn(sigma) * prod_i A[i][sigma(i)]
+
+        The sign (signature) of a permutation sigma is defined via inversions:
+        an inversion is a pair (i, j) with i < j but sigma(i) > sigma(j).
+        sgn(sigma) = (-1)^N, where N = number of inversions.
+
+        This equals the parity of the permutation: even permutations (N even) have
+        sgn = +1, odd permutations (N odd) have sgn = -1.
+
+        Reference: Lang, S., "Algebra", 3rd ed., Springer (2002), Ch. XIII §4;
+                   also Artin, M., "Algebra", 2nd ed., Pearson (2011), Ch. 5 §4.
+
+        >>> FMatrix.identity(4).determinant()
+        1
+        >>> FMatrix.parse("[[0, 1, 0], [1, 0, 0], [0, 0, 1]]").determinant()
+        -1
+
+        :return: QR
+        """
+        from itertools import permutations
+        n = len(self.components)
+        m = self.components
+        # cool trick to construct a zero with the correct modulus
+        zero = m[0][0] - m[0][0]
+        result = zero
+        for perm in permutations(range(n)):
+            inversions = sum(1 for i in range(n) for j in range(i + 1, n) if perm[i] > perm[j])
+            product = m[0][perm[0]]
+            for i in range(1, n):
+                product = product * m[i][perm[i]]
+            result = result + product if inversions % 2 == 0 else result - product
+        return result
+
     @classmethod
     def identity(cls,rank=3,root_modulus=5,root_string="r5"):
         """
@@ -881,6 +927,7 @@ class FMatrix(FTensor):
         out+="\n"
         out+=r"\end{array}\right)"
         return out
+
 
 class EpsilonTensor(FTensor):
     def __init__(self,rank,root_modulus=5,root_string="r5"):

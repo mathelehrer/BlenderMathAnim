@@ -2428,6 +2428,109 @@ class DataModifier(GeometryNodesModifier):
             create_geometry_line(tree, [del_geo, set_pos, wireframe, set_material], ins=ins.outputs[0],
                                  out=out.inputs[0])
 
+class DataModifier3D(GeometryNodesModifier):
+    def __init__(self, name='DataModifier', **kwargs):
+        """
+        create geometry to display a point cloud of data points
+        """
+
+        super().__init__(name, group_input=True, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        ins = self.group_inputs
+        links = tree.links
+
+        # input parameters
+        x_domain = get_from_kwargs(kwargs, 'x_domain', [0, 10])
+        y_domain = get_from_kwargs(kwargs, 'y_domain', [0, 10])
+        z_domain = get_from_kwargs(kwargs, 'z_domain', [0, 10])
+
+        width = get_from_kwargs(kwargs, "width", 10)
+        height = get_from_kwargs(kwargs, "height", 10)
+        depth = get_from_kwargs(kwargs, "depth", 10)
+
+        offset = get_from_kwargs(kwargs, "offset", [0, 0, 0])
+
+        pointsize = get_from_kwargs(kwargs, "pointsize", None)
+        linesize = get_from_kwargs(kwargs, "linesize", None)
+        if pointsize:
+            in_pointsize = InputValue(tree, name='PointSize', value=0.05 * pointsize)
+        else:
+            in_pointsize = None
+
+        subdivisions = get_from_kwargs(kwargs, 'subdivisions', 2)
+
+        in_width = InputValue(tree, name='Width', value=width)
+        in_height = InputValue(tree, name='Height', value=height)
+        in_depth = InputValue(tree, name='Depth', value=depth)
+        in_x_min = InputValue(tree, name='X0', value=x_domain[0])
+        in_x_max = InputValue(tree, name='X1', value=x_domain[1])
+        in_y_min = InputValue(tree, name='Y0', value=y_domain[0])
+        in_y_max = InputValue(tree, name='Y1', value=y_domain[1])
+        in_z_min = InputValue(tree, name='Z0', value=z_domain[0])
+        in_z_max = InputValue(tree, name='Z1', value=z_domain[1])
+        in_offset = InputVector(tree, name='Offset', value=offset)
+        in_time = SceneTime(tree, std_out="Seconds")
+        in_log = InputValue(tree, name='Log', value=0)
+
+        in_time_min = InputValue(tree, name='T0', value=0)
+        in_time_max = InputValue(tree, name='T1', value=DEFAULT_ANIMATION_TIME)
+        in_pos = Position(tree)
+
+        # this function takes care of
+        # * positioning the data points
+        # * deleting points outside the view window
+        # * deleting points outside the display time
+        position_function = make_function(tree, name="DataDisplayFunction",
+                                          functions={
+                                              "position": [
+                                                  "pos_x,x0,-,x1,x0,-,/,w,*,offset_x,-",
+                                                  "pos_y,y0,-,y1,y0,-,/,d,*,offset_y,-",
+                                                  "pos_z,z0,-,z1,z0,-,/,h,*,offset_z,-"],
+                                              "invisible": [
+                                                  "pos_x,x0,<,pos_x,x1,>,or,pos_z,y0,<,or,pos_z,y1,>,or,t,t0,<,or,pos_x,x0,-,x1,x0,-,/,t,t0,-,t1,t0,-,/,>,or"]
+                                          },
+                                          inputs=["pos", "x0", "x1", "y0", "y1", "z0","z1","w", "h","d", "t0", "t1", "t", "l","offset"],
+                                          outputs=["position", "invisible"],
+                                          scalars=["x0", "x1", "y0", "y1","z0","z1","d", "w", "h", "invisible", "t0", "t1", "t", "l"],
+                                          vectors=["pos", "position","offset"])
+        links.new(in_pos.std_out, position_function.inputs["pos"])
+        links.new(in_width.std_out, position_function.inputs["w"])
+        links.new(in_height.std_out, position_function.inputs["h"])
+        links.new(in_depth.std_out, position_function.inputs["d"])
+        links.new(in_x_min.std_out, position_function.inputs["x0"])
+        links.new(in_x_max.std_out, position_function.inputs["x1"])
+        links.new(in_y_min.std_out, position_function.inputs["y0"])
+        links.new(in_z_min.std_out, position_function.inputs["z0"])
+        links.new(in_y_max.std_out, position_function.inputs["y1"])
+        links.new(in_z_max.std_out, position_function.inputs["z1"])
+        links.new(in_time_min.std_out, position_function.inputs["t0"])
+        links.new(in_time_max.std_out, position_function.inputs["t1"])
+        links.new(in_time.std_out, position_function.inputs["t"])
+        links.new(in_log.std_out, position_function.inputs["l"])
+        links.new(in_offset.std_out, position_function.inputs["offset"])
+
+        del_geo = DeleteGeometry(tree, selection=position_function.outputs["invisible"])
+        set_pos = SetPosition(tree, position=position_function.outputs["position"])
+
+        if pointsize:
+            point = IcoSphere(tree, subdivisions=subdivisions, radius=in_pointsize.std_out)
+            iop = InstanceOnPoints(tree, instance=point.geometry_out)
+        if linesize:
+            wireframe = WireFrame(tree, radius=0.02 * linesize, **kwargs)
+
+        mat = get_from_kwargs(kwargs, "material", None)
+        if mat:
+            mat = get_material(mat, **kwargs)
+            self.materials.append(mat)
+        set_material = SetMaterial(tree, material=mat)
+        if pointsize:
+            create_geometry_line(tree, [del_geo, set_pos, iop, set_material], ins=ins.outputs[0], out=out.inputs[0])
+        if linesize:
+            create_geometry_line(tree, [del_geo, set_pos, wireframe, set_material], ins=ins.outputs[0],
+                                 out=out.inputs[0])
+
 
 class LegendrePolynomials(GeometryNodesModifier):
     def __init__(self, l_range=range(10), name='LegendrePolynomials', **kwargs):

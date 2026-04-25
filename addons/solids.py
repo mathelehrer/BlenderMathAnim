@@ -59,7 +59,7 @@ SOLID_COLORS = {
     'CUBE':  (0,0,1, 1.0),
     'TRUNC_HEXA': (0,0,0.5, 1.0),
     'RHOMBICUBOCTA': (0,0.5,0.25,1),
-    'TRUNC_CUBOCTA': (0,0.25,0.25,1),
+    'TRUNC_CUBOCTA': (0.5,0,1,1),
     'DODECA':(1,0, 0,1.0),
     'ICOSA': (1,0.5, 0,1.0),
     'ICOSIDODECA': (1,1,0, 1.0),
@@ -885,7 +885,7 @@ class OBJECT_OT_add_solid_from_selection(bpy.types.Operator):
             if bsdf:
                 color = SOLID_COLORS.get(self.solid_type, (0.8, 0.8, 0.8, 1.0))
                 bsdf.inputs['Base Color'].default_value = color
-                bsdf.inputs["Roughness"].default_value = 0.1
+                bsdf.inputs["Roughness"].default_value = 0.9
 
         # --- Add Material ---
         mat_name = "Mat_Sphere"
