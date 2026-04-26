@@ -1,10 +1,8 @@
 import os
-from _ast import Compare
-from multiprocessing import Value
-from operator import truediv
 
 import bpy
 import numpy as np
+from mathematics.groups.e8 import E8Lattice
 from mathutils import Vector
 from sympy import false
 
@@ -13,8 +11,6 @@ from grandalf.layouts import SugiyamaLayout, DigcoLayout
 from interface import ibpy
 from interface.ibpy import get_material, make_new_socket, OPERATORS, get_obj
 from interface.interface_constants import blender_version
-from mathematics.groups.e8 import E8Lattice
-from utils.color_conversion import get_color
 from utils.constants import RES_XML, RES_XML2
 from utils.kwargs import get_from_kwargs
 from utils.string_utils import parse_vector
@@ -3813,6 +3809,7 @@ class InsideConvexHull3D(GreenNode):
         tree_links.new(comparison.outputs["in"], group_outputs.inputs["Is Inside"])
         tree_links.new(comparison.outputs["out"], group_outputs.inputs["Is Outside"])
         return group
+
 
 class E8Node(GreenNode):
     def __init__(self, tree, location=(0, 0), **kwargs):

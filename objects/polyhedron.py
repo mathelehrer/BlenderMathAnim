@@ -9,16 +9,14 @@ from appearance.textures import get_texture
 from geometry_nodes.geometry_nodes_modifier import PolyhedronViewModifier
 from interface import ibpy
 from interface.ibpy import create_mesh, to_vector
-from mathematics import geometry
-from mathematics.geometry.field_extensions import QR
+from mathematics.algebra.field_extensions import QR
 from mathematics.geometry.meshface import MeshFace
 from mathematics.lin_alg.subspace import Subspace
-from new_stuff.mathematics.unfolder import color_dict
+from mathematics.geometry.unfolder import color_dict
 from objects.bobject import BObject
 from objects.face import Face
 
 from objects.tex_bobject import SimpleTexBObject
-from utils import kwargs
 from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME
 from utils.kwargs import get_from_kwargs
 

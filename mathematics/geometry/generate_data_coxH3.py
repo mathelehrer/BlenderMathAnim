@@ -2,8 +2,8 @@ import os
 
 from matplotlib import pyplot as plt
 
-from mathematics.geometry.coxH3 import CoxH3
-from mathematics.geometry.field_extensions import FVector
+from mathematics.groups.coxH3 import CoxH3
+from mathematics.algebra.field_extensions import FVector
 
 
 def read_signatures(filename):

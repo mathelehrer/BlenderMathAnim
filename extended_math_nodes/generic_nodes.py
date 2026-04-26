@@ -3,13 +3,13 @@ import random
 
 import bpy
 import numpy as np
-from sympy.parsing.mathematica import parse_mathematica
 
 from geometry_nodes.nodes import make_function, Switch
 from interface.ibpy import make_new_socket
 from shader_nodes.shader_nodes import MixNode
-from utils.constants import LOC_FILE_DIR, DATA_DIR
+from utils.constants import DATA_DIR
 from utils.kwargs import get_from_kwargs
+
 
 def fitting_function_dictionary():
     with open(os.path.join(DATA_DIR, "fittingfunctions.dat")) as data:

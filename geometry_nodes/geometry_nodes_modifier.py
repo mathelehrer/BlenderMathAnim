@@ -24,7 +24,8 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode, PolyhedronViewNode, \
     ShowNormalsNode, Rotation, LinearMap
 from interface import ibpy
-from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material, get_geometry_node_from_modifier
+from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material, get_geometry_node_from_modifier, \
+    get_material_of
 from mathematics.mathematica.mathematica import choose
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
@@ -6877,6 +6878,84 @@ class PolyhedronViewModifier(GeometryNodesModifier):
         ibpy.change_default_value(edge_radius_node,from_value=0,to_value=edge_radius,begin_time=0,transition_time=0)
         vertex_radius_node=ibpy.get_geometry_node_from_modifier(self.tree,"VertexRadius")
         ibpy.change_default_value(vertex_radius_node,from_value=0,to_value=vertex_radius,begin_time=0,transition_time=0)
+
+# what's new in four dimensions
+
+
+class CrystalModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(name="CrystalModifier",
+                         group_input=False, group_output=False, automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        create_from_xml(tree, "crystal_nodes", **kwargs)
+        cracks_count = get_from_kwargs(kwargs, "cracks_count", 5)
+
+        cracks_count_node=ibpy.get_geometry_node_from_modifier(self,label="CracksCount")
+        ibpy.change_default_integer(cracks_count_node,from_value=cracks_count,
+                                    to_value=cracks_count,begin_time=0,transition_time=0)
+
+    def transfer_material_from(self, source_object):
+        material_node = get_geometry_node_from_modifier(self, "CrystalColor")
+        material_node.material = get_material_of(source_object)
+
+
+class ExplosionModifier(GeometryNodesModifier):
+    def __init__(self, **kwargs):
+        super().__init__(name="ExplosionModifier", group_input=True, group_output=True, automatic_layout=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        ins = self.group_inputs
+        out = self.group_outputs
+        links = tree.links
+        subdivide_level = get_from_kwargs(kwargs, "subdivide_level", 5)
+        elements_scale = get_from_kwargs(kwargs, "elements_scale", 0.95)
+        speed_value = get_from_kwargs(kwargs, "speed_value", 0.001)
+        explosion_start = get_from_kwargs(kwargs,"begin_time",0)
+        crack_scale=get_from_kwargs(kwargs,"crack_scale",0.01)
+        crack_density=get_from_kwargs(kwargs,"crack_density",1)
+        crack_seed=get_from_kwargs(kwargs,"crack_seed",0)
+        material = get_from_kwargs(kwargs, "material", get_texture("joker"))
+
+        # create cutting planes
+        grid = Grid(tree,size_x=100,size_y=100,vertices_x=2,vertices_y=2,hide=True)
+        extrude = ExtrudeMesh(tree,offset_scale=crack_scale,mode="FACES",indivdual=False,hide=True)
+        join = JoinGeometry(tree,hide=True)
+
+        merge_by_distance = MergeByDistance(tree, distance=0.001, hide=True)
+        subdivide=SubdivideMesh(tree, level=subdivide_level, hide=True)
+
+        # wrinkle cutting planes
+        normal = InputNormal(tree, hide=True)
+        value = InputValue(tree, value =2, hide=True)
+        noise = NoiseTexture(tree,scale=0.1,detail=15,std_out="Factor",normalize=False)
+        adjust_noise = make_function(tree,name="NoiseScaling",
+                    functions={
+                        "offset":"noise,normal,mul,scl,mul"
+                    },inputs=["noise","scl","normal"],outputs=["offset"],
+                    scalars=["noise","scl"],vectors=["normal","offset"])
+
+        links.new(normal.std_out,adjust_noise.inputs["normal"])
+        links.new(value.std_out,adjust_noise.inputs["scl"])
+        links.new(noise.std_out,adjust_noise.inputs["noise"])
+
+        set_pos = SetPosition(tree,offset=adjust_noise.outputs["offset"],hide=True)
+        create_geometry_line(tree, [grid,extrude,join])
+        create_geometry_line(tree,[grid,join,merge_by_distance,subdivide,set_pos])
+
+        distrib = DistributePointsOnFaces(tree,density=0.002*crack_density,seed=crack_seed,hide=True)
+        rnd_rot = RandomValue(tree,data_type="FLOAT_VECTOR",min=Vector(),max=Vector([pi,pi,pi]),hide=True)
+        iop = InstanceOnPoints(tree,instance=set_pos.geometry_out,rotation=rnd_rot.std_out,hide=True)
+
+        set_material = SetMaterial(tree,material=material,hide=True)
+        mesh_difference = MeshBoolean(tree,operation="DIFFERENCE",mesh_2=iop.geometry_out,hide=True)
+        scale_elements = ScaleElements(tree,domain="FACE",scale=elements_scale,hide=True)
+
+        create_geometry_line(tree,[set_material,mesh_difference,scale_elements],out=out.inputs[0],ins=ins.outputs[0])
+        create_geometry_line(tree,[distrib,iop],ins=ins.outputs[0])
+
+
+
 
 # recreate the essentials to convert a latex expression into a collection of curves
 # that can be further processed in geometry nodes

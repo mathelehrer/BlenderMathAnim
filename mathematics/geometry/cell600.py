@@ -7,7 +7,7 @@ from fractions import Fraction
 import numpy as np
 
 from interface.ibpy import Vector
-from mathematics.geometry.field_extensions import FQuaternion, QR, FTensor, EpsilonTensor, FVector
+from mathematics.algebra.field_extensions import FQuaternion, QR, FTensor, EpsilonTensor, FVector
 from mathematics.zeros import chop
 from utils.constants import DATA_DIR
 
