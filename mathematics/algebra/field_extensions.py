@@ -60,361 +60,7 @@ def find_modulus(string):
     else:
         return (1, "r1")
 
-
 class QR:
-    def __init__(self, x: Fraction, y: Fraction, root_modulus=5, root_string="r5"):
-        """
-       >>> QR(Fraction(1, 2), Fraction(3, 4))
-       (1/2+3/4*r5)
-       >>> QR(Fraction(1,2), Fraction(3,4),root_modulus=2,root_string="r2")
-       (1/2+3/4*r2)
-
-       :param x:
-       :param y:
-       """
-        self.x = x
-        self.y = y
-        self.root_modulus = root_modulus
-        self.root_string = root_string
-
-    @classmethod
-    def parse(cls, string):
-        """
-        parse a string of the form "(a/b+c/d*root_string)" into a QR object
-
-        >>> QR.parse("1/2-1/2*r2")
-        (1/2-1/2*r2)
-        >>> QR.parse("-2/3*r5")
-        -2/3*r5
-        >>> QR.parse("-r5")
-        -1*r5
-        >>> QR.parse("(1/2+3/4*r5)")
-        (1/2+3/4*r5)
-        >>> QR.parse("1/2")
-        1/2
-        >>> QR.parse("-1/2")
-        -1/2
-        >>> QR.parse("0")
-        0
-        >>> QR.parse("-2-r5")
-        (-2-1*r5)
-        >>> QR.parse("5+2*r5")
-        (5+2*r5)
-        >>> QR.parse("3+r5")
-        (3+1*r5)
-        """
-        # remove brackets
-        root_modulus, root_string = find_modulus(string)
-
-        string = string.replace(" ", "")
-        if string[0] == "(":
-            string = string[1:-1]
-        if string[0] == "-":
-            string = string[1:]
-            sign1 = -1
-        else:
-            sign1 = 1
-        if "-" in string:
-            parts = string.split("-")
-            sign2 = -1
-        elif "+" in string:
-            parts = string.split("+")
-            sign2 = 1
-        else:
-            parts = [string]
-
-        if len(parts) == 1:
-            if "*" in parts[0]:
-                smaller_parts = parts[0].split("*" + root_string)
-                if len(smaller_parts[0]) == 0:
-                    return cls(Fraction(0, 1), Fraction(sign1, 1), root_modulus=root_modulus, root_string=root_string)
-                else:
-                    if "/" in smaller_parts[0]:
-                        a, b = smaller_parts[0].split("/")
-                        return cls(Fraction(0, 1), Fraction(sign1 * int(a), int(b)), root_modulus=root_modulus,
-                                   root_string=root_string)
-                    else:
-                        return cls(Fraction(0, 1), Fraction(sign1 * int(smaller_parts[0]), 1),
-                                   root_modulus=root_modulus, root_string=root_string)
-            elif root_string in parts[0]:
-                return cls(Fraction(0, 1), Fraction(sign1, 1), root_modulus=root_modulus, root_string=root_string)
-            elif "/" in parts[0]:
-                a, b = parts[0].split("/")
-                return cls(Fraction(sign1 * int(a), int(b)), Fraction(0, 1), root_modulus=root_modulus,
-                           root_string=root_string)
-            else:
-                return cls(Fraction(sign1 * int(parts[0]), 1), Fraction(0, 1), root_modulus=root_modulus,
-                           root_string=root_string)
-        else:
-            if "/" in parts[0]:
-                a, b = parts[0].split("/")
-            else:
-                a = parts[0]
-                b = 1
-            if "*" in parts[1]:
-                parts[1] = parts[1].replace("*" + root_string, "")
-                if "/" in parts[1]:
-                    c, d = parts[1].split("/")
-                else:
-                    c = int(parts[1])
-                    d = 1
-            elif root_string in parts[1]:
-                c = 1
-                d = 1
-            else:
-                c = parts[1]
-                d = 1
-            return cls(Fraction(sign1 * int(a), int(b)), Fraction(sign2 * int(c), int(d)), root_modulus=root_modulus,
-                       root_string=root_string)
-
-    @classmethod
-    def from_integers(cls, a: int, b: int, c: int, d: int, root_modulus: int = 5, root_string="r5"):
-        """
-        >>> QR.from_integers(1,2,3,4,5,"r5")
-        (1/2+3/4*r5)
-        """
-
-        return cls(Fraction(a, b), Fraction(c, d), root_modulus=root_modulus, root_string=root_string)
-
-    @classmethod
-    def random(cls, range=10, root_modulus=5, root_string="r5"):
-        x = Fraction(np.random.randint(-range, range), 1)
-        y = Fraction(np.random.randint(-range, range), 1)
-        return QR(x, y, root_modulus=root_modulus, root_string=root_string)
-
-    def to_integer(self):
-        return [self.x.numerator, self.x.denominator, self.y.numerator, self.y.denominator]
-
-    def __str__(self):
-        if self.y > 0:
-            if self.x != 0:
-                return "(" + str(self.x) + "+" + str(self.y) + "*" + self.root_string + ")"
-            else:
-                return str(self.y) + "*" + self.root_string
-        elif self.y < 0:
-            if self.x != 0:
-                return "(" + str(self.x) + "-" + str(
-                    Fraction(np.abs(self.y.numerator), np.abs(self.y.denominator))) + "*" + self.root_string + ")"
-            else:
-                return "-" + str(
-                    Fraction(np.abs(self.y.numerator), np.abs(self.y.denominator))) + "*" + self.root_string
-        else:
-            return str(self.x)
-
-    def __repr__(self):
-        return self.__str__()
-
-    def __mul__(self, other):
-        """
-        >>> QR(Fraction(1, 2), Fraction(3, 4))*QR(Fraction(2,1), Fraction(4,3))
-        (6+13/6*r5)
-
-        >>> np.random.seed(1234)
-        >>> z = QR.random()
-        >>> w = QR.random()
-        >>> z*w
-        (70-26*r5)
-
-        >>> QR.parse("1/2-1/2*r2")*QR.parse("1/2+1/4*r2")
-        -1/8*r2
-        >>> QR.parse("4-1/2*r7")*QR.parse("1/2+1/4*r7")
-        (9/8+3/4*r7)
-
-        :param other:
-        :return:
-        """
-
-        if self.root_modulus != other.root_modulus:
-            # harmless case, when there is no modulus
-            if self.root_modulus == 1 and self.y == 0:
-                return QR(self.x * other.x, self.x * other.y, root_modulus=other.root_modulus,
-                          root_string=other.root_string)
-            if other.root_modulus == 1 and other.y == 0:
-                return QR(self.x * other.x, self.y * other.x, root_modulus=self.root_modulus,
-                          root_string=self.root_string)
-            raise ValueError("Cannot multiply QR fields with different root moduli")
-        return QR(self.x * other.x + self.root_modulus * self.y * other.y, self.x * other.y + self.y * other.x,
-                  root_modulus=self.root_modulus, root_string=self.root_string)
-
-    def __add__(self, other):
-        """
-        >>> np.random.seed(1234)
-        >>> z = QR.random()
-        >>> w = QR.random()
-        >>> z+w
-        (1+11*r5)
-        >>> QR.parse("4-1/2*r7")+QR.parse("1/2+1/4*r7")
-        (9/2-1/4*r7)
-
-
-        :param other:
-        :return:
-        """
-        if self.root_modulus != other.root_modulus:
-            # harmless case, when there is no modulus
-            if self.root_modulus == 1 and self.y == 0:
-                return QR(self.x + other.x, other.y, root_modulus=other.root_modulus, root_string=other.root_string)
-            if other.root_modulus == 1 and other.y == 0:
-                return QR(self.x + other.x, self.y, root_modulus=self.root_modulus, root_string=self.root_string)
-            raise ValueError("Cannot multiply QR fields with different root moduli")
-        return QR(self.x + other.x, self.y + other.y, root_modulus=self.root_modulus, root_string=self.root_string)
-
-    def __sub__(self, other):
-        """
-        >>> np.random.seed(1234)
-        >>> z = QR.random()
-        >>> w = QR.random()
-        >>> z-w
-        (9+7*r5)
-        >>> QR.parse("4-1/2*r7")-QR.parse("1/2+1/4*r7")
-        (7/2-3/4*r7)
-
-        :param other:
-        :return:
-        """
-
-        if self.root_modulus != other.root_modulus:
-            # harmless case, when there is no modulus
-            if self.root_modulus == 1 and self.y == 0:
-                return QR(self.x - other.x, -other.y, root_modulus=other.root_modulus, root_string=other.root_string)
-            if other.root_modulus == 1 and other.y == 0:
-                return QR(self.x - other.x, self.y, root_modulus=self.root_modulus, root_string=self.root_string)
-            raise ValueError("Cannot multiply QR fields with different root moduli")
-        return QR(self.x - other.x, self.y - other.y, root_modulus=self.root_modulus, root_string=self.root_string)
-
-    def conj(self):
-        """
-        >>> QR(Fraction(1, 2), Fraction(3, 4)).conj()
-        (1/2-3/4*r5)
-        >>> QR.parse("4-1/2*r7").conj()
-        (4+1/2*r7)
-
-        :return:
-        """
-        return QR(self.x, -self.y, self.root_modulus, self.root_string)
-
-    def norm(self):
-        """
-        >>> QR(Fraction(1, 2), Fraction(3, 4)).norm()
-        Fraction(-41, 16)
-        >>> QR.parse("4-1/2*r7").norm()
-        Fraction(57, 4)
-
-        :return:
-        """
-
-        return self.x ** 2 - self.root_modulus * self.y ** 2
-
-    def __neg__(self):
-        """
-        >>> -QR.from_integers(-1,1,2,-3)
-        (1+2/3*r5)
-        >>> -QR.from_integers(-1,1,2,-3,3,"r3")
-        (1+2/3*r3)
-
-
-        :return:
-        """
-        return QR(-self.x, -self.y, self.root_modulus, self.root_string)
-
-    def __truediv__(self, other):
-        """
-        >>> np.random.seed(1234)
-        >>> z = QR.random(5,2,"r2")
-        >>> w = QR.random(5,2,"r2")
-        >>> z/w*w,z
-        ((-2+1*r2), (-2+1*r2))
-
-        >>> np.random.seed(1234)
-        >>> z = QR.random()
-        >>> w = QR.random()
-        >>> z/w
-        (55/2+23/2*r5)
-        
-        :param other:
-        :return:
-        """
-        return QR(1 / other.norm(), Fraction(0, 1), self.root_modulus, self.root_string) * (self * other.conj())
-
-    def __eq__(self, other):
-        if self.root_modulus == other.root_modulus:
-            return self.x == other.x and self.y == other.y
-        else:
-            if self.y == 0 and other.y == 0:
-                return self.x == other.x
-            else:
-                return False
-
-    def __hash__(self):
-        """ custom hash function for QR objects
-        >>> a = QR(Fraction(1, 2), Fraction(3, 4))
-        >>> hash(a)
-        -5659871693760987716
-
-        >>> b = QR(Fraction(5, 6), Fraction(7, 8))
-        >>> hash((a,b))
-        9002616610964909476
-
-        >>> M=FTensor([a,b])
-        >>> hash(M)
-        9002616610964909476
-
-        """
-        # the root_modulus is only effective, when the prefactor is non-zero,
-        return hash((self.x.numerator, self.x.denominator, self.y.numerator, self.y.denominator,
-                     self.y.numerator * self.root_modulus))
-
-    def real(self):
-        return float(self.x) + float(self.y) * np.sqrt(self.root_modulus)
-
-    def to_latex(self):
-        out = ""
-        if self.x.numerator != 0:
-            if self.x.numerator < 0:
-                out += "-"
-            if self.x.denominator == 1:
-                out += str(np.abs(self.x.numerator))
-            else:
-                out += (r"\frac{" + str(np.abs(self.x.numerator)) + r"}{" + str(self.x.denominator) + r"}")
-        if self.y.numerator != 0:
-            if self.y.numerator < 0:
-                out += "-"
-            else:
-                out += "+"
-            if self.y.denominator == 1:
-                out += str(np.abs(self.y.numerator))
-            else:
-                out += (r"\frac{" + str(np.abs(self.y.numerator)) + r"}{" + str(self.y.denominator) + r"}")
-            out += r"\sqrt{" + str(self.root_modulus) + r"}"
-        if self.y.numerator == 0 and self.x.numerator == 0:
-            out += "0"
-        return out
-
-    def to_mathematica(self):
-        out = ""
-        if self.x.numerator != 0:
-            if self.x.numerator < 0:
-                out += "-"
-            if self.x.denominator == 1:
-                out += str(np.abs(self.x.numerator))
-            else:
-                out += str(np.abs(self.x.numerator)) + r"/" + str(self.x.denominator)
-        if self.y.numerator != 0:
-            if self.y.numerator < 0:
-                out += "-"
-            else:
-                out += "+"
-            if self.y.denominator == 1:
-                out += str(np.abs(self.y.numerator))
-            else:
-                out += str(np.abs(self.y.numerator)) + r"/" + str(self.y.denominator)
-            out += r"*Sqrt[" + str(self.root_modulus) + r"]"
-        if self.y.numerator == 0 and self.x.numerator == 0:
-            out += "0"
-        return out
-
-
-class QR2:
     """
     Extended degree-2 field extension  K(ξ),  represented as  x + y·ξ.
 
@@ -425,7 +71,7 @@ class QR2:
         min_poly: None  →  ξ² = root_modulus  (ξ = √root_modulus)
 
     Extended mode  (new):
-        x, y    : QR2 elements of the base field K
+        x, y    : QR elements of the base field K
         min_poly: [p0, p1]  with  p0, p1 ∈ K  and  ξ² + p1·ξ + p0 = 0
         root_value: float  (numerical value of ξ, required for real())
 
@@ -435,10 +81,10 @@ class QR2:
         N(a+b·ξ)         =  a² − p1·ab   +  p0·b²    (element of K)
 
     Example — ℚ(√5, φ):
-        r5  = QR2(Fraction(1,1), Fraction(0,1), root_modulus=5, root_string="r5")
-        zero_r5 = QR2(Fraction(0,1), Fraction(0,1), root_modulus=5, root_string="r5")
-        one_r5  = QR2(Fraction(1,1), Fraction(0,1), root_modulus=5, root_string="r5")
-        phi = QR2(zero_r5, one_r5,
+        r5  = QR(Fraction(1,1), Fraction(0,1), root_modulus=5, root_string="r5")
+        zero_r5 = QR(Fraction(0,1), Fraction(0,1), root_modulus=5, root_string="r5")
+        one_r5  = QR(Fraction(1,1), Fraction(0,1), root_modulus=5, root_string="r5")
+        phi = QR(zero_r5, one_r5,
                   min_poly=[-one_r5, -one_r5],   # φ²−φ−1=0
                   root_string="phi",
                   root_value=(1+5**0.5)/2)
@@ -447,8 +93,8 @@ class QR2:
     def __init__(self, x, y, root_modulus=5, root_string="r5",
                  min_poly=None, root_value=None):
         """
-        :param x: rational part (Fraction) or base-field element (QR2)
-        :param y: irrational coefficient (Fraction or QR2)
+        :param x: rational part (Fraction) or base-field element (QR)
+        :param y: irrational coefficient (Fraction or QR)
         :param root_modulus: integer n, used in base mode where ξ²=n
         :param root_string: display label for ξ
         :param min_poly: [p0, p1] where ξ²+p1·ξ+p0=0; None → base mode
@@ -478,15 +124,15 @@ class QR2:
         return Fraction(0)
 
     def _make(self, x, y):
-        """Create a new QR2 of the same extension type."""
-        return QR2(x, y,
-                   root_modulus=self.root_modulus,
-                   root_string=self.root_string,
-                   min_poly=self._min_poly,
-                   root_value=self._root_value)
+        """Create a new QR of the same extension type."""
+        return QR(x, y,
+                  root_modulus=self.root_modulus,
+                  root_string=self.root_string,
+                  min_poly=self._min_poly,
+                  root_value=self._root_value)
 
     def is_zero(self):
-        if isinstance(self.x, QR2):
+        if isinstance(self.x, QR):
             return self.x.is_zero() and self.y.is_zero()
         return self.x == Fraction(0) and self.y == Fraction(0)
 
@@ -497,15 +143,15 @@ class QR2:
     @classmethod
     def parse(cls, string):
         """
-        Parse a string of the form "(a/b+c/d*root_string)" into a QR2 object.
+        Parse a string of the form "(a/b+c/d*root_string)" into a QR object.
 
-        >>> QR2.parse("1/2-1/2*r2")
+        >>> QR.parse("1/2-1/2*r2")
         (1/2-1/2*r2)
-        >>> QR2.parse("(1/2+3/4*r5)")
+        >>> QR.parse("(1/2+3/4*r5)")
         (1/2+3/4*r5)
-        >>> QR2.parse("1/2")
+        >>> QR.parse("1/2")
         1/2
-        >>> QR2.parse("0")
+        >>> QR.parse("0")
         0
         """
         root_modulus, root_string = find_modulus(string)
@@ -576,7 +222,7 @@ class QR2:
     def from_integers(cls, a: int, b: int, c: int, d: int,
                       root_modulus: int = 5, root_string="r5"):
         """
-        >>> QR2.from_integers(1,2,3,4,5,"r5")
+        >>> QR.from_integers(1,2,3,4,5,"r5")
         (1/2+3/4*r5)
         """
         return cls(Fraction(a, b), Fraction(c, d),
@@ -586,7 +232,7 @@ class QR2:
     def random(cls, range=10, root_modulus=5, root_string="r5"):
         x = Fraction(np.random.randint(-range, range), 1)
         y = Fraction(np.random.randint(-range, range), 1)
-        return QR2(x, y, root_modulus=root_modulus, root_string=root_string)
+        return QR(x, y, root_modulus=root_modulus, root_string=root_string)
 
     # ------------------------------------------------------------------
     # arithmetic — extended mode uses min_poly; base mode is identical to QR
@@ -599,24 +245,24 @@ class QR2:
 
         Base mode (p0=−n, p1=0) reproduces the original QR formula exactly.
 
-        >>> QR2(Fraction(1,2), Fraction(3,4)) * QR2(Fraction(2,1), Fraction(4,3))
+        >>> QR(Fraction(1,2), Fraction(3,4)) * QR(Fraction(2,1), Fraction(4,3))
         (6+13/6*r5)
-        >>> QR2.parse("1/2-1/2*r2") * QR2.parse("1/2+1/4*r2")
+        >>> QR.parse("1/2-1/2*r2") * QR.parse("1/2+1/4*r2")
         -1/8*r2
         """
         if self._min_poly is None and other._min_poly is None:
             # base mode: keep original QR behaviour (including harmless cross-modulus)
             if self.root_modulus != other.root_modulus:
                 if self.root_modulus == 1 and self.y == 0:
-                    return QR2(self.x * other.x, self.x * other.y,
-                               root_modulus=other.root_modulus, root_string=other.root_string)
+                    return QR(self.x * other.x, self.x * other.y,
+                              root_modulus=other.root_modulus, root_string=other.root_string)
                 if other.root_modulus == 1 and other.y == 0:
-                    return QR2(self.x * other.x, self.y * other.x,
-                               root_modulus=self.root_modulus, root_string=self.root_string)
-                raise ValueError("Cannot multiply QR2 fields with different root moduli")
-            return QR2(self.x * other.x + self.root_modulus * self.y * other.y,
-                       self.x * other.y + self.y * other.x,
-                       root_modulus=self.root_modulus, root_string=self.root_string)
+                    return QR(self.x * other.x, self.y * other.x,
+                              root_modulus=self.root_modulus, root_string=self.root_string)
+                raise ValueError("Cannot multiply QR fields with different root moduli")
+            return QR(self.x * other.x + self.root_modulus * self.y * other.y,
+                      self.x * other.y + self.y * other.x,
+                      root_modulus=self.root_modulus, root_string=self.root_string)
         # extended mode
         p0 = self._p0()
         p1 = self._p1()
@@ -628,43 +274,43 @@ class QR2:
 
     def __add__(self, other):
         """
-        >>> QR2.parse("4-1/2*r7") + QR2.parse("1/2+1/4*r7")
+        >>> QR.parse("4-1/2*r7") + QR.parse("1/2+1/4*r7")
         (9/2-1/4*r7)
         """
         if self._min_poly is None and other._min_poly is None:
             if self.root_modulus != other.root_modulus:
                 if self.root_modulus == 1 and self.y == 0:
-                    return QR2(self.x + other.x, other.y,
-                               root_modulus=other.root_modulus, root_string=other.root_string)
+                    return QR(self.x + other.x, other.y,
+                              root_modulus=other.root_modulus, root_string=other.root_string)
                 if other.root_modulus == 1 and other.y == 0:
-                    return QR2(self.x + other.x, self.y,
-                               root_modulus=self.root_modulus, root_string=self.root_string)
-                raise ValueError("Cannot add QR2 fields with different root moduli")
-            return QR2(self.x + other.x, self.y + other.y,
-                       root_modulus=self.root_modulus, root_string=self.root_string)
+                    return QR(self.x + other.x, self.y,
+                              root_modulus=self.root_modulus, root_string=self.root_string)
+                raise ValueError("Cannot add QR fields with different root moduli")
+            return QR(self.x + other.x, self.y + other.y,
+                      root_modulus=self.root_modulus, root_string=self.root_string)
         return self._make(self.x + other.x, self.y + other.y)
 
     def __sub__(self, other):
         """
-        >>> QR2.parse("4-1/2*r7") - QR2.parse("1/2+1/4*r7")
+        >>> QR.parse("4-1/2*r7") - QR.parse("1/2+1/4*r7")
         (7/2-3/4*r7)
         """
         if self._min_poly is None and other._min_poly is None:
             if self.root_modulus != other.root_modulus:
                 if self.root_modulus == 1 and self.y == 0:
-                    return QR2(self.x - other.x, -other.y,
-                               root_modulus=other.root_modulus, root_string=other.root_string)
+                    return QR(self.x - other.x, -other.y,
+                              root_modulus=other.root_modulus, root_string=other.root_string)
                 if other.root_modulus == 1 and other.y == 0:
-                    return QR2(self.x - other.x, self.y,
-                               root_modulus=self.root_modulus, root_string=self.root_string)
-                raise ValueError("Cannot subtract QR2 fields with different root moduli")
-            return QR2(self.x - other.x, self.y - other.y,
-                       root_modulus=self.root_modulus, root_string=self.root_string)
+                    return QR(self.x - other.x, self.y,
+                              root_modulus=self.root_modulus, root_string=self.root_string)
+                raise ValueError("Cannot subtract QR fields with different root moduli")
+            return QR(self.x - other.x, self.y - other.y,
+                      root_modulus=self.root_modulus, root_string=self.root_string)
         return self._make(self.x - other.x, self.y - other.y)
 
     def __neg__(self):
         if self._min_poly is None:
-            return QR2(-self.x, -self.y, self.root_modulus, self.root_string)
+            return QR(-self.x, -self.y, self.root_modulus, self.root_string)
         return self._make(-self.x, -self.y)
 
     def conj(self):
@@ -674,11 +320,11 @@ class QR2:
         Base mode: conj(a+b·√n) = a − b·√n  (original QR behaviour).
         Extended:  conj(a+b·ξ) = (a − p1·b) + (−b)·ξ.
 
-        >>> QR2(Fraction(1,2), Fraction(3,4)).conj()
+        >>> QR(Fraction(1,2), Fraction(3,4)).conj()
         (1/2-3/4*r5)
         """
         if self._min_poly is None:
-            return QR2(self.x, -self.y, self.root_modulus, self.root_string)
+            return QR(self.x, -self.y, self.root_modulus, self.root_string)
         p1 = self._p1()
         return self._make(self.x - p1 * self.y, -self.y)
 
@@ -688,7 +334,7 @@ class QR2:
 
         Base mode: a² − n·b²  (original QR behaviour).
 
-        >>> QR2(Fraction(1,2), Fraction(3,4)).norm()
+        >>> QR(Fraction(1,2), Fraction(3,4)).norm()
         Fraction(-41, 16)
         """
         if self._min_poly is None:
@@ -705,20 +351,20 @@ class QR2:
         Extended mode divides the base-field elements by N(other).
 
         >>> np.random.seed(1234)
-        >>> z = QR2.random(5, 2, "r2")
-        >>> w = QR2.random(5, 2, "r2")
+        >>> z = QR.random(5, 2, "r2")
+        >>> w = QR.random(5, 2, "r2")
         >>> z/w*w
         (-2+1*r2)
         """
         if self._min_poly is None and other._min_poly is None:
-            return QR2(1 / other.norm(), Fraction(0, 1),
-                       self.root_modulus, self.root_string) * (self * other.conj())
+            return QR(1 / other.norm(), Fraction(0, 1),
+                      self.root_modulus, self.root_string) * (self * other.conj())
         product = self * other.conj()           # e + f·ξ  with e,f ∈ K
         n = other.norm()                        # element of K
         return self._make(product.x / n, product.y / n)
 
     def __eq__(self, other):
-        if not isinstance(other, QR2):
+        if not isinstance(other, QR):
             return False
         if self._min_poly is None and other._min_poly is None:
             if self.root_modulus == other.root_modulus:
@@ -729,7 +375,7 @@ class QR2:
         return self.x == other.x and self.y == other.y
 
     def __hash__(self):
-        if isinstance(self.x, QR2):
+        if isinstance(self.x, QR):
             return hash((hash(self.x), hash(self.y), self.root_string))
         return hash((self.x.numerator, self.x.denominator,
                      self.y.numerator, self.y.denominator,
@@ -741,7 +387,7 @@ class QR2:
 
     def real(self):
         """Numerical float value of this element."""
-        if isinstance(self.x, QR2):
+        if isinstance(self.x, QR):
             if self._root_value is None:
                 raise ValueError(
                     f"root_value not set for '{self.root_string}' extension; "
@@ -753,13 +399,13 @@ class QR2:
         return float(self.x) + float(self.y) * np.sqrt(self.root_modulus)
 
     def to_integer(self):
-        if isinstance(self.x, QR2):
+        if isinstance(self.x, QR):
             return self.x.to_integer() + self.y.to_integer()
         return [self.x.numerator, self.x.denominator,
                 self.y.numerator, self.y.denominator]
 
     def __str__(self):
-        if isinstance(self.x, QR2):
+        if isinstance(self.x, QR):
             y_zero = self.y.is_zero()
             x_zero = self.x.is_zero()
             if x_zero and y_zero:
@@ -791,7 +437,7 @@ class QR2:
         return self.__str__()
 
     def to_latex(self):
-        if isinstance(self.x, QR2):
+        if isinstance(self.x, QR):
             y_zero = self.y.is_zero()
             x_zero = self.x.is_zero()
             if x_zero and y_zero:
@@ -827,7 +473,7 @@ class QR2:
         return out
 
     def to_mathematica(self):
-        if isinstance(self.x, QR2):
+        if isinstance(self.x, QR):
             y_zero = self.y.is_zero()
             x_zero = self.x.is_zero()
             if x_zero and y_zero:

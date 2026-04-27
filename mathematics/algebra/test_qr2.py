@@ -13,7 +13,7 @@ import unittest
 from fractions import Fraction
 import numpy as np
 
-from mathematics.algebra.field_extensions import QR2, FVector, FMatrix
+from mathematics.algebra.field_extensions import QR, FVector, FMatrix
 
 
 # ---------------------------------------------------------------------------
@@ -25,15 +25,15 @@ def _frac(a, b=1):
 
 
 # ℚ(√5) base elements
-ZERO_R5 = QR2(_frac(0), _frac(0), root_modulus=5, root_string="r5")
-ONE_R5  = QR2(_frac(1), _frac(0), root_modulus=5, root_string="r5")
-HALF_R5 = QR2(_frac(1, 2), _frac(0), root_modulus=5, root_string="r5")
-R5      = QR2(_frac(0), _frac(1), root_modulus=5, root_string="r5")  # √5
+ZERO_R5 = QR(_frac(0), _frac(0), root_modulus=5, root_string="r5")
+ONE_R5  = QR(_frac(1), _frac(0), root_modulus=5, root_string="r5")
+HALF_R5 = QR(_frac(1, 2), _frac(0), root_modulus=5, root_string="r5")
+R5      = QR(_frac(0), _frac(1), root_modulus=5, root_string="r5")  # √5
 
 # ℚ(√2) base elements
-ZERO_R2 = QR2(_frac(0), _frac(0), root_modulus=2, root_string="r2")
-ONE_R2  = QR2(_frac(1), _frac(0), root_modulus=2, root_string="r2")
-R2      = QR2(_frac(0), _frac(1), root_modulus=2, root_string="r2")  # √2
+ZERO_R2 = QR(_frac(0), _frac(0), root_modulus=2, root_string="r2")
+ONE_R2  = QR(_frac(1), _frac(0), root_modulus=2, root_string="r2")
+R2      = QR(_frac(0), _frac(1), root_modulus=2, root_string="r2")  # √2
 
 # Golden ratio φ over ℚ: φ²−φ−1=0  ⟺  ξ²+(−1)ξ+(−1)=0
 ZERO_Q = _frac(0)
@@ -45,7 +45,7 @@ PHI_VAL = (1.0 + 5.0**0.5) / 2.0        # ≈ 1.6180339887
 PHI_MINPOLY_R5 = [-ONE_R5, -ONE_R5]
 
 # √5 over ℚ(√2): ξ²−5=0  ⟺  ξ²+0·ξ+(−5)=0
-MINPOLY_R5_OVER_R2 = [QR2(_frac(-5), _frac(0), root_modulus=2, root_string="r2"), ZERO_R2]
+MINPOLY_R5_OVER_R2 = [QR(_frac(-5), _frac(0), root_modulus=2, root_string="r2"), ZERO_R2]
 
 
 # ---------------------------------------------------------------------------
@@ -56,75 +56,75 @@ class TestQR2BackwardCompat(unittest.TestCase):
     """QR2 with Fraction coefficients and no min_poly must match QR exactly."""
 
     def test_str_r5(self):
-        z = QR2(_frac(1, 2), _frac(3, 4))
+        z = QR(_frac(1, 2), _frac(3, 4))
         self.assertEqual(str(z), "(1/2+3/4*r5)")
 
     def test_str_r2(self):
-        z = QR2(_frac(1, 2), _frac(3, 4), root_modulus=2, root_string="r2")
+        z = QR(_frac(1, 2), _frac(3, 4), root_modulus=2, root_string="r2")
         self.assertEqual(str(z), "(1/2+3/4*r2)")
 
     def test_from_integers(self):
-        z = QR2.from_integers(1, 2, 3, 4, 5, "r5")
+        z = QR.from_integers(1, 2, 3, 4, 5, "r5")
         self.assertEqual(str(z), "(1/2+3/4*r5)")
 
     def test_parse_r5(self):
-        self.assertEqual(str(QR2.parse("(1/2+3/4*r5)")), "(1/2+3/4*r5)")
+        self.assertEqual(str(QR.parse("(1/2+3/4*r5)")), "(1/2+3/4*r5)")
 
     def test_parse_r2(self):
-        self.assertEqual(str(QR2.parse("1/2-1/2*r2")), "(1/2-1/2*r2)")
+        self.assertEqual(str(QR.parse("1/2-1/2*r2")), "(1/2-1/2*r2)")
 
     def test_add(self):
-        a = QR2(_frac(1), _frac(2))
-        b = QR2(_frac(3), _frac(4))
-        self.assertEqual(a + b, QR2(_frac(4), _frac(6)))
+        a = QR(_frac(1), _frac(2))
+        b = QR(_frac(3), _frac(4))
+        self.assertEqual(a + b, QR(_frac(4), _frac(6)))
 
     def test_sub(self):
-        a = QR2(_frac(5), _frac(3))
-        b = QR2(_frac(2), _frac(1))
-        self.assertEqual(a - b, QR2(_frac(3), _frac(2)))
+        a = QR(_frac(5), _frac(3))
+        b = QR(_frac(2), _frac(1))
+        self.assertEqual(a - b, QR(_frac(3), _frac(2)))
 
     def test_mul(self):
         # (1/2 + 3/4·√5)(2 + 4/3·√5) = 1/2·2 + 5·3/4·4/3 + (1/2·4/3 + 3/4·2)·√5
         #                              = 1 + 5 + (2/3 + 3/2)·√5 = 6 + 13/6·√5
-        a = QR2(_frac(1, 2), _frac(3, 4))
-        b = QR2(_frac(2), _frac(4, 3))
+        a = QR(_frac(1, 2), _frac(3, 4))
+        b = QR(_frac(2), _frac(4, 3))
         result = a * b
         self.assertEqual(result.x, _frac(6))
         self.assertEqual(result.y, _frac(13, 6))
 
     def test_mul_r2(self):
-        a = QR2.parse("1/2-1/2*r2")
-        b = QR2.parse("1/2+1/4*r2")
+        a = QR.parse("1/2-1/2*r2")
+        b = QR.parse("1/2+1/4*r2")
         result = a * b
         self.assertEqual(result.x, _frac(0))
         self.assertEqual(result.y, _frac(-1, 8))
 
     def test_conj(self):
-        z = QR2(_frac(1, 2), _frac(3, 4))
-        self.assertEqual(z.conj(), QR2(_frac(1, 2), _frac(-3, 4)))
+        z = QR(_frac(1, 2), _frac(3, 4))
+        self.assertEqual(z.conj(), QR(_frac(1, 2), _frac(-3, 4)))
 
     def test_norm(self):
         # norm = (1/2)² − 5·(3/4)² = 1/4 − 45/16 = 4/16 − 45/16 = −41/16
-        z = QR2(_frac(1, 2), _frac(3, 4))
+        z = QR(_frac(1, 2), _frac(3, 4))
         self.assertEqual(z.norm(), _frac(-41, 16))
 
     def test_div(self):
         np.random.seed(1234)
-        z = QR2.random(5, 2, "r2")
-        w = QR2.random(5, 2, "r2")
+        z = QR.random(5, 2, "r2")
+        w = QR.random(5, 2, "r2")
         self.assertEqual(z / w * w, z)
 
     def test_neg(self):
-        z = QR2(_frac(3), _frac(-2))
-        self.assertEqual(-z, QR2(_frac(-3), _frac(2)))
+        z = QR(_frac(3), _frac(-2))
+        self.assertEqual(-z, QR(_frac(-3), _frac(2)))
 
     def test_eq_different_modulus_rational(self):
-        a = QR2(_frac(3), _frac(0), root_modulus=5, root_string="r5")
-        b = QR2(_frac(3), _frac(0), root_modulus=2, root_string="r2")
+        a = QR(_frac(3), _frac(0), root_modulus=5, root_string="r5")
+        b = QR(_frac(3), _frac(0), root_modulus=2, root_string="r2")
         self.assertEqual(a, b)   # both are pure-rational 3
 
     def test_real(self):
-        z = QR2(_frac(1), _frac(1))     # 1 + √5
+        z = QR(_frac(1), _frac(1))     # 1 + √5
         self.assertAlmostEqual(z.real(), 1.0 + 5.0**0.5)
 
 
@@ -137,10 +137,10 @@ class TestQR2PhiOverQ(unittest.TestCase):
 
     def _phi(self, a=0, b=1):
         """Return a·1 + b·φ  in ℚ(φ)."""
-        return QR2(_frac(a), _frac(b),
-                   min_poly=PHI_MINPOLY_Q,
-                   root_string="phi",
-                   root_value=PHI_VAL)
+        return QR(_frac(a), _frac(b),
+                  min_poly=PHI_MINPOLY_Q,
+                  root_string="phi",
+                  root_value=PHI_VAL)
 
     def test_phi_squared_equals_phi_plus_one(self):
         phi = self._phi(0, 1)          # 0 + 1·φ
@@ -202,11 +202,11 @@ class TestQR2PhiOverQ(unittest.TestCase):
 class TestQR2PhiOverR5(unittest.TestCase):
     """QR2(QR2_r5, QR2_r5, min_poly=[−1_r5, −1_r5]) represents ℚ(√5, φ)."""
 
-    def _make(self, a_r5: QR2, b_r5: QR2) -> QR2:
-        return QR2(a_r5, b_r5,
-                   min_poly=PHI_MINPOLY_R5,
-                   root_string="phi",
-                   root_value=PHI_VAL)
+    def _make(self, a_r5: QR, b_r5: QR) -> QR:
+        return QR(a_r5, b_r5,
+                  min_poly=PHI_MINPOLY_R5,
+                  root_string="phi",
+                  root_value=PHI_VAL)
 
     def _phi(self):
         """The element φ itself: 0 + 1·φ  with ℚ(√5) coefficients."""
@@ -283,11 +283,11 @@ class TestQR2PhiOverR5(unittest.TestCase):
 class TestQR2R5OverR2(unittest.TestCase):
     """ℚ(√2, √5):  min_poly = [−5·1_r2, 0_r2]  (ξ²−5=0 over ℚ(√2))."""
 
-    def _make(self, a_r2: QR2, b_r2: QR2) -> QR2:
-        return QR2(a_r2, b_r2,
-                   min_poly=MINPOLY_R5_OVER_R2,
-                   root_string="r5",
-                   root_value=5.0**0.5)
+    def _make(self, a_r2: QR, b_r2: QR) -> QR:
+        return QR(a_r2, b_r2,
+                  min_poly=MINPOLY_R5_OVER_R2,
+                  root_string="r5",
+                  root_value=5.0**0.5)
 
     def _sqrt5(self):
         """0 + 1·√5  with ℚ(√2) coefficients."""
@@ -303,7 +303,7 @@ class TestQR2R5OverR2(unittest.TestCase):
     def test_sqrt5_squared_is_5(self):
         """(√5)² = 5."""
         s5  = self._sqrt5()
-        five = self._make(QR2(_frac(5), _frac(0), root_modulus=2, root_string="r2"), ZERO_R2)
+        five = self._make(QR(_frac(5), _frac(0), root_modulus=2, root_string="r2"), ZERO_R2)
         self.assertEqual(s5 * s5, five)
 
     def test_sqrt2_times_sqrt5(self):
@@ -317,7 +317,7 @@ class TestQR2R5OverR2(unittest.TestCase):
     def test_norm_sqrt5(self):
         """N(√5) = (√5)·(−√5) = −5."""
         s5   = self._sqrt5()
-        minus5 = self._make(QR2(_frac(-5), _frac(0), root_modulus=2, root_string="r2"), ZERO_R2)
+        minus5 = self._make(QR(_frac(-5), _frac(0), root_modulus=2, root_string="r2"), ZERO_R2)
         self.assertEqual(s5.norm(), minus5.x)   # norm is in base field ℚ(√2)
 
     def test_add(self):
@@ -358,10 +358,10 @@ class TestFVectorWithQR2(unittest.TestCase):
     """FVector and FMatrix must work transparently with QR2 elements."""
 
     def _phi_elem(self, a=0, b=1):
-        return QR2(_frac(a), _frac(b),
-                   min_poly=PHI_MINPOLY_Q,
-                   root_string="phi",
-                   root_value=PHI_VAL)
+        return QR(_frac(a), _frac(b),
+                  min_poly=PHI_MINPOLY_Q,
+                  root_string="phi",
+                  root_value=PHI_VAL)
 
     def test_fvector_dot_over_phi(self):
         """Dot product of two FVectors with φ-extension scalars."""
@@ -404,21 +404,21 @@ class TestFVectorWithQR2(unittest.TestCase):
 
     def test_fvector_over_tower(self):
         """FVector with ℚ(√5, φ) scalars: dot product uses tower arithmetic."""
-        phi_r5 = QR2(ZERO_R5, ONE_R5,
+        phi_r5 = QR(ZERO_R5, ONE_R5,
+                    min_poly=PHI_MINPOLY_R5,
+                    root_string="phi",
+                    root_value=PHI_VAL)
+        one_ext = QR(ONE_R5, ZERO_R5,
                      min_poly=PHI_MINPOLY_R5,
                      root_string="phi",
                      root_value=PHI_VAL)
-        one_ext = QR2(ONE_R5, ZERO_R5,
-                      min_poly=PHI_MINPOLY_R5,
-                      root_string="phi",
-                      root_value=PHI_VAL)
         v = FVector([one_ext, phi_r5])
         dot = v.dot(v)
         # 1² + φ² = 1 + (1+φ) = 2+φ  over ℚ(√5)
-        expected = QR2(ONE_R5, ZERO_R5,
-                       min_poly=PHI_MINPOLY_R5,
-                       root_string="phi",
-                       root_value=PHI_VAL) + phi_r5 + one_ext
+        expected = QR(ONE_R5, ZERO_R5,
+                      min_poly=PHI_MINPOLY_R5,
+                      root_string="phi",
+                      root_value=PHI_VAL) + phi_r5 + one_ext
         # simpler: just check the float
         self.assertAlmostEqual(dot.real(), 2.0 + PHI_VAL, places=10)
 

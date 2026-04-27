@@ -1,0 +1,351 @@
+class QR:
+    def __init__(self, x: Fraction, y: Fraction, root_modulus=5, root_string="r5"):
+        """
+       >>> QR(Fraction(1, 2), Fraction(3, 4))
+       (1/2+3/4*r5)
+       >>> QR(Fraction(1,2), Fraction(3,4),root_modulus=2,root_string="r2")
+       (1/2+3/4*r2)
+
+       :param x:
+       :param y:
+       """
+        self.x = x
+        self.y = y
+        self.root_modulus = root_modulus
+        self.root_string = root_string
+
+    @classmethod
+    def parse(cls, string):
+        """
+        parse a string of the form "(a/b+c/d*root_string)" into a QR object
+
+        >>> QR.parse("1/2-1/2*r2")
+        (1/2-1/2*r2)
+        >>> QR.parse("-2/3*r5")
+        -2/3*r5
+        >>> QR.parse("-r5")
+        -1*r5
+        >>> QR.parse("(1/2+3/4*r5)")
+        (1/2+3/4*r5)
+        >>> QR.parse("1/2")
+        1/2
+        >>> QR.parse("-1/2")
+        -1/2
+        >>> QR.parse("0")
+        0
+        >>> QR.parse("-2-r5")
+        (-2-1*r5)
+        >>> QR.parse("5+2*r5")
+        (5+2*r5)
+        >>> QR.parse("3+r5")
+        (3+1*r5)
+        """
+        # remove brackets
+        root_modulus, root_string = find_modulus(string)
+
+        string = string.replace(" ", "")
+        if string[0] == "(":
+            string = string[1:-1]
+        if string[0] == "-":
+            string = string[1:]
+            sign1 = -1
+        else:
+            sign1 = 1
+        if "-" in string:
+            parts = string.split("-")
+            sign2 = -1
+        elif "+" in string:
+            parts = string.split("+")
+            sign2 = 1
+        else:
+            parts = [string]
+
+        if len(parts) == 1:
+            if "*" in parts[0]:
+                smaller_parts = parts[0].split("*" + root_string)
+                if len(smaller_parts[0]) == 0:
+                    return cls(Fraction(0, 1), Fraction(sign1, 1), root_modulus=root_modulus, root_string=root_string)
+                else:
+                    if "/" in smaller_parts[0]:
+                        a, b = smaller_parts[0].split("/")
+                        return cls(Fraction(0, 1), Fraction(sign1 * int(a), int(b)), root_modulus=root_modulus,
+                                   root_string=root_string)
+                    else:
+                        return cls(Fraction(0, 1), Fraction(sign1 * int(smaller_parts[0]), 1),
+                                   root_modulus=root_modulus, root_string=root_string)
+            elif root_string in parts[0]:
+                return cls(Fraction(0, 1), Fraction(sign1, 1), root_modulus=root_modulus, root_string=root_string)
+            elif "/" in parts[0]:
+                a, b = parts[0].split("/")
+                return cls(Fraction(sign1 * int(a), int(b)), Fraction(0, 1), root_modulus=root_modulus,
+                           root_string=root_string)
+            else:
+                return cls(Fraction(sign1 * int(parts[0]), 1), Fraction(0, 1), root_modulus=root_modulus,
+                           root_string=root_string)
+        else:
+            if "/" in parts[0]:
+                a, b = parts[0].split("/")
+            else:
+                a = parts[0]
+                b = 1
+            if "*" in parts[1]:
+                parts[1] = parts[1].replace("*" + root_string, "")
+                if "/" in parts[1]:
+                    c, d = parts[1].split("/")
+                else:
+                    c = int(parts[1])
+                    d = 1
+            elif root_string in parts[1]:
+                c = 1
+                d = 1
+            else:
+                c = parts[1]
+                d = 1
+            return cls(Fraction(sign1 * int(a), int(b)), Fraction(sign2 * int(c), int(d)), root_modulus=root_modulus,
+                       root_string=root_string)
+
+    @classmethod
+    def from_integers(cls, a: int, b: int, c: int, d: int, root_modulus: int = 5, root_string="r5"):
+        """
+        >>> QR.from_integers(1,2,3,4,5,"r5")
+        (1/2+3/4*r5)
+        """
+
+        return cls(Fraction(a, b), Fraction(c, d), root_modulus=root_modulus, root_string=root_string)
+
+    @classmethod
+    def random(cls, range=10, root_modulus=5, root_string="r5"):
+        x = Fraction(np.random.randint(-range, range), 1)
+        y = Fraction(np.random.randint(-range, range), 1)
+        return QR(x, y, root_modulus=root_modulus, root_string=root_string)
+
+    def to_integer(self):
+        return [self.x.numerator, self.x.denominator, self.y.numerator, self.y.denominator]
+
+    def __str__(self):
+        if self.y > 0:
+            if self.x != 0:
+                return "(" + str(self.x) + "+" + str(self.y) + "*" + self.root_string + ")"
+            else:
+                return str(self.y) + "*" + self.root_string
+        elif self.y < 0:
+            if self.x != 0:
+                return "(" + str(self.x) + "-" + str(
+                    Fraction(np.abs(self.y.numerator), np.abs(self.y.denominator))) + "*" + self.root_string + ")"
+            else:
+                return "-" + str(
+                    Fraction(np.abs(self.y.numerator), np.abs(self.y.denominator))) + "*" + self.root_string
+        else:
+            return str(self.x)
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __mul__(self, other):
+        """
+        >>> QR(Fraction(1, 2), Fraction(3, 4))*QR(Fraction(2,1), Fraction(4,3))
+        (6+13/6*r5)
+
+        >>> np.random.seed(1234)
+        >>> z = QR.random()
+        >>> w = QR.random()
+        >>> z*w
+        (70-26*r5)
+
+        >>> QR.parse("1/2-1/2*r2")*QR.parse("1/2+1/4*r2")
+        -1/8*r2
+        >>> QR.parse("4-1/2*r7")*QR.parse("1/2+1/4*r7")
+        (9/8+3/4*r7)
+
+        :param other:
+        :return:
+        """
+
+        if self.root_modulus != other.root_modulus:
+            # harmless case, when there is no modulus
+            if self.root_modulus == 1 and self.y == 0:
+                return QR(self.x * other.x, self.x * other.y, root_modulus=other.root_modulus,
+                          root_string=other.root_string)
+            if other.root_modulus == 1 and other.y == 0:
+                return QR(self.x * other.x, self.y * other.x, root_modulus=self.root_modulus,
+                          root_string=self.root_string)
+            raise ValueError("Cannot multiply QR fields with different root moduli")
+        return QR(self.x * other.x + self.root_modulus * self.y * other.y, self.x * other.y + self.y * other.x,
+                  root_modulus=self.root_modulus, root_string=self.root_string)
+
+    def __add__(self, other):
+        """
+        >>> np.random.seed(1234)
+        >>> z = QR.random()
+        >>> w = QR.random()
+        >>> z+w
+        (1+11*r5)
+        >>> QR.parse("4-1/2*r7")+QR.parse("1/2+1/4*r7")
+        (9/2-1/4*r7)
+
+
+        :param other:
+        :return:
+        """
+        if self.root_modulus != other.root_modulus:
+            # harmless case, when there is no modulus
+            if self.root_modulus == 1 and self.y == 0:
+                return QR(self.x + other.x, other.y, root_modulus=other.root_modulus, root_string=other.root_string)
+            if other.root_modulus == 1 and other.y == 0:
+                return QR(self.x + other.x, self.y, root_modulus=self.root_modulus, root_string=self.root_string)
+            raise ValueError("Cannot multiply QR fields with different root moduli")
+        return QR(self.x + other.x, self.y + other.y, root_modulus=self.root_modulus, root_string=self.root_string)
+
+    def __sub__(self, other):
+        """
+        >>> np.random.seed(1234)
+        >>> z = QR.random()
+        >>> w = QR.random()
+        >>> z-w
+        (9+7*r5)
+        >>> QR.parse("4-1/2*r7")-QR.parse("1/2+1/4*r7")
+        (7/2-3/4*r7)
+
+        :param other:
+        :return:
+        """
+
+        if self.root_modulus != other.root_modulus:
+            # harmless case, when there is no modulus
+            if self.root_modulus == 1 and self.y == 0:
+                return QR(self.x - other.x, -other.y, root_modulus=other.root_modulus, root_string=other.root_string)
+            if other.root_modulus == 1 and other.y == 0:
+                return QR(self.x - other.x, self.y, root_modulus=self.root_modulus, root_string=self.root_string)
+            raise ValueError("Cannot multiply QR fields with different root moduli")
+        return QR(self.x - other.x, self.y - other.y, root_modulus=self.root_modulus, root_string=self.root_string)
+
+    def conj(self):
+        """
+        >>> QR(Fraction(1, 2), Fraction(3, 4)).conj()
+        (1/2-3/4*r5)
+        >>> QR.parse("4-1/2*r7").conj()
+        (4+1/2*r7)
+
+        :return:
+        """
+        return QR(self.x, -self.y, self.root_modulus, self.root_string)
+
+    def norm(self):
+        """
+        >>> QR(Fraction(1, 2), Fraction(3, 4)).norm()
+        Fraction(-41, 16)
+        >>> QR.parse("4-1/2*r7").norm()
+        Fraction(57, 4)
+
+        :return:
+        """
+
+        return self.x ** 2 - self.root_modulus * self.y ** 2
+
+    def __neg__(self):
+        """
+        >>> -QR.from_integers(-1,1,2,-3)
+        (1+2/3*r5)
+        >>> -QR.from_integers(-1,1,2,-3,3,"r3")
+        (1+2/3*r3)
+
+
+        :return:
+        """
+        return QR(-self.x, -self.y, self.root_modulus, self.root_string)
+
+    def __truediv__(self, other):
+        """
+        >>> np.random.seed(1234)
+        >>> z = QR.random(5,2,"r2")
+        >>> w = QR.random(5,2,"r2")
+        >>> z/w*w,z
+        ((-2+1*r2), (-2+1*r2))
+
+        >>> np.random.seed(1234)
+        >>> z = QR.random()
+        >>> w = QR.random()
+        >>> z/w
+        (55/2+23/2*r5)
+
+        :param other:
+        :return:
+        """
+        return QR(1 / other.norm(), Fraction(0, 1), self.root_modulus, self.root_string) * (self * other.conj())
+
+    def __eq__(self, other):
+        if self.root_modulus == other.root_modulus:
+            return self.x == other.x and self.y == other.y
+        else:
+            if self.y == 0 and other.y == 0:
+                return self.x == other.x
+            else:
+                return False
+
+    def __hash__(self):
+        """ custom hash function for QR objects
+        >>> a = QR(Fraction(1, 2), Fraction(3, 4))
+        >>> hash(a)
+        -5659871693760987716
+
+        >>> b = QR(Fraction(5, 6), Fraction(7, 8))
+        >>> hash((a,b))
+        9002616610964909476
+
+        >>> M=FTensor([a,b])
+        >>> hash(M)
+        9002616610964909476
+
+        """
+        # the root_modulus is only effective, when the prefactor is non-zero,
+        return hash((self.x.numerator, self.x.denominator, self.y.numerator, self.y.denominator,
+                     self.y.numerator * self.root_modulus))
+
+    def real(self):
+        return float(self.x) + float(self.y) * np.sqrt(self.root_modulus)
+
+    def to_latex(self):
+        out = ""
+        if self.x.numerator != 0:
+            if self.x.numerator < 0:
+                out += "-"
+            if self.x.denominator == 1:
+                out += str(np.abs(self.x.numerator))
+            else:
+                out += (r"\frac{" + str(np.abs(self.x.numerator)) + r"}{" + str(self.x.denominator) + r"}")
+        if self.y.numerator != 0:
+            if self.y.numerator < 0:
+                out += "-"
+            else:
+                out += "+"
+            if self.y.denominator == 1:
+                out += str(np.abs(self.y.numerator))
+            else:
+                out += (r"\frac{" + str(np.abs(self.y.numerator)) + r"}{" + str(self.y.denominator) + r"}")
+            out += r"\sqrt{" + str(self.root_modulus) + r"}"
+        if self.y.numerator == 0 and self.x.numerator == 0:
+            out += "0"
+        return out
+
+    def to_mathematica(self):
+        out = ""
+        if self.x.numerator != 0:
+            if self.x.numerator < 0:
+                out += "-"
+            if self.x.denominator == 1:
+                out += str(np.abs(self.x.numerator))
+            else:
+                out += str(np.abs(self.x.numerator)) + r"/" + str(self.x.denominator)
+        if self.y.numerator != 0:
+            if self.y.numerator < 0:
+                out += "-"
+            else:
+                out += "+"
+            if self.y.denominator == 1:
+                out += str(np.abs(self.y.numerator))
+            else:
+                out += str(np.abs(self.y.numerator)) + r"/" + str(self.y.denominator)
+            out += r"*Sqrt[" + str(self.root_modulus) + r"]"
+        if self.y.numerator == 0 and self.x.numerator == 0:
+            out += "0"
+        return out
