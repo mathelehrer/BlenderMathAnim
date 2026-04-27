@@ -38,6 +38,8 @@ def parse_location(location):
     coords = location.split(",")
     return (float(coords[0]), float(coords[1]))
 
+
+
 class Node:
     def __init__(self, tree, location=(0, 0), node_width=200, node_height=100, offset_y=0, **kwargs):
         """
@@ -301,6 +303,8 @@ class Node:
             return StringJoin(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="SLICE_STRING":
             return SliceString(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
+        if type=="STRING_LENGTH":
+            return StringLength(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="CURVE_PRIMITIVE_CIRCLE":
             mode=attributes["mode"]
             return CurveCircle(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
@@ -1283,6 +1287,7 @@ class CurveToMesh(GreenNode):
         if profile_curve:
             self.tree.links.new(profile_curve, self.node.inputs["Profile Curve"])
 
+
 # String operations
 class ValueToString(BlueNode):
     def __init__(self,tree,location=(0,0),value=0,data_type="INT",**kwargs):
@@ -1296,6 +1301,20 @@ class ValueToString(BlueNode):
             self.node.inputs["Value"].default_value = value
         else:
             self.tree.links.new(value,self.node.inputs["Value"])
+
+
+class StringLength(BlueNode):
+    def __init__(self,tree,location=(0,0),string="",**kwargs):
+        self.node=tree.nodes.new(type="FunctionNodeStringLength")
+        super().__init__(tree,location=location,**kwargs)
+
+        self.std_out = self.node.outputs["Length"]
+
+        if isinstance(string, str):
+            self.node.inputs["String"].default_value = string
+        else:
+            self.tree.links.new(string,self.node.inputs["String"])
+
 
 class StringJoin(BlueNode):
     def __init__(self,tree,location=(0,0),delimiter="",strings = None,**kwargs):

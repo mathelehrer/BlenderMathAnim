@@ -26,7 +26,7 @@ COXA3_SEEDS = {
     "o3x3x": FVector.parse("[1, 0, -3/2*r2]"),
     "x3o3x": FVector.parse("[1,1,-r2]"),
     "x3x3x": FVector.parse("[1, 1,-2*r2]"),
-    "s3s3s": FVector.parse("[1, 1,-2*r2]"),
+    # "s3s3s": FVector.parse("[1, 1,-2*r2]"),
 }
 
 COXA3_NAMES = {

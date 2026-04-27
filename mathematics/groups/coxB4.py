@@ -19,6 +19,24 @@ COXB4_SIGNATURES = {
     "x3x3x4x": [1, -1, 1, -1]
 }
 
+COXB4_SEEDS ={
+    "x3o3o4o": FVector.parse("[0,0,r2,0]"),
+    "o3o3o4x": FVector.parse("[0,r2,-1,1]"),
+    "o3x3o4o": FVector.parse("[0,2,0,0]"),
+    "o3o3x4o": FVector.parse("[0,-2,r2,0]"),
+    "x3x3o4o": FVector.parse("[1,-3,0,0]"),
+    "x3o3o4x": FVector.parse("[0,-2+r2,-1+r2,1]"),
+    "o3o3x4x": FVector.parse("[0,-2-r2,1+r2,-1]"),
+    "o3x3o4x": FVector.parse("[1,1+r2,-1-r2,1]"),
+    "o3x3x4o": FVector.parse("[0,4,-r2,0]"),
+    "x3o3x4o": FVector.parse("[1,3,-r2,0]"),
+    "x3x3x4o": FVector.parse("[1,-5,r2,0]"),
+    "x3x3o4x": FVector.parse("[1,-3-r2,1,-1]"),
+    "x3o3x4x": FVector.parse("[1,-3-r2,1+r2,-1]"),
+    "o3x3x4x": FVector.parse("[0,4+r2,-1-r2,1]"),
+    "x3x3x4x": FVector.parse("[1,-5-r2,1+r2,-1]"),
+}
+
 _DEFAULT_PATH = "../geometry/data/"
 
 
@@ -43,4 +61,4 @@ class CoxB4(CoxeterGroup4D):
         epsilon = EpsilonTensor(4, root_modulus=2, root_string="r2")
 
         super().__init__("coxB4", normals, generators, zero, epsilon, identity,
-                         path=path or _DEFAULT_PATH)
+                         path=path or _DEFAULT_PATH,seeds=COXB4_SEEDS,signatures=COXB4_SIGNATURES)

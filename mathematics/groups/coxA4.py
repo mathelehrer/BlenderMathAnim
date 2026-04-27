@@ -22,7 +22,6 @@ COXA4_SIGNATURES = {
 COXA4_SEEDS = {
     "o3o3o3x": FVector.parse("[0,-1/2-1/2*r5,-1/2+1/2*r5,r5]"),
     "x3o3o3o": FVector.parse("[0,-1/2-1/2*r5,-1/2+1/2*r5,r5]"),
-    "x3x3x3x": FVector.parse("[1,3,-3,-1]"),
     "x3o3o3x": FVector.parse("[0,1/2+1/2*r5,-1/2+1/2*r5,-1]"),
     "o3x3x3o": FVector.parse("[0,-2,2,0]"),
     "o3o3x3o": FVector.parse("[0,1+r5,1-r5,0]"),
@@ -35,8 +34,9 @@ COXA4_SEEDS = {
     "x3x3x3o": FVector.parse("[0,10-12*r5,-15+13*r5,-5+5*r5]"),
     "x3x3o3x": FVector.parse("[5-5*r5,5-9*r5,-15+11*r5,-5+5*r5]"),
     "x3o3x3x": FVector.parse("[5-5*r5,5-9*r5,-15+11*r5,-5+5*r5]"),
+    "x3x3x3x": FVector.parse("[1,3,-3,-1]"),
 }
-_DEFAULT_PATH = "../geometry/data/"
+_DEFAULT_PATH = "../mathematics/geometry/data/"
 
 
 class CoxA4(CoxeterGroup4D):

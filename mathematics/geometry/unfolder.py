@@ -1146,7 +1146,7 @@ class Morpher4D:
                 # if color in modifier_map:
                 #     mod = modifier_map[color]
                 # else:
-                mod = CrystalModifier(unpublished=True, material=get_texture(color))
+                mod = CrystalModifier(material=get_texture(color))
                 modifier_map[color] = mod
                 cellobj.add_mesh_modifier(type="NODES", node_modifier=mod)
                 mod.transfer_material_from(cellobj)
@@ -1670,7 +1670,7 @@ class Unfolder4D2:
                                    scale=scale)
 
                 if self.crystal:
-                    crystal = CrystalModifier(unpublished=True, material=get_texture(color), **self.kwargs)
+                    crystal = CrystalModifier(material=get_texture(color), **self.kwargs)
                     if cell_index not in add_cells:
                         cell_obj.add_mesh_modifier(type="NODES", node_modifier=crystal)
                         crystal.transfer_material_from(cell_obj)
@@ -1741,7 +1741,7 @@ class Unfolder4D2:
                                color=color)
 
             if self.crystal:
-                crystal = CrystalModifier(unpublished=True)
+                crystal = CrystalModifier()
                 cell_obj.add_mesh_modifier(type="NODES", node_modifier=crystal)
                 crystal.transfer_material_from(cell_obj)
                 modifier = crystal
@@ -3267,7 +3267,7 @@ class Unfolder4D:
                               name="Cell" + str(cell_index), color=color, scale=scale)
 
             if self.crystal:
-                crystal = CrystalModifier(unpublished=True, material=get_texture(color))
+                crystal = CrystalModifier( material=get_texture(color))
                 cellobj.add_mesh_modifier(type="NODES", node_modifier=crystal)
                 crystal.transfer_material_from(cellobj)
             if not half_way:
@@ -3311,7 +3311,7 @@ class Unfolder4D:
                               color=color)
 
             if self.crystal:
-                crystal = CrystalModifier(unpublished=True)
+                crystal = CrystalModifier()
                 cellobj.add_mesh_modifier(type="NODES", node_modifier=crystal)
                 crystal.transfer_material_from(cellobj)
                 modifier = crystal

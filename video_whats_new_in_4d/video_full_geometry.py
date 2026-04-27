@@ -268,7 +268,6 @@ class VideoFullGeometry(Scene):
         self.sub_scenes = OrderedDict([
             ('almost_platonic', {'duration': 15}),
             ('trailer_h4_panel', {'duration': 15}),
-            ('trailer_stereo_merger', {'duration': 15}),
             ('trailer_v1440', {'duration': 15}),
             ('trailer_v120', {'duration': 15}),
             ('trailer_net_merger', {'duration': 15}),
@@ -329,7 +328,6 @@ class VideoFullGeometry(Scene):
             ('a4_normal_constraints', {'duration': 32}),
             ('a4_normal_explicit', {'duration': 12}),
             ('a4_python_script', {'duration': 35}),
-            ('a4_matrix_parade', {'duration': 20}),
             ('a4_image_generation', {'duration': 5}),
             ('a4_seed_point', {'duration': 15}),
             ('a4_cell_normal', {'duration': 25}),
@@ -2511,7 +2509,7 @@ class VideoFullGeometry(Scene):
                             location=[0, 0, 0],
                             name="Morpher", limit_direction=Vector([0, 0, 1]), limit=0.1, south_pole=1,
                             mode="CELL_SIZE", cell_size=20, skip=0, scale_elements=0.99,
-                            cell_removals=[1858, 1981, 2333, 2177, 2269, 2166, 2235, 1032, 813, 660, 139, 492],
+                            cell_removals=[1858, 1981, 2333, 2177, 2269, 2166, 2235, 1032, 813, 660, 139, 492, 358],
                             crystal=False)
 
         t0 = 0.5 + morpher.morph(begin_time=t0, transition_time=2, pause=1)
