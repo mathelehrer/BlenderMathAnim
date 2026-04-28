@@ -303,7 +303,6 @@ class VideoFullGeometry(Scene):
             ('family_d4_nets', {'duration': 40}),
             ('family_d4_and_b4', {'duration': 5}),
             ('demi_tesseract', {'duration': 15}),
-            ('tesseract_to_16_cell', {'duration': 30}),
             ('family_d4', {'duration': 40}),
             ('family_h4', {'duration': 85}),
             ('family_a3', {'duration': 55}),
@@ -311,11 +310,7 @@ class VideoFullGeometry(Scene):
             ('family_a3_outtake', {'duration': 35}),
             ('show_panel_a3', {'duration': 20}),
             ('show_panel_b3', {'duration': 20}),
-            ('morphing_stereo_3d', {'duration': 90}),
             ('logo', {'duration': 60}),
-            ('documentation', {'duration': 35}),
-            ('documentation2', {'duration': 35}),
-            ('documentation3', {'duration': 35}),
             ('short_dynkin_magic', {'duration': 42}),
             ('short_h4_family', {'duration': 42}),
             ('lifting_cubes', {'duration': 36}),
@@ -4993,127 +4988,6 @@ class VideoFullGeometry(Scene):
         t0 = 0.5 + logo.grow(begin_time=t0, transition_time=2)
         for instance in logo.get_instances():
             instance.rotate(rotation_euler=[0, tau, 0], begin_time=0, transition_time=30)
-
-        self.t0 = t0
-
-    def documentation(self):
-        t0 = 0
-        ibpy.set_hdri_background("kloofendal_misty_morning_puresky_4k", 'exr', simple=True, transparent=True,
-                                 rotation_euler=pi / 180 * interface.ibpy.Vector())
-        t0 = ibpy.set_hdri_strength(1, begin_time=t0, transition_time=0)
-
-        ibpy.set_render_engine(denoising=False, transparent=True, frame_start=1,  # skip initialization frame at 0
-                               resolution_percentage=100, engine=CYCLES, taa_render_samples=64,
-                               motion_blur=True)
-        set_alpha_composition()
-        ibpy.empty_blender_view3d()
-
-        camera_empty = EmptyCube(location=Vector([0, 0, 0]))
-        camera_location = [0, -25, 0]
-        ibpy.set_camera_location(location=camera_location)
-        ibpy.set_camera_view_to(camera_empty)
-        ibpy.set_camera_lens(lens=40)
-
-        create_glow_composition(threshold=0.6, type='BLOOM', size=1)
-
-        # vertex map between two polyhedra
-        poly = PolyhedronWithModifier.from_group_signature(CoxB3, COXB3_SIGNATURES["TRUNC_OCTA"], radius=5)
-        poly.grow(begin_time=t0, transition_time=0)
-        poly2 = PolyhedronWithModifier.from_group_signature(CoxB3, COXB3_SIGNATURES["OCTA"], radius=5)
-        poly2.grow(begin_time=t0, transition_time=0)
-
-        # nets with different root face
-        # trunc_octa_unfolder = Unfolder(CoxB3, COXB3_SIGNATURES["TRUNC_OCTA"])
-        # net = trunc_octa_unfolder.create_net()
-        # net.appear(begin_time=t0, transition_time=1)
-        #
-        # trunc_octa_unfolder2 = Unfolder(CoxB3, COXB3_SIGNATURES["TRUNC_OCTA"],mode="SMALLEST_FACE")
-        # net2 = trunc_octa_unfolder2.create_net()
-        # net2.appear(begin_time=t0, transition_time=1)
-
-        # Face tree illustration
-        # trunc_octa_unfolder = Unfolder(CoxB3, COXB3_SIGNATURES["TRUNC_OCTA"])
-        # trunc_octa = trunc_octa_unfolder.create_bob()
-        # trunc_octa.grow(begin_time=t0, transition_time=1)
-        #
-        # trunc_octa_net = trunc_octa_unfolder.create_net()
-        # trunc_octa_net.appear(begin_time=t0, transition_time=1)
-        #
-        # trunc_octa_unfolder.show_node_tree()
-        # trunc_octa_unfolder.show_index_structure()
-        #
-        # print(trunc_octa_unfolder.unfolded2vertex_map)
-        # print(trunc_octa_unfolder.vertex2unfolded_map)
-        #trunc_octa_unfolder.display_net_data()
-
-        self.t0 = t0
-
-    def documentation2(self):
-        t0 = 0
-        ibpy.set_hdri_background("kloofendal_misty_morning_puresky_4k", 'exr', simple=True, transparent=True,
-                                 rotation_euler=pi / 180 * interface.ibpy.Vector())
-        t0 = ibpy.set_hdri_strength(1, begin_time=t0, transition_time=0)
-
-        ibpy.set_render_engine(denoising=False, transparent=True, frame_start=1,  # skip initialization frame at 0
-                               resolution_percentage=100, engine=CYCLES, taa_render_samples=64,
-                               motion_blur=True)
-        set_alpha_composition()
-        ibpy.empty_blender_view3d()
-
-        camera_empty = EmptyCube(location=Vector([0, 0, 0]))
-        camera_location = [0, -25, 0]
-        ibpy.set_camera_location(location=camera_location)
-        ibpy.set_camera_view_to(camera_empty)
-        ibpy.set_camera_lens(lens=40)
-
-        octahedron_unfolder = Unfolder(CoxB3, COXB3_SIGNATURES["OCTA"])
-        trunc_octa_unfolder = Unfolder(CoxB3, COXB3_SIGNATURES["TRUNC_OCTA"])
-
-        src2target = trunc_octa_unfolder.create_map(octahedron_unfolder)
-        target2src = octahedron_unfolder.create_map(trunc_octa_unfolder)
-
-        print(src2target)
-        print(target2src)
-
-        self.t0 = t0
-
-    def documentation3(self):
-        t0 = 0
-        ibpy.set_hdri_background("kloofendal_misty_morning_puresky_4k", 'exr', simple=True, transparent=True,
-                                 rotation_euler=pi / 180 * interface.ibpy.Vector())
-        t0 = ibpy.set_hdri_strength(1, begin_time=t0, transition_time=0)
-
-        ibpy.set_render_engine(denoising=False, transparent=True, frame_start=1,  # skip initialization frame at 0
-                               resolution_percentage=100, engine=CYCLES, taa_render_samples=64,
-                               motion_blur=True)
-        set_alpha_composition()
-        ibpy.empty_blender_view3d()
-
-        camera_empty = EmptyCube(location=Vector([0, 0, 0]))
-        camera_location = [0, -25, 0]
-        ibpy.set_camera_location(location=camera_location)
-        ibpy.set_camera_view_to(camera_empty)
-        ibpy.set_camera_lens(lens=40)
-
-        trunc_octa = PolyhedronWithModifier.from_group_signature(CoxB3, COXB3_SIGNATURES["TRUNC_OCTA"],
-                                                                 location=[-7, 0, -2.5], radius=2.5)
-        t0 = 0.5 + trunc_octa.grow(begin_time=t0, transition_time=1)
-
-        octa = PolyhedronWithModifier.from_group_signature(CoxB3, COXB3_SIGNATURES["OCTA"],
-                                                           location=[7, 0, -2.5], radius=2.5)
-        t0 = 0.5 + octa.grow(begin_time=t0, transition_time=1)
-
-        morpher = NetMorpher(group=CoxA3,
-                             sequence=[COXA3_SIGNATURES[_] for _ in ["TRUNC_OCTA", "OCTA"]],
-                             scale=0.3, location=Vector([-2.9, 0, 2.4]))
-
-        t0 = 0.5 + morpher.morph_sequence(begin_time=t0, transition_time=1, pause=1)
-
-        morpher2 = NetMorpher(group=CoxA3,
-                              sequence=[COXA3_SIGNATURES[_] for _ in ["TRUNC_OCTA", "OCTA"]],
-                              scale=0.3, location=Vector([-2.9, 0, 2.4]))
-
-        t0 = 0.5 + morpher2.morph_sequence(begin_time=t0, transition_time=1, pause=1000)
 
         self.t0 = t0
 
