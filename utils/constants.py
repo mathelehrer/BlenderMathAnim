@@ -377,11 +377,24 @@ GLOBAL_DATA_DIR2=os.path.join(RES_DIR2,"data")
 OSL_DIR = os.path.join(RES_DIR, "osl")
 PRIMITIVES_DIR = os.path.join(RES_DIR, 'blend/primitives')
 
-for folder in [MEDIA_DIR, TEX_DIR, SVG_DIR, BLEND_DIR, RES_DIR, TEX_TPL_DIR, BLEND_TPL_DIR, IMG_DIR,
-               RENDER_DIR, DATA_DIR,APPEND_DIR]:
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-        print("created folder: " + folder)
+# Directories that need to exist before a Scene actually runs.  Creating
+# them at import time causes surprising side effects (e.g. spurious dirs
+# appearing on disk just because a unit test imports a parser module that
+# transitively reaches utils.constants).  ensure_runtime_directories() is
+# called explicitly from perform.scene.Scene.__init__ instead.
+RUNTIME_DIRECTORIES = [
+    MEDIA_DIR, TEX_DIR, SVG_DIR, BLEND_DIR, RES_DIR, TEX_TPL_DIR, BLEND_TPL_DIR,
+    IMG_DIR, RENDER_DIR, DATA_DIR, APPEND_DIR,
+]
+
+
+def ensure_runtime_directories(verbose: bool = True) -> None:
+    """Create the project's runtime output directories on first use."""
+    for folder in RUNTIME_DIRECTORIES:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+            if verbose:
+                print("created folder: " + folder)
 
 TEX_TEXT_TO_REPLACE = "YourTextHere"
 TEMPLATE_TEX_FILE = os.path.join(TEX_TPL_DIR, "template_arial.tex")

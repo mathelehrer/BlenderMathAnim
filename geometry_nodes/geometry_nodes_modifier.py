@@ -143,10 +143,8 @@ class GeometryNodesModifier:
         return self.tree
 
 
-##################
-## Applications ##
-##################
 
+## Applications
 class SpherePreImage(GeometryNodesModifier):
     """
     theta-phi-domain that gets mapped into a sphere
@@ -6120,8 +6118,8 @@ class SimpleFunctionModifier(GeometryNodesModifier):
                              ins=input.outputs[0])
 
 
-# new videos
 
+# Polytope videos
 
 class CustomUnfoldModifier(GeometryNodesModifier):
     def __init__(self, name="UnfoldModifier", **kwargs):

@@ -16,7 +16,8 @@ class BObject(object):
     """
     This is the base class for all objects that can be added to a blender scene and moved
     """
-    def __init__(self,no_material=False, **kwargs):
+
+    def __init__(self, no_material=False, **kwargs):
         r"""
             this class can handle the following kwargs
             |
@@ -42,21 +43,19 @@ class BObject(object):
         self.updaters = []
         self.label_sep = 1
         self.name = self.get_from_kwargs('name', 'b_object')
-        self.hide = self.get_from_kwargs('hide',False) # per default each object is visible. It can be changed with toggle_hide
-        if 'obj' in kwargs:
-            ref_obj = kwargs['obj']
-            if self.name != 'b_object':
-                ref_obj.name = self.name
-            kwargs.pop('obj')
-        else:
-            if 'mesh' in kwargs:
-                mesh = kwargs['mesh']
-                kwargs.pop('mesh')
-                ref_obj = bpy.data.objects.new(self.name, mesh)
+        self.hide = self.get_from_kwargs('hide',
+                                         False)  # per default each object is visible. It can be changed with toggle_hide
+        ref_obj = get_from_kwargs(kwargs, "obj", None)
+        if ref_obj is None:
+            mesh = get_from_kwargs(kwargs, "mesh", None)
+            if mesh is None:
+                ref_obj = bpy.data.objects.new(name=self.name, object_data=mesh)
             else:
-                ref_obj = bpy.data.objects.new(name=self.name, object_data=None)
+                ref_obj = bpy.data.objects.new(self.name, mesh)
+        else:
+            ref_obj.name = self.name
 
-        self.collection = self.get_from_kwargs('collection',None)
+        self.collection = self.get_from_kwargs('collection', None)
         self.intrinsic_scale = self.get_from_kwargs('scale', 1)
         if isinstance(self.intrinsic_scale, int) or isinstance(self.intrinsic_scale, float):
             self.intrinsic_scale = [self.intrinsic_scale] * 3
@@ -67,9 +66,9 @@ class BObject(object):
         if 'location' in kwargs:
             location = self.get_from_kwargs('location', [0, 0, 0])
             ref_obj.location = location
-            self.initial_location=location
+            self.initial_location = location
         else:
-            self.initial_location=Vector()
+            self.initial_location = Vector()
         if 'rotation_euler' in kwargs:
             ref_obj.rotation_mode = 'XYZ'
             ref_obj.rotation_euler = self.get_from_kwargs('rotation_euler', [0, 0, 0])
@@ -81,40 +80,40 @@ class BObject(object):
 
         # Blender objects with this b_object as the container
         self.b_children = self.get_from_kwargs('children', [])
-        if len(self.b_children)>0:
-            parenting=self.get_from_kwargs('parenting',True)
-            if isinstance(parenting,list):
-                for i,obj in enumerate(self.b_children):
+        if len(self.b_children) > 0:
+            parenting = self.get_from_kwargs('parenting', True)
+            if isinstance(parenting, list):
+                for i, obj in enumerate(self.b_children):
                     if i in parenting:
-                        ibpy.set_parent(obj,self)
+                        ibpy.set_parent(obj, self)
             elif parenting:
                 for obj in self.b_children:
                     if obj is not None:
-                        ibpy.set_parent(obj,self)
+                        ibpy.set_parent(obj, self)
 
         # set color
         if not no_material:
-            self.color = self.get_from_kwargs('color',None)
+            self.color = self.get_from_kwargs('color', None)
             self.colors = self.get_from_kwargs('colors', None)
 
             if self.colors is not None:
                 apply_material(self.ref_obj, self.color, colors=self.colors, **kwargs)
             else:
-                apply_material(self.ref_obj, self.color,**kwargs)
+                apply_material(self.ref_obj, self.color, **kwargs)
             # do not automatically apply material to the children
             # [apply_material(child,self.color,**kwargs) for child in self.b_children]
             # for multiple slots
-
 
         smooth = self.get_from_kwargs('smooth', 0)
         bevel = self.get_from_kwargs('bevel', 0)
         solid = self.get_from_kwargs('solid', 0)
         if smooth > 1:
-            adaptive_subdivision=self.get_from_kwargs('adaptive_subdivision',False)
-            dicing_rate = self.get_from_kwargs('dicing_rate',0.5)
-            ibpy.add_sub_division_surface_modifier(self, level=smooth,adaptive_subdivision=adaptive_subdivision,dicing_rate=dicing_rate,**kwargs)
+            adaptive_subdivision = self.get_from_kwargs('adaptive_subdivision', False)
+            dicing_rate = self.get_from_kwargs('dicing_rate', 0.5)
+            ibpy.add_sub_division_surface_modifier(self, level=smooth, adaptive_subdivision=adaptive_subdivision,
+                                                   dicing_rate=dicing_rate, **kwargs)
         if solid:
-            ibpy.add_solidify_modifier(self, thickness=solid,**kwargs),
+            ibpy.add_solidify_modifier(self, thickness=solid, **kwargs),
         if bevel:
             ibpy.add_bevel_modifier(self, width=bevel)
 
@@ -181,7 +180,7 @@ class BObject(object):
         # if geometry nodes modifier is part of the kwargs
         geo_node_modifier = get_from_kwargs(kwargs, "geo_node_modifier", None)
         if geo_node_modifier is not None:
-            self.add_mesh_modifier(type="NODES",node_modifier=geo_node_modifier)
+            self.add_mesh_modifier(type="NODES", node_modifier=geo_node_modifier)
 
     @classmethod
     def from_name(cls, name=None, **kwargs):
@@ -189,7 +188,7 @@ class BObject(object):
             return BObject(obj=ibpy.get_obj_from_name(name), **kwargs)
 
     @classmethod
-    def batch_create_from_single_mesh(cls,mesh,name="Batch",locations=[],colors=['drawing'],**kwargs):
+    def batch_create_from_single_mesh(cls, mesh, name="Batch", locations=[], colors=['drawing'], **kwargs):
         """
         example
 
@@ -234,22 +233,22 @@ class BObject(object):
         bobs = []
         for i, name in enumerate(obj_names):
             if i >= len(colors):
-                col= colors[-1]
+                col = colors[-1]
             else:
                 col = colors[i]
-            bob = BObject(obj=ibpy.get_obj_from_name(name),color=col,**kwargs)
+            bob = BObject(obj=ibpy.get_obj_from_name(name), color=col, **kwargs)
             bobs.append(bob)
 
         return bobs
 
-    def batch_create(cls, name="Batch",meshes=[], locations=[], colors=['drawing'], **kwargs):
+    def batch_create(cls, name="Batch", meshes=[], locations=[], colors=['drawing'], **kwargs):
         obj_names = []
-        i=0
-        for  mesh,location in zip(meshes,locations):
+        i = 0
+        for mesh, location in zip(meshes, locations):
             obj_name = name + "_" + str(i)
             obj_names.append(obj_name)
             ibpy.create(mesh.copy(), obj_name, location)
-            i+=1
+            i += 1
 
         bobs = []
         for i, name in enumerate(obj_names):
@@ -257,7 +256,7 @@ class BObject(object):
                 col = colors[-1]
             else:
                 col = colors[i]
-            bob = BObject(obj=ibpy.get_obj_from_name(name), color=col,**kwargs)
+            bob = BObject(obj=ibpy.get_obj_from_name(name), color=col, **kwargs)
             bobs.append(bob)
 
         return bobs
@@ -283,13 +282,13 @@ class BObject(object):
             if 'emission' in kwargs:
                 emission = kwargs.pop('emission')
             else:
-                emission=0
+                emission = 0
 
             bobs = []
             for i, obj in enumerate(objs):
-                if len(cols)==0:
+                if len(cols) == 0:
                     # no colors presented
-                    col="background"
+                    col = "background"
                 elif i < len(cols):
                     col = cols[i]
                 else:
@@ -297,15 +296,15 @@ class BObject(object):
                 # change made on 2023-04-13 for the laptop class
                 # obj_name = name + '_' + objects[i]
                 # converted to
-                bpy_name=obj.name
-                obj_name=name+'_'+obj.name
-                if i==0:
+                bpy_name = obj.name
+                obj_name = name + '_' + obj.name
+                if i == 0:
                     # added kwargs on 2024-12-08 to treat all cubies of the rubik's cube equivalently
-                    bobs.append(BObject(obj=obj, color=col, name=obj_name,emission=emission,**kwargs))
+                    bobs.append(BObject(obj=obj, color=col, name=obj_name, emission=emission, **kwargs))
                 else:
                     bobs.append(BObject(obj=obj, color=col, name=obj_name, **kwargs))
                 #IMPORTED_OBJECTS.append(obj_name)
-                IMPORTED_OBJECTS.append(bpy_name) # 2025-02-18 to allow multiple imports of the same object
+                IMPORTED_OBJECTS.append(bpy_name)  # 2025-02-18 to allow multiple imports of the same object
             return bobs
         else:
             obj = import_object(filename)
@@ -341,8 +340,8 @@ class BObject(object):
     ############
     # Setter ##
     ###########
-    def set_emission_color(self,color):
-        ibpy.set_emission_color(self,color)
+    def set_emission_color(self, color):
+        ibpy.set_emission_color(self, color)
 
     def set_rigid_body(self, dynamic=True):
         ibpy.make_rigid_body(self, dynamic=dynamic)
@@ -482,13 +481,13 @@ class BObject(object):
         """
         ibpy.replace_mesh_modifier(self, type=type, **kwargs)
 
-    def add_constraint(self, type='COPY_LOCATION',name=None, **kwargs):
+    def add_constraint(self, type='COPY_LOCATION', name=None, **kwargs):
         """
         add modifier to mesh object
         :param kwargs:
         :return:
         """
-        ibpy.add_constraint(self, type=type,name=name, **kwargs)
+        ibpy.add_constraint(self, type=type, name=name, **kwargs)
 
     ################################
     # non-animated transformations #
@@ -499,7 +498,7 @@ class BObject(object):
 
     def copy(self, name=None, **kwargs):
         copy = ibpy.copy(self)
-        location =self.ref_obj.location.copy()
+        location = self.ref_obj.location.copy()
 
         children = []
         for child in self.b_children:
@@ -508,19 +507,19 @@ class BObject(object):
         if not name:
             name = "copy_of_" + self.ref_obj.name
         if 'scale' in kwargs:
-            scale=kwargs.pop('scale')
+            scale = kwargs.pop('scale')
         else:
-            scale=self.intrinsic_scale
-        if len(children)>0:
-            bcopy = BObject(children=children,scale=scale,name=name,location=location,**kwargs)
+            scale = self.intrinsic_scale
+        if len(children) > 0:
+            bcopy = BObject(children=children, scale=scale, name=name, location=location, **kwargs)
         else:
-            bcopy = BObject(obj=copy, name=name,scale=scale,location=location,  **kwargs)
+            bcopy = BObject(obj=copy, name=name, scale=scale, location=location, **kwargs)
 
         bcopy.old_sk = self.old_sk
         bcopy.appeared = False
         bcopy.transformation_state = self.transformation_state
 
-        if hasattr(self,"color") and self.color:
+        if hasattr(self, "color") and self.color:
             # This is important to create an own material for the copy if possible
             # otherwise the material will have the same actions for the copy and the original
             # (alpha changes and so on)
@@ -569,7 +568,8 @@ class BObject(object):
                              transition_time=transition_time)
         return begin_time + transition_time
 
-    def index_transform_mesh(self,transformations,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,pause_time=None):
+    def index_transform_mesh(self, transformations, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+                             pause_time=None):
         """
         This transforms the mesh with a list of lambda functions.
         The lambda functions act on the index of the shape key rather than on the positions
@@ -585,16 +585,15 @@ class BObject(object):
             state += 1
             self.old_sk = ibpy.create_shape_key_from_index_transformation(self, basis, state, t)
 
-
         # set all shape keys to zero initially
-        ibpy.zero_all_shape_keys(self,appear_frame=begin_time*FRAME_RATE-1)
+        ibpy.zero_all_shape_keys(self, appear_frame=begin_time * FRAME_RATE - 1)
         self.transformation_state += 1
         if pause_time is None:
             ibpy.morph_to_next_shape2(self, self.transformation_state - 1, begin_time * FRAME_RATE,
                                       transition_time * FRAME_RATE)
         else:
             ibpy.morph_to_next_shape_with_pause(self, self.transformation_state - 1, begin_time * FRAME_RATE,
-                                      transition_time * FRAME_RATE,pause_time*FRAME_RATE)
+                                                transition_time * FRAME_RATE, pause_time * FRAME_RATE)
 
         return begin_time + transition_time
 
@@ -631,7 +630,7 @@ class BObject(object):
         return begin_time + transition_time
 
     def transform_mesh_to_next_shape2(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
-                                      pause_time=None,**kwargs):
+                                      pause_time=None, **kwargs):
         """
         This transformation is a more efficient way to set up multiple transformations.
         It avoids to call set_frame. It requires the pause duration before the next transformations starts
@@ -641,10 +640,10 @@ class BObject(object):
 
         if pause_time is None:
             ibpy.morph_to_next_shape2(self, self.transformation_state, begin_time * FRAME_RATE,
-                                 transition_time * FRAME_RATE)
+                                      transition_time * FRAME_RATE)
         else:
             ibpy.morph_to_next_shape_with_pause(self, self.transformation_state, begin_time * FRAME_RATE,
-                                 transition_time * FRAME_RATE,pause_time*FRAME_RATE)
+                                                transition_time * FRAME_RATE, pause_time * FRAME_RATE)
 
         self.transformation_state += 1
         return begin_time + transition_time
@@ -655,14 +654,14 @@ class BObject(object):
         self.transformation_state -= 1
         return begin_time + transition_time
 
-    def transform_mesh_to_first_shape(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
-        ibpy.set_to_first_shape(self,begin_time*FRAME_RATE,transition_time*FRAME_RATE)
+    def transform_mesh_to_first_shape(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.set_to_first_shape(self, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
         self.transformation_state = 0
-        return begin_time+transition_time
+        return begin_time + transition_time
 
-    def change_color(self, new_color, slot = 0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
-        ibpy.change_color(self, new_color, slot=slot,begin_frame=begin_time * FRAME_RATE,
-                          final_frame=(begin_time + transition_time) * FRAME_RATE,**kwargs)
+    def change_color(self, new_color, slot=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+        ibpy.change_color(self, new_color, slot=slot, begin_frame=begin_time * FRAME_RATE,
+                          final_frame=(begin_time + transition_time) * FRAME_RATE, **kwargs)
 
         return begin_time + transition_time
 
@@ -674,9 +673,9 @@ class BObject(object):
         ibpy.shader_value(self, old_value, new_value, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
         return begin_time + transition_time
 
-    def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,scale=1,
-               clear_data=False, silent=False,linked=False, nice_alpha=False,children=True,sequentially=False,
-               offset_for_slots=[0],**kwargs):
+    def appear(self, alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, scale=1,
+               clear_data=False, silent=False, linked=False, nice_alpha=False, children=True, sequentially=False,
+               offset_for_slots=[0], **kwargs):
         """
         makes the object simply fade in with in the transition time
         from alpha = 0 to alpha defined in kwargs (default 1)
@@ -695,43 +694,44 @@ class BObject(object):
             if not silent:
                 print("Appear " + self.ref_obj.name)
             if nice_alpha:
-                ibpy.set_taa_render_samples(1024,begin_time*FRAME_RATE)
-                ibpy.set_taa_render_samples(64,(begin_time+transition_time)*FRAME_RATE)
+                ibpy.set_taa_render_samples(1024, begin_time * FRAME_RATE)
+                ibpy.set_taa_render_samples(64, (begin_time + transition_time) * FRAME_RATE)
             obj = self.ref_obj
             if not linked:
                 if obj.name not in bpy.context.scene.objects:
-                    ibpy.link(obj,collection=self.collection,**kwargs)
+                    ibpy.link(obj, collection=self.collection, **kwargs)
 
             if clear_data:  # this is useful for copies of objects to remove animation data from inherited from the parent
                 ibpy.clear_animation_data(self)
             ibpy.fade_in(self, begin_time * FRAME_RATE, np.maximum(1, transition_time * FRAME_RATE), alpha=alpha,
-                         offset_for_slots=offset_for_slots,**kwargs)
+                         offset_for_slots=offset_for_slots, **kwargs)
             self.appeared = True
 
         if not silent and len(self.b_children) > 10:
             silent = True
-            concise=True
+            concise = True
         else:
-            concise=False
+            concise = False
         if children:
             if not sequentially:
                 for child in self.b_children:
                     if concise:
-                        print("\r",end="")
+                        print("\r", end="")
                         print("Appear children of " + child.name, end="")
-                    child.appear(begin_time=begin_time,transition_time=transition_time,silent=silent)
+                    child.appear(begin_time=begin_time, transition_time=transition_time, silent=silent)
             else:
                 dt = transition_time / len(self.b_children)
                 for i, child in enumerate(self.b_children):
                     if concise:
                         print("\r")
                         print("Appear children of " + child.name, end="")
-                    child.appear(begin_time=begin_time + i * dt, transition_time=dt,silent=silent)
+                    child.appear(begin_time=begin_time + i * dt, transition_time=dt, silent=silent)
         if concise:
             print()
         return begin_time + transition_time
 
-    def change_alpha(self, slot = 0,from_value=None, to_value=None , alpha=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+    def change_alpha(self, slot=0, from_value=None, to_value=None, alpha=None, begin_time=0,
+                     transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         """
         only call this function, after changes in alpha due to appearance have settled
         :param transition_time:
@@ -742,27 +742,28 @@ class BObject(object):
         if alpha is not None:
             to_value = alpha
 
-        children = get_from_kwargs(kwargs,"children",True)
+        children = get_from_kwargs(kwargs, "children", True)
         if transition_time == 0:
             transition_frames = 1
         else:
             transition_frames = transition_time * FRAME_RATE
 
-        ibpy.change_alpha(self, begin_time*FRAME_RATE, transition_frames, from_value=from_value,to_value=to_value,
-                          alpha=alpha, slot=slot,**kwargs)
+        ibpy.change_alpha(self, begin_time * FRAME_RATE, transition_frames, from_value=from_value, to_value=to_value,
+                          alpha=alpha, slot=slot, **kwargs)
 
         if children:
             for child in self.b_children:
-                child.change_alpha(slot=slot, from_value=from_value,to_value=to_value, alpha=alpha,
-                                   begin_time=begin_time,transition_time=transition_time,children =children, **kwargs)
+                child.change_alpha(slot=slot, from_value=from_value, to_value=to_value, alpha=alpha,
+                                   begin_time=begin_time, transition_time=transition_time, children=children, **kwargs)
 
-        return begin_time+transition_time
+        return begin_time + transition_time
 
-    def toggle_hide(self,begin_time=0):
-        self.hide=not self.hide
-        ibpy.set_hide(self,self.hide,frame=begin_time*FRAME_RATE)
+    def toggle_hide(self, begin_time=0):
+        self.hide = not self.hide
+        ibpy.set_hide(self, self.hide, frame=begin_time * FRAME_RATE)
 
-    def disappear(self, alpha=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, slot=None,children=True, **kwargs):
+    def disappear(self, alpha=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, slot=None, children=True,
+                  **kwargs):
         """
         :param alpha:
         :param transition_time:
@@ -776,16 +777,17 @@ class BObject(object):
             else:
                 transition_frames = transition_time * FRAME_RATE
 
-            quick=get_from_kwargs(kwargs,"quick",False)
+            quick = get_from_kwargs(kwargs, "quick", False)
             if quick:
-                ibpy.fade_out_quickly(self, disappear_frame, transition_frames,cildren=children, **kwargs)
+                ibpy.fade_out_quickly(self, disappear_frame, transition_frames, cildren=children, **kwargs)
             else:
-                ibpy.fade_out(self, disappear_frame, transition_frames, slot =slot, alpha=alpha,children=children, **kwargs)
-        if alpha == 0 and slot is None: # only disappear, when all slots have been zeroed.
+                ibpy.fade_out(self, disappear_frame, transition_frames, slot=slot, alpha=alpha, children=children,
+                              **kwargs)
+        if alpha == 0 and slot is None:  # only disappear, when all slots have been zeroed.
             self.appeared = False
         return begin_time + transition_time
 
-    def move_fast(self,direction=Vector(),begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def move_fast(self, direction=Vector(), begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         """
         move an object without checking its position before
         instead one works with the global variable self.current_location.
@@ -797,11 +799,12 @@ class BObject(object):
         :return:
 
         """
-        new_location=self.current_location+to_vector(direction)
-        ibpy.move_fast_from_to(self,start=self.current_location,end=new_location,begin_frame=begin_time*FRAME_RATE,frame_duration=transition_time*FRAME_RATE)
+        new_location = self.current_location + to_vector(direction)
+        ibpy.move_fast_from_to(self, start=self.current_location, end=new_location, begin_frame=begin_time * FRAME_RATE,
+                               frame_duration=transition_time * FRAME_RATE)
         self.current_location = new_location
 
-    def move_fast_to(self,new_location=Vector(),begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def move_fast_to(self, new_location=Vector(), begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         """
         move an object without checking its position before
         instead one works with the global variable self.current_location.
@@ -814,7 +817,8 @@ class BObject(object):
         :return:
 
         """
-        ibpy.move_fast_from_to(self,start=self.current_location,end=new_location,begin_frame=begin_time*FRAME_RATE,frame_duration=transition_time*FRAME_RATE)
+        ibpy.move_fast_from_to(self, start=self.current_location, end=new_location, begin_frame=begin_time * FRAME_RATE,
+                               frame_duration=transition_time * FRAME_RATE)
         self.current_location = new_location
 
     def move(self, direction, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
@@ -825,12 +829,12 @@ class BObject(object):
         :param transition_time: duration of the motion
         :return:
         """
-        direction=to_vector(direction)
+        direction = to_vector(direction)
         ibpy.move(self, direction, begin_time * FRAME_RATE, transition_time * FRAME_RATE)
         return begin_time + transition_time
 
     def move_to(self, target_location, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
-                global_system=False,verbose=True,from_location=None):
+                global_system=False, verbose=True, from_location=None):
         """
         move an object. !!! Make sure that the object has appeared before using this function otherwise there will be
         issues with visiblity
@@ -842,13 +846,13 @@ class BObject(object):
         """
 
         ibpy.move_to(self, target_location, begin_time * FRAME_RATE, transition_time * FRAME_RATE,
-                     global_system=global_system,verbose=verbose,from_location=from_location)
+                     global_system=global_system, verbose=verbose, from_location=from_location)
         return begin_time + transition_time
 
-    def move_copy(self, direction=[0, 0, 0], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
+    def move_copy(self, direction=[0, 0, 0], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         obj_copy = self.copy(**kwargs)
         ibpy.clear_animation_data(obj_copy)
-        obj_copy.appeared=False# remove animation data to make it appear independently of the src object
+        obj_copy.appeared = False  # remove animation data to make it appear independently of the src object
         obj_copy.appear(begin_time=begin_time, transition_time=0)  # make copy appear
         obj_copy.move(direction=direction, begin_time=begin_time, transition_time=transition_time)
         return obj_copy
@@ -883,16 +887,17 @@ class BObject(object):
                   initial_scale=initial_scale)
         return begin_time + transition_time
 
-    def rescale(self, rescale=[1, 1, 1], from_scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+    def rescale(self, rescale=[1, 1, 1], from_scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+                **kwargs):
         ibpy.rescale(self, rescale, begin_time * FRAME_RATE, np.maximum(1, transition_time * FRAME_RATE),
                      from_scale=from_scale, **kwargs)
         return begin_time + transition_time
 
-    def rename(self,name="BObject"):
-        ibpy.rename(self,name)
+    def rename(self, name="BObject"):
+        ibpy.rename(self, name)
 
     def grow(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, modus='from_center', pivot=None,
-             initial_scale=0,alpha=1):
+             initial_scale=0, alpha=1):
         """
         grow an object from 0 to
         :param scale: the final scale
@@ -903,7 +908,7 @@ class BObject(object):
         """
 
         if not self.appeared:
-            self.appear(alpha=alpha,begin_time=0, transition_time=0)
+            self.appear(alpha=alpha, begin_time=0, transition_time=0)
         if pivot:
             ibpy.set_pivot(self, pivot)
         if scale is None:
@@ -911,15 +916,15 @@ class BObject(object):
         ibpy.grow(self, scale, begin_time * FRAME_RATE, transition_time * FRAME_RATE, initial_scale, modus)
         return begin_time + transition_time
 
-    def shrink(self,scale=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+    def shrink(self, scale=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         """
         shrink an object to 0
         :param begin_time: starting time
         :param transition_time: duration
         :return:
         """
-        ibpy.shrink(self, begin_frame=begin_time*FRAME_RATE, frame_duration=FRAME_RATE*transition_time,scale=scale)
-        return begin_time+transition_time
+        ibpy.shrink(self, begin_frame=begin_time * FRAME_RATE, frame_duration=FRAME_RATE * transition_time, scale=scale)
+        return begin_time + transition_time
 
     def next_to(self, parent, direction=RIGHT, buff=SMALL_BUFF, shift=0 * RIGHT):
         """
@@ -945,25 +950,22 @@ class BObject(object):
         location_parent = ibpy.get_location(self)  # ibpy.get_location(parent)
         ibpy.set_location(self, location_parent + (dist + buff) * direction + shift)
 
-    def explode(self,explode_scale=2, begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def explode(self, explode_scale=2, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for child in self.b_children:
             child.initial_location = child.ref_obj.location
-            child.rescale(rescale=0.975,from_scale=1, begin_time=0, transition_time=0)
+            child.rescale(rescale=0.975, from_scale=1, begin_time=0, transition_time=0)
             # somehow, setting origin at this point is very expensive
             # compute explosion manually for each child
             start = time.time()
             verts = [v.co for v in ibpy.get_vertices(child)]
 
-            center = sum(verts,Vector())/len(verts)
+            center = sum(verts, Vector()) / len(verts)
 
-            shift = (explode_scale-1)*center
-            child.transform_mesh(lambda v: v+shift,begin_time=begin_time,transition_time=transition_time)
+            shift = (explode_scale - 1) * center
+            child.transform_mesh(lambda v: v + shift, begin_time=begin_time, transition_time=transition_time)
             end = time.time()
             # print("Exlode child: ", child.name, (end - start))
-        return begin_time+transition_time
-
-
-
+        return begin_time + transition_time
 
     def get_location_at_frame(self, frame):
         ibpy.set_frame(frame)
@@ -1005,10 +1007,10 @@ class BObject(object):
         else:
             new_constraint = True
         if new_constraint:
-            ibpy.set_follow(self, curve,**kwargs)
+            ibpy.set_follow(self, curve, **kwargs)
         ibpy.follow(self, curve, initial_value=initial_value, final_value=final_value, begin_time=begin_time,
-                    transition_time=transition_time,**kwargs)
-        return begin_time+transition_time
+                    transition_time=transition_time, **kwargs)
+        return begin_time + transition_time
 
     def hide(self, begin_time=0):
         ibpy.hide(self, begin_time=begin_time)
@@ -1016,30 +1018,33 @@ class BObject(object):
     def un_hide(self, begin_time=0):
         ibpy.unhide(self, begin_time=begin_time)
 
-    def make_invisible(self,begin_time=0):
-        ibpy.hide(self,begin_time=begin_time)
+    def make_invisible(self, begin_time=0):
+        ibpy.hide(self, begin_time=begin_time)
 
-    def make_visible(self,begin_time=0):
-        ibpy.unhide(self,begin_time=begin_time)
+    def make_visible(self, begin_time=0):
+        ibpy.unhide(self, begin_time=begin_time)
 
-    def change_emission(self, from_value=0, to_value=1, slot=0,slots=None,begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
-        ibpy.change_emission(self, from_value=from_value, to_value=to_value, slot=slot,slots=slots,begin_frame=begin_time * FRAME_RATE,
-                        frame_duration=transition_time * FRAME_RATE)
+    def change_emission(self, from_value=0, to_value=1, slot=0, slots=None, begin_time=0,
+                        transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.change_emission(self, from_value=from_value, to_value=to_value, slot=slot, slots=slots,
+                             begin_frame=begin_time * FRAME_RATE,
+                             frame_duration=transition_time * FRAME_RATE)
         return begin_time + transition_time
 
     def clear_parent(self):
         ibpy.clear_parent(self)
 
-    def change_material(self, new_color, begin_time, transition_time, slot,**kwargs):
+    def change_material(self, new_color, begin_time, transition_time, slot, **kwargs):
         """
         add second material to existing material and make transition
         """
-        mat = ibpy.get_material_of(self,slot=slot)
-        textures.add_texture_to_material(mat,new_color,**kwargs)
-        slider = ibpy.get_node_of_material(mat,"MaterialMixer")[0]
-        ibpy.change_default_value(slider.inputs[0],from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
+        mat = ibpy.get_material_of(self, slot=slot)
+        textures.add_texture_to_material(mat, new_color, **kwargs)
+        slider = ibpy.get_node_of_material(mat, "MaterialMixer")[0]
+        ibpy.change_default_value(slider.inputs[0], from_value=0, to_value=1, begin_time=begin_time,
+                                  transition_time=transition_time)
 
-        return begin_time+transition_time
+        return begin_time + transition_time
 
     def get_materials(self):
         """
@@ -1052,6 +1057,7 @@ class AnimBObject(BObject):
     """
         Used for the spider in the Apollonian spider
     """
+
     def __init__(self, filename, object_name=None, armature=None, **kwargs):
         filepath = os.path.join(PRIMITIVES_DIR, filename + '.blend')
         objects = ibpy.load(filepath)

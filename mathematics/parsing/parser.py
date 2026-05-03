@@ -1,10 +1,11 @@
-import sympy
 from sympy.combinatorics import Permutation
-
 from interface.ibpy import OPERATORS
 
 
-def prec(c):
+def operator_priority(c):
+    """
+    define the priority of an operator
+    """
     if c == '(':
         return 10
     elif c == '**':
@@ -26,11 +27,11 @@ def associativity(c):
 
 def flag_operators(expr):
     """
-    It's a bit tricky, because we have to protect operators that contain smaller operators
+    It's a bit tricky because we have to protect operators that contain smaller operators
     sin->_sin_
     asin->_asin_ and not _a_sin__
 
-    Therefore all operators are first substituted with an auxiliary expression, which is substituted back in the end
+    Therefore, all operators are first substituted with an auxiliary expression, which is substituted back in the end
     flag operators in expression
 
     protect unary minus signs
@@ -57,15 +58,17 @@ def flag_operators(expr):
 
     return expr
 
+
 def parse_int_tuple(expr):
     # remove parenthesis
     if expr[0] == '(':
         expr = expr[1:]
-    if expr[-1]==')':
+    if expr[-1] == ')':
         expr = expr[:-1]
 
     parts = expr.split(',')
     return tuple([int(p) for p in parts])
+
 
 def parse_permutation(cycle_string):
     perm = Permutation()
@@ -85,7 +88,7 @@ def parse_permutation(cycle_string):
 class ExpressionConverter:
     def __init__(self, infix):
         self.expr = infix
-        if not isinstance(self.expr,str):
+        if not isinstance(self.expr, str):
             self.expr = str(self.expr)
 
     def postfix(self):
@@ -110,7 +113,7 @@ class ExpressionConverter:
         :return:
         """
         # remove all white spaces
-        self.expr = self.expr.replace(' ','')
+        self.expr = self.expr.replace(' ', '')
         self.expr = flag_operators(self.expr)
 
         result = []
@@ -118,6 +121,8 @@ class ExpressionConverter:
         op_flag = False
         operand = []
         operator = None
+
+        opened_abs = False
 
         for i in range(len(self.expr)):
             c = self.expr[i]
@@ -134,8 +139,8 @@ class ExpressionConverter:
                     # assemble operator expression
                     operator = "".join(operator)
                     # deal with operators
-                    while stack and (prec(operator) < prec(stack[-1]) or (
-                            prec(operator) == prec(stack[-1]) and associativity(operator) == 'L')) and stack[-1] != '(':
+                    while stack and (operator_priority(operator) < operator_priority(stack[-1]) or (
+                            operator_priority(operator) == operator_priority(stack[-1]) and associativity(operator) == 'L')) and stack[-1] != '(':
                         result.append(stack.pop())
                     stack.append(operator.strip())
                     op_flag = False
@@ -149,6 +154,18 @@ class ExpressionConverter:
                 while stack and stack[-1] != '(':
                     result.append(stack.pop())
                 stack.pop()  # pop '('
+            elif c == '|' and not opened_abs:
+                stack.append(c)
+                opened_abs = True
+            elif c == '|' and opened_abs:
+                opened_abs = False
+                if len(operand) > 0:
+                    result.append("".join(operand))
+                    operand = []
+                while stack and stack[-1] != '|':
+                    result.append(stack.pop())
+                result.append('abs')
+                stack.pop()  # pop '|'
             else:
                 if op_flag:
                     operator.append(c)
@@ -159,7 +176,7 @@ class ExpressionConverter:
         while stack:
             if len(operand) > 0:
                 result.append("".join(operand))
-                operand=""
+                operand = ""
             result.append(stack.pop())
 
         return ','.join(result)

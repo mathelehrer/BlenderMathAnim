@@ -4923,3 +4923,151 @@ def set_sky_background(**kwargs):
     links.new(background.outputs['Background'], out.inputs["Surface"])
 
     animate_sky_background(**kwargs)
+
+
+def make_hex_tile_tunnel_material(name="HexTileTunnel", **kwargs):
+    """
+    Reflective metallic tunnel with a procedural hexagonal grid pattern,
+    matching Shane's `hex(p)` function from the hexagons.st ShaderToy:
+
+        hex(p):
+            p.x *= 0.57735*2
+            p.y += mod(floor(p.x), 2)*0.5
+            p   = abs(mod(p, 1) - 0.5)
+            return abs(max(p.x*1.5 + p.y, p.y*2) - 1)
+
+    Low values mark the hex grid edges (drawn dark / emissive),
+    high values are the cell interiors (dark metallic).  A noise texture
+    sampled at cell coords drives a flickering emission, mimicking the
+    `step(.9, fract(...))` highlight in the original shader.
+    """
+    scale = get_from_kwargs(kwargs, 'scale', 0.6)
+    base_color = get_from_kwargs(kwargs, 'base_color', [0.02, 0.04, 0.08, 1])
+    line_color = get_from_kwargs(kwargs, 'line_color', [0.4, 0.7, 1.0, 1])
+    flicker_strength = get_from_kwargs(kwargs, 'flicker_strength', 6.0)
+
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+    tree = mat.node_tree
+    nodes = tree.nodes
+    links = tree.links
+
+    bsdf = nodes['Principled BSDF']
+    bsdf.inputs['Base Color'].default_value = base_color
+    bsdf.inputs['Metallic'].default_value = 1.0
+    bsdf.inputs['Roughness'].default_value = 0.08
+
+    # 1. Object coords (so the pattern follows the swept tunnel mesh)
+    coords = TextureCoordinate(tree, location=(-9, 0), std_out="Object")
+
+    # 2. Pre-scale and pick the (z, y) plane.  The tunnel runs along Z,
+    #    matching the shader's hex(pt.yz).  Output: a vector (uv_x, uv_y, 0)
+    #    where uv_x carries the staggered axis and uv_y carries the run axis.
+    pre_scale = make_function(
+        tree,
+        functions={
+            # uv_x = pos_y * 1.1547 * scale     (staggered axis)
+            # uv_y = pos_z * scale              (along the tunnel)
+            # uv_z = 0
+            "uv": [
+                "pos_y,1.1547,*," + str(scale) + ",*",
+                "pos_z," + str(scale) + ",*",
+                "0",
+            ],
+        },
+        inputs=["pos"],
+        outputs=["uv"],
+        vectors=["pos", "uv"],
+        node_group_type='Shader',
+        location=(-7, 0),
+        name="HexUVScale",
+    )
+    links.new(coords.std_out, pre_scale.inputs["pos"])
+
+    # 3. Compute the hex SDF.  The expression below is the inlined RPN of
+    #    abs(max(abs(mod(x,1)-.5)*1.5 + abs(mod(y',1)-.5),
+    #            abs(mod(y',1)-.5)*2) - 1)
+    #    where y' = uv_y + mod(floor(uv_x), 2)*0.5.
+    hex_expr = (
+        "uv_x,1,%,0.5,-,abs,1.5,*,"
+        "uv_y,uv_x,floor,2,%,0.5,*,+,1,%,0.5,-,abs,+,"
+        "uv_y,uv_x,floor,2,%,0.5,*,+,1,%,0.5,-,abs,2,*,"
+        "max,1,-,abs"
+    )
+    # Per-cell id: floor(uv_x) and floor(uv_y) seed the noise lookup.
+    hex_node = make_function(
+        tree,
+        functions={
+            "hex_value": hex_expr,
+            "cell": [
+                "uv_x,floor",
+                "uv_y,floor",
+                "0",
+            ],
+        },
+        inputs=["uv"],
+        outputs=["hex_value", "cell"],
+        scalars=["hex_value"],
+        vectors=["uv", "cell"],
+        node_group_type='Shader',
+        location=(-5, 0),
+        name="HexSDF",
+    )
+    links.new(pre_scale.outputs["uv"], hex_node.inputs["uv"])
+
+    # 4. Color ramp: small hex_value (edge) → bright line color,
+    #    larger hex_value (interior) → black.
+    edge_ramp = ColorRamp(
+        tree, location=(-3, 1),
+        factor=hex_node.outputs["hex_value"],
+        values=[0.0, 0.08, 0.25],
+        colors=[line_color, line_color, [0, 0, 0, 1]],
+        interpolation="LINEAR",
+    )
+
+    # 5. Per-cell flicker: noise on the cell id, gated by a sharp threshold
+    #    (mirrors the shader's step(.9, fract(...)) highlight).
+    #    Set 4D first so the W input socket is available before we link to it.
+    flicker_noise = nodes.new(type='ShaderNodeTexNoise')
+    flicker_noise.noise_dimensions = '4D'
+    flicker_noise.location = (-700, -200)
+    flicker_noise.inputs['Scale'].default_value = 0.7
+    flicker_noise.inputs['Detail'].default_value = 2
+    links.new(hex_node.outputs["cell"], flicker_noise.inputs['Vector'])
+
+    # Drive a Value node from the scene frame so the flicker animates.
+    time_node = nodes.new(type='ShaderNodeValue')
+    time_node.label = "FlickerTime"
+    time_node.location = (-900, -350)
+    time_node.outputs[0].default_value = 0.0
+    drv = time_node.outputs[0].driver_add("default_value").driver
+    drv.type = 'SCRIPTED'
+    drv.expression = "frame / 24.0"
+
+    links.new(time_node.outputs[0], flicker_noise.inputs['W'])
+
+    # Sharp threshold: only cells with noise > 0.7 light up.
+    flicker_thresh = nodes.new(type='ShaderNodeMath')
+    flicker_thresh.operation = 'GREATER_THAN'
+    flicker_thresh.location = (-500, -200)
+    flicker_thresh.inputs[1].default_value = 0.7
+    links.new(flicker_noise.outputs['Fac'], flicker_thresh.inputs[0])
+
+    # Combine: emission strength = base edge intensity + cell flicker.
+    edge_strength = nodes.new(type='ShaderNodeMath')
+    edge_strength.operation = 'MULTIPLY'
+    edge_strength.location = (-300, 0)
+    edge_strength.inputs[1].default_value = float(flicker_strength)
+    links.new(flicker_thresh.outputs[0], edge_strength.inputs[0])
+
+    add_emission = nodes.new(type='ShaderNodeMath')
+    add_emission.operation = 'ADD'
+    add_emission.location = (-100, 0)
+    add_emission.inputs[1].default_value = 1.0  # base emission floor on the lines
+    links.new(edge_strength.outputs[0], add_emission.inputs[0])
+
+    # Wire emission color and strength.
+    links.new(edge_ramp.std_out, bsdf.inputs[EMISSION])
+    links.new(add_emission.outputs[0], bsdf.inputs['Emission Strength'])
+
+    return mat

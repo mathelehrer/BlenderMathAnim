@@ -1,5 +1,4 @@
 import os
-import time
 from copy import deepcopy
 from datetime import date, datetime
 
@@ -15,7 +14,6 @@ from utils.constants import BLEND_DIR, FRAME_RATE, OBJECT_APPEARANCE_TIME, OSL_D
 from utils.geometry import BoundingBox
 from utils.kwargs import get_from_kwargs
 from utils.mathematics import lin_map
-from utils.string_utils import remove_digits
 
 """
 This interface encodes most of the blender functionality.
@@ -42,7 +40,7 @@ DATA_TYPES = ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOL
 # where as '*' is the ordinary multiplication for scalars, 'mul' is the corresponding vector operator
 OPERATORS = ['*', 'mul', '%', 'mod', '/', 'div', '+', 'add', '-', 'sub', '**', 'sin', 'cos', 'tan', '^', 'lg',
              'sqrt', 'exp', 'abs', 'min', 'max', '<', '>', 'sgn', 'round', 'floor', 'vfloor', 'ceil',
-             'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'length', 'scale', 'sqrt', '=', 'dot',
+             'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'length', 'scale', 'sqrt', '=', 'dot','°',
              'cross', 'rot', 'axis_rot', 'rot2euler', 'axis_angle_euler', 'not', 'normalize', 'and', 'or', "rot_vec",
              "inv_rot"]
 # operators that return data of type VECTOR

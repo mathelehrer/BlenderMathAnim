@@ -15,13 +15,14 @@ from interface.interface_constants import blender_version
 from perform.render import render_with_skips
 from utils.constants import DEFAULT_SCENE_BUFFER, LIGHT_TYPE, CAMERA_LOCATION, CAMERA_ANGLE, FRAME_RATE, COLORS_SCALED, \
     DEFAULT_SCENE_DURATION, SAMPLE_COUNT, LIGHT_SAMPLING_THRESHOLD, RESOLUTION_PERCENTAGE, RENDER_DIR, \
-    BLEND_FRM_RATE_DIR, COLOR_NAMES, COLORS, FONT_DIR
+    BLEND_FRM_RATE_DIR, COLOR_NAMES, COLORS, FONT_DIR, ensure_runtime_directories
 from utils.kwargs import get_from_kwargs
 
 OLDSCHOOL = "AcPlus IBM VGA 8x16 Regular"
 
 class Scene(object):
     def __init__(self, **kwargs):
+        ensure_runtime_directories()
         self.kwargs = kwargs;
         self.is_created = False
         try:

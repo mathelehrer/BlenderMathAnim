@@ -393,7 +393,7 @@ def import_svg_data(imported_svg_data,path,kwargs):
         new_curves = [x for x in ibpy.get_all_curves() if x not in previous_curves]
 
         # Arrange new curves relative to tex object's ref_obj
-        if text_size == 'normal':
+        if text_size == 'normal' or text_size=="Normal":
             scale_up = TEX_LOCAL_SCALE_UP
         elif text_size == 'medium':
             scale_up = TEX_LOCAL_SCALE_UP * 1.25
