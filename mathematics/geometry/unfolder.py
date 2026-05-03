@@ -331,7 +331,7 @@ class NetMorpher:
     def create_net_sequence(self):
         bobs = []
         for unfolder in self.unfolders:
-            bobs.append(unfolder.create_net(self.kwargs))
+            bobs.append(unfolder.create_net(**self.kwargs))
         return bobs
 
     def morph_sequence(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, pause=DEFAULT_ANIMATION_TIME / 2,

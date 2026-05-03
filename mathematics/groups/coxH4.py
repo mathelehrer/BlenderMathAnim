@@ -37,9 +37,7 @@ COXH4_SEEDS ={
     "x3x3x5x": FVector.parse("[1,1,7+4*r5,-11-4*r5]"),
 }
 
-
 _DEFAULT_PATH = "../geometry/data/"
-
 
 class CoxH4(CoxeterGroup4D):
     def __init__(self, path=None):
