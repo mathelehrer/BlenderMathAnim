@@ -2545,6 +2545,35 @@ class GeometryProximity(GreenNode):
                 tree.links.new(sample_group_id, self.node.inputs["Sample Group ID"])
 
 
+class SampleNearest(GreenNode):
+    """
+    Geometry node SampleNearest (GeometryNodeSampleNearest).
+
+    Given an explicit ``geometry`` and a ``sample_position`` field, returns the
+    integer ``Index`` of the nearest element in ``geometry`` to that position.
+    Mirrors the SAMPLE_NEAREST node used in
+    ``video_spacegroups/hexagonal_tiling.xml``.
+    """
+
+    def __init__(self, tree, location=(0, 0),
+                 domain="POINT",
+                 geometry=None, sample_position=None, **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeSampleNearest")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.node.domain = domain
+        self.std_out = self.node.outputs["Index"]
+        self.geometry_in = self.node.inputs["Geometry"]
+
+        if geometry is not None:
+            tree.links.new(geometry, self.node.inputs["Geometry"])
+        if sample_position is not None:
+            if isinstance(sample_position, (list, tuple, Vector)):
+                self.node.inputs["Sample Position"].default_value = list(sample_position)
+            else:
+                tree.links.new(sample_position, self.node.inputs["Sample Position"])
+
+
 class IndexOfNearest(GreenNode):
     """
     GeometryNodeIndexOfNearest: for the implicit "current" geometry context,
