@@ -7437,6 +7437,8 @@ def _ensure_sub_group(name, xml_filename):
     create_from_xml(tree, xml_filename, unpublished=True)
     return tree
 
+# this is an example where node groups are contained inside node setups
+# the node groups are created first from xml and then they can be used inside higher level node-groups
 
 class Show120MatricesModifier(GeometryNodesModifier):
     """
