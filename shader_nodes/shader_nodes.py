@@ -79,7 +79,7 @@ class ShaderNode:
         type = attributes["type"]
         if type == "ATTRIBUTE":
             attribute_name = attributes["attribute_name"]
-            attribute_type = attributes["attribute_type"]
+            attribute_type = attributes.get("attribute_type","GEOMETRY")
             return AttributeNode(tree, location=location, label=label,
                                  name=name, attribute_name=attribute_name,
                                  attribute_type=attribute_type,
@@ -298,6 +298,10 @@ class ColorRamp(ShaderNode):
             # # add last element
             # dict[float(key_str)] = parse_vector(val_str)
             # color_dictionary = dict
+            if isinstance(color_dictionary, str):
+                color_dictionary=eval(color_dictionary)
+                for key,val in color_dictionary.items():
+                    color_dictionary[key]=eval(val)
             values = list(color_dictionary.keys())
             colors = list(color_dictionary.values())
         else:

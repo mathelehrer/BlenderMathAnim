@@ -478,6 +478,29 @@ class ReRoute(Node):
 
         super().__init__(tree,location,**kwargs)
 
+class Reroute(Node):
+    """
+    Reroute (NodeReroute) — typed pass-through node used to keep the
+    node-editor layout tidy. Blender derives the socket type from the
+    upstream connection, so the same class works for VALUE, VECTOR,
+    GEOMETRY, etc.
+
+    Pass ``input=<socket>`` to wire the upstream socket in one step.
+    """
+    def __init__(self, tree, location=(0, 0), hide=False, mute=False,
+                 input=None, **kwargs):
+        self.node = tree.nodes.new("NodeReroute")
+        self.node.hide = hide
+        self.node.mute = mute
+
+        self.std_in = self.node.inputs[0]
+        self.std_out = self.node.outputs[0]
+
+        if input is not None:
+            tree.links.new(input, self.std_in)
+
+        super().__init__(tree, location, **kwargs)
+
 class Frame(Node):
     def __init__(self,tree,location=(0,0),node_width=200, node_height=200,hide=False,mute=False,**kwargs):
         self.node = tree.nodes.new(type="NodeFrame")

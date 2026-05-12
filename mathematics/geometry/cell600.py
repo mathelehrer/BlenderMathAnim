@@ -15,7 +15,7 @@ from utils.constants import DATA_DIR
 # exact values for r5 = 5**0.5
 # therefore, the field extension QR is implemented
 
-PATH = "mathematics/geometry/data/"
+PATH = "mathematics/geometry/c600_data/"
 
 
 # with the normal vector, we can project and rotate the vertices into our
