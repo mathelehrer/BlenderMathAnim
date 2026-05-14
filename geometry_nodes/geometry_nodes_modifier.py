@@ -7470,3 +7470,218 @@ class Show120MatricesModifier(GeometryNodesModifier):
         _ensure_sub_group("Show120_MatrixRow3", "Show120_MatrixRow3_node")
         # Load the main modifier tree
         create_from_xml(tree, "Show120_Matrices_node", unpublished=True, **kwargs)
+
+
+###################################################################
+## Hat tile (Smith-Myers-Kaplan-Goodman-Strauss aperiodic monotile)
+## Construction follows Labbé-Selinger arXiv:2604.20964
+## (triangular grid + per-grid-point orientation label).
+###################################################################
+
+
+class HatTileModifier(GeometryNodesModifier):
+    """
+    Geometry-nodes modifier that places hat tiles on a triangular grid.
+
+    The triangular grid is generated from a square Grid mesh whose integer
+    vertex coordinates (a, b) are remapped to a + b * exp(i pi/3), matching
+    the convention of the paper. Each grid point is assigned an orientation
+    label l in {0, 1, ..., 12}: l=0 means no tile, l in 1..6 picks one of the
+    six rotations of the hat (rotated by (l-1) * 60 deg), l in 7..12 picks the
+    six rotations of the anti-hat (mirror image, rotated by (l-7) * 60 deg).
+
+    The default orientation label is computed by a `Random Value` (INT) node
+    seeded from the grid index, so each grid point gets a pseudo-random tile
+    orientation. For a *valid* hat tiling the labels would have to come from a
+    Markov partition (paper's Fig. 4) or a substitution rule; this prototype
+    offers the placement infrastructure with a swappable label source.
+
+    Exposed input sockets (read with `ibpy.get_geometry_node_from_modifier`):
+        - "GridSize"  : half-extent N (int). Grid spans (a,b) in [-N, N].
+        - "Seed"      : seed for the random orientation labels (int).
+        - "EmptyProb" : probability that the orientation is forced to 0 (float).
+        - "TileScale" : scale applied to each instanced hat (float).
+
+    Args:
+        hat_object : a Blender object whose mesh is one canonical hat tile
+            (anchor at origin, oriented as label +1).
+        anti_hat_object : optional separate object for the mirror tile. If
+            None, the regular hat is mirrored in-graph (scale=-1 along x).
+    """
+
+    def __init__(self, hat_object, anti_hat_object=None, name='HatTile'):
+        self.hat_object = hat_object
+        self.anti_hat_object = anti_hat_object
+        super().__init__(name=name, automatic_layout=False)
+
+    def create_node(self, tree):
+        # ------------------------------------------------------------
+        # exposed parameters
+        # ------------------------------------------------------------
+        grid_size = InputInteger(tree, integer=6, name="GridSize")
+        seed = InputInteger(tree, integer=0, name="Seed")
+        empty_prob = InputValue(tree, value=0.15, name="EmptyProb")
+        tile_scale = InputValue(tree, value=1.0, name="TileScale")
+
+        # ------------------------------------------------------------
+        # triangular grid: square integer Grid then shear
+        #     (a, b)  ->  (a + b*cos(60), b*sin(60))
+        # ------------------------------------------------------------
+        size = make_function(tree, functions={
+            "size": "n,2,*",
+            "verts": "n,2,*,1,+",
+        }, inputs=["n"], outputs=["size", "verts"], scalars=["n", "size", "verts"],
+                             name="GridSizing", hide=True)
+        tree.links.new(grid_size.std_out, size.inputs["n"])
+
+        grid = Grid(tree,
+                    size_x=size.outputs["size"], size_y=size.outputs["size"],
+                    vertices_x=size.outputs["verts"], vertices_y=size.outputs["verts"])
+
+        # remap each grid vertex from square -> triangular lattice
+        position = Position(tree)
+        triangular = make_function(tree, functions={
+            "position": [
+                "pos_x,pos_y,0.5,*,+",       # x = a + b/2
+                "pos_y,3,sqrt,*,0.5,*",      # y = b * sqrt(3)/2
+                "0",
+            ]
+        }, inputs=["pos"], outputs=["position"], vectors=["pos", "position"],
+                                   name="Triangulate", hide=True)
+        tree.links.new(position.std_out, triangular.inputs["pos"])
+
+        # ------------------------------------------------------------
+        # per-point orientation label l in {0..12}
+        #   - random INT in [0, 12]
+        #   - then forced to 0 with probability EmptyProb
+        # ------------------------------------------------------------
+        index = Index(tree)
+
+        rand_label = RandomValue(tree, data_type="INT", min=0, max=12,
+                                 seed=seed.std_out, probability=None,
+                                 name="HatLabel")
+        tree.links.new(index.std_out, rand_label.node.inputs["ID"])
+
+        rand_empty = RandomValue(tree, data_type="FLOAT", min=0.0, max=1.0,
+                                 seed=seed.std_out, probability=None,
+                                 name="EmptyDraw")
+        tree.links.new(index.std_out, rand_empty.node.inputs["ID"])
+
+        # final label = (rand_empty < EmptyProb) ? 0 : rand_label
+        # break out into useful selectors:
+        label = make_function(tree, functions={
+            "label":      "draw,p,<,not,raw_label,*",
+            "is_tile":    "raw_label,0,>,draw,p,<,not,*",
+            "is_anti":    "raw_label,6,>,draw,p,<,not,*",
+            # rot_index = (raw_label - 1) for label<=6, (raw_label - 7) for label in 7..12
+            #           = raw_label - 1 - 6 * (raw_label > 6)
+            "rot_index":  "raw_label,1,-,raw_label,6,>,6,*,-",
+        }, inputs=["raw_label", "draw", "p"], outputs=["label", "is_tile", "is_anti", "rot_index"],
+                              scalars=["raw_label", "draw", "p", "label", "is_tile", "is_anti", "rot_index"],
+                              name="LabelLogic", hide=True)
+        tree.links.new(rand_label.std_out, label.inputs["raw_label"])
+        tree.links.new(rand_empty.std_out, label.inputs["draw"])
+        tree.links.new(empty_prob.std_out, label.inputs["p"])
+
+        # capture the rotation index as a per-point attribute so it survives
+        # the InstanceOnPoints boundary -- we'll read it back as a per-instance
+        # attribute when computing the rotation in RotateInstances.
+        set_pos_tri = SetPosition(tree, position=triangular.outputs["position"])
+        store_rot = StoredNamedAttribute(tree, data_type="FLOAT",
+                                         domain="POINT", name="hat_rot_index",
+                                         value=label.outputs["rot_index"])
+        store_tile = StoredNamedAttribute(tree, data_type="BOOLEAN",
+                                          domain="POINT", name="hat_is_tile",
+                                          value=label.outputs["is_tile"])
+        store_anti = StoredNamedAttribute(tree, data_type="BOOLEAN",
+                                          domain="POINT", name="hat_is_anti",
+                                          value=label.outputs["is_anti"])
+
+        # readers (used downstream in field contexts that no longer have
+        # access to the original Index):
+        rot_attr = NamedAttribute(tree, data_type="FLOAT",
+                                  name="hat_rot_index")
+        tile_attr = NamedAttribute(tree, data_type="BOOLEAN",
+                                   name="hat_is_tile")
+        anti_attr = NamedAttribute(tree, data_type="BOOLEAN",
+                                   name="hat_is_anti")
+
+        # rotation around z by (rot_index) * pi/3
+        rotation_fn = make_function(tree, functions={
+            "rotation": ["0", "0", "k,pi,3,/,*"],
+        }, inputs=["k"], outputs=["rotation"], scalars=["k"], vectors=["rotation"],
+                                    name="HatRotation", hide=True)
+        tree.links.new(rot_attr.std_out, rotation_fn.inputs["k"])
+
+        # selection masks for the two branches
+        select_fn = make_function(tree, functions={
+            "tile_sel":   "is_tile,is_anti,not,*",
+            "mirror_sel": "is_anti",
+        }, inputs=["is_tile", "is_anti"], outputs=["tile_sel", "mirror_sel"],
+                                  scalars=["is_tile", "is_anti", "tile_sel", "mirror_sel"],
+                                  name="SelectionMasks", hide=True)
+        tree.links.new(tile_attr.std_out, select_fn.inputs["is_tile"])
+        tree.links.new(anti_attr.std_out, select_fn.inputs["is_anti"])
+
+        # ------------------------------------------------------------
+        # hat geometry source(s) via ObjectInfo
+        # ------------------------------------------------------------
+        hat_info = ObjectInfo(tree, transform_space="ORIGINAL",
+                              as_instance=True, object=self.hat_object,
+                              name="HatSource")
+
+        # ------------------------------------------------------------
+        # branch 1: regular hats (orientations +1..+6)
+        # ------------------------------------------------------------
+        join_geometry = JoinGeometry(tree)
+
+        scale_vec = make_function(tree, functions={
+            "scale": ["s", "s", "s"],
+        }, inputs=["s"], outputs=["scale"], scalars=["s"], vectors=["scale"],
+                                  name="ScaleVec", hide=True)
+        tree.links.new(tile_scale.std_out, scale_vec.inputs["s"])
+
+        instance_hats = InstanceOnPoints(tree,
+                                         instance=hat_info.geometry_out,
+                                         selection=select_fn.outputs["tile_sel"],
+                                         scale=scale_vec.outputs["scale"])
+        rotate_hats = RotateInstances(tree, rotation=rotation_fn.outputs["rotation"])
+
+        create_geometry_line(tree,
+                             [grid, set_pos_tri,
+                              store_rot, store_tile, store_anti,
+                              instance_hats, rotate_hats, join_geometry],
+                             out=self.group_outputs.inputs[0])
+
+        # ------------------------------------------------------------
+        # branch 2: anti-hats (orientations -1..-6 == labels 7..12)
+        # mirror via scale (-1, 1, 1) before rotating
+        # ------------------------------------------------------------
+        if self.anti_hat_object is not None:
+            anti_info = ObjectInfo(tree, transform_space="ORIGINAL",
+                                   as_instance=True, object=self.anti_hat_object,
+                                   name="AntiHatSource")
+            anti_scale = scale_vec.outputs["scale"]
+            anti_instance_in = anti_info.geometry_out
+        else:
+            anti_info = hat_info
+            mirror_scale = make_function(tree, functions={
+                "scale": ["s,-1,*", "s", "s"],
+            }, inputs=["s"], outputs=["scale"], scalars=["s"], vectors=["scale"],
+                                         name="MirrorScale", hide=True)
+            tree.links.new(tile_scale.std_out, mirror_scale.inputs["s"])
+            anti_scale = mirror_scale.outputs["scale"]
+            anti_instance_in = anti_info.geometry_out
+
+        instance_anti = InstanceOnPoints(tree,
+                                         instance=anti_instance_in,
+                                         selection=select_fn.outputs["mirror_sel"],
+                                         scale=anti_scale)
+        rotate_anti = RotateInstances(tree, rotation=rotation_fn.outputs["rotation"])
+
+        # branch 2 reads from the same point cloud (after the attribute stores)
+        create_geometry_line(tree,
+                             [store_anti, instance_anti, rotate_anti, join_geometry])
+
+        # tidy layout
+        layout(tree)
