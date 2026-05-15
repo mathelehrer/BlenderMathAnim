@@ -393,6 +393,11 @@ class Node:
         if type=="INDEX_SWITCH":
             data_type=attributes["data_type"]
             return IndexSwitch(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type)
+        if type == "MENU_SWITCH":
+            data_type = attributes["data_type"]
+            return MenuSwitch(tree, location=location, name=name, label=label, hide=hide, mute=mute,
+                               node_height=200, data_type=data_type)
+
             # don't know the category yet
         if type=="FIELD_ON_DOMAIN":
             data_type=attributes["data_type"]
@@ -405,7 +410,7 @@ class Node:
             return EvaluateAtIndex(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,data_type=data_type,domain=domain)
 
         if type=="REROUTE":
-            return ReRoute(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
+            return Reroute(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200)
         if type=="FRAME":
             return Frame(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,node_width=200)
 
@@ -462,22 +467,6 @@ class GroupOutput(Node):
     def add_socket(self, socket_type, socket_name):
         self.node.repeat_items.new(socket_type, socket_name)
 
-class ReRoute(Node):
-    """
-    ReRoute nodes are created, when the links are split and re-routed.
-    Don't use it, when you create the xml file data.
-    They are buggy.
-    """
-    def __init__(self, tree, location=(0, 0), hide=False, mute=False, **kwargs):
-        self.node = tree.nodes.new("NodeReroute")
-        self.node.hide=hide
-        self.node.mute=mute
-
-        self.std_out=self.node.outputs[0]
-        self.std_in=self.node.inputs[0]
-
-        super().__init__(tree,location,**kwargs)
-
 class Reroute(Node):
     """
     Reroute (NodeReroute) — typed pass-through node used to keep the
@@ -488,18 +477,21 @@ class Reroute(Node):
     Pass ``input=<socket>`` to wire the upstream socket in one step.
     """
     def __init__(self, tree, location=(0, 0), hide=False, mute=False,
-                 input=None, **kwargs):
+                 ins=None, **kwargs):
         self.node = tree.nodes.new("NodeReroute")
         self.node.hide = hide
         self.node.mute = mute
 
-        self.std_in = self.node.inputs[0]
-        self.std_out = self.node.outputs[0]
-
-        if input is not None:
-            tree.links.new(input, self.std_in)
+        if ins is not None:
+            tree.links.new(ins, self.node.inputs[0])
 
         super().__init__(tree, location, **kwargs)
+
+        self.std_in = self.node.inputs[0]
+        self.std_out = self.node.outputs[0]
+        self.geometry_in = self.node.inputs[0]
+        self.geometry_out = self.node.outputs[0]
+
 
 class Frame(Node):
     def __init__(self,tree,location=(0,0),node_width=200, node_height=200,hide=False,mute=False,**kwargs):
@@ -3536,6 +3528,59 @@ class IndexSwitch(BlueNode):
     def new_item(self):
         self.node.index_switch_items.new()
 
+class MenuSwitch(BlueNode):
+    def __init__(self, tree, location=(0, 0), data_type="GEOMETRY",
+                 menu=None, **kwargs):
+
+        self.node = tree.nodes.new(type="GeometryNodeMenuSwitch")
+        self.tree = tree
+        self.node.data_type=data_type
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Output"]
+        self.menu = self.node.inputs["Menu"]
+        self.slots = self.node.inputs
+        self.added_items = 0
+
+        if menu:
+            if isinstance(menu, str):
+                self.node.inputs["Menue"].default_value = menu
+            else:
+                tree.links.new(menu, self.menu)
+
+    def add_new_item_from_xml(self,default_value=None):
+        """
+        do not use this function, use add_new_item instead
+        it is only used for the xml import
+        """
+        self.new_item()
+        if self.added_items==0:
+            self.added_items=2 # these are the items existing by default
+        self.added_items+=1
+        if default_value:
+            self.slots[self.added_items].default_value=default_value
+        return True
+
+    def add_item(self,socket):
+        # """
+        #  only use this function, when you add switch items,
+        #  it assumes that you wire the index socket independently
+        # """
+        # if self.added_items>len(self.slots)-3:
+        #     self.new_item()
+        # if socket:
+        #     if isinstance(socket,int):
+        #         self.slots[self.added_items+1].default_value=socket
+        #     else:
+        #         self.tree.links.new(socket,self.slots[self.added_items+1])
+
+        ibpy.add_item_to_switch(self.node,self.added_items,socket,self.tree)
+        self.added_items+=1
+
+    def new_item(self):
+        self.node.enum_items.new()
+
+
 # zones
 class RepeatInput(GreenNode):
     def __init__(self,tree,location=(0,0),**kwargs):
@@ -3771,7 +3816,6 @@ class ForEachOutput(GreenNode):
             self.node.outputs[name].default_value = value
 
 # custom composite nodes
-
 class WireFrame(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  radius=0.02,
@@ -4094,7 +4138,6 @@ class InsideConvexHull3D(GreenNode):
         tree_links.new(comparison.outputs["out"], group_outputs.inputs["Is Outside"])
         return group
 
-
 class E8Node(GreenNode):
     def __init__(self, tree, location=(0, 0), **kwargs):
         """
@@ -4313,6 +4356,41 @@ class BevelNode(NodeGroup):
         convex_hull = ConvexHull(tree,hide=True)
         create_geometry_line(tree, [set_pos, iop, realize_instance, convex_hull],out=self.group_outputs.inputs["Bevelled Geometry"],
                              ins = self.group_inputs.outputs["Points"])
+
+class ComplexMathNode(NodeGroup):
+    def __init__(self, tree, z=Vector(),w=Vector(),lbd=0,
+                 operation="ADD", **kwargs):
+        self.name = get_from_kwargs(kwargs, "name", "ComplexMathNode")
+        super().__init__(tree, inputs={"z": "VECTOR", "w": "VECTOR",
+                                       "lambda": "FLOAT","Operation": "MENU"},
+                         outputs={"Result": "VECTOR"},
+                         auto_layout=False, name=self.name, **kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.std_out = self.node.outputs["Result"]
+
+        if isinstance(z, (list,Vector)):
+            self.node.inputs["z"].default_value =z
+        else:
+            tree.links.new(z, self.node.inputs["z"])
+
+        if isinstance(w, (list, Vector)):
+            self.node.inputs["w"].default_value = w
+        else:
+            tree.links.new(w, self.node.inputs["w"])
+
+
+        if isinstance(lbd, (int,float)):
+            self.node.inputs["lambda"].default_value = lbd
+        else:
+            tree.links.new(lbd, self.node.inputs["lambda"])
+
+        # self.node.inputs["Operation"].default_value=operation
+
+    def fill_group_with_node(self, tree, **kwargs):
+        create_from_xml(tree,"complex_math_node")
 
 # custom Matrix operations #
 class Rotation(GreenNode):
@@ -5414,6 +5492,14 @@ def create_socket(tree, node, node_attributes, attributes):
             else:
                 node.add_new_item_from_xml()
             return True
+        if node_attributes['type'] == 'MENU_SWITCH': # just add empty socket to Menu Switch
+            # this is called, when MenuSwitch node is created from XML
+            if "default_value" in attributes:
+                default_value = get_default_value_for_socket(attributes)
+                node.add_new_item_from_xml(default_value)
+            else:
+                node.add_new_item_from_xml()
+            return True
         if node_attributes['type']=='GROUP_INPUT':
             tree.interface.new_socket(attributes['name'],description='',in_out="INPUT",socket_type=SOCKET_TYPES[attributes['type']])
             if "default_value" in attributes:
@@ -5544,7 +5630,10 @@ def create_from_xml(tree,filename=None,**kwargs):
                                 node.outputs[output_count].name=output_attributes["name"]
                                 node_structure[node_id]["outputs"][output_id] = output_count
                                 if 'default_value' in output_attributes:
-                                    node.outputs[output_count].default_value = get_default_value_for_socket(output_attributes)
+                                    try:
+                                        node.outputs[output_count].default_value = get_default_value_for_socket(output_attributes)
+                                    except BaseException:
+                                        print("stp")
                                 output_count += 1
                             else:
                                 if output_attributes["type"] !="CUSTOM": # FOREACH_GEOMETRY_ELEMENT_OUTPUT has a custom socket in between proper sockets
