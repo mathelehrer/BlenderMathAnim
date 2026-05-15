@@ -3544,41 +3544,37 @@ class MenuSwitch(BlueNode):
 
         if menu:
             if isinstance(menu, str):
-                self.node.inputs["Menue"].default_value = menu
+                self.node.inputs["Menu"].default_value = menu
             else:
                 tree.links.new(menu, self.menu)
 
-    def add_new_item_from_xml(self,default_value=None):
+    def add_new_item_from_xml(self, default_value=None, name=""):
         """
-        do not use this function, use add_new_item instead
+        do not use this function, use add_item instead
         it is only used for the xml import
         """
-        self.new_item()
-        if self.added_items==0:
-            self.added_items=2 # these are the items existing by default
-        self.added_items+=1
+        self.new_item(name)
+        if self.added_items == 0:
+            self.added_items = 2  # two default items (A, B) already exist
+        self.added_items += 1
         if default_value:
-            self.slots[self.added_items].default_value=default_value
+            self.slots[self.added_items].default_value = default_value
         return True
 
-    def add_item(self,socket):
-        # """
-        #  only use this function, when you add switch items,
-        #  it assumes that you wire the index socket independently
-        # """
-        # if self.added_items>len(self.slots)-3:
-        #     self.new_item()
-        # if socket:
-        #     if isinstance(socket,int):
-        #         self.slots[self.added_items+1].default_value=socket
-        #     else:
-        #         self.tree.links.new(socket,self.slots[self.added_items+1])
+    def add_item(self, socket, name=""):
+        # grow enum_items collection until the target slot exists
+        while self.added_items > len(self.slots) - 3:
+            self.node.enum_items.new(name)
+            name = ""
+        if socket is not None:
+            if isinstance(socket, (int, float, str)):
+                self.slots[self.added_items + 1].default_value = socket
+            else:
+                self.tree.links.new(socket, self.slots[self.added_items + 1])
+        self.added_items += 1
 
-        ibpy.add_item_to_switch(self.node,self.added_items,socket,self.tree)
-        self.added_items+=1
-
-    def new_item(self):
-        self.node.enum_items.new()
+    def new_item(self, name=""):
+        self.node.enum_items.new(name)
 
 
 # zones
@@ -4387,7 +4383,10 @@ class ComplexMathNode(NodeGroup):
         else:
             tree.links.new(lbd, self.node.inputs["lambda"])
 
-        # self.node.inputs["Operation"].default_value=operation
+        if isinstance(operation, str):
+            self.node.inputs["Operation"].default_value = operation
+        else:
+            tree.links.new(operation, self.node.inputs["Operation"])
 
     def fill_group_with_node(self, tree, **kwargs):
         create_from_xml(tree,"complex_math_node")
@@ -5492,13 +5491,14 @@ def create_socket(tree, node, node_attributes, attributes):
             else:
                 node.add_new_item_from_xml()
             return True
-        if node_attributes['type'] == 'MENU_SWITCH': # just add empty socket to Menu Switch
+        if node_attributes['type'] == 'MENU_SWITCH': # just add named socket to Menu Switch
             # this is called, when MenuSwitch node is created from XML
+            item_name = attributes.get('name', '')
             if "default_value" in attributes:
                 default_value = get_default_value_for_socket(attributes)
-                node.add_new_item_from_xml(default_value)
+                node.add_new_item_from_xml(default_value, name=item_name)
             else:
-                node.add_new_item_from_xml()
+                node.add_new_item_from_xml(name=item_name)
             return True
         if node_attributes['type']=='GROUP_INPUT':
             tree.interface.new_socket(attributes['name'],description='',in_out="INPUT",socket_type=SOCKET_TYPES[attributes['type']])
@@ -5602,7 +5602,15 @@ def create_from_xml(tree,filename=None,**kwargs):
                             elif len(node.inputs)>input_count and node.inputs[input_count].name!="": # avoid virtual socket
                                 node_structure[node_id]["inputs"][input_id] = input_count
                                 node.inputs[input_count].name=input_attributes['name']
-                                if 'default_value' in input_attributes:
+                                # REROUTE: socket type is unresolved until a link is attached;
+                                # Blender defaults it to RGBA (4 components) before that, so
+                                # writing a 3-component VECTOR default raises a ValueError.
+                                # MENU: the enum is empty at node-creation time; valid item names
+                                # only exist after the connected MenuSwitch has been built, so
+                                # writing any string default raises a TypeError ("enum not found in ()").
+                                if ('default_value' in input_attributes
+                                        and node_attributes['type'] != 'REROUTE'
+                                        and input_attributes.get('type') != 'MENU'):
                                     node.inputs[input_count].default_value = get_default_value_for_socket(input_attributes)
                                 input_count += 1
                             else:
@@ -5629,11 +5637,16 @@ def create_from_xml(tree,filename=None,**kwargs):
                             elif len(node.outputs)>output_count and node.outputs[output_count].name!="": # avoid virtual socket
                                 node.outputs[output_count].name=output_attributes["name"]
                                 node_structure[node_id]["outputs"][output_id] = output_count
-                                if 'default_value' in output_attributes:
-                                    try:
-                                        node.outputs[output_count].default_value = get_default_value_for_socket(output_attributes)
-                                    except BaseException:
-                                        print("stp")
+                                # REROUTE: socket type is unresolved until a link is attached;
+                                # Blender defaults it to RGBA (4 components) before that, so
+                                # writing a 3-component VECTOR default raises a ValueError.
+                                # MENU: the enum is empty at node-creation time; valid item names
+                                # only exist after the connected MenuSwitch has been built, so
+                                # writing any string default raises a TypeError ("enum not found in ()").
+                                if ('default_value' in output_attributes
+                                        and node_attributes['type'] != 'REROUTE'
+                                        and output_attributes.get('type') != 'MENU'):
+                                    node.outputs[output_count].default_value = get_default_value_for_socket(output_attributes)
                                 output_count += 1
                             else:
                                 if output_attributes["type"] !="CUSTOM": # FOREACH_GEOMETRY_ELEMENT_OUTPUT has a custom socket in between proper sockets
