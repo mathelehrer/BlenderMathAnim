@@ -909,8 +909,8 @@ class CurveLine(GreenNode):
 class Quadrilateral(GreenNode):
     def  __init__(self, tree, location=(0, 0),
                   mode="RECTANGLE",
-                  width=1,
-                  height=1,
+                  width=None,
+                  height=None,
                   **kwargs
                   ):
         self.node = tree.nodes.new(type="GeometryNodeCurvePrimitiveQuadrilateral")
@@ -918,14 +918,22 @@ class Quadrilateral(GreenNode):
         self.node.mode = mode
         self.geometry_out = self.node.outputs["Curve"]
 
-        if isinstance(width, (int, float)):
-            self.node.inputs["Width"].default_value = width
-        else:
-            self.tree.links.new(width, self.node.inputs["Width"])
-        if isinstance(height, (int, float)):
-            self.node.inputs["Height"].default_value = height
-        else:
-            self.tree.links.new(height, self.node.inputs["Height"])
+        if mode=="RECTANGLE":
+            if width is None:
+                width=1
+            if height is None:
+                height=1
+
+        if width:
+            if isinstance(width, (int, float)):
+                self.node.inputs["Width"].default_value = width
+            else:
+                self.tree.links.new(width, self.node.inputs["Width"])
+        if height:
+            if isinstance(height, (int, float)):
+                self.node.inputs["Height"].default_value = height
+            else:
+                self.tree.links.new(height, self.node.inputs["Height"])
 
 class ResampleCurve(GreenNode):
     def __init__(self, tree, location=(0, 0),mode="Count",curve=None,
@@ -3554,9 +3562,12 @@ class MenuSwitch(BlueNode):
         it is only used for the xml import
         """
         self.new_item(name)
-        if self.added_items == 0:
-            self.added_items = 2  # two default items (A, B) already exist
-        self.added_items += 1
+        # The XML's first N case sockets are absorbed into the default A/B
+        # enum items by `create_from_xml` (rename path), which doesn't go
+        # through this method. Only the case sockets past the defaults
+        # arrive here, so derive the new item's slot index from the current
+        # enum size rather than counting calls.
+        self.added_items = len(self.node.enum_items)
         if default_value:
             self.slots[self.added_items].default_value = default_value
         return True
@@ -3564,7 +3575,7 @@ class MenuSwitch(BlueNode):
     def add_item(self, socket, name=""):
         # grow enum_items collection until the target slot exists
         while self.added_items > len(self.slots) - 3:
-            self.node.enum_items.new(name)
+            self.new_item(name)
             name = ""
         if socket is not None:
             if isinstance(socket, (int, float, str)):
@@ -3574,7 +3585,12 @@ class MenuSwitch(BlueNode):
         self.added_items += 1
 
     def new_item(self, name=""):
-        self.node.enum_items.new(name)
+        # enum_items.new(name) can silently keep a default/conflicting name —
+        # reassign explicitly so the requested name actually sticks.
+        item = self.node.enum_items.new(name)
+        if name and item is not None and item.name != name:
+            item.name = name
+        return item
 
 
 # zones
@@ -4389,6 +4405,13 @@ class ComplexMathNode(NodeGroup):
             tree.links.new(operation, self.node.inputs["Operation"])
 
     def fill_group_with_node(self, tree, **kwargs):
+        # remove default group input and output
+        ins = tree.nodes.get("Group Input")
+        if ins:
+            tree.nodes.remove(ins)
+        out = tree.nodes.get("Group Output")
+        if out:
+            tree.nodes.remove(out)
         create_from_xml(tree,"complex_math_node")
 
 # custom Matrix operations #
@@ -5493,6 +5516,10 @@ def create_socket(tree, node, node_attributes, attributes):
             return True
         if node_attributes['type'] == 'MENU_SWITCH': # just add named socket to Menu Switch
             # this is called, when MenuSwitch node is created from XML
+            # The MENU-typed input is the menu selector itself (auto-created
+            # by Blender on node construction); it is not an enum case.
+            if attributes.get('type') == 'MENU':
+                return True
             item_name = attributes.get('name', '')
             if "default_value" in attributes:
                 default_value = get_default_value_for_socket(attributes)
@@ -5601,7 +5628,21 @@ def create_from_xml(tree,filename=None,**kwargs):
                                 save_for_after_pairing[node_id]["inputs"].append(input_attributes)
                             elif len(node.inputs)>input_count and node.inputs[input_count].name!="": # avoid virtual socket
                                 node_structure[node_id]["inputs"][input_id] = input_count
-                                node.inputs[input_count].name=input_attributes['name']
+                                if (node_attributes['type'] == 'MENU_SWITCH'
+                                        and input_attributes.get('type') != 'MENU'):
+                                    # MENU_SWITCH case sockets are slaved to enum_items:
+                                    # setting input.name does NOT rename the enum entry, so
+                                    # the default "A"/"B" items would leak into the final
+                                    # menu. Rename the enum item directly — Blender keeps
+                                    # the matching input/output socket names in sync.
+                                    # (node here is the MenuSwitch wrapper; the bpy node
+                                    # that owns .enum_items is node.node.)
+                                    enum_items = node.node.enum_items
+                                    enum_idx = input_count - 1  # inputs[0] is the Menu selector
+                                    if 0 <= enum_idx < len(enum_items):
+                                        enum_items[enum_idx].name = input_attributes['name']
+                                else:
+                                    node.inputs[input_count].name=input_attributes['name']
                                 # REROUTE: socket type is unresolved until a link is attached;
                                 # Blender defaults it to RGBA (4 components) before that, so
                                 # writing a 3-component VECTOR default raises a ValueError.
@@ -5947,6 +5988,66 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
     return group
 
 
+# Dispatch tables consumed by build_function.
+#
+# Scalar ops -> ShaderNodeMath. Each entry is keyed by the RPN token and
+# yields (operation, label, unary, extra_defaults), where extra_defaults is
+# an iterable of (input_index, default_value) pairs that get applied to the
+# freshly created node (used by "=" for the COMPARE epsilon input and by
+# "lg" to pin the log base to 10). label=None means "leave the default".
+_SCALAR_MATH_OPS = {
+    # binary
+    "*":     ("MULTIPLY",     "*",     False, ()),
+    "%":     ("MODULO",       "%",     False, ()),
+    "/":     ("DIVIDE",       "/",     False, ()),
+    "+":     ("ADD",          "+",     False, ()),
+    "-":     ("SUBTRACT",     "-",     False, ()),
+    "**":    ("POWER",        "**",    False, ()),
+    "<":     ("LESS_THAN",    "<",     False, ()),
+    ">":     ("GREATER_THAN", ">",     False, ()),
+    "=":     ("COMPARE",      "==",    False, ((2, 0),)),
+    "min":   ("MINIMUM",      "min",   False, ()),
+    "max":   ("MAXIMUM",      "max",   False, ()),
+    "atan2": ("ARCTAN2",      "atan2", False, ()),
+    # unary
+    "sin":   ("SINE",         "sin",   True,  ()),
+    "sinh":  ("SINH",         "sinh",  True,  ()),
+    "lg":    ("LOGARITHM",    "lg",    True,  ((1, 10),)),
+    "asin":  ("ARCSINE",      "asin",  True,  ()),
+    "cos":   ("COSINE",       "cos",   True,  ()),
+    "cosh":  ("COSH",         "cosh",  True,  ()),
+    "acos":  ("ARCCOSINE",    "acos",  True,  ()),
+    "tan":   ("TANGENT",      "tan",   True,  ()),
+    "abs":   ("ABSOLUTE",     "abs",   True,  ()),
+    "sgn":   ("SIGN",         "sgn",   True,  ()),
+    "round": ("ROUND",        None,    True,  ()),
+    "floor": ("FLOOR",        "floor", True,  ()),
+    "ceil":  ("CEIL",         "ceil",  True,  ()),
+    "sqrt":  ("SQRT",         "sqrt",  True,  ()),
+    "frac":  ("FRACT",        "frac",  True,  ()),
+}
+
+# Vector ops -> ShaderNodeVectorMath. Entry is
+# (operation, label, unary, out_socket, right_socket). out_socket lets LENGTH
+# and DOT_PRODUCT return "Value"; right_socket lets SCALE pull the scalar
+# from the named "Scale" socket instead of inputs[1].
+_VECTOR_MATH_OPS = {
+    # binary
+    "mul":       ("MULTIPLY",      "*",     False, "Vector", 1),
+    "mod":       ("MODULO",        "%",     False, "Vector", 1),
+    "div":       ("DIVIDE",        "/",     False, "Vector", 1),
+    "add":       ("ADD",           "+",     False, "Vector", 1),
+    "sub":       ("SUBTRACT",      "-",     False, "Vector", 1),
+    "scale":     ("SCALE",         "scale", False, "Vector", "Scale"),
+    "cross":     ("CROSS_PRODUCT", "x",     False, "Vector", 1),
+    "dot":       ("DOT_PRODUCT",   "*",     False, "Value",  1),
+    # unary
+    "vfloor":    ("FLOOR",         "floor", True,  "Vector", None),
+    "length":    ("LENGTH",        "len",   True,  "Value",  None),
+    "normalize": ("NORMALIZE",     "norm",  True,  "Vector", None),
+}
+
+
 def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channels={},
                    fcn_count=0, out=None, unary=None,
                    last_operator=None,
@@ -5995,304 +6096,34 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
             # warning not all possible operators have been implemented yet
             # always implement them on the fly when needed
             unary = False  # default case, unary operators explicitly overwrite this variable
-            if next_element == "*":
+            if next_element in _SCALAR_MATH_OPS:
+                # scalar math op (ShaderNodeMath) dispatched via _SCALAR_MATH_OPS
+                _op, _label, _op_unary, _extras = _SCALAR_MATH_OPS[next_element]
                 new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "MULTIPLY"
-                new_node_math.label = "*"
+                new_node_math.operation = _op
+                if _label is not None:
+                    new_node_math.label = _label
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
+                if not _op_unary:
+                    new_node_structure.right = new_node_math.inputs[1]
                 new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == "mul":
+                for _idx, _val in _extras:
+                    new_node_math.inputs[_idx].default_value = _val
+                unary = _op_unary
+            elif next_element in _VECTOR_MATH_OPS:
+                # vector math op (ShaderNodeVectorMath) dispatched via _VECTOR_MATH_OPS
+                _op, _label, _op_unary, _out_sock, _right_sock = _VECTOR_MATH_OPS[next_element]
                 new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
-                new_node_math.operation = "MULTIPLY"
-                new_node_math.label = "*"
+                new_node_math.operation = _op
+                if _label is not None:
+                    new_node_math.label = _label
                 new_node_structure = Structure()
                 new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Vector"]
-            elif next_element == "%":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "MODULO"
-                new_node_math.label = "%"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == "mod":
-                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
-                new_node_math.operation = "MODULO"
-                new_node_math.label = "%"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Vector"]
-            elif next_element == "/":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "DIVIDE"
-                new_node_math.label = "/"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == "div":
-                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
-                new_node_math.operation = "DIVIDE"
-                new_node_math.label = "/"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Vector"]
-            elif next_element == "+":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "ADD"
-                new_node_math.label = "+"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == "add":
-                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
-                new_node_math.operation = "ADD"
-                new_node_math.label = "+"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Vector"]
-            elif next_element == "sub":
-                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
-                new_node_math.operation = "SUBTRACT"
-                new_node_math.label = "-"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Vector"]
-            elif next_element == "-":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "SUBTRACT"
-                new_node_math.label = "-"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == "**":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "POWER"
-                new_node_math.label = "**"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == "<":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "LESS_THAN"
-                new_node_math.label = "<"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == ">":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "GREATER_THAN"
-                new_node_math.label = ">"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == "=":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "COMPARE"
-                new_node_math.label = "=="
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_math.inputs[2].default_value = 0
-                new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == "min":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "MINIMUM"
-                new_node_math.label = "min"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == "max":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "MAXIMUM"
-                new_node_math.label = "max"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == "sin":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "SINE"
-                new_node_math.label = "sin"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "sinh":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "SINH"
-                new_node_math.label = "sinh"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "lg":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "LOGARITHM"
-                new_node_math.label = "lg"
-                new_node_math.inputs[1].default_value = 10
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "asin":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "ARCSINE"
-                new_node_math.label = "asin"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "cos":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "COSINE"
-                new_node_math.label = "cos"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "cosh":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "COSH"
-                new_node_math.label = "cosh"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "acos":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "ARCCOSINE"
-                new_node_math.label = "acos"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "tan":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "TANGENT"
-                new_node_math.label = "tan"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "atan2":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "ARCTAN2"
-                new_node_math.label = "atan2"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = False
-            elif next_element == "abs":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "ABSOLUTE"
-                new_node_math.label = "abs"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "sgn":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "SIGN"
-                new_node_math.label = "sgn"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "round":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "ROUND"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "floor":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "FLOOR"
-                new_node_math.label = "floor"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "vfloor":
-                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
-                new_node_math.operation = "FLOOR"
-                new_node_math.label = "floor"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Vector"]
-                unary = True
-            elif next_element == "ceil":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "CEIL"
-                new_node_math.label = "ceil"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "length":
-                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
-                new_node_math.operation = "LENGTH"
-                new_node_math.label = "len"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "sqrt":
-                new_node_math = tree.nodes.new(type="ShaderNodeMath")
-                new_node_math.operation = "SQRT"
-                new_node_math.label = "sqrt"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Value"]
-                unary = True
-            elif next_element == "scale":
-                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
-                new_node_math.operation = "SCALE"
-                new_node_math.label = "scale"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs["Scale"]
-                new_node_structure.out = new_node_math.outputs["Vector"]
-            elif next_element == "cross":
-                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
-                new_node_math.operation = "CROSS_PRODUCT"
-                new_node_math.label = "x"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Vector"]
-            elif next_element == "dot":
-                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
-                new_node_math.operation = "DOT_PRODUCT"
-                new_node_math.label = "*"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.right = new_node_math.inputs[1]
-                new_node_structure.out = new_node_math.outputs["Value"]
-            elif next_element == "normalize":
-                new_node_math = tree.nodes.new(type="ShaderNodeVectorMath")
-                new_node_math.operation = "NORMALIZE"
-                new_node_math.label = "norm"
-                new_node_structure = Structure()
-                new_node_structure.left = new_node_math.inputs[0]
-                new_node_structure.out = new_node_math.outputs["Vector"]
-                unary = True
+                if not _op_unary:
+                    new_node_structure.right = new_node_math.inputs[_right_sock]
+                new_node_structure.out = new_node_math.outputs[_out_sock]
+                unary = _op_unary
             elif next_element == "rot":
                 new_node_math = tree.nodes.new(type="ShaderNodeVectorRotate")
                 new_node_math.rotation_type = "EULER_XYZ"
@@ -6356,6 +6187,29 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                 new_node_structure.left = new_node_math.inputs["Rotation"]
                 new_node_structure.out = new_node_math.outputs["Rotation"]
                 unary = True
+            elif next_element in ("cadd", "csub", "cmul", "cdiv", "cscale", "cconj", "cabs"):
+                # complex math (ComplexMathNode group): z, w as complex numbers in a VECTOR
+                # binary: cadd/csub/cmul/cdiv (right=w VECTOR), cscale (right=lambda FLOAT)
+                # unary:  cconj/cabs
+                _cop_map = {
+                    "cadd":   ("ADD",   False, "w"),
+                    "csub":   ("SUB",   False, "w"),
+                    "cmul":   ("MUL",   False, "w"),
+                    "cdiv":   ("DIV",   False, "w"),
+                    "cscale": ("SCALE", False, "lambda"),
+                    "cconj":  ("CONJ",  True,  None),
+                    "cabs":   ("ABS",   True,  None),
+                }
+                _cop_name, _cop_unary, _cop_right = _cop_map[next_element]
+                _cmplx = ComplexMathNode(tree, operation=_cop_name, name=next_element)
+                new_node_math = _cmplx.node
+                new_node_math.label = next_element
+                new_node_structure = Structure()
+                new_node_structure.left = new_node_math.inputs["z"]
+                if not _cop_unary:
+                    new_node_structure.right = new_node_math.inputs[_cop_right]
+                new_node_structure.out = new_node_math.outputs["Result"]
+                unary = _cop_unary
 
             # positioning is a non-trivial task, matter of improvement
             if unary:

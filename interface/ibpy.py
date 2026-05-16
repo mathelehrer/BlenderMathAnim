@@ -39,13 +39,15 @@ DATA_TYPES = ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOL
 
 # where as '*' is the ordinary multiplication for scalars, 'mul' is the corresponding vector operator
 OPERATORS = ['*', 'mul', '%', 'mod', '/', 'div', '+', 'add', '-', 'sub', '**', 'sin', 'cos', 'tan', '^', 'lg',
-             'sqrt', 'exp', 'abs', 'min', 'max', '<', '>', 'sgn', 'round', 'floor', 'vfloor', 'ceil',
+             'sqrt', 'exp', 'abs', 'min', 'max', '<', '>', 'sgn', 'round', 'floor', 'vfloor', 'ceil','frac',
              'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'length', 'scale', 'sqrt', '=', 'dot','°',
              'cross', 'rot', 'axis_rot', 'rot2euler', 'axis_angle_euler', 'not', 'normalize', 'and', 'or', "rot_vec",
-             "inv_rot"]
+             "inv_rot",
+             'cadd', 'csub', 'cmul', 'cdiv', 'cscale', 'cconj', 'cabs']
 # operators that return data of type VECTOR
 VECTOR_OPERATORS = ['mul', 'mod', 'div', 'add', 'sub', 'scale', 'vfloor', 'cross', 'rot', 'axis_rot', 'rot2euler',
-                    'axis_angle_euler', 'normalize', "rot_vec", "inv_rot"]
+                    'axis_angle_euler', 'normalize', "rot_vec", "inv_rot",
+                    'cadd', 'csub', 'cmul', 'cdiv', 'cscale', 'cconj', 'cabs']
 
 
 def get_context():
@@ -1588,7 +1590,8 @@ def set_hdri_background(filename='', ext='exr', simple=False, transparent=False,
     # remove lights
     for obj in bpy.data.objects:
         if 'Sun' in obj.name:
-            un_link(obj, collection='Collection')
+            un_link(obj, collection="Collection")
+            break
     world = bpy.data.worlds[-1]
     nodes = world.node_tree.nodes
     links = world.node_tree.links
