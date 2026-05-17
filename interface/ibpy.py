@@ -43,11 +43,11 @@ OPERATORS = ['*', 'mul', '%', 'mod', '/', 'div', '+', 'add', '-', 'sub', '**', '
              'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'length', 'scale', 'sqrt', '=', 'dot','°',
              'cross', 'rot', 'axis_rot', 'rot2euler', 'axis_angle_euler', 'not', 'normalize', 'and', 'or', "rot_vec",
              "inv_rot",
-             'cadd', 'csub', 'cmul', 'cdiv', 'cscale', 'cconj', 'cabs']
+             'cadd', 'csub', 'cmul', 'cdiv', 'cscale', 'cconj', 'cabs',"cexp"]
 # operators that return data of type VECTOR
 VECTOR_OPERATORS = ['mul', 'mod', 'div', 'add', 'sub', 'scale', 'vfloor', 'cross', 'rot', 'axis_rot', 'rot2euler',
                     'axis_angle_euler', 'normalize', "rot_vec", "inv_rot",
-                    'cadd', 'csub', 'cmul', 'cdiv', 'cscale', 'cconj', 'cabs']
+                    'cadd', 'csub', 'cmul', 'cdiv', 'cscale', 'cconj', 'cabs','cexp']
 
 
 def get_context():
