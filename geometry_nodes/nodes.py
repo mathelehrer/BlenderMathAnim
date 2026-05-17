@@ -508,6 +508,31 @@ class Frame(Node):
         else:
             node.parent=self.node
 
+class Coord:
+    """
+    Creates a rectangular grid of labelled reroute nodes spanning
+    x in [min[0], max[0]] and y in [min[1], max[1]] (inclusive integers).
+    Each reroute is placed at pixel position (x*spacing, y*spacing) and
+    labelled "(x,y)".  Access individual reroutes via self.nodes[(x, y)].
+    """
+    def __init__(self, tree, min=(-5, -5), max=(5, 5), spacing=200, **kwargs):
+        self.tree = tree
+        self.nodes = {}
+        x_min, y_min = min
+        x_max, y_max = max
+        for x in range(x_min, x_max + 1):
+            for y in range(y_min, y_max + 1):
+                node = tree.nodes.new("NodeReroute")
+                node.location = (x * spacing, y * spacing)
+                label = f"({x},{y-1})"
+                node.label = label
+                node.name = label
+                self.nodes[(x, y)] = node
+
+    def __getitem__(self, key):
+        return self.nodes[key]
+
+
 class ExistingNodeGroup(Node):
     """
     A GROUP node that references an already-existing node group tree by name.
@@ -6304,7 +6329,7 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                 new_node_structure.left = new_node_math.inputs["Rotation"]
                 new_node_structure.out = new_node_math.outputs["Rotation"]
                 unary = True
-            elif next_element in ("cadd", "csub", "cmul", "cdiv", "cscale", "cconj", "cabs"):
+            elif next_element in ("cadd", "csub", "cmul", "cdiv", "cscale", "cconj", "cabs","cexp"):
                 # complex math (ComplexMathNode group): z, w as complex numbers in a VECTOR
                 # binary: cadd/csub/cmul/cdiv (right=w VECTOR), cscale (right=lambda FLOAT)
                 # unary:  cconj/cabs
@@ -6316,6 +6341,7 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                     "cscale": ("SCALE", False, "lambda"),
                     "cconj":  ("CONJ",  True,  None),
                     "cabs":   ("ABS",   True,  None),
+                    "cexp":   ("EXP",   True, None)
                 }
                 _cop_name, _cop_unary, _cop_right = _cop_map[next_element]
                 _cmplx = ComplexMathNode(tree, operation=_cop_name, name=next_element)
