@@ -3732,6 +3732,7 @@ class ForEachZone(GreenNode):
         self.index = self.foreach_input.outputs[0]
         self.geometry_in = self.foreach_input.inputs["Geometry"]
         self.geometry_out = self.foreach_output.outputs[2]
+        self.old_geometry_out=self.foreach_output.outputs[0]
         self.element=self.foreach_input.outputs["Element"]
         # tree.links.new(self.foreach_input.outputs["Element"], self.foreach_output.inputs["Geometry"])
         super().__init__(tree, location=location, **kwargs)
@@ -3751,7 +3752,7 @@ class ForEachZone(GreenNode):
         self.foreach_output.input_items.new(socket_type, name)
 
         if value is not None:
-            if isinstance(value,(int,float)):
+            if isinstance(value,(int,float,list,Vector)):
                 self.foreach_input.outputs[name].default_value = value
             else:
                 if for_input:
@@ -3799,9 +3800,8 @@ class ForEachInput(GreenNode):
 
     def pair_with_output(self,output):
         self.pair_node = output
-        if isinstance(output,Node):
-            output = output.node
-        self.node.pair_with_output(output)
+        self.node.pair_with_output(output.node)
+        output.pair_input=self
 
 class ForEachOutput(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -3809,6 +3809,8 @@ class ForEachOutput(GreenNode):
 
         self.node = tree.nodes.new("GeometryNodeForeachGeometryElementOutput")
         self.node.domain = domain
+        self.pair_input = None
+        self.tree = tree
         super().__init__(tree,location,**kwargs)
 
         self.geometry_in = self.node.inputs["Geometry"]
@@ -3819,13 +3821,18 @@ class ForEachOutput(GreenNode):
 
     def add_socket(self, socket_type="GEOMETRY", name="socket", value=None):
         """
+        only use this after pairing
         :param socket_type: "FLOAT", "INT", "BOOLEAN", "VECTOR", "ROTATION", "STRING", "RGBA", "OBJECT", "IMAGE", "GEOMETRY", "COLLECTION", "TEXTURE", "MATERIAL"
         :param name:
         :return:
         """
         self.node.input_items.new(socket_type, name)
         if value is not None:
-            self.node.outputs[name].default_value = value
+            if isinstance(value,(list,int,float,Vector)):
+                self.node.outputs[name].default_value = value
+            else:
+                self.tree.links.new(value,self.pair_input.inputs[name])
+
 
 # custom composite nodes
 class WireFrame(GreenNode):
@@ -4148,6 +4155,116 @@ class InsideConvexHull3D(GreenNode):
 
         tree_links.new(comparison.outputs["in"], group_outputs.inputs["Is Inside"])
         tree_links.new(comparison.outputs["out"], group_outputs.inputs["Is Outside"])
+        return group
+
+class InsidePolygon(GreenNode):
+    """Inside-polygon test for a flat convex polygon mesh.
+
+    Unlike :class:`InsideConvexHull`, the input polygon is extruded inside
+    the group and the ray direction is computed automatically from the
+    polygon itself: the direction is taken as the diagonal between two
+    non-neighbour vertices (indices 0 and 2 — works for quadrilaterals
+    and any polygon with at least four vertices).
+    """
+
+    def __init__(self, tree, location=(0, 0),
+                 target_geometry=None,
+                 source_position=Vector(),
+                 **kwargs
+                 ):
+        self.node = self.create_node(tree.nodes)
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_in = self.node.inputs["Target Geometry"]
+        self.std_out = self.node.outputs["Is Inside"]
+
+        if target_geometry:
+            self.tree.links.new(target_geometry,
+                                self.node.inputs["Target Geometry"])
+        if isinstance(source_position, (Vector, list)):
+            self.node.inputs["Source Position"].default_value = source_position
+        else:
+            self.tree.links.new(source_position,
+                                self.node.inputs["Source Position"])
+
+    def create_node(self, nodes, name="InsidePolygonTest"):
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
+
+        group.name = name
+        group.node_tree = tree
+
+        tree_nodes = tree.nodes
+        tree_links = tree.links
+
+        group_inputs = tree_nodes.new("NodeGroupInput")
+        group_outputs = tree_nodes.new("NodeGroupOutput")
+
+        make_new_socket(tree, name="Target Geometry", io="INPUT",
+                        type="NodeSocketGeometry")
+        make_new_socket(tree, name="Source Position", io="INPUT",
+                        type="NodeSocketVector")
+
+        make_new_socket(tree, name="Is Inside", io="OUTPUT",
+                        type="NodeSocketBool")
+        make_new_socket(tree, name="Is Outside", io="OUTPUT",
+                        type="NodeSocketBool")
+
+        group_inputs.location = (0, 0)
+        group_outputs.location = (1800, 0)
+
+        # ---------- Extrude the input polygon to a face mesh ----------
+        extrude = ExtrudeMesh(
+            tree, location=(1, 1), mode="FACES",
+            mesh=group_inputs.outputs["Target Geometry"], label="Extrude")
+
+        # ---------- Diagonal direction from two non-neighbour vertices ----------
+        pos_attr = Position(tree, location=(1, -1))
+        sample_v0 = SampleIndex(
+            tree, location=(2, -0.5),
+            geometry=group_inputs.outputs["Target Geometry"],
+            data_type="FLOAT_VECTOR", domain="POINT",
+            value=pos_attr.std_out, index=0, hide=True)
+        sample_v2 = SampleIndex(
+            tree, location=(2, -1.5),
+            geometry=group_inputs.outputs["Target Geometry"],
+            data_type="FLOAT_VECTOR", domain="POINT",
+            value=pos_attr.std_out, index=2, hide=True)
+
+        diagonal = VectorMath(
+            tree, location=(3, -1), operation="SUBTRACT",
+            inputs0=sample_v2.std_out, inputs1=sample_v0.std_out,
+            label="Diagonal", hide=True)
+        neg_diag = VectorMath(
+            tree, location=(3, -1.5), operation="SCALE",
+            inputs0=diagonal.std_out, float_input=-1,
+            label="-Diagonal", hide=True)
+
+        # ---------- Raycast along ±diagonal ----------
+        ray_up = RayCast(
+            tree, location=(4, 1),
+            target_geometry=extrude.geometry_out,
+            source_position=group_inputs.outputs["Source Position"],
+            ray_direction=diagonal.std_out, label="RayUp")
+        ray_down = RayCast(
+            tree, location=(4, -1),
+            target_geometry=extrude.geometry_out,
+            source_position=group_inputs.outputs["Source Position"],
+            ray_direction=neg_diag.std_out, label="RayDown")
+
+        and_math = BooleanMath(
+            tree, location=(5, 0.5), label="And", operation="AND",
+            inputs0=ray_up.node.outputs["Is Hit"],
+            inputs1=ray_down.node.outputs["Is Hit"],
+            hide=True)
+        nand_math = BooleanMath(
+            tree, location=(5, -0.5), label="NotAnd", operation="NAND",
+            inputs0=ray_up.node.outputs["Is Hit"],
+            inputs1=ray_down.node.outputs["Is Hit"],
+            hide=True)
+
+        tree_links.new(and_math.std_out, group_outputs.inputs["Is Inside"])
+        tree_links.new(nand_math.std_out, group_outputs.inputs["Is Outside"])
         return group
 
 class E8Node(GreenNode):
