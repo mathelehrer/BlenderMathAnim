@@ -515,15 +515,15 @@ class Coord:
     Each reroute is placed at pixel position (x*spacing, y*spacing) and
     labelled "(x,y)".  Access individual reroutes via self.nodes[(x, y)].
     """
-    def __init__(self, tree, min=(-5, -5), max=(5, 5), spacing=200, **kwargs):
+    def __init__(self, tree, min=(-5, -5), max=(5, 5), spacing_x=200,spacing_y=100, **kwargs):
         self.tree = tree
         self.nodes = {}
         x_min, y_min = min
         x_max, y_max = max
-        for x in range(x_min, x_max + 1):
-            for y in range(y_min, y_max + 1):
+        for x in range(x_min, x_max + 1,):
+            for y in range(y_min, y_max + 1,2):
                 node = tree.nodes.new("NodeReroute")
-                node.location = (x * spacing, y * spacing)
+                node.location = (x * spacing_x, y * spacing_y)
                 label = f"({x},{y-1})"
                 node.label = label
                 node.name = label
