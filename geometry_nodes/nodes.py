@@ -494,7 +494,7 @@ class Reroute(Node):
 
 
 class Frame(Node):
-    def __init__(self,tree,location=(0,0),node_width=200, node_height=200,hide=False,mute=False,**kwargs):
+    def __init__(self,tree,location=(0,0),node_width=200, node_height=100,hide=False,mute=False,**kwargs):
         self.node = tree.nodes.new(type="NodeFrame")
         self.node.hide=hide
         self.node.mute=mute
@@ -504,9 +504,14 @@ class Frame(Node):
         """ make Frame parent to given node(s)  """
         if isinstance(node,list):
             for n in node:
-                n.parent=self.node
+                if hasattr(n,"node"):
+                    n.node.parent=self.node
+                elif hasattr(n,"parent"):
+                    n.parent=self.node
+                else:
+                    print (" Don't know how to parent "+str(n))
         else:
-            node.parent=self.node
+            node.node.parent=self.node
 
 class Coord:
     """
