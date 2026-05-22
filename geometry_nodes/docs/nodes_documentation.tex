@@ -1,0 +1,858 @@
+% =====================================================================
+%  Extended documentation for geometry_nodes/nodes.py
+%  Build:  pdflatex nodes_documentation.tex   (run twice for the ToC)
+% =====================================================================
+\documentclass[10pt,a4paper,twocolumn]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1.6cm]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!55!black,
+    urlcolor=blue!55!black,
+    pdftitle={geometry\_nodes/nodes.py -- Node class reference},
+    pdfauthor={MyBlenderMathAmin}
+}
+
+% ---------------------------------------------------------------------
+%  Colours used to mirror the three "node colours" of the library
+% ---------------------------------------------------------------------
+\definecolor{greennode}{RGB}{36,138,61}
+\definecolor{rednode}{RGB}{183,46,46}
+\definecolor{bluenode}{RGB}{40,82,170}
+\definecolor{graynode}{RGB}{90,90,90}
+\definecolor{codebg}{RGB}{246,246,248}
+\definecolor{codekw}{RGB}{0,90,170}
+\definecolor{codestr}{RGB}{160,60,30}
+\definecolor{codecom}{RGB}{110,120,110}
+
+% ---------------------------------------------------------------------
+%  Listings configuration (Python)
+% ---------------------------------------------------------------------
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\scriptsize,
+    keywordstyle=\color{codekw}\bfseries,
+    stringstyle=\color{codestr},
+    commentstyle=\color{codecom}\itshape,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{gray!40},
+    framesep=4pt,
+    xleftmargin=4pt,
+    xrightmargin=2pt,
+    breaklines=true,
+    breakatwhitespace=false,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    aboveskip=6pt,
+    belowskip=4pt,
+    literate={->}{{$\rightarrow$}}1 {*}{{*}}1
+}
+
+% small inline code helper
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+% colour-coded class-name badges
+\newcommand{\Gn}{\textcolor{greennode}{\textbf{(G)}}}
+\newcommand{\Rn}{\textcolor{rednode}{\textbf{(R)}}}
+\newcommand{\Bn}{\textcolor{bluenode}{\textbf{(B)}}}
+\newcommand{\Nn}{\textcolor{graynode}{\textbf{(N)}}}
+\newcommand{\NGn}{\textcolor{graynode}{\textbf{(NG)}}}
+
+% catalog entry: \cls{Name}{badge}{description}
+\newcommand{\cls}[3]{\item[\textbf{#1}\,#2] #3}
+
+\setlist[description]{leftmargin=0pt,labelindent=0pt,style=unboxed,
+                      itemsep=2pt,parsep=1pt}
+
+\titleformat{\section}{\large\bfseries\color{blue!45!black}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\titlespacing*{\subsection}{0pt}{7pt}{3pt}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small\textsc{geometry\_nodes/nodes.py}}
+\rhead{\small Node class reference}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+
+% =====================================================================
+\begin{document}
+
+\twocolumn[
+  \begin{@twocolumnfalse}
+    \begin{center}
+      {\LARGE\bfseries The \texttt{nodes.py} Node Library}
+
+      \vspace{4pt}
+      {\large An extended reference to the Python wrappers around
+       Blender Geometry Nodes}
+
+      \vspace{6pt}
+      {\small Package \code{geometry\_nodes/} \quad$\bullet$\quad
+       companion file \code{geometry\_nodes\_modifier.py}}
+
+      \vspace{10pt}
+    \end{center}
+    \begin{quote}\small
+    This document catalogues the node wrapper classes defined in
+    \code{geometry\_nodes/nodes.py} and explains the conventions you must
+    follow to build and read scenes with them. Every wrapper is a thin
+    Python object around a single \code{bpy} geometry node (or, for the
+    \code{NodeGroup} family, a whole sub-tree). The goal of the library is
+    to let you describe a node graph as ordinary Python --- constructing
+    nodes, passing sockets between them, and chaining their geometry ports
+    --- instead of clicking in Blender's node editor.
+    Read it top to bottom once; thereafter use the catalogue
+    (\S\ref{sec:green}--\S\ref{sec:custom}) as a lookup table.
+    \end{quote}
+    \vspace{6pt}
+  \end{@twocolumnfalse}
+]
+
+\tableofcontents
+\vspace{6pt}
+
+% =====================================================================
+\section{The big picture}
+% =====================================================================
+
+\subsection{Three node ``colours''}
+
+Every wrapper inherits from one of three colour classes, and the colour
+tells you the \emph{shape of its Python API}:
+
+\begin{description}
+\item[\textcolor{greennode}{GreenNode} \Gn] Nodes that carry
+  \emph{geometry}. They expose \code{.geometry\_in} and
+  \code{.geometry\_out} so they can be piped together left-to-right with
+  \code{create\_geometry\_line(...)}. Almost all mesh/curve/instance
+  operators live here.
+\item[\textcolor{rednode}{RedNode} \Rn] Pure \emph{input / source} nodes.
+  No geometry input. They expose \code{.outputs} and usually
+  \code{.std\_out} (``the main output socket''). Field readers
+  (\code{Position}, \code{Index}, \code{NamedAttribute}) and the
+  \code{Input*} constants live here.
+\item[\textcolor{bluenode}{BlueNode} \Bn] Pure \emph{compute / math}
+  nodes. They expose \code{.outputs} and always set
+  \code{.std\_out = outputs[0]}. Math, switches, RNG, type conversion.
+\end{description}
+
+A fourth, uncoloured group \Nn{} holds structural nodes
+(\code{GroupInput}, \code{GroupOutput}, \code{Reroute}, \code{Frame}), and
+the \code{NodeGroup} family \NGn{} builds an \emph{entire sub-tree} that
+appears in the parent graph as one tidy node.
+
+\subsection{Sockets you rely on by name}
+
+\begin{description}
+\item[\code{self.geometry\_in / .geometry\_out}] the canonical mesh ports
+  on green nodes.
+\item[\code{self.std\_out}] ``the main output''. Always present on blue
+  nodes; present on most red nodes; present on green nodes only when there
+  is a single obvious output.
+\item[\code{self.inputs / self.outputs}] direct references to
+  \code{self.node.inputs/outputs}. Use these whenever the named
+  convenience attribute is not there.
+\end{description}
+
+\subsection{Layout coordinates are grid units, not pixels}
+
+The base \code{Node.\_\_init\_\_} multiplies the supplied \code{location}
+by \code{node\_width=200} (x) and \code{node\_height=100} (y). So
+\code{location=(3,-2)} ends up at \code{(600,-200)} in Blender.
+Half-integer steps are fine.
+
+\begin{lstlisting}
+# (1, 0) grid  ==>  (200, 0) px in Blender
+node = SetPosition(tree, location=(1, 0))
+\end{lstlisting}
+
+\subsection{Automatic vs hand layout}
+
+\code{GeometryNodesModifier.\_\_init\_\_(automatic\_layout=True)} (the
+default) calls \code{layout(tree, mode="Sugiyama")} \emph{after}
+\code{create\_node}, which re-positions everything. For any visually
+structured graph (substitution graphs, classifiers, anything you will
+cross-reference with an XML export) pass \code{automatic\_layout=False}
+and place nodes yourself.
+
+% =====================================================================
+\section{The base \texttt{Node} class}
+% =====================================================================
+
+Every wrapper follows the same two-step birth: first create the underlying
+\code{bpy} node into \code{self.node}, \emph{then} call
+\code{super().\_\_init\_\_}, which handles location, naming, and parenting.
+
+\begin{lstlisting}
+class SetPosition(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 geometry=None, selection=None,
+                 position=Vector([0,0,0]),
+                 offset=Vector([0,0,0]), **kwargs):
+        # 1) create the real bpy node first
+        self.node = tree.nodes.new(
+            type="GeometryNodeSetPosition")
+        # 2) base class: location / name / parent
+        super().__init__(tree, location=location,
+                         **kwargs)
+        ...
+\end{lstlisting}
+
+\code{Node.\_\_init\_\_} consumes a handful of universal \code{**kwargs}:
+
+\begin{description}
+\item[\code{hide=True}] collapse the node visually.
+\item[\code{name="..."}] sets both \code{node.name} and \code{node.label}.
+\item[\code{label="..."}] sets only the label.
+\item[\code{parent=<Node>}] re-parents (e.g.\ into a \code{Frame}); the
+  location is then interpreted relative to the parent.
+\end{description}
+
+\subsection{The constructor kwarg pattern (read this twice)}
+
+\label{sec:kwargpattern}
+Most wrappers accept a source socket \emph{as} a kwarg and wire it for you
+--- but only when you actually pass it. Pass a literal
+(\code{Vector}/\code{int}/\code{float}) instead and many wrappers set the
+socket's \code{default\_value}:
+
+\begin{lstlisting}
+# socket  -> creates a link
+SetPosition(tree, geometry=grid.geometry_out,
+            position=fn.outputs["p"])
+
+# literal -> sets default_value
+SetPosition(tree, geometry=grid.geometry_out,
+            offset=Vector([0, 0, 1]))
+\end{lstlisting}
+
+The typical implementation that produces this dual behaviour:
+
+\begin{lstlisting}
+if isinstance(position, (Vector, list)):
+    self.node.inputs["Position"].default_value = position
+else:
+    self.tree.links.new(position,
+                        self.node.inputs["Position"])
+\end{lstlisting}
+
+\paragraph{Caveat.} Not every wrapper honours its own kwarg. When a kwarg
+you want is missing (or silently ignored), set the socket directly:
+
+\begin{lstlisting}
+s = SampleIndex(tree, index=0)
+s.node.inputs["Index"].default_value = 3  # override
+\end{lstlisting}
+
+See the footguns in \S\ref{sec:footguns} for the specific offenders
+(\code{SeparateGeometry}, \code{SampleNearestSurface}).
+
+% =====================================================================
+\section{Green nodes --- geometry I/O}
+\label{sec:green}
+% =====================================================================
+
+Green nodes are the backbone of every scene: they take geometry in and
+push geometry out. Chain them with \code{create\_geometry\_line}.
+
+\subsection{Worked snippet}
+
+\begin{lstlisting}
+grid     = Grid(tree, size_x=4, size_y=4)
+del_geo  = DeleteGeometry(tree, selection=mask)
+set_pos  = SetPosition(tree, position=p_fn.outputs["p"])
+smooth   = SetShadeSmooth(tree)
+mat      = SetMaterial(tree, material=my_material)
+
+# pipe their geometry ports L->R, ending at the output
+create_geometry_line(tree,
+    [grid, del_geo, set_pos, smooth, mat],
+    out=out.inputs["Geometry"])
+\end{lstlisting}
+
+\subsection{Primitives \& conversions}
+\begin{description}
+\cls{MeshLine}{\Gn}{straight line of vertices; \code{count},
+  \code{start\_location}, \code{end\_location}.}
+\cls{Grid}{\Gn}{XY grid; \code{size\_x}, \code{size\_y},
+  \code{vertices\_x/y}.}
+\cls{CubeMesh}{\Gn}{primitive cube.}
+\cls{UVSphere}{\Gn}, \cls{IcoSphere}{\Gn}{spheres.}
+\cls{CylinderMesh}{\Gn}, \cls{ConeMesh}{\Gn}, \cls{MeshCircle}{\Gn}{round
+  primitives.}
+\cls{Points}{\Gn}{$N$ free-floating points (no faces).}
+\cls{CurveLine}{\Gn}, \cls{CurveCircle}{\Gn}, \cls{CurveArc}{\Gn},
+  \cls{CurveQuadrilateral}{\Gn}, \cls{Quadrilateral}{\Gn}{curve
+  primitives. \code{Quadrilateral} in \code{mode="POINTS"} lets you wire
+  \code{Point 1..4} from sockets.}
+\cls{MeshToCurve}{\Gn}, \cls{MeshToPoints}{\Gn},
+  \cls{PointsToVertices}{\Gn}, \cls{PointsToCurve}{\Gn},
+  \cls{CurveToMesh}{\Gn}{type conversions.}
+\cls{StringToCurves}{\Gn}{text $\rightarrow$ curves.}
+\cls{VolumeCube}{\Gn}, \cls{VolumeToMesh}{\Gn}{volume primitives.}
+\end{description}
+
+\subsection{Curve operations}
+\begin{description}
+\cls{ResampleCurve}{\Gn}{\code{mode="Count"/"Length"/...}.}
+\cls{TrimCurve}{\Gn}, \cls{FilletCurve}{\Gn}, \cls{SampleCurve}{\Gn}{trim,
+  round corners, sample a value/position along a curve.}
+\cls{FillCurve}{\Gn}{close a curve into a face (\code{mode="N-gons"}).}
+\end{description}
+
+\subsection{Mesh editing}
+\begin{description}
+\cls{ExtrudeMesh}{\Gn}{extrude verts/edges/faces (\code{mode=}).}
+\cls{SubdivideMesh}{\Gn}, \cls{SubdivisionSurface}{\Gn}{subdivision.}
+\cls{DualMesh}{\Gn}, \cls{FlipFaces}{\Gn}, \cls{SplitEdges}{\Gn}{topology
+  edits.}
+\cls{ScaleElements}{\Gn}{scale faces/edges about their centre.}
+\cls{MergeByDistance}{\Gn}, \cls{SetShadeSmooth}{\Gn}{cleanup / shading.}
+\cls{ConvexHull}{\Gn}, \cls{BoundingBox}{\Gn}{(outputs \code{Min},
+  \code{Max}, \code{Box}).}
+\cls{MeshBoolean}{\Gn}{union/diff/intersect (\code{operation},
+  \code{solver}).}
+\cls{WireFrame}{\Gn}, \cls{CurveWireFrame}{\Gn},
+  \cls{WireFrameRectangle}{\Gn}{custom wire-frame builders.}
+\end{description}
+
+\subsection{Instances}
+\begin{description}
+\cls{InstanceOnPoints}{\Gn}, \cls{InstanceOnEdges}{\Gn}{scatter instances.}
+\cls{ScaleInstances}{\Gn}, \cls{RotateInstances}{\Gn},
+  \cls{TranslateInstances}{\Gn}{per-instance transforms.}
+\cls{GeometryToInstance}{\Gn}{wrap geometry as one instance.}
+\cls{RealizeInstances}{\Gn}{flatten instances back to mesh.}
+\end{description}
+
+\begin{lstlisting}
+iop = InstanceOnPoints(tree, points=pts.geometry_out,
+                       instance=sphere.geometry_out)
+rot = RotateInstances(tree, instances=iop.geometry_out,
+                      rotation=rot_fn.outputs["r"])
+\end{lstlisting}
+
+\subsection{Selection, sorting, splitting}
+\begin{description}
+\cls{SeparateGeometry}{\Gn}{split by \code{selection}; outputs
+  \code{.geometry\_out} (selected) and \code{.inverse}. \textbf{The
+  \code{geometry=} kwarg does not auto-link} --- see
+  \S\ref{sec:footguns}.}
+\cls{DeleteGeometry}{\Gn}{delete by selection
+  (\code{mode="POINT"/"EDGE"/"FACE"}).}
+\cls{SortElements}{\Gn}{reorder a domain.}
+\cls{DistributePointsOnFaces}{\Gn}{Poisson/random surface sampling.}
+\end{description}
+
+\subsection{Sampling another geometry}
+\begin{description}
+\cls{SampleIndex}{\Gn}{read an attribute at a specific element index.}
+\cls{SampleNearest}{\Gn}, \cls{SampleNearestSurface}{\Gn}{nearest-element
+  sampling. For \code{SampleNearestSurface} the input socket is named
+  \code{"Mesh"}, not \code{"Geometry"} --- wire it manually.}
+\cls{GeometryProximity}{\Gn}{closest position on a target;
+  \code{.std\_out} = Position.}
+\cls{IndexOfNearest}{\Gn}{nearest-index lookup.}
+\cls{RayCast}{\Gn}{cast a ray; outputs hit position, normal, etc.}
+\end{description}
+
+\begin{lstlisting}
+# read a per-face attribute from a *separate* mesh:
+named = NamedAttribute(tree, name="region",
+                       data_type="INT")
+snn = SampleNearestSurface(tree, data_type="INT",
+                           sample_position=p.std_out)
+tree.links.new(src, snn.node.inputs["Mesh"])      # !
+tree.links.new(named.std_out, snn.node.inputs["Value"])
+\end{lstlisting}
+
+\subsection{Whole-geometry transforms \& info}
+\begin{description}
+\cls{TransformGeometry}{\Gn}{apply one transform to the whole geometry.}
+\cls{JoinGeometry}{\Gn}{merge any number of streams (feed
+  \code{geometry=} a list).}
+\cls{DomainSize}{\Gn}{element counts per domain.}
+\cls{ObjectInfo}{\Gn}{geometry/transform from a Blender object.}
+\cls{SetMaterial}{\Gn}{assign a material to a selection.}
+\cls{StoredNamedAttribute}{\Gn}{\emph{write} a named attribute on a
+  domain. Kwargs \code{name}, \code{data\_type}, \code{domain},
+  \code{value}, \code{selection}.}
+\cls{ImportCSV}{\Gn}{load a CSV as geometry attributes.}
+\end{description}
+
+\begin{lstlisting}
+join = JoinGeometry(tree)
+for g in geometries:
+    tree.links.new(g, join.geometry_in)   # repeatable
+\end{lstlisting}
+
+% =====================================================================
+\section{Red nodes --- inputs \& field readers}
+% =====================================================================
+
+Red nodes are pure sources: no geometry in, a \code{.std\_out} you wire
+forward.
+
+\subsection{Constant inputs}
+\begin{description}
+\cls{InputValue}{\Rn}, \cls{InputInteger}{\Rn}, \cls{InputBoolean}{\Rn},
+  \cls{InputString}{\Rn}{scalar/boolean/string constants.}
+\cls{InputVector}{\Rn}, \cls{InputRotation}{\Rn}{vector/rotation
+  constants.}
+\cls{InputMaterial}{\Rn}{a material reference.}
+\cls{SceneTime}{\Rn}{\code{.std\_out="Seconds"} (or \code{"Frame"}).}
+\end{description}
+
+\begin{lstlisting}
+k = InputValue(tree, value=3.5, name="k")
+v = InputVector(tree, value=[1, 0, 0], name="axis")
+# use them downstream via .std_out:
+fn_input = k.std_out
+\end{lstlisting}
+
+\subsection{Per-element fields}
+\begin{description}
+\cls{Position}{\Rn}, \cls{Index}{\Rn}, \cls{InputNormal}{\Rn},
+  \cls{FaceArea}{\Rn}{built-in fields.}
+\cls{NamedAttribute}{\Rn}{read an attribute by name; \code{data\_type}
+  picks FLOAT/INT/BOOL/VECTOR/QUATERNION/COLOR. When fed to a
+  \code{Sample*} node's \code{Value} input it evaluates in the sampled
+  mesh's context.}
+\cls{CollectionInfo}{\Rn}{geometry from a Blender collection.}
+\end{description}
+
+\subsection{Mesh topology readers}
+\begin{description}
+\cls{EdgeVertices}{\Rn}, \cls{VertexNeighbors}{\Rn}{edge endpoints /
+  vertex valence.}
+\cls{CornersOfEdge}{\Rn}, \cls{CornersOfFace}{\Rn}, \cls{EdgesOfCorner}{\Rn},
+  \cls{FaceOfCorner}{\Rn}, \cls{OffsetCornerInFace}{\Rn}{corner/edge/face
+  topology walks.}
+\cls{ShortestEdgePaths}{\Rn}{shortest path along edges.}
+\end{description}
+
+\subsection{Rotation algebra (red)}
+\begin{description}
+\cls{InvertRotation}{\Rn}, \cls{RotateRotation}{\Rn}{compose/invert
+  rotations.}
+\cls{AlignRotationToVector}{\Rn}{align an axis to a vector.}
+\end{description}
+
+% =====================================================================
+\section{Blue nodes --- compute \& math}
+% =====================================================================
+
+Blue nodes never touch geometry; they transform values. Every one sets
+\code{.std\_out = outputs[0]}.
+
+\subsection{Scalar / vector math}
+\begin{description}
+\cls{MathNode}{\Bn}{\code{ShaderNodeMath}; \code{operation},
+  \code{inputs0..2}.}
+\cls{VectorMath}{\Bn}{\code{ShaderNodeVectorMath}; \code{operation},
+  \code{inputs0/1}, \code{float\_input} (for \code{SCALE}).}
+\cls{BooleanMath}{\Bn}{\code{NOT/AND/OR/XOR/...}; \code{inputs0/1}.}
+\cls{CompareNode}{\Bn}{typed compare; \code{data\_type}, \code{operation},
+  \code{inputs0/1}.}
+\cls{MapRange}{\Bn}{remap a value; \code{data\_type} for scalar/vector.}
+\cls{MixNode}{\Bn}{mix float/vector/colour.}
+\end{description}
+
+\begin{lstlisting}
+# (a > 0) AND (b == c)
+gt   = CompareNode(tree, operation="GREATER_THAN",
+                   inputs0=a.std_out, inputs1=0)
+eq   = CompareNode(tree, operation="EQUAL",
+                   inputs0=b.std_out, inputs1=c.std_out)
+both = BooleanMath(tree, operation="AND",
+                   inputs0=gt.std_out, inputs1=eq.std_out)
+\end{lstlisting}
+
+\subsection{Vectors, matrices, conversions}
+\begin{description}
+\cls{SeparateXYZ}{\Bn}, \cls{CombineXYZ}{\Bn}{(de)compose a vector.}
+\cls{CombineMatrix}{\Bn}{build a $4{\times}4$ matrix from columns.}
+\cls{TransformPoint}{\Bn}{apply a matrix to one vector.}
+\cls{ValueToString}{\Bn}, \cls{StringLength}{\Bn}, \cls{StringJoin}{\Bn},
+  \cls{SliceString}{\Bn}{string ops.}
+\end{description}
+
+\subsection{Rotation algebra (blue)}
+\begin{description}
+\cls{EulerToRotation}{\Bn}, \cls{AxisAngleToRotation}{\Bn},
+  \cls{AxesToRotation}{\Bn}, \cls{QuaternionToRotation}{\Bn}{build
+  rotations.}
+\cls{RotateVector}{\Bn}, \cls{VectorRotate}{\Bn}{rotate a vector.}
+\end{description}
+
+\subsection{Random \& statistics}
+\begin{description}
+\cls{RandomValue}{\Bn}{RNG; \code{data\_type}
+  (\code{FLOAT}/\code{FLOAT\_VECTOR}/\code{INT}/\code{BOOLEAN}); kwargs
+  \code{min}, \code{max}, \code{seed}, \code{id}, \code{probability}.}
+\cls{AttributeStatistic}{\Bn}{min/max/mean/stddev over a domain.}
+\cls{EvaluateOnDomain}{\Bn}, \cls{EvaluateAtIndex}{\Bn}{evaluate an
+  attribute on a domain / at an index.}
+\end{description}
+
+\begin{lstlisting}
+rng = RandomValue(tree, data_type="FLOAT_VECTOR",
+                  min=Vector([-1,-1,0]),
+                  max=Vector([ 1, 1,0]), seed=7)
+offset = rng.std_out
+\end{lstlisting}
+
+% =====================================================================
+\section{Switches}
+% =====================================================================
+
+\begin{description}
+\cls{Switch}{\Bn}{boolean 2-way switch; \code{input\_type}, \code{switch},
+  \code{false}, \code{true}.}
+\cls{IndexSwitch}{\Bn}{$N$-way switch keyed by an INT. Add slots with
+  \code{.new\_item()}; \code{.slots[0]} is the \emph{Index} socket, the
+  $k$-th case is \code{.slots[k+1]}. \code{.std\_out} is the Output.}
+\cls{MenuSwitch}{\Bn}{string/menu-keyed switch.}
+\end{description}
+
+\begin{lstlisting}
+sw = Switch(tree, input_type="VECTOR",
+            switch=flag.std_out,
+            false=a.std_out, true=b.std_out)
+
+idx = IndexSwitch(tree, data_type="GEOMETRY",
+                  index=key.std_out)
+idx.new_item()                 # add a 3rd case
+idx.add_item(geo_a.geometry_out)
+idx.add_item(geo_b.geometry_out)
+idx.add_item(geo_c.geometry_out)
+result = idx.std_out
+\end{lstlisting}
+
+% =====================================================================
+\section{Structural / special nodes}
+% =====================================================================
+
+\begin{description}
+\cls{GroupInput}{\Nn}, \cls{GroupOutput}{\Nn}{the group's I/O nodes.}
+\cls{Reroute}{\Nn}{typed pass-through wire; \code{ins=<socket>} feeds it
+  inline. Exposes \code{.std\_in/.std\_out} \emph{and}
+  \code{.geometry\_in/.geometry\_out} (same socket), so it can sit in a
+  geometry line too.}
+\cls{Frame}{\Nn}{a visual container; \code{frame.add([n1, n2])}
+  re-parents nodes into it.}
+\cls{Coord}{--}{a labelled grid of reroute nodes; index with
+  \code{coord[(x,y)]}. Handy as a manual wiring lattice.}
+\cls{ExistingNodeGroup}{\Nn}{wrap an already-created group tree by name
+  (used by the XML importer).}
+\end{description}
+
+\begin{lstlisting}
+frame = Frame(tree, name="setup")
+frame.add([grid, set_pos, mat])   # group them visually
+
+r = Reroute(tree, ins=value.std_out, location=(2, 1))
+downstream_socket = r.std_out
+\end{lstlisting}
+
+% =====================================================================
+\section{Zones --- loops \& simulation}
+% =====================================================================
+
+Zones come as a paired input/output node. The wrapper creates both,
+pairs them, and gives you \code{.geometry\_in}/\code{.geometry\_out} plus
+a \code{create\_geometry\_line([...])} that anchors a chain inside the
+loop body. Extra carry-through state is added with \code{.add\_socket}.
+
+\subsection{\texttt{RepeatZone} --- fixed iteration count}
+\begin{lstlisting}
+rep = RepeatZone(tree, iterations=10,
+                 geometry=src.geometry_out)
+# carry-through state lives on both the in and out
+rep.add_socket("FLOAT", "energy")
+# build the body between repeat_input and repeat_output
+rep.create_geometry_line([step1, step2])
+# the loop's iteration index:
+i = rep.iteration
+result = rep.geometry_out
+\end{lstlisting}
+
+\subsection{\texttt{ForEachZone} --- iterate over a domain}
+\begin{description}
+\item[\code{.element}] the per-iteration element
+  (\code{foreach\_input.outputs["Element"]}).
+\item[\code{.index}] the iteration index socket.
+\item[\code{.geometry\_in / .geometry\_out}] loop in/out geometry.
+\item[\code{.add\_socket(type, name, value, for\_input=False)}]
+  carry-through inputs.
+\end{description}
+
+\begin{lstlisting}
+fe = ForEachZone(tree, domain="FACE",
+                 geometry=mesh.geometry_out)
+fe.create_geometry_line([transform], ins=fe.element)
+out_geo = fe.geometry_out
+\end{lstlisting}
+
+\subsection{\texttt{Simulation} --- state across frames}
+Same API shape as \code{RepeatZone}: \code{.geometry\_in/out},
+\code{.add\_socket(type, name, value)}, and \code{.create\_geometry\_line}.
+Use it for state that must persist between rendered frames (physics,
+growth, accumulators).
+
+\begin{lstlisting}
+sim = Simulation(tree, geometry=seed.geometry_out)
+sim.add_socket("VECTOR", "velocity", value=Vector())
+sim.create_geometry_line([integrate, collide])
+\end{lstlisting}
+
+The lower-level \code{RepeatInput}/\code{RepeatOutput},
+\code{SimulationInput}/\code{SimulationOutput},
+\code{ForEachInput}/\code{ForEachOutput} wrappers exist but you rarely
+need them directly --- prefer the zone wrappers above.
+
+% =====================================================================
+\section{The \texttt{make\_function} RPN builder}
+% =====================================================================
+
+\code{make\_function} is the single most-used helper. It builds a whole
+node group implementing arbitrary scalar/vector/rotation math from
+\emph{Reverse-Polish-Notation} strings, so you avoid hand-laying towers
+of \code{MathNode}/\code{VectorMath}.
+
+\begin{lstlisting}
+xi = make_function(tree, name="xi",
+    functions={"xi": ["1,2,/", "3,sqrt,2,/", "0"]},
+    outputs=["xi"], vectors=["xi"],
+    location=(-8, -1), hide=True)
+
+tree.links.new(src.outputs["phi"], xi.inputs["phi"])
+result = xi.outputs["xi"]
+\end{lstlisting}
+
+Recipe:
+\begin{itemize}[leftmargin=12pt,itemsep=1pt]
+\item \code{inputs=[...]}, \code{outputs=[...]} are socket-name strings.
+\item Each name is typed by listing it in \code{scalars=[...]},
+  \code{vectors=[...]} or \code{rotations=[...]}. \textbf{Outputs default
+  to scalar} if you forget --- a common source of link-type errors.
+\item \code{functions=\{name: "rpn"\}} for a scalar output, or
+  \code{\{name: ["x","y","z"]\}} to assemble a vector component-wise. A
+  single string for a vector name is combined as one vector.
+\item \code{location} is in grid units.
+\end{itemize}
+
+\paragraph{Evaluation order.} The parser pushes left-to-right and pops
+from the top, so \code{"a,b,sub"} computes $a-b$. A worked example:
+$T(p)=v_1+\mathrm{cmul}(p-v_4,\,r)/k$ is written
+
+\begin{lstlisting}
+"p,v4,sub,rot,cmul,1,k,/,scale,v1,add"
+\end{lstlisting}
+
+\subsection{RPN operator vocabulary}
+
+\textbf{Scalar} (\code{ShaderNodeMath}):
+\code{* / + - ** \% < > =}, \code{min max atan2 sin sinh cos cosh tan asin
+acos atan tanh lg exp sqrt abs sgn round floor ceil frac}. Special:
+\code{=} sets the COMPARE epsilon to 0; \code{lg} is log base 10.
+
+\smallskip
+\textbf{Vector} (\code{ShaderNodeVectorMath}, names differ from scalars):
+\code{mul div add sub mod scale} (right operand scalar),
+\code{cross dot} (scalar), \code{length} (scalar), \code{vfloor
+normalize}.
+
+\smallskip
+\textbf{Rotations:} \code{rot} (apply Euler XYZ to a vector), \code{axis\_rot}
+(axis+angle$\rightarrow$rotation), \code{rot2euler axis\_angle\_euler
+rot\_vec inv\_rot}.
+
+\smallskip
+\textbf{Booleans:} \code{not and or}.
+
+\smallskip
+\textbf{Complex} (a VECTOR is treated as $(\mathrm{Re},\mathrm{Im},|z|)$,
+dispatched to \code{ComplexMathNode}): \code{cadd csub cmul cdiv cscale}
+(right operand scalar), \code{cconj cabs}.
+
+% =====================================================================
+\section{Wiring helpers}
+% =====================================================================
+
+\begin{description}
+\cls{create\_geometry\_line(tree, [n1,n2,...], ins, out)}{--}{chains the
+  geometry ports of a list of green nodes left-to-right; optional
+  \code{ins} source and \code{out} target.}
+\cls{layout(tree, mode="Sugiyama")}{--}{auto-layout; run \emph{once} at
+  the end. Never run it on a hand-positioned tree --- it undoes your
+  work.}
+\cls{add\_locations(loc1, loc2)}{--}{element-wise tuple add; handy when
+  shifting a block of nodes.}
+\end{description}
+
+% =====================================================================
+\section{Custom group nodes --- \texttt{NodeGroup}}
+\label{sec:custom}
+% =====================================================================
+
+When you need an inner sub-tree (so the parent shows one tidy node),
+subclass \code{NodeGroup}. The base class creates the group, its
+\code{GroupInput}/\code{GroupOutput}, and the requested sockets; your
+subclass fills the inner graph in \code{fill\_group\_with\_node}.
+
+\begin{lstlisting}
+class MyThing(NodeGroup):
+    def __init__(self, tree, **kwargs):
+        super().__init__(tree,
+            inputs ={"x": "VECTOR", "k": "VALUE"},
+            outputs={"y": "VECTOR"},
+            name="MyThing", **kwargs)
+        self.std_out = self.node.outputs["y"]
+
+    def fill_group_with_node(self, tree, **kwargs):
+        # `tree` is the *inner* tree (self.group_tree)
+        fn = make_function(tree, name="core",
+            functions={"y": "x,k,scale"},
+            inputs=["x","k"], outputs=["y"],
+            vectors=["x","y"], scalars=["k"])
+        tree.links.new(self.group_inputs.outputs["x"],
+                       fn.inputs["x"])
+        tree.links.new(self.group_inputs.outputs["k"],
+                       fn.inputs["k"])
+        tree.links.new(fn.outputs["y"],
+                       self.group_outputs.inputs["y"])
+\end{lstlisting}
+
+\subsection{Catalogue of ready-made groups \NGn}
+\begin{description}
+\cls{TransformPositionNode}{\NGn}{\code{position*scale*rotation+location}
+  (and its inverse via an \code{Undo Transformation} flag).}
+\cls{BevelNode}{\NGn}, \cls{BeveledCubeNode}{\NGn}, \cls{BevelFaces}{\NGn}{bevel
+  helpers.}
+\cls{ComplexMathNode}{\NGn}{complex arithmetic over a VECTOR
+  ($X=\mathrm{Re}$, $Y=\mathrm{Im}$, $Z=|z|$): \code{ADD/SUB/MUL/DIV/
+  SCALE/CONJ/ABS}.}
+\cls{CoxeterReflectionNode}{\NGn}{Coxeter-group reflection.}
+\cls{Rotation}{\Gn}, \cls{Matrix}{\Gn}, \cls{Transpose}{\Gn},
+  \cls{LinearMap}{\Gn}, \cls{ProjectionMap}{\Gn}{linear-algebra helpers
+  (custom green groups).}
+\cls{InsideConvexHull}{\Gn}, \cls{InsideConvexHull3D}{\Gn},
+  \cls{InsidePolygon}{\Gn}{point-in-region tests; \code{.std\_out =
+  "Is Inside"}.}
+\cls{CycleNode}{\NGn}, \cls{SimpleRubiksCubeNode}{\NGn},
+  \cls{TranslateToCenterNode}{\NGn}, \cls{SlicerNode}{\NGn},
+  \cls{UnfoldMeshNode}{\NGn}, \cls{PolyhedronViewNode}{\NGn},
+  \cls{ShowNormalsNode}{\NGn}, \cls{E8Node}{\Gn}{domain-specific helpers
+  for particular videos.}
+\end{description}
+
+% =====================================================================
+\section{Building a scene: \texttt{GeometryNodesModifier}}
+% =====================================================================
+
+Scenes subclass \code{GeometryNodesModifier} and override
+\code{create\_node}. The base class creates the tree, a group output (and
+optionally a group input), runs your \code{create\_node}, and --- unless
+\code{automatic\_layout=False} --- lays the result out.
+
+\begin{lstlisting}
+class MyModifier(GeometryNodesModifier):
+    def __init__(self, n=100, **kwargs):
+        self.n = n
+        super().__init__(name="MyModifier",
+                         automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out   = tree.nodes.get("Group Output")
+        grid  = Grid(tree, location=(-6, 0))
+        spos  = SetPosition(tree, location=(-4, 0),
+                            position=p_fn.outputs["p"])
+        mat   = SetMaterial(tree, location=(-2, 0),
+                            material=self.materials[0])
+        create_geometry_line(tree, [grid, spos, mat],
+                             out=out.inputs["Geometry"])
+\end{lstlisting}
+
+What the base class hands you:
+\begin{itemize}[leftmargin=12pt,itemsep=1pt]
+\item \code{self.group\_outputs} (the IO node) and
+  \code{self.group\_output} (same node, by name) with one
+  \code{"Geometry"} output socket.
+\item \code{self.group\_inputs} when \code{group\_input=True}.
+\item \code{self.tree} / \code{self.nodes} for direct access.
+\end{itemize}
+Materials created inside \code{create\_node} should be appended to
+\code{self.materials}; the framework adds them to the host object's
+material slots.
+
+% =====================================================================
+\section{XML import path}
+% =====================================================================
+
+\code{create\_from\_xml(tree, filename=...)} reconstructs a node tree that
+was exported from Blender as XML, dispatching each node through
+\code{Node.from\_attributes}. This is the round-trip path: iterate a graph
+visually in Blender, export \code{tmp.xml}, then port it back to Python.
+
+\begin{lstlisting}
+create_from_xml(tree, filename="my_graph.xml")
+\end{lstlisting}
+
+\code{IndexSwitch} and \code{MenuSwitch} have an
+\code{add\_new\_item\_from\_xml(...)} path used \emph{only} by the
+importer --- in normal code use \code{.new\_item()} / \code{.add\_item()}
+instead.
+
+% =====================================================================
+\section{Footguns actually hit}
+\label{sec:footguns}
+% =====================================================================
+
+\begin{enumerate}[leftmargin=14pt,itemsep=2pt]
+\item \textbf{\code{SeparateGeometry(geometry=src)} ignores the kwarg.}
+  Always \code{tree.links.new(src, sep.geometry\_in)}.
+\item \textbf{\code{SampleNearestSurface} uses \code{"Mesh"} not
+  \code{"Geometry"}.} The \code{mesh=} kwarg links the wrong socket; use
+  \code{tree.links.new(src, snn.node.inputs["Mesh"])}.
+\item \textbf{\code{IndexSwitch} slot indexing.} \code{.slots[0]} is the
+  Index input; the $k$-th case is \code{.slots[k+1]}. Ships with 2 cases;
+  call \code{.new\_item()} for each extra one \emph{before} indexing it.
+\item \textbf{Automatic layout eats hand-placed nodes.}
+  \code{automatic\_layout=False} is mandatory for any graph you want to
+  read.
+\item \textbf{Location units are grid, not pixels.} \code{(1,0)} =
+  \code{(200,0)} in Blender.
+\item \textbf{\code{make\_function} order is RPN, popped from the top.}
+  \code{"a,b,sub"} produces $a-b$; \code{"v4,v1,sub"} is $v_4-v_1$.
+\item \textbf{\code{make\_function} outputs default to scalar.} List a
+  name in \code{vectors=[...]} or \code{rotations=[...]} or you get
+  confusing socket-type errors at link time.
+\item \textbf{Two classes are defined twice} in \code{nodes.py}
+  (\code{Switch}, \code{TransformPositionNode}, \code{BeveledCubeNode}):
+  the \emph{later} definition wins.
+\end{enumerate}
+
+\vfill
+\begin{center}\small\itshape
+Generated from \code{geometry\_nodes/nodes.py};
+cross-checked against \code{geometry\_nodes\_modifier.py} and
+\code{learning\_from\_claude/geometrynodes.md}.
+\end{center}
+
+\end{document}

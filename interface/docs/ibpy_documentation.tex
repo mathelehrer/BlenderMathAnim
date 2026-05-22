@@ -1,0 +1,962 @@
+% =====================================================================
+%  Reference documentation for interface/ibpy.py
+%
+%  Build (minted needs shell-escape + Pygments on PATH):
+%     # make sure `pygmentize` is reachable, e.g. the project venv:
+%     export PATH="$PWD/../../.venv2/bin:$PATH"
+%     pdflatex -shell-escape ibpy_documentation.tex
+%     pdflatex -shell-escape ibpy_documentation.tex   # 2nd pass for ToC
+% =====================================================================
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{minted}
+\usepackage{enumitem}
+\usepackage{seqsplit}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+
+\hypersetup{
+    colorlinks=true, linkcolor=blue!55!black, urlcolor=blue!55!black,
+    pdftitle={interface/ibpy.py -- function reference},
+}
+
+% ---- minted setup ----
+\setminted[python]{
+    fontsize=\small,
+    breaklines=true,
+    breakanywhere=false,
+    frame=single,
+    framesep=5pt,
+    rulecolor=\color{gray!40},
+    bgcolor=gray!7,
+    tabsize=4,
+    autogobble,
+}
+\newminted{python}{}                       % environment: pythoncode
+% inline code: robust verbatim that also works inside \item[...] labels,
+% and that may line-break (long signatures otherwise overflow the margin).
+% detokenize is pre-expanded into \ibpytmp so seqsplit sees raw characters.
+\newcommand{\py}[1]{%
+  \begingroup
+    \edef\ibpytmp{\detokenize{#1}}%
+    \texttt{\expandafter\seqsplit\expandafter{\ibpytmp}}%
+  \endgroup}
+
+\definecolor{secblue}{RGB}{40,82,140}
+\titleformat{\section}{\large\bfseries\color{secblue}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{14pt}{6pt}
+
+\setlist[description]{leftmargin=1.4em,style=nextline,itemsep=2pt,parsep=1pt}
+\newcommand{\fn}[1]{\py{#1}}               % function-name shortcut
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small\textsc{interface/ibpy.py}}
+\rhead{\small function reference}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+
+% =====================================================================
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+{\Huge\bfseries The \texttt{ibpy} Interface}\\[10pt]
+{\LARGE A reference to \texttt{interface/ibpy.py}}\\[24pt]
+{\large The single boundary between this animation package and Blender's
+\texttt{bpy} API}\\[40pt]
+\begin{minipage}{0.82\textwidth}\small
+\itshape
+\texttt{ibpy.py} encapsulates almost all direct calls into Blender. Every
+scene in the \py{video_*} folders talks to Blender \emph{through} this
+module, never to \texttt{bpy} directly. The practical payoff: when the
+Blender API changes between versions, the fix lives in one file; and the
+module doubles as a searchable catalogue of ``how do I do X in this
+package''. This document mirrors the section ordering that the source file
+itself now uses --- search the source for \texttt{=== <SECTION NAME>} to
+jump straight to the corresponding code.
+\end{minipage}
+\vfill
+{\small Generated for the reorganised \texttt{ibpy.py}
+(375 functions, 25 sections).}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{How to read this document}
+% =====================================================================
+
+The module is a flat collection of free functions; you import it and call
+them with a Blender object (conventionally a \py{bob} --- ``Blender
+object'') plus parameters:
+
+\begin{pythoncode}
+from interface import ibpy
+# or:  from interface.ibpy import set_camera_location, camera_zoom
+\end{pythoncode}
+
+A few conventions recur throughout:
+
+\begin{description}
+\item[\texttt{bob}] the target object. Most functions accept either a real
+  \py{bpy} object or one of this package's wrapper objects and call
+  \fn{get_obj} internally to normalise it.
+\item[\py{begin_time} / \py{transition_time}] animation timing in
+  \emph{seconds}. They are converted to frames with the module-level
+  \py{FRAME_RATE}. Many ``\py{change_*}'' functions return
+  \py{begin_time + transition_time}, so you can chain them:
+  \py{t0 = ibpy.change_default_value(..., begin_time=t0)}.
+\item[\py{begin_frame} / \py{frame_duration}] the older,
+  frame-based variants of the same idea (integer frames).
+\item[\texttt{slot}] index into an object's material slots (default
+  \py{0}).
+\end{description}
+
+The sections below follow the file's own ordering. Within each section the
+most-used functions are documented with runnable usage snippets taken from
+the \py{video_*} scenes; the remaining helpers are summarised so the
+section is complete.
+
+% =====================================================================
+\section{Context, scene, frames \& file I/O}
+% =====================================================================
+
+Entry points to Blender's global state and to saving/loading.
+
+\begin{description}
+\item[\fn{get_context()}, \fn{get_scene()}, \fn{get_layout()}] thin
+  accessors for \py{bpy.context}, the active scene, and the ``Layout''
+  screen. Used internally far more than in scene code.
+\item[\fn{set_frame(frame)}, \fn{get_frame()}, \fn{start_frame()},
+  \fn{end_frame()}] move/query the playhead and the scene's frame range.
+\item[\fn{close(x, y, precision=EPS)}] floating-point ``almost equal''
+  test used by geometry helpers.
+\item[\fn{save(filename)}, \fn{load(filepath)}, \fn{load_file(filename)},
+  \fn{append(filename)}] persistence. \fn{append} pulls assets from an
+  external \texttt{.blend}.
+\item[\fn{set_cursor_location(position)}, \fn{cursor_to_origin()}] drive
+  the 3D cursor (which several ``set origin'' operations rely on).
+\item[\fn{register_class(cls)}] register a custom \py{bpy} class.
+\end{description}
+
+\begin{pythoncode}
+# advance the timeline and persist the result
+ibpy.set_frame(0)
+ibpy.save("/tmp/scene_v1.blend")
+\end{pythoncode}
+
+% =====================================================================
+\section{Object lookup, creation, copying \& deletion}
+% =====================================================================
+
+\begin{description}
+\item[\fn{get_obj(bob)}] the workhorse: returns the underlying \py{bpy}
+  object for a wrapper, a name, or a \py{bpy} object (idempotent). Almost
+  every other function calls it first.
+\item[\fn{get_obj_from_name(name)}, \fn{get_objects_from_name(name)}] look
+  up by (sub)string of the object name.
+\item[\fn{rename(bob, name)}] rename an object.
+\item[\fn{create(mesh, name, location)}] wrap a mesh datablock into a new
+  scene object at a location.
+\item[\fn{add_empty(**kwargs)}] add an Empty (handy as a camera target or
+  parent pivot).
+\item[\fn{copy(bob)}, \fn{duplicate(bob)}] shallow copy / full duplicate.
+\item[\fn{delete(obj)}] remove an object from the scene.
+\item[\fn{get_child_with_name(bob, child_name, starts_with=False)}] find a
+  specific child in a hierarchy.
+\end{description}
+
+\begin{pythoncode}
+target = ibpy.add_empty(location=[0, 0, -6], name="CameraTarget")
+clone  = ibpy.duplicate(some_object)
+ibpy.rename(clone, "Clone.001")
+\end{pythoncode}
+
+% =====================================================================
+\section{Mesh primitives \& mesh creation}
+% =====================================================================
+
+Convenience wrappers around Blender's primitive operators, plus the
+all-important \fn{create_mesh} for arbitrary geometry.
+
+\begin{description}
+\item[\fn{create_mesh(vertices, edges=[], faces=[], name='mesh',
+  orient_faces=False)}] build a mesh datablock from raw
+  vertex/edge/face lists. The most general entry point; everything else is
+  a shortcut.
+\item[\fn{add_sphere}, \fn{add_cube}, \fn{add_cone}, \fn{add_cylinder},
+  \fn{add_torus}, \fn{add_circle}, \fn{add_plane}] the usual primitives;
+  all take \py{location}, \py{scale}, and \py{smooth} where meaningful.
+\item[\fn{add_reference_image(name, **kwargs)}] add an image-empty for
+  modelling reference.
+\item[\fn{create_vertex_group(bob, vertex_indices, name)},
+  \fn{add_vertex_group(bob, indices, name, weight_function)}] define
+  weighted vertex groups (used by modifiers and deformations).
+\end{description}
+
+\begin{pythoncode}
+# build a polyhedron from explicit data and hand it to a wrapper object
+mesh = ibpy.create_mesh(vertices, faces=faces)
+kwargs_red = {"mesh": mesh, "color": "trunc_icosidodeca"}
+
+# a smooth-shaded reference sphere
+ball = ibpy.add_sphere(radius=1, location=(0, 0, 0), resolution=5,
+                       smooth=True)
+\end{pythoncode}
+
+% =====================================================================
+\section{Mesh editing, conversion \& analysis}
+% =====================================================================
+
+\begin{description}
+\item[\fn{get_vertex_locations(bob)}, \fn{get_vertices(bob)}] read back
+  vertex coordinates / vertices.
+\item[\fn{smooth_mesh(bob)}, \fn{shade_smooth(auto=True)}] smoothing.
+\item[\fn{analyse_mesh(bob)}] print a structural report (vertex / edge /
+  face counts) --- a debugging aid.
+\item[\fn{apply(bob, location=True, rotation=True, scale=True)}] apply
+  transforms into the mesh data (bakes them into vertex coordinates).
+  \fn{apply_scale(bob)} is the scale-only shortcut.
+\item[\fn{convert_to_mesh(obj, apply_transform=False)}] convert a curve /
+  text / other object into a mesh.
+\item[\fn{separate(bob, type='SELECTED')}] split selected geometry into a
+  new object.
+\item[\fn{select_faces(faces, normal)},
+  \fn{stretch_uv_map_to_faces(bob, normal)}] face selection and UV
+  stretching (used for image-on-geometry materials).
+\item[\fn{add_attribute(bob, name, attribute, type='FLOAT',
+  domain='POINT')}] add a custom mesh attribute (read later by geometry
+  nodes).
+\end{description}
+
+\begin{pythoncode}
+ibpy.apply(bob, location=False, rotation=True, scale=True)
+verts = ibpy.get_vertex_locations(bob)     # list of Vectors
+ibpy.add_attribute(bob, name="charge", attribute=charges, type="FLOAT")
+\end{pythoncode}
+
+% =====================================================================
+\section{Selection \& edit/object mode}
+% =====================================================================
+
+A complete set of (de)selection helpers plus mode switching. They wrap the
+fiddly \py{bpy.ops} selection state machine.
+
+\begin{description}
+\item[\fn{set_edit_mode()}, \fn{set_object_mode()}] toggle interaction
+  mode.
+\item[\fn{set_active(obj)}, \fn{get_active()}] manage the active object.
+\item[\fn{select(obj, deselect_others=True)}, \fn{un_select(obj)},
+  \fn{deselect_all()}] basic selection.
+\item[\fn{select_recursively(obj)}, \fn{select_all_deep(bobs)},
+  \fn{deep_select(obj)}] select an object together with its descendants.
+\item[\fn{set_select(obj, value=True)},
+  \fn{set_several_select(objects, value=True)}] bulk set selection flags
+  without operators.
+\end{description}
+
+\begin{pythoncode}
+ibpy.deselect_all()
+ibpy.select(bob)                 # also makes it active, deselecting others
+ibpy.set_edit_mode()
+# ... operate ...
+ibpy.set_object_mode()
+\end{pythoncode}
+
+% =====================================================================
+\section{Collections \& linking}
+% =====================================================================
+
+\begin{description}
+\item[\fn{make_new_collection(name, hide_render=False,
+  hide_viewport=False)}] create a collection.
+\item[\fn{get_collection(name)}, \fn{get_collection_name(obj)},
+  \fn{remove_collection(collection)}] manage collections.
+\item[\fn{link(obj, collection=None, recursively=True)},
+  \fn{recursive_link(obj, collection)}, \fn{un_link(obj, collection)}]
+  link/unlink objects into a collection (objects must be linked to appear
+  in the scene). \fn{is_linked(obj)} tests membership.
+\item[\fn{to_collection(collection)},
+  \fn{collection_to_string(collection)}] utilities used by the importer.
+\end{description}
+
+\begin{pythoncode}
+coll = ibpy.make_new_collection("Particles", hide_render=False)
+ibpy.link(particle_obj, collection="Particles", recursively=True)
+\end{pythoncode}
+
+% =====================================================================
+\section{Visibility (hide / unhide) \& fading}
+% =====================================================================
+
+Two flavours of ``make it disappear'': \emph{hard} hide (toggles
+\py{hide_render}) and \emph{soft} fade (animates material alpha). The
+\py{*_rec} / \py{recursive_*} variants walk the child hierarchy.
+
+\begin{description}
+\item[\fn{hide(bob, begin_time=0)}, \fn{unhide(bob, begin_time=0)}]
+  keyframe render visibility at a time.
+\item[\fn{hide_rec}, \fn{unhide_rec}, \fn{hide_frm_rec}, \fn{unhide_frm_rec}]
+  recursive / frame-based versions.
+\item[\fn{is_hidden(obj)}, \fn{set_hide(bob, hide, frame)}] query / set raw
+  flags.
+\item[\fn{fade_in(b_obj, frame, frame_duration)},
+  \fn{fade_out(b_obj, frame, frame_duration, alpha=0, children=True)}]
+  animate alpha up/down; recurse into children by default.
+  \fn{fade_out_quickly} and \fn{recursive_fade_out} are variants.
+\item[\fn{set_shadow(value)}, \fn{set_shadow_of_object(b_object, shadow)}]
+  toggle shadow casting.
+\end{description}
+
+\begin{pythoncode}
+ibpy.fade_in(label, frame=0, frame_duration=30)
+# later: hide from render after 5 s
+ibpy.hide(label, begin_time=5)
+\end{pythoncode}
+
+% =====================================================================
+\section{Lights \& light probes}
+% =====================================================================
+
+\begin{description}
+\item[\fn{add_point_light(**kwargs)}, \fn{add_area_light(**kwargs)},
+  \fn{add_spot_light(energy, **kwargs)}] add lights; kwargs include
+  \py{location}, \py{radius}, \py{scale}, \py{energy}.
+\item[\fn{set_sun_light(location, energy=2)}, \fn{remove_sun_light()}] the
+  scene sun.
+\item[\fn{add_light_probe(**kwargs)}] add a reflection/irradiance probe.
+\item[\fn{switch_on(bob, ...)}, \fn{switch_off(bob, ...)},
+  \fn{change_power(bob, from_value, to_value, ...)}] animate a light's
+  power; \fn{get_energy_at_frame(bob, frame)} reads it back.
+\item[\fn{light_path_settings(total=12, diffuse=4, glossy=4,
+  transmission=12, volume=0, transparency=8)}] global Cycles light-path
+  bounce limits --- a common quality/perf knob.
+\end{description}
+
+\begin{pythoncode}
+ibpy.add_point_light(location=[4, -4, 6], energy=2000, radius=0.5)
+ibpy.light_path_settings(total=12, transmission=12, transparency=8)
+ibpy.change_power(lamp, from_value=0, to_value=5000,
+                  begin_frame=0, frame_duration=30)
+\end{pythoncode}
+
+% =====================================================================
+\section{Camera setup \& animation}
+% =====================================================================
+
+The most frequently used section. A scene typically: adds/places a camera,
+points it at a target Empty, sets the lens, then animates zoom/move.
+
+\begin{description}
+\item[\fn{add_camera(location, rotation)}, \fn{get_camera()}] create / get
+  the camera.
+\item[\fn{set_camera_location(location, frame=0)},
+  \fn{set_camera_rotation(rotation)}] place it.
+\item[\fn{set_camera_lens(lens=50, clip_end=1000)}] focal length and far
+  clip.
+\item[\fn{set_camera_view_to(target, rotation_euler=[0,0,0],
+  targetZ=False, up_axis='UP_Y')}] aim the camera at a target with a
+  Track-To constraint --- the standard way to frame a subject.
+\item[\fn{camera_zoom(lens, begin_time, transition_time)}] animate the
+  focal length (dolly-zoom feel).
+\item[\fn{camera_move(shift, begin_time, transition_time)}] translate the
+  camera over time.
+\item[\fn{camera_rotate_to(rotation_euler, ...)}] animate orientation.
+\item[\fn{set_camera_dof(focus_object, aperture_fstop=0.1)}] depth of
+  field.
+\item[\fn{set_camera_follow(target)}, \fn{set_camera_copy_location(target)},
+  \fn{camera_follow(target, initial_value, final_value, ...)},
+  \fn{camera_change_track_influence(...)},
+  \fn{camera_change_follow_influence(...)}] constraint-based camera rigs
+  (follow a path, copy a location, blend influence in/out).
+\item[\fn{camera_alignment_euler(bob, camera_location)},
+  \fn{camera_alignment_quaternion(bob, camera_location, default)}] compute
+  the rotation that makes an object face the camera (billboarding).
+\end{description}
+
+\begin{pythoncode}
+# canonical opening shot (from video_4d_geometry)
+camera_empty = ibpy.add_empty(location=[0, 0, -6])
+ibpy.set_camera_view_to(camera_empty)
+ibpy.set_camera_location(location=Vector([-30, 55, 55]))
+ibpy.set_camera_lens(lens=50)
+
+# animate a slow zoom-in over 2 s
+ibpy.camera_zoom(lens=30, begin_time=0.1, transition_time=2)
+# then track the action for the rest of the shot
+ibpy.camera_move(shift=[0, 0, 4], begin_time=2, transition_time=6)
+\end{pythoncode}
+
+% =====================================================================
+\section{Constraints, tracking, follow paths \& parenting}
+% =====================================================================
+
+The general constraint machinery that the camera section builds on, plus
+object parenting.
+
+\begin{description}
+\item[\fn{add_constraint(b_object, type, name=None, **kwargs)}] add any
+  Blender constraint by type string.
+\item[\fn{set_track(bob, target)}, \fn{set_copy_location(bob, target)},
+  \fn{set_follow(bob, target, **kwargs)}] add Track-To / Copy-Location /
+  Follow-Path constraints.
+\item[\fn{follow(bob, target, initial_value, final_value, begin_time,
+  transition_time)}] animate movement along a follow-path target.
+\item[\fn{set_track_influence}, \fn{set_follow_influence},
+  \fn{change_follow_influence}] blend constraint influence over time.
+\item[\fn{set_parent(b_obj, parent)}, \fn{get_parent(bob)},
+  \fn{get_oldest_parent(bob)}, \fn{clear_parent(bob)}] object parenting.
+\item[\fn{set_vertex_parent(parent, child, vertex_index)}] parent a child
+  to a single vertex (used for the ``chain of arrows'' constructions).
+\end{description}
+
+\begin{pythoncode}
+ibpy.set_parent(child_obj, parent_obj)        # rigid hierarchy
+ibpy.set_track(arrow, target=tip_empty)       # always point at the tip
+\end{pythoncode}
+
+% =====================================================================
+\section{Transform animation (move / rotate / scale / grow / shrink)}
+% =====================================================================
+
+Keyframed transforms. Frame-based functions take \py{begin_frame,
+frame_duration}; the \fn{shrink}/\fn{grow} pair has both a time-based and a
+scale-based overload (the later definition wins, see the note at the end).
+
+\begin{description}
+\item[\fn{move(b_obj, direction, begin_frame, frame_duration)},
+  \fn{move_to(b_obj, target, begin_frame, frame_duration,
+  global_system=False)}, \fn{move_fast_from_to(b_obj, start, end, ...)}]
+  translate by a delta / to an absolute point.
+\item[\fn{rotate_by(b_obj, rotation_euler)},
+  \fn{rotate_to(b_obj, begin_frame, frame_duration, pivot,
+  interpolation)}] rotation (instant / animated about a pivot).
+\item[\fn{grow(b_obj, scale, begin_frame, frame_duration,
+  initial_scale=0, modus='from_center')},
+  \fn{shrink(b_obj, scale, ...)}] scale-in / scale-out animation.
+\item[\fn{grow_from(b_obj, pivot, ...)}, \fn{shrink_from(b_obj, pivot,
+  ...)}, \fn{rescale(b_obj, re_scale, ...)}] scale about an explicit
+  pivot.
+\item[\fn{set_location(b_obj, location)}, \fn{set_origin(bob,
+  type='ORIGIN_GEOMETRY')}, \fn{set_pivot(obj, origin)},
+  \fn{transform_into_world(b_obj, location)}] non-animated placement and
+  origin control.
+\end{description}
+
+\begin{pythoncode}
+# scale an object up from nothing over 0.5 s (15 frames @ 30 fps)
+ibpy.grow(bob, scale=1, begin_frame=0, frame_duration=15,
+          initial_scale=0, modus="from_center")
+
+ibpy.set_origin(bob, type="ORIGIN_GEOMETRY")   # center the pivot
+\end{pythoncode}
+
+% =====================================================================
+\section{Materials: assignment, color, alpha \& emission}
+% =====================================================================
+
+The largest section (37 functions). Covers attaching materials to objects
+and animating their scalar/colour properties.
+
+\begin{description}
+\item[\fn{add_material(bob, material)}, \fn{set_material(bob, material,
+  slot=0)}, \fn{append_materials(bobj, materials)}] attach materials to
+  slots. \fn{get_material(material, **kwargs)} resolves a material by name
+  or spec; \fn{get_materials(bob)}, \fn{get_material_of(bob, slot)} read
+  them back.
+\item[\fn{assign_material_to_faces(bob, material_index, normal)},
+  \fn{set_color_to_faces(bob, face2color_function)},
+  \fn{create_color_map_for_mesh(bob, colors, name)},
+  \fn{set_vertex_colors(bob, colors)}] per-face / per-vertex colouring.
+\item[\fn{change_alpha(b_obj, frame, frame_duration, ...)},
+  \fn{change_alpha_of_material(mat, from_value, to_value, begin_time,
+  transition_time)}, \fn{set_alpha_for_material(material, alpha)},
+  \fn{set_alpha_and_keyframe(obj, value, frame, slot)}] animate
+  transparency. \fn{get_alpha_at_current_keyframe(obj, frame, slot)} reads
+  it.
+\item[\fn{set_emission}, \fn{set_emission_color}, \fn{change_emission},
+  \fn{change_emission_to}, \fn{change_emission_by_name},
+  \fn{change_emission_of_material}] drive emission strength / colour.
+\item[\fn{set_metallic_for_material}, \fn{set_roughness_for_material},
+  \fn{set_transmission_for_material},
+  \fn{set_emission_strength_for_material}] one-shot PBR property setters.
+\item[\fn{change_brightness}, \fn{change_color}, \fn{mix_color},
+  \fn{shader_value}, \fn{adjust_mixer}, \fn{set_mixer}] colour-mix and
+  value-node animation. \fn{get_alpha_mixer},
+  \fn{change_material_properties}, \fn{get_new_material} are construction
+  helpers.
+\end{description}
+
+\begin{pythoncode}
+ibpy.set_material(bob, my_material, slot=0)
+
+# fade a material to fully transparent over 1 s
+ibpy.change_alpha_of_material(mat, from_value=1, to_value=0,
+                              begin_time=t0, transition_time=1)
+
+# pulse the emission of slot 0
+ibpy.change_emission(bob, from_value=0, to_value=5,
+                     slot=0, begin_frame=0, frame_duration=30)
+\end{pythoncode}
+
+% =====================================================================
+\section{Shader / geometry node access \& default-value drivers}
+% =====================================================================
+
+Find nodes inside a material or node group, and animate their socket
+default values --- the backbone of procedural animation in this package.
+
+\begin{description}
+\item[\fn{get_node_tree(name, type='GeometryNodeTree')}] create/fetch a
+  node tree.
+\item[\fn{get_node_with_label(bob, label)},
+  \fn{get_node_from_tree(tree, label)},
+  \fn{get_node_from_shader(shader, label)},
+  \fn{get_all_nodes_from_shader(shader, label)},
+  \fn{get_shader_node_from_material(material, label)},
+  \fn{get_nodes_of_material(bob, name_part, slot)},
+  \fn{get_node_of_material(material, label)}] locate nodes by label.
+\item[\fn{change_default_value(slot, from_value, to_value, begin_time,
+  transition_time)}] the single most useful driver: keyframe a socket's
+  \py{default_value} from one number to another. Returns the end time for
+  chaining.
+\item[\fn{set_default_value}, \fn{change_default_boolean},
+  \fn{set_default_boolean}, \fn{change_default_integer},
+  \fn{change_default_vector}, \fn{change_default_rotation},
+  \fn{change_default_quaternion}, \fn{change_default_material},
+  \fn{change_value}] type-specific variants for each socket kind.
+\item[\fn{change_shader_value(b_object, node, input, initial_value,
+  final_value, frame, frame_duration)}, \fn{change_mixer(mixer, ...)}]
+  animate a specific node input / a mix factor.
+\item[\fn{get_default_value_at_frame(socket, frm)},
+  \fn{get_value_at_frame(function, frm)},
+  \fn{get_parameter_at_frame(function, frm)}] sample animated values.
+\item[\fn{add_item_to_switch(switch_node, idx, socket_or_value, tree)},
+  \fn{remove_unlinked_nodes(node_tree)}] node-tree editing utilities.
+\end{description}
+
+\begin{pythoncode}
+# chain several socket animations, threading the time t0 through:
+t0 = 0
+t0 = 0.5 + ibpy.change_default_value(sliders[-1], from_value=0,
+                                     to_value=1, begin_time=t0,
+                                     transition_time=1)
+t0 = ibpy.change_default_value(ra, from_value=1, to_value=0,
+                               begin_time=t0, transition_time=1)
+\end{pythoncode}
+
+% =====================================================================
+\section{Procedural material \& shader builders, textures}
+% =====================================================================
+
+Functions that \emph{construct} entire shader node graphs --- the
+domain-specific materials used across the videos (Mandelbrot colouring,
+hue maps, magnet fields, gradients, image/movie textures).
+
+\begin{description}
+\item[\fn{customize_material(material, **kwargs)}] the central material
+  customiser; pass \py{override_material} to replace special materials.
+\item[\fn{make_mandelbrot_material}, \fn{make_hue_material},
+  \fn{make_iteration_material}, \fn{make_magnet_material},
+  \fn{make_gradient_material}, \fn{make_dashed_material},
+  \fn{make_alpha_frame}] ready-made procedural materials.
+\item[\fn{make_coarse_grained_group}, \fn{make_phase2color_group},
+  \fn{make_vector_interpolation}, \fn{make_mandel_iteration}] reusable node
+  sub-groups consumed by the materials above.
+\item[\fn{make_image__stretched_over_geometry(src, v_min, v_max)},
+  \fn{add_image_texture(bob, image, ...)},
+  \fn{setup_material_for_alpha_masking(bob)},
+  \fn{create_image_mixing_find_previous_mixer(material, image_path)}]
+  image-texture pipeline (incl.\ alpha masking).
+\item[\fn{set_movie_to_material(bob, src, duration, ...)},
+  \fn{set_movie_start(bob, begin_frame)}] map a video clip onto a surface.
+\item[\fn{create_color_mixing(material, color1, color2)},
+  \fn{create_color_mixing_find_previous_color(material, color)},
+  \fn{create_shader_from_script(material, osl_script, ...)},
+  \fn{create_voronoi_shader(material, colors, ...)},
+  \fn{create_shader_from_function(material, hue_functions, ...)}] colour
+  mixers and OSL/Voronoi/RPN shader generators.
+\end{description}
+
+\begin{pythoncode}
+mat = ibpy.make_hue_material()
+ibpy.set_material(plane, mat)
+ibpy.add_image_texture(plane, image="diagram.png",
+                       begin_time=0, transition_time=1)
+\end{pythoncode}
+
+% =====================================================================
+\section{Node-group \& RPN function builders}
+% =====================================================================
+
+Generic machinery that turns a mathematical formula in \emph{reverse Polish
+notation} into a Shader/Geometry node group. These power
+\fn{make_function}-style construction throughout the package.
+
+\begin{description}
+\item[\fn{create_group_from_scalar_function(nodes, functions,
+  parameters=[], ...)}, \fn{create_group_from_vector_function(nodes,
+  functions, ...)}] build a node group computing scalar / vector RPN
+  formulae.
+\item[\fn{create_shader_group_from_function(nodes, function, parameters,
+  inputType, outputType, name)}] shader-tree variant.
+\item[\fn{create_iterator_group(nodes, functions, parameters, iterations,
+  name)}] nest a function group \py{iterations} times (fractal / iterative
+  maps).
+\item[\fn{if_node(nodes, bool_function, parameters, ...)}] a mix node
+  switching between two inputs based on a boolean RPN expression.
+\item[\fn{make_new_socket(tree, name, io='INPUT',
+  type='NodeSocketFloat')}] add a typed socket to a group interface (used
+  everywhere groups are built).
+\item[\fn{build_group_component}, \fn{build_scalar_group_component},
+  \fn{build_group}, \fn{create_part}, \fn{build_recursively}] the recursive
+  RPN-to-nodes compiler internals. \fn{build_group} is deprecated in favour
+  of \fn{build_group_component}.
+\end{description}
+
+\begin{pythoncode}
+# add a vector input socket to a freshly created group tree
+ibpy.make_new_socket(tree, name="position", io="INPUT",
+                     type="NodeSocketVector")
+\end{pythoncode}
+
+% =====================================================================
+\section{Geometry-nodes modifier access \& sockets}
+% =====================================================================
+
+Reach into a geometry-nodes modifier to read its nodes and push values into
+its exposed sockets.
+
+\begin{description}
+\item[\fn{get_geometry_nodes_modifier(bob)}] return the geometry-nodes
+  modifier on an object. \emph{(Defined twice; the second definition ---
+  the documented ``extract modifier from bob'' one --- wins.)}
+\item[\fn{get_geometry_node_from_modifier(modifier, label)}] fetch an
+  inner node by label, e.g.\ to drive it later.
+\item[\fn{get_socket_names_from_modifier(modifier)}] list the sockets that
+  receive custom values during setup. \emph{(Also defined twice; last
+  wins.)}
+\item[\fn{set_socket_data_for_geometry_node_modifier(bob, socket_data)}]
+  bulk-assign exposed-socket values.
+\item[\fn{get_material_from_modifier(modifier, label)}] pull a material
+  generated inside the modifier.
+\end{description}
+
+\begin{pythoncode}
+mod        = ibpy.get_geometry_nodes_modifier(bob)
+csv_node   = ibpy.get_geometry_node_from_modifier(mod, "Import CSV")
+counter    = ibpy.get_geometry_node_from_modifier(mod, "Counter")
+ibpy.change_default_value(counter.inputs["Value"], from_value=0,
+                          to_value=100, begin_time=0, transition_time=4)
+\end{pythoncode}
+
+% =====================================================================
+\section{Volume scatter \& absorption}
+% =====================================================================
+
+\begin{description}
+\item[\fn{set_volume_scatter(bob, value, begin_time=0)},
+  \fn{change_volume_scatter(bob, final_value, begin_time,
+  transition_time)}] animate volumetric scattering on an object.
+\item[\fn{set_volume_absorption(bob, value, begin_time=0)},
+  \fn{change_volume_absorption(bob, final_value, ...)}] volumetric
+  absorption.
+\item[\fn{set_volume_scatter_of_material(material, value)},
+  \fn{set_volume_absorption_of_material(material, value)}] material-level
+  setters.
+\item[\fn{set_volume_scatter_background(density=1)}] world-volume fog.
+\end{description}
+
+\begin{pythoncode}
+ibpy.change_volume_scatter(cloud, final_value=0.4,
+                           begin_time=t0, transition_time=2)
+\end{pythoncode}
+
+% =====================================================================
+\section{World, background, HDRI, render \& compositor}
+% =====================================================================
+
+Render-engine configuration, the world/HDRI environment, and post-render
+compositor effects. \fn{set_render_engine} and \fn{set_hdri_background} are
+among the most-called functions in the whole package.
+
+\begin{description}
+\item[\fn{set_render_engine(engine='CYCLES', transparent=False,
+  motion_blur=False, denoising=False, resolution_percentage=100,
+  frame_start=0, taa_render_samples=1024, ...)}] one call to configure
+  the render pipeline.
+\item[\fn{set_hdri_background(filename, ext='exr', simple=False,
+  transparent=False, strength=0.2, rotation_euler=None, reflections=True,
+  ...)}] load an HDRI as the world background.
+\item[\fn{set_hdri_strength(strength, begin_time, transition_time)},
+  \fn{change_hdri_strength(start, end, ...)},
+  \fn{hdri_background_rotate(rotation_euler, ...)}] animate the HDRI.
+\item[\fn{get_background()}, \fn{get_sky()}, \fn{animate_sky_background()},
+  \fn{dim_background(value, ...)},
+  \fn{set_volume_scatter_background(density)}] other world controls.
+\item[\fn{create_composition(denoising=None)}, \fn{empty_blender_view3d()},
+  \fn{set_taa_render_samples(taa_render_samples=64, begin_frame=0)},
+  \fn{set_exposure(value)}] compositor / viewport / exposure.
+\item[\fn{animate_glare(glare, **kwargs)},
+  \fn{change_glow_threshold(...)}, \fn{change_glow_size(...)},
+  \fn{get_image(src)}] glare/glow compositor effects.
+\end{description}
+
+\begin{pythoncode}
+# canonical render + world setup (from video_4d_geometry)
+ibpy.set_hdri_background("kloofendal_misty_morning_puresky_4k", 'exr',
+                         simple=True, transparent=True,
+                         rotation_euler=Vector())
+t0 = ibpy.set_hdri_strength(1, begin_time=0, transition_time=0)
+ibpy.set_render_engine(denoising=False, transparent=True, frame_start=1,
+                       resolution_percentage=100, engine="CYCLES",
+                       taa_render_samples=64, motion_blur=True)
+\end{pythoncode}
+
+% =====================================================================
+\section{Curves, splines \& bevel}
+% =====================================================================
+
+Bezier-curve construction and the bevel/extrude controls that turn a curve
+into a renderable tube, plus ``grow along the curve'' animation.
+
+\begin{description}
+\item[\fn{import_curve(path)}, \fn{new_curve_object(name, curve)},
+  \fn{get_new_curve(name, num_points, data, **kwargs)}] curve creation /
+  import.
+\item[\fn{add_bezier_spline(splines, num_points=2, data, cyclic=True)},
+  \fn{add_points_to_spline(spline, total_points, closed_loop)},
+  \fn{set_bezier_point_of_curve(curve, index, position, handle_left,
+  handle_right)}, \fn{reset_bezier_point(...)}] build / edit splines and
+  control points.
+\item[\fn{get_splines(obj)}, \fn{get_splines_of_curve(b_obj)},
+  \fn{get_bezier_points(spline)},
+  \fn{get_curve_for_object(obj)}, \fn{get_all_curves()},
+  \fn{merge_splines(b_objects)}, \fn{separate_pieces(data)},
+  \fn{get_spline_bounding_box(b_obj)}] inspect / combine curve data.
+\item[\fn{set_bevel(bob, depth, caps=True, res=4)},
+  \fn{change_bevel(bob, old_depth, new_depth, ...)},
+  \fn{set_extrude(bob, extrude)},
+  \fn{set_bevel_factor_mapping(bob, ...)}] give a curve thickness.
+\item[\fn{grow_curve(bob, appear_frame, duration, ...)},
+  \fn{shrink_curve(bob, appear_frame, duration, inverted=False)},
+  \fn{set_curve_range(bob, factor, ...)},
+  \fn{set_curve_full_range(bob, factor1, factor2, ...)},
+  \fn{set_use_path(bob, is_used)}] animate a curve drawing itself in /
+  out (via bevel-factor start/end).
+\end{description}
+
+\begin{pythoncode}
+ibpy.set_bevel(curve_obj, depth=0.02, caps=True, res=6)
+# draw the curve on, left to right, over 1.5 s
+ibpy.grow_curve(curve_obj, appear_frame=0, duration=45)
+\end{pythoncode}
+
+% =====================================================================
+\section{Shape keys \& morphing}
+% =====================================================================
+
+Animate between mesh shapes via shape keys --- the basis of the ``morph
+one object into another'' transitions.
+
+\begin{description}
+\item[\fn{add_shape_key(bobj, name, previous=None, following=None,
+  relative=True)}] add a shape key.
+\item[\fn{create_shape_key_from_transformation(bob, old_sk, index,
+  transformation)},
+  \fn{create_shape_key_from_index_transformation(bob, old_sk, index,
+  transformation)}] derive a new shape by transforming an existing one.
+\item[\fn{keyframe_shape_key(bob, sk_name, frame)},
+  \fn{set_shape_key_to_value(bob, sk_name, value, frame)},
+  \fn{set_shape_key_eval_time(bob, time, frame)}] keyframe shape-key
+  values / evaluation time.
+\item[\fn{morph_to_next_shape}, \fn{morph_to_next_shape2},
+  \fn{morph_to_next_shape_with_pause}, \fn{morph_to_previous_shape},
+  \fn{morph_to_first_shape}, \fn{set_to_first_shape},
+  \fn{set_to_last_shape}, \fn{zero_all_shape_keys}] high-level morph
+  sequencing (the \py{*2} variant zeroes all but the current key).
+\end{description}
+
+\begin{pythoncode}
+ibpy.add_shape_key(bob, "target")
+ibpy.morph_to_next_shape(bob, current_shape_index=0,
+                         appear_frame=0, frame_duration=30)
+\end{pythoncode}
+
+% =====================================================================
+\section{Modifiers}
+% =====================================================================
+
+Add, configure, animate and apply Blender modifiers (incl.\ geometry
+nodes).
+
+\begin{description}
+\item[\fn{add_mesh_modifier(bob, **kwargs)}] the generic, preferred
+  entry point (dispatches on a \py{type} kwarg). \fn{replace_mesh_modifier}
+  swaps one out.
+\item[\fn{add_modifier(b_obj, type, name=None)},
+  \fn{add_modifier_recursive(obj, type, name)}] low-level add by type.
+\item[\fn{add_sub_division_surface_modifier(b_obj, level=2, ...)},
+  \fn{add_solidify_modifier(b_obj, thickness=0.1)},
+  \fn{add_bevel_modifier(b_obj, width=0.1)}] common specific modifiers.
+\item[\fn{change_solidifier_thickness(bob, from_value, to_value, ...)},
+  \fn{change_modifier_attribute(bob, mod_name, attr_name, start, end,
+  ...)}] animate modifier parameters.
+\item[\fn{apply_modifier(bob, type=None)}, \fn{apply_modifiers(bob)}] bake
+  modifiers into the mesh.
+\end{description}
+
+\begin{pythoncode}
+ibpy.add_solidify_modifier(shell, thickness=0.05)
+ibpy.change_modifier_attribute(bob, "Solidify", "thickness",
+                               start=0, end=0.1,
+                               begin_frame=0, frame_duration=30)
+ibpy.apply_modifiers(bob)
+\end{pythoncode}
+
+% =====================================================================
+\section{Keyframes, F-curves \& animation interpolation}
+% =====================================================================
+
+The low-level keyframe layer that all the \py{change_*} functions sit on,
+plus tools to make animations linear and to debug F-curves.
+
+\begin{description}
+\item[\fn{insert_keyframe(bob, data_path, frame)}] insert a keyframe on
+  any data path.
+\item[\fn{set_bevel_factor_and_keyframe(data, value, frame)},
+  \fn{set_bevel_factor_start_and_end_keyframe(data, start, end, frame)},
+  \fn{set_bevel_factor_start_keyframe(data, start, frame)}] curve-draw
+  keyframing primitives used by \fn{grow_curve}.
+\item[\fn{set_linear_fcurves(bob)}, \fn{set_linear_action(bob,
+  data_path_part)}, \fn{set_linear_action_full(bob)},
+  \fn{set_linear_action_modifier(bob)}, \fn{set_bezier_action_modifier(bob)},
+  \fn{set_linear_fcurves_for_nodes(node)},
+  \fn{make_animations_linear(thing, data_paths, extrapolate=False)}]
+  force linear (constant-speed) interpolation on selected channels.
+\item[\fn{clear_animation_data(bob)}] wipe all animation from an object.
+\item[\fn{value_of_action_fcurve_at_frame(action, fcurve, frm)},
+  \fn{print_actions()}, \fn{print_fcurves_of_action(action)}] inspection /
+  debugging helpers (``first used in \py{video_apollonian}'').
+\end{description}
+
+\begin{pythoncode}
+ibpy.insert_keyframe(bob, "location", frame=0)
+ibpy.make_animations_linear(bob, data_paths=["location"])
+\end{pythoncode}
+
+% =====================================================================
+\section{Rigid body, forces \& physics simulation}
+% =====================================================================
+
+\begin{description}
+\item[\fn{make_rigid_body(bob, dynamic=True, kinematic=False, friction=0.1,
+  bounciness=0.5, ...)}, \fn{make_rigid_bodies(bob_list, ...)}] turn one
+  or many objects into rigid bodies.
+\item[\fn{add_rigid_body(bob, **kwargs)},
+  \fn{key_frame_rigid_body_properties(bob, type='dynamic', value=True,
+  begin_time=0)}] lower-level rigid-body control and keyframing the
+  dynamic/kinematic switch.
+\item[\fn{add_force(**kwargs)}, \fn{add_wind(**kwargs)},
+  \fn{add_turbulence(**kwargs)}, \fn{decay_force(bob, initial_strength,
+  final_strength=0, ...)}] force fields.
+\item[\fn{set_simulation(begin_time=0, transition_time=250/FRAME_RATE)}]
+  run/scope the physics simulation over a time window.
+\end{description}
+
+\begin{pythoncode}
+for child in pieces:
+    ibpy.make_rigid_body(child, type="ACTIVE",
+                         collision_shape="MESH", friction=0.5)
+ibpy.add_force(location=[0, 0, 0], strength=-50)   # gravity well
+ibpy.set_simulation(begin_time=0, transition_time=4)
+\end{pythoncode}
+
+% =====================================================================
+\section{Geometry queries: bounding box, centers, world location}
+% =====================================================================
+
+Read-only spatial queries: where is an object, how big is it, where is a
+particular feature. Heavily used to position labels and arrows relative to
+existing geometry.
+
+\begin{description}
+\item[\fn{get_bounding_box(bob)}, \fn{get_bounding_box_for_letter(letter)},
+  \fn{analyse_bound_box(bob)}, \fn{get_dimension(bob, direction)}] extents
+  and size.
+\item[\fn{find_center_of_leftest_vertices(obj)} and its
+  \texttt{rightest / lowest / highest / closest / furthest} siblings] the
+  geometric centre of an object's extremal face/edge/vertex --- ideal
+  anchor points for annotations.
+\item[\fn{get_world_location(b_obj)}, \fn{get_world_location2(b_obj)},
+  \fn{get_world_matrix(bob)}, \fn{get_location(b_obj)},
+  \fn{get_scale(b_obj)}, \fn{get_rotation(b_obj)}] current transform.
+\item[\fn{get_world_location_at_time(b_obj, time)},
+  \fn{get_location_at_frame(b_obj, frame)},
+  \fn{get_scale_at_frame(b_obj, frame)},
+  \fn{get_rotation_at_frame(b_obj, frame)},
+  \fn{get_rotation_quaternion_at_frame(b_obj, frame)},
+  \fn{get_offset_factor_at_frame(b_obj, target, frame)},
+  \fn{get_input_value_at_frame(b_obj, frame)}] sample the transform /
+  values at a specific time --- essential when one animation must start
+  where another leaves off.
+\end{description}
+
+\begin{pythoncode}
+top = ibpy.find_center_of_highest_vertices(bob)   # anchor a label here
+where = ibpy.get_world_location_at_time(mover, time=2.0)
+\end{pythoncode}
+
+% =====================================================================
+\section{Miscellaneous utilities}
+% =====================================================================
+
+\begin{description}
+\item[\fn{to_vector(z)}] coerce a list/tuple into a \py{mathutils.Vector}
+  (\py{to_vector([1,2,3]) -> Vector((1.0, 2.0, 3.0))}).
+\item[\fn{vectorize(list)}] map a nested list to Vectors.
+\item[\fn{diff(a, b)}] element-wise difference helper.
+\end{description}
+
+\begin{pythoncode}
+v = ibpy.to_vector([1, 2, 3])     # Vector((1.0, 2.0, 3.0))
+\end{pythoncode}
+
+% =====================================================================
+\section{Notes on duplicate definitions}
+% =====================================================================
+
+Three names are defined twice in the source; Python keeps the
+\emph{last} definition, and the reorganisation preserves that ``last wins''
+ordering so behaviour is unchanged:
+
+\begin{itemize}[leftmargin=1.4em]
+\item \fn{get_geometry_nodes_modifier} --- the second (documented
+  ``extract modifier from bob'') definition is the live one.
+\item \fn{get_socket_names_from_modifier} --- second definition wins.
+\item \fn{shrink} --- the scale-based overload (with a \py{scale}
+  argument) wins over the earlier time-based one.
+\end{itemize}
+
+If you intend to call the \emph{earlier} behaviour, rename one of the
+definitions; calling the name as-is always reaches the later one.
+
+\vfill
+\begin{center}\small\itshape
+Generated from the reorganised \texttt{interface/ibpy.py}. Section order and
+titles match the in-file \texttt{===} banners; search the source for a
+banner to jump to the code.
+\end{center}
+
+\end{document}
