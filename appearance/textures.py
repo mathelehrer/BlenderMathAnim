@@ -13,7 +13,8 @@ from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
     Vector, set_material, create_iterator_group, get_obj, animate_sky_background, \
     make_gradient_material, make_dashed_material, make_mandelbrot_material, make_iteration_material, make_hue_material, \
-    get_node_from_shader, change_default_value
+    hat_tile_fractal, hat_tile_fractal2, \
+    make_new_socket, get_node_from_shader, change_default_value
 from interface.interface_constants import TRANSMISSION, SPECULAR, EMISSION, blender_version
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
@@ -446,6 +447,12 @@ def get_texture(material, **kwargs):
             material = make_magnet_material(**kwargs)
         elif material == 'mandelbrot':
             material = make_mandelbrot_material(**kwargs)
+        elif material == 'hat_tile_fractal':
+            material = hat_tile_fractal(**kwargs)
+        elif material == 'hat_tile_fractal2':
+            material = hat_tile_fractal2(**kwargs)
+        elif material == 'hat_tile_fractal3':
+            material = hat_tile_fractal3(**kwargs)
         elif material == 'iteration':
             material = make_iteration_material(**kwargs)
         elif material == 'hue':
@@ -5070,4 +5077,533 @@ def make_hex_tile_tunnel_material(name="HexTileTunnel", **kwargs):
     links.new(edge_ramp.std_out, bsdf.inputs[EMISSION])
     links.new(add_emission.outputs[0], bsdf.inputs['Emission Strength'])
 
+    return mat
+
+
+def hat_tile_fractal3(iterations=8, scale=3.0, **kwargs):
+    """
+    Shader translation of shadertoy_example.txt using make_function (RPN) for
+    simple groups and mk_sg+layout for the complex InFractalStep iterations.
+
+    Groups:
+      BasisTiling         — make_function, RPN: 2x2 matrix -> FRACT -> (a_f,b_f)
+      FundamentalDomain   — make_function, RPN: (a_f,b_f) -> (qx,qy,half_int)
+      TRot1/TRot2         — make_function, RPN: two 120-deg rotations
+      TSelect             — make_function, RPN: sector 0/1/2 -> tp,s1,s2,no_sec,above_diag
+      InFractalStep 0..N  — mk_sg+layout; one group per bisection step in a NodeFrame
+      ColorIndex          — make_function, RPN: 18-case lookup position
+      ShaderNodeValToRGB  — CONSTANT ramp, 18 colour stops + white sentinel
+
+    Fix vs hat_tile_fractal2:
+      default-true: GLSL inFractal exhausts the loop returning true; un-terminated
+        points are inside the fractal (result=1) via  result += (1-done).
+    """
+    import math as _m
+    from geometry_nodes.nodes import make_function, layout
+
+    phi   = (1 + _m.sqrt(5)) / 2
+    phi2  = phi + 1
+    phim1 = 1.0 / phi
+    r3    = _m.sqrt(3)
+    r32   = r3 / 2.0
+
+    VX, VY = 3.118033988749895,  r32
+    WX, WY = 0.8090169943749476, 3.1333093460129504
+    B00, B10 =  0.3454915028125263,  -0.09549150281252629
+    B01, B11 = -0.0892055224432725,   0.34380717944894684
+
+    COLS = [
+        (237/256.,  28/256.,  37/256.),
+        (246/256., 152/256.,   0/256.),
+        (253/256., 235/256.,   4/256.),
+        (  4/256., 203/256.,  29/256.),
+        ( 51/256., 115/256., 221/256.),
+        (157/256.,  68/256., 184/256.),
+        (243/256., 119/256., 124/256.),
+        (250/256., 192/256., 102/256.),
+        (254/256., 247/256., 152/256.),
+        (153/256., 234/256., 164/256.),
+        (102/256., 151/256., 229/256.),
+        (181/256., 113/256., 201/256.),
+    ]
+    PRIMS = [-5, 2, 5,  -3, 6, 3,  -1, 4, 1,
+             -2, 5, 2,  -6, 3, 6,  -4, 1, 4]
+    def _pti(pr): return (-pr + 5) if pr < 0 else (pr - 1)
+    CASE_COL = [COLS[_pti(p)] for p in PRIMS]
+
+    mat = bpy.data.materials.new("HatTileFractal3")
+    mat.use_nodes = True
+    tree  = mat.node_tree
+    nodes = tree.nodes
+    links = tree.links
+    out_node = nodes.get("Material Output")
+    for n in list(nodes):
+        if n != out_node:
+            nodes.remove(n)
+    out_node.location = (2000, 0)
+
+    from shader_nodes.shader_nodes import (
+        TextureCoordinate, SeparateXYZ as SepXYZ,
+        ColorRamp, EmissionShader, ShaderFrame,
+    )
+
+    # ---- parent-tree helpers ------------------------------------------------
+    def m(op, *args):
+        nd = nodes.new("ShaderNodeMath")
+        nd.operation = op
+        nd.hide = True
+        for i, a in enumerate(args):
+            if isinstance(a, (int, float)):
+                nd.inputs[i].default_value = float(a)
+            else:
+                links.new(a, nd.inputs[i])
+        return nd.outputs["Value"]
+
+    def sep(vec):
+        s = SepXYZ(tree, vector=vec)
+        return s.std_out_x, s.std_out_y
+
+    # ---- mk_sg: ShaderNodeTree group factory with auto-layout ---------------
+    def mk_sg(grp_name, in_names, out_names, body):
+        """
+        Creates a ShaderNodeTree group; calls layout() so internal nodes are
+        spread out (Sugiyama algorithm) rather than stacked.  body(lm,lsel,ic)
+        returns {out_name: socket}.
+        """
+        gt = bpy.data.node_groups.new(type="ShaderNodeTree", name=grp_name)
+        tn, tl = gt.nodes, gt.links
+        gi = tn.new("NodeGroupInput")
+        go = tn.new("NodeGroupOutput")
+        for n in in_names:
+            make_new_socket(gt, name=n, io="INPUT",  type="NodeSocketFloat")
+        for n in out_names:
+            make_new_socket(gt, name=n, io="OUTPUT", type="NodeSocketFloat")
+
+        def lm(op, *args):
+            nd = tn.new("ShaderNodeMath")
+            nd.operation = op
+            nd.hide = True
+            for i, a in enumerate(args):
+                if isinstance(a, (int, float)):
+                    nd.inputs[i].default_value = float(a)
+                else:
+                    tl.new(a, nd.inputs[i])
+            return nd.outputs["Value"]
+
+        def lsel(c, tv, fv):
+            return lm("ADD", lm("MULTIPLY", tv, c),
+                             lm("MULTIPLY", fv, lm("SUBTRACT", 1.0, c)))
+
+        in_ch = {n: gi.outputs[n] for n in in_names}
+        out_sockets = body(lm, lsel, in_ch)
+        for n, sock in out_sockets.items():
+            tl.new(sock, go.inputs[n])
+
+        layout(gt)  # auto-layout nodes inside the group
+
+        grp = nodes.new("ShaderNodeGroup")
+        grp.name = grp_name
+        grp.node_tree = gt
+        grp.hide = True
+        return grp
+
+    # ===== Stage 1: Input coordinates ========================================
+    tex = TextureCoordinate(tree, std_out='Object', location=(-10, 0), hide=False)
+    px_raw, py_raw = sep(tex.std_out)
+    px = m("DIVIDE", px_raw, scale)
+    py = m("DIVIDE", py_raw, scale)
+
+    # ===== Stage 2: BasisTiling (make_function / RPN) ========================
+    # a_f = frac(B00*px + B01*py),  b_f = frac(B10*px + B11*py)
+    g_basis = make_function(nodes, functions={
+        "a_f": f"px,{B00},*,py,{B01},*,+,frac",
+        "b_f": f"px,{B10},*,py,{B11},*,+,frac",
+    }, inputs=["px", "py"], outputs=["a_f", "b_f"],
+       scalars=["px", "py", "a_f", "b_f"],
+       node_group_type='Shader', name="BasisTiling", location=(-8, 0))
+    links.new(px, g_basis.inputs["px"])
+    links.new(py, g_basis.inputs["py"])
+
+    # ===== Stage 3: FundamentalDomain (make_function / RPN) ==================
+    # u = (a_f+b_f) < 1
+    # mp_x = a_f*VX + b_f*WX;  tr_x = (VX+WX) - mp_x
+    # qx = u*mp_x + (1-u)*tr_x;  (same for y);  half_int = 1-u
+    _VXWX = VX + WX
+    _VYWY = VY + WY
+    _u   = "a_f,b_f,+,1,<"
+    _mpx = f"a_f,{VX},*,b_f,{WX},*,+"
+    _mpy = f"a_f,{VY},*,b_f,{WY},*,+"
+    _trx = f"{_VXWX},{_mpx},-"
+    _try = f"{_VYWY},{_mpy},-"
+    g_fund = make_function(nodes, functions={
+        "qx":       f"{_u},{_mpx},*,1,{_u},-,{_trx},*,+",
+        "qy":       f"{_u},{_mpy},*,1,{_u},-,{_try},*,+",
+        "half_int": f"1,{_u},-",
+    }, inputs=["a_f", "b_f"], outputs=["qx", "qy", "half_int"],
+       scalars=["a_f", "b_f", "qx", "qy", "half_int"],
+       node_group_type='Shader', name="FundamentalDomain", location=(-6, 0))
+    links.new(g_basis.outputs["a_f"], g_fund.inputs["a_f"])
+    links.new(g_basis.outputs["b_f"], g_fund.inputs["b_f"])
+
+    # ===== Stage 4: TriangleSector (3 make_function groups in a NodeFrame) ===
+    fr_sect = ShaderFrame(tree, label="TriangleSector", color=(0.2, 0.3, 0.5))
+
+    # apply_R: rotate 120 deg CCW + translate to (VX,VY)
+    # R*(x,y) = (-0.5*x - r32*y + VX,  r32*x - 0.5*y + VY)
+    def _rot_rpn(xn, yn):
+        return (f"{xn},-0.5,*,{yn},{-r32},*,+,{VX},+",
+                f"{xn},{r32},*,{yn},-0.5,*,+,{VY},+")
+
+    r1x_rpn, r1y_rpn = _rot_rpn("qx", "qy")
+    g_rot1 = make_function(nodes,
+        functions={"r1x": r1x_rpn, "r1y": r1y_rpn},
+        inputs=["qx", "qy"], outputs=["r1x", "r1y"],
+        scalars=["qx", "qy", "r1x", "r1y"],
+        node_group_type='Shader', name="TRot1", location=(-4, 1))
+    fr_sect.add(g_rot1)
+    links.new(g_fund.outputs["qx"], g_rot1.inputs["qx"])
+    links.new(g_fund.outputs["qy"], g_rot1.inputs["qy"])
+
+    r2x_rpn, r2y_rpn = _rot_rpn("r1x", "r1y")
+    g_rot2 = make_function(nodes,
+        functions={"r2x": r2x_rpn, "r2y": r2y_rpn},
+        inputs=["r1x", "r1y"], outputs=["r2x", "r2y"],
+        scalars=["r1x", "r1y", "r2x", "r2y"],
+        node_group_type='Shader', name="TRot2", location=(-4, -1))
+    fr_sect.add(g_rot2)
+    links.new(g_rot1.outputs["r1x"], g_rot2.inputs["r1x"])
+    links.new(g_rot1.outputs["r1y"], g_rot2.inputs["r1y"])
+
+    # in_sec(x,y) = (y < r32) * (y < r3*x)
+    def _insec(xn, yn):
+        return f"{yn},{r32},<,{yn},{xn},{r3},*,<,*"
+
+    _is0 = _insec("qx",  "qy")
+    _is1 = _insec("r1x", "r1y")
+    _is2 = _insec("r2x", "r2y")
+    _s1  = f"{_is1},1,{_is0},-,*"                     # is1*(1-s0)
+    _s2  = f"{_is2},1,{_is0},-,{_s1},-,*"             # is2*(1-s0-s1)
+    _tpx = f"qx,{_is0},*,r1x,{_s1},*,+,r2x,{_s2},*,+"
+    _tpy = f"qy,{_is0},*,r1y,{_s1},*,+,r2y,{_s2},*,+"
+    _nos = f"1,{_is0},-,{_s1},-,{_s2},-,0,max"
+    # above_diag = tp_y > r3*(1-tp_x); inline tp_x, tp_y fully
+    _adiag = f"{_tpy},{r3},1,{_tpx},-,*,>"
+
+    g_select = make_function(nodes, functions={
+        "tp_x":       _tpx,
+        "tp_y":       _tpy,
+        "s1":         _s1,
+        "s2":         _s2,
+        "no_sector":  _nos,
+        "above_diag": _adiag,
+    }, inputs=["qx", "qy", "r1x", "r1y", "r2x", "r2y"],
+       outputs=["tp_x", "tp_y", "s1", "s2", "no_sector", "above_diag"],
+       scalars=["qx","qy","r1x","r1y","r2x","r2y",
+                "tp_x","tp_y","s1","s2","no_sector","above_diag"],
+       node_group_type='Shader', name="TSelect", location=(-4, -3))
+    fr_sect.add(g_select)
+    links.new(g_fund.outputs["qx"],  g_select.inputs["qx"])
+    links.new(g_fund.outputs["qy"],  g_select.inputs["qy"])
+    links.new(g_rot1.outputs["r1x"], g_select.inputs["r1x"])
+    links.new(g_rot1.outputs["r1y"], g_select.inputs["r1y"])
+    links.new(g_rot2.outputs["r2x"], g_select.inputs["r2x"])
+    links.new(g_rot2.outputs["r2y"], g_select.inputs["r2y"])
+
+    # ===== Stages 5..N+4: InFractalStep (mk_sg+layout, each in a NodeFrame) =
+    # Implements one bisection iteration of the GLSL inFractal loop exactly.
+    # The computation has ~200 shared intermediate values per iteration, making
+    # pure RPN impractical; mk_sg with layout() gives the same auto-layout.
+    STATE   = ["ax","ay","bx","by","cx","cy","dx","dy","is_trap","fl","done","result"]
+    ITER_IN = STATE + ["tp_x", "tp_y"]
+
+    def _infractal_body(lm, lsel, ic):
+        tp_x, tp_y = ic["tp_x"], ic["tp_y"]
+        ax,  ay   = ic["ax"],  ic["ay"]
+        bx,  by_  = ic["bx"],  ic["by"]
+        cx,  cy   = ic["cx"],  ic["cy"]
+        dx,  dy   = ic["dx"],  ic["dy"]
+        is_trap   = ic["is_trap"]
+        fl        = ic["fl"]
+        done      = ic["done"]
+        result    = ic["result"]
+
+        def lor(px, py, Ax, Ay, Bx, By):
+            return lm("GREATER_THAN",
+                      lm("SUBTRACT",
+                         lm("MULTIPLY", lm("SUBTRACT", px, Ax), lm("SUBTRACT", By, Ay)),
+                         lm("MULTIPLY", lm("SUBTRACT", py, Ay), lm("SUBTRACT", Bx, Ax))),
+                      0.0)
+
+        def lmix(ax, ay, bx, by, t):
+            return (lm("ADD", lm("MULTIPLY", lm("SUBTRACT", bx, ax), t), ax),
+                    lm("ADD", lm("MULTIPLY", lm("SUBTRACT", by, ay), t), ay))
+
+        def br(tv, pv):
+            return lsel(is_trap, tv, pv)
+
+        # --- isTrap branch ---
+        ex_t, ey_t = lmix(ax, ay, bx, by_, 1.0/phi2)
+        fx_t = lm("ADD", bx,  lm("SUBTRACT", ax,   ex_t))
+        fy_t = lm("ADD", by_, lm("SUBTRACT", ay,   ey_t))
+        gx_t = lm("ADD", dx,  lm("SUBTRACT", ex_t, ax))
+        gy_t = lm("ADD", dy,  lm("SUBTRACT", ey_t, ay))
+
+        ct1   = lor(tp_x, tp_y, dx,   dy,   ex_t, ey_t)
+        ct2   = lm("MULTIPLY", lor(tp_x, tp_y, gx_t, gy_t, ex_t, ey_t),
+                               lm("SUBTRACT", 1.0, ct1))
+        not12 = lm("MULTIPLY", lm("SUBTRACT", 1.0, ct1), lm("SUBTRACT", 1.0, ct2))
+        ct3   = lm("MULTIPLY", lor(tp_x, tp_y, cx, cy, fx_t, fy_t), not12)
+        ct4   = lm("MAXIMUM",  lm("SUBTRACT", 1.0,
+                   lm("ADD", lm("ADD", ct1, ct2), ct3)), 0.0)
+
+        A1x, A1y = lmix(ex_t, ey_t, ax,   ay,   phim1)
+        B1x, B1y = lmix(ex_t, ey_t, dx,   dy,   phim1)
+        s_t1     = lor(tp_x, tp_y, A1x, A1y, B1x, B1y)
+        ct1_term = lm("MULTIPLY", ct1, s_t1)
+        ct1_rec  = lm("MULTIPLY", ct1, lm("SUBTRACT", 1.0, s_t1))
+
+        A2x, A2y = lmix(ex_t, ey_t, dx,   dy,   phim1)
+        B2x, B2y = lmix(ex_t, ey_t, gx_t, gy_t, phim1)
+        s_t2     = lor(tp_x, tp_y, A2x, A2y, B2x, B2y)
+        ct2_term = lm("MULTIPLY", ct2, s_t2)
+        ct2_rec  = lm("MULTIPLY", ct2, lm("SUBTRACT", 1.0, s_t2))
+
+        A3x, A3y = lmix(ex_t, ey_t, gx_t, gy_t, phim1)
+        B3x, B3y = lmix(cx,   cy,   fx_t, fy_t, phim1)
+        s_t3a    = lor(tp_x, tp_y, A3x, A3y, fx_t, fy_t)
+        s_t3b    = lor(tp_x, tp_y, B3x, B3y, gx_t, gy_t)
+        not_t3a  = lm("SUBTRACT", 1.0, s_t3a)
+        ct3_term_a = lm("MULTIPLY", ct3, s_t3a)
+        ct3_term_b = lm("MULTIPLY", ct3, lm("MULTIPLY", not_t3a, s_t3b))
+        ct3_rec    = lm("MULTIPLY", ct3, lm("MULTIPLY", not_t3a,
+                        lm("SUBTRACT", 1.0, s_t3b)))
+
+        A4x, A4y = lmix(cx, cy, bx,   by_,  phim1)
+        B4x, B4y = lmix(cx, cy, fx_t, fy_t, phim1)
+        s_t4     = lor(tp_x, tp_y, A4x, A4y, B4x, B4y)
+        ct4_term = lm("MULTIPLY", ct4, s_t4)
+        ct4_rec  = lm("MULTIPLY", ct4, lm("SUBTRACT", 1.0, s_t4))
+
+        # --- !isTrap (parallelogram) branch ---
+        ex_p, ey_p = lmix(dx, dy, cx, cy, phim1)
+        fx_p = lm("ADD", bx,  lm("SUBTRACT", dx, ex_p))
+        fy_p = lm("ADD", by_, lm("SUBTRACT", dy, ey_p))
+
+        cp1   = lor(tp_x, tp_y, ex_p, ey_p, ax, ay)
+        cp2   = lm("MULTIPLY", lor(tp_x, tp_y, cx, cy, fx_p, fy_p),
+                               lm("SUBTRACT", 1.0, cp1))
+        cp3   = lm("MAXIMUM",  lm("SUBTRACT", 1.0, lm("ADD", cp1, cp2)), 0.0)
+
+        Ap1x, Ap1y = lmix(ax, ay, dx,   dy,   phim1)
+        Bp1x, Bp1y = lmix(ax, ay, ex_p, ey_p, phim1)
+        s_p1     = lor(tp_x, tp_y, Ap1x, Ap1y, Bp1x, Bp1y)
+        cp1_term = lm("MULTIPLY", cp1, s_p1)
+        cp1_rec  = lm("MULTIPLY", cp1, lm("SUBTRACT", 1.0, s_p1))
+
+        Ap2x, Ap2y = lmix(ax, ay, ex_p, ey_p, phim1)
+        Bp2x, Bp2y = lmix(cx, cy, fx_p, fy_p, phim1)
+        s_p2a    = lor(tp_x, tp_y, Ap2x, Ap2y, fx_p, fy_p)
+        s_p2b    = lor(tp_x, tp_y, Bp2x, Bp2y, ex_p, ey_p)
+        not_p2a  = lm("SUBTRACT", 1.0, s_p2a)
+        cp2_term_a = lm("MULTIPLY", cp2, s_p2a)
+        cp2_term_b = lm("MULTIPLY", cp2, lm("MULTIPLY", not_p2a, s_p2b))
+        cp2_rec    = lm("MULTIPLY", cp2, lm("MULTIPLY", not_p2a,
+                        lm("SUBTRACT", 1.0, s_p2b)))
+
+        Ap3x, Ap3y = lmix(cx, cy, fx_p, fy_p, phim1)
+        Bp3x, Bp3y = lmix(cx, cy, bx,   by_,  phim1)
+        s_p3     = lor(tp_x, tp_y, Bp3x, Bp3y, Ap3x, Ap3y)
+        cp3_term = lm("MULTIPLY", cp3, s_p3)
+        cp3_rec  = lm("MULTIPLY", cp3, lm("SUBTRACT", 1.0, s_p3))
+
+        # --- accumulate done / result ---
+        term_nfl = br(lm("ADD", lm("ADD", ct1_term, ct2_term), ct3_term_a),
+                      lm("ADD", cp1_term, cp2_term_a))
+        term_fl  = br(lm("ADD", ct3_term_b, ct4_term),
+                      lm("ADD", cp2_term_b, cp3_term))
+
+        not_done_now = lm("SUBTRACT", 1.0, done)
+        nd_nfl = lm("MULTIPLY", term_nfl, not_done_now)
+        nd_fl  = lm("MULTIPLY", term_fl,  not_done_now)
+
+        new_result = lm("ADD", result,
+                        lm("ADD",
+                           lm("MULTIPLY", nd_nfl, lm("SUBTRACT", 1.0, fl)),
+                           lm("MULTIPLY", nd_fl,  fl)))
+        new_done   = lm("MINIMUM", lm("ADD", done, lm("ADD", nd_nfl, nd_fl)), 1.0)
+        not_done   = lm("SUBTRACT", 1.0, new_done)
+
+        # --- state updates ---
+        new_ax = br(
+            lm("ADD", lm("ADD", lm("ADD",
+                lm("MULTIPLY", ct1_rec, dx),
+                lm("MULTIPLY", ct2_rec, gx_t)),
+                lm("MULTIPLY", ct3_rec, A3x)),
+                lm("MULTIPLY", ct4_rec, fx_t)),
+            lm("ADD", lm("ADD",
+                lm("MULTIPLY", cp1_rec, ex_p),
+                lm("MULTIPLY", cp2_rec, Ap2x)),
+                lm("MULTIPLY", cp3_rec, fx_p)))
+        new_ay = br(
+            lm("ADD", lm("ADD", lm("ADD",
+                lm("MULTIPLY", ct1_rec, dy),
+                lm("MULTIPLY", ct2_rec, gy_t)),
+                lm("MULTIPLY", ct3_rec, A3y)),
+                lm("MULTIPLY", ct4_rec, fy_t)),
+            lm("ADD", lm("ADD",
+                lm("MULTIPLY", cp1_rec, ey_p),
+                lm("MULTIPLY", cp2_rec, Ap2y)),
+                lm("MULTIPLY", cp3_rec, fy_p)))
+        new_bx = br(
+            lm("ADD", lm("ADD", lm("ADD",
+                lm("MULTIPLY", ct1_rec, ax),
+                lm("MULTIPLY", ct2_rec, dx)),
+                lm("MULTIPLY", ct3_rec, fx_t)),
+                lm("MULTIPLY", ct4_rec, bx)),
+            lm("ADD", lm("ADD",
+                lm("MULTIPLY", cp1_rec, dx),
+                lm("MULTIPLY", cp2_rec, fx_p)),
+                lm("MULTIPLY", cp3_rec, bx)))
+        new_by = br(
+            lm("ADD", lm("ADD", lm("ADD",
+                lm("MULTIPLY", ct1_rec, ay),
+                lm("MULTIPLY", ct2_rec, dy)),
+                lm("MULTIPLY", ct3_rec, fy_t)),
+                lm("MULTIPLY", ct4_rec, by_)),
+            lm("ADD", lm("ADD",
+                lm("MULTIPLY", cp1_rec, dy),
+                lm("MULTIPLY", cp2_rec, fy_p)),
+                lm("MULTIPLY", cp3_rec, by_)))
+        new_cx = br(
+            lm("ADD", lm("ADD", lm("ADD",
+                lm("MULTIPLY", ct1_rec, A1x),
+                lm("MULTIPLY", ct2_rec, A2x)),
+                lm("MULTIPLY", ct3_rec, B3x)),
+                lm("MULTIPLY", ct4_rec, A4x)),
+            lm("ADD", lm("ADD",
+                lm("MULTIPLY", cp1_rec, Ap1x),
+                lm("MULTIPLY", cp2_rec, Bp2x)),
+                lm("MULTIPLY", cp3_rec, Ap3x)))
+        new_cy = br(
+            lm("ADD", lm("ADD", lm("ADD",
+                lm("MULTIPLY", ct1_rec, A1y),
+                lm("MULTIPLY", ct2_rec, A2y)),
+                lm("MULTIPLY", ct3_rec, B3y)),
+                lm("MULTIPLY", ct4_rec, A4y)),
+            lm("ADD", lm("ADD",
+                lm("MULTIPLY", cp1_rec, Ap1y),
+                lm("MULTIPLY", cp2_rec, Bp2y)),
+                lm("MULTIPLY", cp3_rec, Ap3y)))
+        new_dx = br(
+            lm("ADD", lm("ADD", lm("ADD",
+                lm("MULTIPLY", ct1_rec, B1x),
+                lm("MULTIPLY", ct2_rec, B2x)),
+                lm("MULTIPLY", ct3_rec, gx_t)),
+                lm("MULTIPLY", ct4_rec, B4x)),
+            lm("ADD", lm("ADD",
+                lm("MULTIPLY", cp1_rec, Bp1x),
+                lm("MULTIPLY", cp2_rec, ex_p)),
+                lm("MULTIPLY", cp3_rec, Bp3x)))
+        new_dy = br(
+            lm("ADD", lm("ADD", lm("ADD",
+                lm("MULTIPLY", ct1_rec, B1y),
+                lm("MULTIPLY", ct2_rec, B2y)),
+                lm("MULTIPLY", ct3_rec, gy_t)),
+                lm("MULTIPLY", ct4_rec, B4y)),
+            lm("ADD", lm("ADD",
+                lm("MULTIPLY", cp1_rec, Bp1y),
+                lm("MULTIPLY", cp2_rec, ey_p)),
+                lm("MULTIPLY", cp3_rec, Bp3y)))
+        new_trap = br(lm("ADD", lm("ADD", ct1_rec, ct2_rec), ct4_rec),
+                      lm("ADD", cp1_rec, cp3_rec))
+        new_fl = br(
+            lm("ADD",
+               lm("MULTIPLY", lm("ADD", ct1_rec, ct2_rec), lm("SUBTRACT", 1.0, fl)),
+               lm("MULTIPLY", lm("ADD", ct3_rec, ct4_rec), fl)),
+            lm("ADD",
+               lm("MULTIPLY", cp1_rec, lm("SUBTRACT", 1.0, fl)),
+               lm("MULTIPLY", lm("ADD", cp2_rec, cp3_rec), fl)))
+
+        def upd(new, old):
+            return lsel(not_done, new, old)
+
+        return {
+            "ax": upd(new_ax, ax),   "ay": upd(new_ay, ay),
+            "bx": upd(new_bx, bx),   "by": upd(new_by, by_),
+            "cx": upd(new_cx, cx),   "cy": upd(new_cy, cy),
+            "dx": upd(new_dx, dx),   "dy": upd(new_dy, dy),
+            "is_trap": upd(new_trap, is_trap),
+            "fl":      upd(new_fl,   fl),
+            "done":    new_done,
+            "result":  new_result,
+        }
+
+    INIT = {
+        "ax": 0.0,        "ay": 0.0,
+        "bx": phi2,       "by": 0.0,
+        "cx": phi2 - 0.5, "cy": r32,
+        "dx": 0.5,        "dy": r32,
+        "is_trap": 1.0,   "fl": 0.0,
+        "done": 0.0,      "result": 0.0,
+    }
+
+    g_prev = None
+    for _it in range(iterations):
+        fr_it = ShaderFrame(tree, label=f"Iteration {_it}", color=(0.30, 0.18, 0.18))
+
+        g_it = mk_sg(f"InFractalStep{_it}", ITER_IN, STATE, _infractal_body)
+        fr_it.add(g_it)
+        g_it.location = (-400 + _it * 200, 0)
+
+        links.new(g_select.outputs["tp_x"], g_it.inputs["tp_x"])
+        links.new(g_select.outputs["tp_y"], g_it.inputs["tp_y"])
+        if g_prev is None:
+            for sv, val in INIT.items():
+                g_it.inputs[sv].default_value = val
+        else:
+            for sv in STATE:
+                links.new(g_prev.outputs[sv], g_it.inputs[sv])
+        g_prev = g_it
+
+    # default-true: GLSL returns true after 20 iterations; un-terminated points in fractal
+    final_result = m("ADD", g_prev.outputs["result"],
+                     m("SUBTRACT", 1.0, g_prev.outputs["done"]))
+
+    # ===== ColorIndex (make_function / RPN) ==================================
+    # case = half_int*9 + sector*3 + sub;  valid_pos = (case+0.5)/18
+    # color_pos = valid_pos*(1-no_sector) + no_sector  (white sentinel at 1.0)
+    _cpos = (
+        f"half_int,9,*,"
+        f"s1,s2,2,*,+,3,*,+,"
+        f"result,1,result,-,above_diag,*,2,*,+,+,"
+        f"0.5,+,18,/,"
+        f"1,no_sector,-,*,"
+        f"no_sector,+"
+    )
+    g_color = make_function(nodes, functions={"color_pos": _cpos},
+        inputs=["result", "half_int", "s1", "s2", "no_sector", "above_diag"],
+        outputs=["color_pos"],
+        scalars=["result", "half_int", "s1", "s2", "no_sector", "above_diag", "color_pos"],
+        node_group_type='Shader', name="ColorIndex", location=(2, 0))
+    links.new(final_result,                      g_color.inputs["result"])
+    links.new(g_fund.outputs["half_int"],        g_color.inputs["half_int"])
+    links.new(g_select.outputs["s1"],            g_color.inputs["s1"])
+    links.new(g_select.outputs["s2"],            g_color.inputs["s2"])
+    links.new(g_select.outputs["no_sector"],     g_color.inputs["no_sector"])
+    links.new(g_select.outputs["above_diag"],    g_color.inputs["above_diag"])
+
+    # ===== Color ramp (CONSTANT, 18 stops + white sentinel) ==================
+    _c_vals   = [(i + 0.5) / 18.0 for i in range(18)] + [1.0]
+    _c_colors = [list(c) + [1.0] for c in CASE_COL] + [[1.0, 1.0, 1.0, 1.0]]
+    ramp = ColorRamp(tree,
+        factor=g_color.outputs["color_pos"],
+        values=_c_vals, colors=_c_colors,
+        interpolation="CONSTANT",
+        location=(3.5, 0), hide=False)
+
+    emission = EmissionShader(tree,
+        color=ramp.std_out,
+        strength=1.0,
+        location=(4.5, 0), hide=False)
+    links.new(emission.std_out, out_node.inputs["Surface"])
     return mat

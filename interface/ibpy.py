@@ -3744,6 +3744,570 @@ def make_mandelbrot_material(**kwargs):
     return material
 
 
+def hat_tile_fractal(iterations=10, scale=3.0, **kwargs):
+    """
+    Shader material for the hat-tiling IFS fractal (Labbé & Selinger 2025).
+
+    Each point of the plane is tiled to the fundamental parallelogram
+    (basis e1 = (phi^2, 0), e2 = (0.5, sqrt(3)/2)) and then coloured
+    by its orbit under the four contracting inverse maps of the IFS after
+    `iterations` steps.  `scale` is world-units per fractal unit so the
+    fractal fills the viewport on the carrier plane.
+    """
+    import math as _m
+
+    phi  = (1 + _m.sqrt(5)) / 2
+    phi2 = phi + 1          # phi^2 = phi + 1 (golden-ratio identity)
+    s3   = _m.sqrt(3)
+
+    mat = bpy.data.materials.new("HatTileFractal")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+
+    out_node = nodes.get("Material Output")
+    for n in list(nodes):
+        if n != out_node:
+            nodes.remove(n)
+
+    def m(op, *args):
+        nd = nodes.new("ShaderNodeMath")
+        nd.operation = op
+        nd.hide = True
+        for i, a in enumerate(args):
+            if isinstance(a, (int, float)):
+                nd.inputs[i].default_value = float(a)
+            else:
+                links.new(a, nd.inputs[i])
+        return nd.outputs["Value"]
+
+    def sep(vec):
+        s = nodes.new("ShaderNodeSeparateXYZ")
+        s.hide = True
+        links.new(vec, s.inputs["Vector"])
+        return s.outputs["X"], s.outputs["Y"], s.outputs["Z"]
+
+    # World-space coordinates from Object texture slot
+    tex = nodes.new("ShaderNodeTexCoord")
+    wx, wy, _ = sep(tex.outputs["Object"])
+    px = m("DIVIDE", wx, scale)
+    py = m("DIVIDE", wy, scale)
+
+    # ---- Tile to fundamental parallelogram ----
+    # Basis: e1 = (phi^2, 0),  e2 = (0.5, sqrt(3)/2)
+    # Decompose p = a*e1 + b*e2:
+    #   b_raw = 2*py / sqrt(3)
+    #   a_raw = (px - 0.5*b_raw) / phi^2  =  (px - py/sqrt(3)) / phi^2
+    b_raw = m("MULTIPLY", py, 2.0 / s3)
+    a_raw = m("DIVIDE", m("SUBTRACT", px, m("DIVIDE", py, s3)), phi2)
+    a_f   = m("FRACT",  a_raw)
+    b_f   = m("FRACT",  b_raw)
+    # Reconstruct reduced point inside the parallelogram
+    px_r  = m("ADD",      m("MULTIPLY", a_f, phi2), m("MULTIPLY", b_f, 0.5))
+    py_r  = m("MULTIPLY", b_f, s3 / 2.0)
+
+    # ---- IFS on the base trapezoid ----
+    # Vertices: a=(0,0)  b=(phi^2,0)  c=(phi^2-0.5, s3/2)  d=(0.5, s3/2)
+    #
+    # Four contraction maps (scale k = 1/phi^2), and their inverses
+    # (scale phi^2):
+    #
+    #  f1_inv(p) = phi^2 * rot120 * (p - d)        [polygon type 3]
+    #  f2_inv(p) = phi^2 * ((1.5, s3/2) - p)       [polygon type 4]
+    #  f3_inv(p) = phi^2 * (p - (phi, 0))           [polygon type 6]
+    #  f4_inv(p) = phi^2 * rot60 * (p-(phi,0)) + (phi^2,0)  [polygon type 5]
+    #
+    # Point-in-trapezoid test (CCW cross-products, all > 0):
+    #   (1) py > 0
+    #   (2) s3*px + py < s3*phi^2
+    #   (3) py < s3/2
+    #   (4) s3*px - py > 0
+
+    def in_trap(qx, qy):
+        c1 = m("GREATER_THAN", qy, 0.0)
+        c2 = m("LESS_THAN",
+               m("ADD", m("MULTIPLY", s3, qx), qy), s3 * phi2)
+        c3 = m("LESS_THAN",   qy, s3 / 2.0)
+        c4 = m("GREATER_THAN",
+               m("SUBTRACT", m("MULTIPLY", s3, qx), qy), 0.0)
+        return m("MULTIPLY", m("MULTIPLY", m("MULTIPLY", c1, c2), c3), c4)
+
+    px_c = px_r
+    py_c = py_r
+    color_val = 0.0
+
+    # Geometric weight: w_i = 0.5^i,  sum_{i=0}^{N-1} = 2*(1 - 0.5^N)
+    weight_sum = 2.0 * (1.0 - 0.5 ** iterations)
+
+    for i in range(iterations):
+        # f1_inv: phi^2 * rot120 * (p - d),  rot120 = (-0.5, s3/2)
+        # re = -0.5*(px-0.5) - s3/2*(py-s3/2) = -0.5*px - s3/2*py + 1
+        # im =  s3/2*(px-0.5) - 0.5*(py-s3/2) =  s3/2*px - 0.5*py
+        q1x = m("MULTIPLY", phi2,
+                m("ADD", m("ADD", m("MULTIPLY", -0.5,    px_c),
+                                  m("MULTIPLY", -s3 / 2, py_c)), 1.0))
+        q1y = m("MULTIPLY", phi2,
+                m("ADD", m("MULTIPLY",  s3 / 2, px_c),
+                          m("MULTIPLY", -0.5,   py_c)))
+
+        # f2_inv: phi^2 * ((1.5, s3/2) - p)
+        q2x = m("MULTIPLY", phi2, m("SUBTRACT", 1.5,    px_c))
+        q2y = m("MULTIPLY", phi2, m("SUBTRACT", s3 / 2, py_c))
+
+        # f3_inv: phi^2 * (p - (phi, 0))
+        q3x = m("MULTIPLY", phi2, m("SUBTRACT", px_c, phi))
+        q3y = m("MULTIPLY", phi2, py_c)
+
+        # f4_inv: phi^2 * rot60 * (p-(phi,0)) + (phi^2, 0),  rot60 = (0.5, s3/2)
+        # re = 0.5*(px-phi) - s3/2*py,  then add phi^2
+        # im = s3/2*(px-phi) + 0.5*py
+        q4x = m("ADD",
+                m("MULTIPLY", phi2,
+                  m("SUBTRACT", m("MULTIPLY", 0.5,    m("SUBTRACT", px_c, phi)),
+                                m("MULTIPLY", s3 / 2, py_c))), phi2)
+        q4y = m("MULTIPLY", phi2,
+                m("ADD", m("MULTIPLY", s3 / 2, m("SUBTRACT", px_c, phi)),
+                          m("MULTIPLY", 0.5,   py_c)))
+
+        t1 = in_trap(q1x, q1y)
+        t2 = in_trap(q2x, q2y)
+        t3 = in_trap(q3x, q3y)
+        t4 = in_trap(q4x, q4y)
+
+        # Sub-regions are disjoint so at most one ti == 1
+        t_any  = m("ADD", m("ADD", m("ADD", t1, t2), t3), t4)
+        t_none = m("MAXIMUM", 0.0, m("SUBTRACT", 1.0, t_any))
+
+        px_new = m("ADD", m("ADD", m("ADD", m("ADD",
+            m("MULTIPLY", q1x, t1),
+            m("MULTIPLY", q2x, t2)),
+            m("MULTIPLY", q3x, t3)),
+            m("MULTIPLY", q4x, t4)),
+            m("MULTIPLY", px_c, t_none))
+
+        py_new = m("ADD", m("ADD", m("ADD", m("ADD",
+            m("MULTIPLY", q1y, t1),
+            m("MULTIPLY", q2y, t2)),
+            m("MULTIPLY", q3y, t3)),
+            m("MULTIPLY", q4y, t4)),
+            m("MULTIPLY", py_c, t_none))
+
+        # Encode applied map as 0.25 / 0.50 / 0.75 / 1.00; leftover = 0
+        type_val = m("ADD", m("ADD", m("ADD",
+            m("MULTIPLY", 0.25, t1),
+            m("MULTIPLY", 0.50, t2)),
+            m("MULTIPLY", 0.75, t3)),
+            m("MULTIPLY", 1.00, t4))
+
+        weight    = (0.5 ** i) / weight_sum
+        color_val = m("ADD", color_val, m("MULTIPLY", type_val, weight))
+
+        px_c = px_new
+        py_c = py_new
+
+    # ---- colour ramp ----
+    ramp = nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.interpolation = "LINEAR"
+    ramp.color_ramp.elements[0].position = 0.0
+    ramp.color_ramp.elements[0].color    = (0.00, 0.00, 0.06, 1)  # dark blue – leftover
+    ramp.color_ramp.elements[1].position = 1.0
+    ramp.color_ramp.elements[1].color    = (0.95, 0.85, 0.10, 1)  # gold      – type-4 dominant
+    e1 = ramp.color_ramp.elements.new(0.25); e1.color = (0.80, 0.12, 0.05, 1)  # red   – type 1
+    e2 = ramp.color_ramp.elements.new(0.50); e2.color = (0.05, 0.65, 0.20, 1)  # green – type 2
+    e3 = ramp.color_ramp.elements.new(0.75); e3.color = (0.05, 0.15, 0.82, 1)  # blue  – type 3
+    links.new(color_val, ramp.inputs["Fac"])
+
+    emission = nodes.new("ShaderNodeEmission")
+    emission.inputs["Strength"].default_value = 1.0
+    links.new(ramp.outputs["Color"], emission.inputs["Color"])
+    links.new(emission.outputs["Emission"], out_node.inputs["Surface"])
+    return mat
+
+
+def hat_tile_fractal2(iterations=4, scale=3.0, **kwargs):
+    """
+    Shader translation of video_hat_tile/shadertoy_example.txt.
+
+    Stages (each in its own labelled NodeFrame):
+      "Input Coordinates"       — TexCoord → Object UV → scale
+      "Basis Matrix Tiling"     — 2×2 basis multiply → FRACT → (a_f, b_f)
+      "Fundamental Domain"      — mp = a_f·v + b_f·w; TR dispatch; half flag
+      "Triangle Sector"         — up to 3 × R-matrix 120° rotations; no-sector
+      "inFractal: Iteration i"  — one frame per iteration of the bisection loop
+      "Color Assignment"        — 18-case prims/cols lookup + white; ValToRGB
+
+    Key constants mirror shadertoy_example.txt exactly:
+      v=(3.118,r32)  w=(0.809,3.133)  basis (4-element mat2)
+      prims[18]  cols[12]  primToIndex
+
+    Bug fixed vs earlier version: apply_R used wrong cross-signs.
+    Correct 120° CCW rotation:  rx = −0.5·qx − r32·qy + VX
+                                 ry =  r32·qx − 0.5·qy + VY
+    """
+    import math as _m
+
+    phi   = (1 + _m.sqrt(5)) / 2
+    phi2  = phi + 1
+    phim1 = 1.0 / phi
+    r3    = _m.sqrt(3)
+    r32   = r3 / 2.0
+
+    VX, VY = 3.118033988749895,   r32
+    WX, WY = 0.8090169943749476,  3.1333093460129504
+    # GLSL mat2 column-major: bp.x = B00*p.x+B01*p.y;  bp.y = B10*p.x+B11*p.y
+    B00, B10 =  0.3454915028125263,  -0.09549150281252629
+    B01, B11 = -0.0892055224432725,   0.34380717944894684
+
+    # Exact shadertoy colour tables
+    COLS = [
+        (237/256.,  28/256.,  37/256.),   # 0  +1 red
+        (246/256., 152/256.,   0/256.),   # 1  +2 orange
+        (253/256., 235/256.,   4/256.),   # 2  +3 yellow
+        (  4/256., 203/256.,  29/256.),   # 3  +4 green
+        ( 51/256., 115/256., 221/256.),   # 4  +5 blue
+        (157/256.,  68/256., 184/256.),   # 5  +6 violet
+        (243/256., 119/256., 124/256.),   # 6  -1 pastel red
+        (250/256., 192/256., 102/256.),   # 7  -2 pastel orange
+        (254/256., 247/256., 152/256.),   # 8  -3 pastel yellow
+        (153/256., 234/256., 164/256.),   # 9  -4 pastel green
+        (102/256., 151/256., 229/256.),   # 10 -5 pastel blue
+        (181/256., 113/256., 201/256.),   # 11 -6 pastel violet
+    ]
+    # prims[18] from shadertoy: case index = half*9 + sector*3 + sub
+    PRIMS = [-5, 2, 5,  -3, 6, 3,  -1, 4, 1,
+             -2, 5, 2,  -6, 3, 6,  -4, 1, 4]
+    def _pti(pr):
+        return (-pr + 5) if pr < 0 else (pr - 1)
+    CASE_COL = [COLS[_pti(p)] for p in PRIMS]
+
+    mat = bpy.data.materials.new("HatTileFractal2")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    out_node = nodes.get("Material Output")
+    for n in list(nodes):
+        if n != out_node:
+            nodes.remove(n)
+    out_node.location = (5200, 0)
+
+    # helpers
+    _cf = [None]
+
+    def _new(t):
+        nd = nodes.new(t)
+        if _cf[0]:
+            nd.parent = _cf[0]
+        return nd
+
+    def m(op, *args):
+        nd = _new("ShaderNodeMath")
+        nd.operation = op
+        nd.hide = True
+        for i, a in enumerate(args):
+            if isinstance(a, (int, float)):
+                nd.inputs[i].default_value = float(a)
+            else:
+                links.new(a, nd.inputs[i])
+        return nd.outputs["Value"]
+
+    def sep(vec):
+        s = _new("ShaderNodeSeparateXYZ")
+        s.hide = True
+        links.new(vec, s.inputs["Vector"])
+        return s.outputs["X"], s.outputs["Y"]
+
+    def mix2(ax, ay, bx, by, t):
+        return (m("ADD", m("MULTIPLY", m("SUBTRACT", bx, ax), t), ax),
+                m("ADD", m("MULTIPLY", m("SUBTRACT", by, ay), t), ay))
+
+    def on_right(px, py, Ax, Ay, Bx, By):
+        return m("GREATER_THAN",
+                 m("SUBTRACT",
+                   m("MULTIPLY", m("SUBTRACT", px, Ax), m("SUBTRACT", By, Ay)),
+                   m("MULTIPLY", m("SUBTRACT", py, Ay), m("SUBTRACT", Bx, Ax))),
+                 0.0)
+
+    def sel(c, tv, fv):
+        return m("ADD", m("MULTIPLY", tv, c),
+                        m("MULTIPLY", fv, m("SUBTRACT", 1.0, c)))
+
+    def mkframe(label, rgb):
+        f = nodes.new("NodeFrame")
+        f.label = label
+        f.use_custom_color = True
+        f.color = rgb
+        f.location = (0, 0)
+        _cf[0] = f
+
+    # === Frame 1: Input Coordinates ======================================
+    mkframe("Input Coordinates", (0.12, 0.18, 0.30))
+    tex = _new("ShaderNodeTexCoord")
+    tex.location = (-2100, 100)
+    px_raw, py_raw = sep(tex.outputs["Object"])
+    px = m("DIVIDE", px_raw, scale)
+    py = m("DIVIDE", py_raw, scale)
+
+    # === Frame 2: Basis Matrix Tiling ====================================
+    mkframe("Basis Matrix Tiling", (0.18, 0.12, 0.30))
+    bp_x = m("ADD", m("MULTIPLY", B00, px), m("MULTIPLY", B01, py))
+    bp_y = m("ADD", m("MULTIPLY", B10, px), m("MULTIPLY", B11, py))
+    a_f  = m("FRACT", bp_x)
+    b_f  = m("FRACT", bp_y)
+
+    # === Frame 3: Fundamental Domain =====================================
+    mkframe("Fundamental Domain", (0.12, 0.28, 0.14))
+    mp_x = m("ADD", m("MULTIPLY", a_f, VX), m("MULTIPLY", b_f, WX))
+    mp_y = m("ADD", m("MULTIPLY", a_f, VY), m("MULTIPLY", b_f, WY))
+    tr_x = m("SUBTRACT", VX + WX, mp_x)
+    tr_y = m("SUBTRACT", VY + WY, mp_y)
+    use_first = m("LESS_THAN", m("ADD", a_f, b_f), 1.0)
+    half_int  = m("SUBTRACT", 1.0, use_first)
+    qx = sel(use_first, mp_x, tr_x)
+    qy = sel(use_first, mp_y, tr_y)
+
+    # === Frame 4: Triangle Sector Detection ==============================
+    mkframe("Triangle Sector Detection", (0.28, 0.18, 0.08))
+
+    def apply_R(qx, qy):
+        # Correct 120 deg CCW: R[col0]=(-0.5,r32), R[col1]=(-r32,-0.5)
+        # R*(qx,qy,1) = (-0.5*qx - r32*qy + VX,  r32*qx - 0.5*qy + VY)
+        return (m("ADD", m("ADD", m("MULTIPLY", -0.5, qx),
+                                  m("MULTIPLY", -r32, qy)), VX),
+                m("ADD", m("ADD", m("MULTIPLY",  r32, qx),
+                                  m("MULTIPLY", -0.5, qy)), VY))
+
+    def in_sector(qx, qy):
+        return m("MULTIPLY",
+                 m("LESS_THAN", qy, r32),
+                 m("LESS_THAN", qy, m("MULTIPLY", r3, qx)))
+
+    s0       = in_sector(qx, qy)
+    r1x, r1y = apply_R(qx, qy)
+    s1       = m("MULTIPLY", in_sector(r1x, r1y), m("SUBTRACT", 1.0, s0))
+    r2x, r2y = apply_R(r1x, r1y)
+    s2       = m("MULTIPLY", in_sector(r2x, r2y),
+                  m("SUBTRACT", 1.0, m("ADD", s0, s1)))
+
+    tp_x = m("ADD", m("ADD", m("MULTIPLY", qx,  s0),
+                              m("MULTIPLY", r1x, s1)),
+                              m("MULTIPLY", r2x, s2))
+    tp_y = m("ADD", m("ADD", m("MULTIPLY", qy,  s0),
+                              m("MULTIPLY", r1y, s1)),
+                              m("MULTIPLY", r2y, s2))
+    no_sector  = m("SUBTRACT", 1.0, m("ADD", m("ADD", s0, s1), s2))
+    above_diag = m("GREATER_THAN", tp_y,
+                   m("MULTIPLY", r3, m("SUBTRACT", 1.0, tp_x)))
+
+    # === Frames 5..N+4: inFractal iterations =============================
+    ax, ay  = 0.0,        0.0
+    bx, by_ = phi2,       0.0
+    cx, cy  = phi2 - 0.5, r32
+    dx, dy  = 0.5,        r32
+    is_trap = 1.0
+    fl      = 0.0
+    done    = 0.0
+    result  = 0.0
+    inv_phi2 = 1.0 / phi2
+
+    for _it in range(iterations):
+        mkframe(f"inFractal — Iteration {_it}", (0.28, 0.22, 0.10))
+
+        # trapezoid branch (isTrap=1)
+        ex_t, ey_t = mix2(ax, ay, bx, by_, inv_phi2)
+        fx_t = m("ADD", bx,  m("SUBTRACT", ax,   ex_t))
+        fy_t = m("ADD", by_, m("SUBTRACT", ay,   ey_t))
+        gx_t = m("ADD", dx,  m("SUBTRACT", ex_t, ax))
+        gy_t = m("ADD", dy,  m("SUBTRACT", ey_t, ay))
+
+        ct1   = on_right(tp_x, tp_y, dx,   dy,   ex_t, ey_t)
+        ct2   = m("MULTIPLY", on_right(tp_x, tp_y, gx_t, gy_t, ex_t, ey_t),
+                               m("SUBTRACT", 1.0, ct1))
+        not12 = m("MULTIPLY", m("SUBTRACT", 1.0, ct1), m("SUBTRACT", 1.0, ct2))
+        ct3   = m("MULTIPLY", on_right(tp_x, tp_y, cx, cy, fx_t, fy_t), not12)
+        ct4   = m("MAXIMUM", m("SUBTRACT", 1.0, m("ADD", m("ADD", ct1, ct2), ct3)), 0.0)
+
+        A1x, A1y = mix2(ex_t, ey_t, ax,   ay,   phim1)
+        B1x, B1y = mix2(ex_t, ey_t, dx,   dy,   phim1)
+        s_t1 = on_right(tp_x, tp_y, A1x, A1y, B1x, B1y)
+        ct1_term = m("MULTIPLY", ct1, s_t1)
+        ct1_rec  = m("MULTIPLY", ct1, m("SUBTRACT", 1.0, s_t1))
+
+        A2x, A2y = mix2(ex_t, ey_t, dx,   dy,   phim1)
+        B2x, B2y = mix2(ex_t, ey_t, gx_t, gy_t, phim1)
+        s_t2 = on_right(tp_x, tp_y, A2x, A2y, B2x, B2y)
+        ct2_term = m("MULTIPLY", ct2, s_t2)
+        ct2_rec  = m("MULTIPLY", ct2, m("SUBTRACT", 1.0, s_t2))
+
+        A3x, A3y = mix2(ex_t, ey_t, gx_t, gy_t, phim1)
+        B3x, B3y = mix2(cx,   cy,   fx_t, fy_t, phim1)
+        s_t3a = on_right(tp_x, tp_y, A3x, A3y, fx_t, fy_t)
+        s_t3b = on_right(tp_x, tp_y, B3x, B3y, gx_t, gy_t)
+        not_t3a    = m("SUBTRACT", 1.0, s_t3a)
+        ct3_term_a = m("MULTIPLY", ct3, s_t3a)
+        ct3_term_b = m("MULTIPLY", ct3, m("MULTIPLY", not_t3a, s_t3b))
+        ct3_rec    = m("MULTIPLY", ct3, m("MULTIPLY", not_t3a, m("SUBTRACT", 1.0, s_t3b)))
+
+        A4x, A4y = mix2(cx, cy, bx,   by_,  phim1)
+        B4x, B4y = mix2(cx, cy, fx_t, fy_t, phim1)
+        s_t4 = on_right(tp_x, tp_y, A4x, A4y, B4x, B4y)
+        ct4_term = m("MULTIPLY", ct4, s_t4)
+        ct4_rec  = m("MULTIPLY", ct4, m("SUBTRACT", 1.0, s_t4))
+
+        # parallelogram branch (isTrap=0)
+        ex_p, ey_p = mix2(dx, dy, cx, cy, phim1)
+        fx_p = m("ADD", bx,  m("SUBTRACT", dx, ex_p))
+        fy_p = m("ADD", by_, m("SUBTRACT", dy, ey_p))
+
+        cp1   = on_right(tp_x, tp_y, ex_p, ey_p, ax, ay)
+        cp2   = m("MULTIPLY", on_right(tp_x, tp_y, cx, cy, fx_p, fy_p),
+                               m("SUBTRACT", 1.0, cp1))
+        cp3   = m("MAXIMUM", m("SUBTRACT", 1.0, m("ADD", cp1, cp2)), 0.0)
+
+        Ap1x, Ap1y = mix2(ax, ay, dx,   dy,   phim1)
+        Bp1x, Bp1y = mix2(ax, ay, ex_p, ey_p, phim1)
+        s_p1 = on_right(tp_x, tp_y, Ap1x, Ap1y, Bp1x, Bp1y)
+        cp1_term = m("MULTIPLY", cp1, s_p1)
+        cp1_rec  = m("MULTIPLY", cp1, m("SUBTRACT", 1.0, s_p1))
+
+        Ap2x, Ap2y = mix2(ax, ay, ex_p, ey_p, phim1)
+        Bp2x, Bp2y = mix2(cx, cy, fx_p, fy_p, phim1)
+        s_p2a = on_right(tp_x, tp_y, Ap2x, Ap2y, fx_p, fy_p)
+        s_p2b = on_right(tp_x, tp_y, Bp2x, Bp2y, ex_p, ey_p)
+        not_p2a    = m("SUBTRACT", 1.0, s_p2a)
+        cp2_term_a = m("MULTIPLY", cp2, s_p2a)
+        cp2_term_b = m("MULTIPLY", cp2, m("MULTIPLY", not_p2a, s_p2b))
+        cp2_rec    = m("MULTIPLY", cp2, m("MULTIPLY", not_p2a, m("SUBTRACT", 1.0, s_p2b)))
+
+        Ap3x, Ap3y = mix2(cx, cy, fx_p, fy_p, phim1)
+        Bp3x, Bp3y = mix2(cx, cy, bx,   by_,  phim1)
+        s_p3 = on_right(tp_x, tp_y, Bp3x, Bp3y, Ap3x, Ap3y)
+        cp3_term = m("MULTIPLY", cp3, s_p3)
+        cp3_rec  = m("MULTIPLY", cp3, m("SUBTRACT", 1.0, s_p3))
+
+        def br(tv, pv):
+            return sel(is_trap, tv, pv)
+
+        term_nfl = br(m("ADD", m("ADD", ct1_term, ct2_term), ct3_term_a),
+                      m("ADD", cp1_term, cp2_term_a))
+        term_fl  = br(m("ADD", ct3_term_b, ct4_term),
+                      m("ADD", cp2_term_b, cp3_term))
+
+        not_done_now = m("SUBTRACT", 1.0, done)
+        nd_nfl = m("MULTIPLY", term_nfl, not_done_now)
+        nd_fl  = m("MULTIPLY", term_fl,  not_done_now)
+
+        result = m("ADD", result,
+                   m("ADD", m("MULTIPLY", nd_nfl, m("SUBTRACT", 1.0, fl)),
+                            m("MULTIPLY", nd_fl,  fl)))
+        done     = m("MINIMUM", m("ADD", done, m("ADD", nd_nfl, nd_fl)), 1.0)
+        not_done = m("SUBTRACT", 1.0, done)
+
+        new_ax = br(
+            m("ADD", m("ADD", m("ADD", m("MULTIPLY", ct1_rec, dx),
+                m("MULTIPLY", ct2_rec, gx_t)), m("MULTIPLY", ct3_rec, A3x)),
+                m("MULTIPLY", ct4_rec, fx_t)),
+            m("ADD", m("ADD", m("MULTIPLY", cp1_rec, ex_p),
+                m("MULTIPLY", cp2_rec, Ap2x)), m("MULTIPLY", cp3_rec, fx_p)))
+        new_ay = br(
+            m("ADD", m("ADD", m("ADD", m("MULTIPLY", ct1_rec, dy),
+                m("MULTIPLY", ct2_rec, gy_t)), m("MULTIPLY", ct3_rec, A3y)),
+                m("MULTIPLY", ct4_rec, fy_t)),
+            m("ADD", m("ADD", m("MULTIPLY", cp1_rec, ey_p),
+                m("MULTIPLY", cp2_rec, Ap2y)), m("MULTIPLY", cp3_rec, fy_p)))
+        new_bx = br(
+            m("ADD", m("ADD", m("ADD", m("MULTIPLY", ct1_rec, ax),
+                m("MULTIPLY", ct2_rec, dx)),  m("MULTIPLY", ct3_rec, fx_t)),
+                m("MULTIPLY", ct4_rec, bx)),
+            m("ADD", m("ADD", m("MULTIPLY", cp1_rec, dx),
+                m("MULTIPLY", cp2_rec, fx_p)), m("MULTIPLY", cp3_rec, bx)))
+        new_by = br(
+            m("ADD", m("ADD", m("ADD", m("MULTIPLY", ct1_rec, ay),
+                m("MULTIPLY", ct2_rec, dy)),  m("MULTIPLY", ct3_rec, fy_t)),
+                m("MULTIPLY", ct4_rec, by_)),
+            m("ADD", m("ADD", m("MULTIPLY", cp1_rec, dy),
+                m("MULTIPLY", cp2_rec, fy_p)), m("MULTIPLY", cp3_rec, by_)))
+        new_cx = br(
+            m("ADD", m("ADD", m("ADD", m("MULTIPLY", ct1_rec, A1x),
+                m("MULTIPLY", ct2_rec, A2x)), m("MULTIPLY", ct3_rec, B3x)),
+                m("MULTIPLY", ct4_rec, A4x)),
+            m("ADD", m("ADD", m("MULTIPLY", cp1_rec, Ap1x),
+                m("MULTIPLY", cp2_rec, Bp2x)), m("MULTIPLY", cp3_rec, Ap3x)))
+        new_cy = br(
+            m("ADD", m("ADD", m("ADD", m("MULTIPLY", ct1_rec, A1y),
+                m("MULTIPLY", ct2_rec, A2y)), m("MULTIPLY", ct3_rec, B3y)),
+                m("MULTIPLY", ct4_rec, A4y)),
+            m("ADD", m("ADD", m("MULTIPLY", cp1_rec, Ap1y),
+                m("MULTIPLY", cp2_rec, Bp2y)), m("MULTIPLY", cp3_rec, Ap3y)))
+        new_dx = br(
+            m("ADD", m("ADD", m("ADD", m("MULTIPLY", ct1_rec, B1x),
+                m("MULTIPLY", ct2_rec, B2x)), m("MULTIPLY", ct3_rec, gx_t)),
+                m("MULTIPLY", ct4_rec, B4x)),
+            m("ADD", m("ADD", m("MULTIPLY", cp1_rec, Bp1x),
+                m("MULTIPLY", cp2_rec, ex_p)), m("MULTIPLY", cp3_rec, Bp3x)))
+        new_dy = br(
+            m("ADD", m("ADD", m("ADD", m("MULTIPLY", ct1_rec, B1y),
+                m("MULTIPLY", ct2_rec, B2y)), m("MULTIPLY", ct3_rec, gy_t)),
+                m("MULTIPLY", ct4_rec, B4y)),
+            m("ADD", m("ADD", m("MULTIPLY", cp1_rec, Bp1y),
+                m("MULTIPLY", cp2_rec, ey_p)), m("MULTIPLY", cp3_rec, Bp3y)))
+        # isTrap: T1,T2,T4->1  T3->0 | P1,P3->1  P2->0
+        new_trap = br(m("ADD", m("ADD", ct1_rec, ct2_rec), ct4_rec),
+                      m("ADD", cp1_rec, cp3_rec))
+        # fl: T1,T2 flip; T3,T4 keep | P1 flips; P2,P3 keep
+        new_fl = br(
+            m("ADD", m("MULTIPLY", m("ADD", ct1_rec, ct2_rec), m("SUBTRACT", 1.0, fl)),
+                     m("MULTIPLY", m("ADD", ct3_rec, ct4_rec), fl)),
+            m("ADD", m("MULTIPLY", cp1_rec, m("SUBTRACT", 1.0, fl)),
+                     m("MULTIPLY", m("ADD", cp2_rec, cp3_rec), fl)))
+
+        ax      = sel(not_done, new_ax,   ax)
+        ay      = sel(not_done, new_ay,   ay)
+        bx      = sel(not_done, new_bx,   bx)
+        by_     = sel(not_done, new_by,   by_)
+        cx      = sel(not_done, new_cx,   cx)
+        cy      = sel(not_done, new_cy,   cy)
+        dx      = sel(not_done, new_dx,   dx)
+        dy      = sel(not_done, new_dy,   dy)
+        is_trap = sel(not_done, new_trap, is_trap)
+        fl      = sel(not_done, new_fl,   fl)
+
+    # === Frame N+5: Color Assignment =====================================
+    # Exact 18-case prims/cols lookup + white for no-sector regions
+    # case = half_int*9 + sector*3 + sub  (sub: 0=default 1=inFrac 2=above)
+    mkframe("Color Assignment", (0.28, 0.12, 0.12))
+
+    sub_is_1 = result
+    sub_is_2 = m("MULTIPLY", m("SUBTRACT", 1.0, result), above_diag)
+    sub_int  = m("ADD", sub_is_1, m("MULTIPLY", sub_is_2, 2.0))
+
+    sector_int = m("ADD", m("MULTIPLY", s1, 1.0), m("MULTIPLY", s2, 2.0))
+    case_index = m("ADD", m("MULTIPLY", half_int, 9.0),
+                   m("ADD", m("MULTIPLY", sector_int, 3.0), sub_int))
+
+    # (case+0.5)/18 centres each constant ramp step; 1.0 = white (no sector)
+    valid_pos = m("DIVIDE", m("ADD", case_index, 0.5), 18.0)
+    color_pos = m("ADD", m("MULTIPLY", valid_pos, m("SUBTRACT", 1.0, no_sector)),
+                         no_sector)
+
+    ramp = _new("ShaderNodeValToRGB")
+    ramp.color_ramp.interpolation = "CONSTANT"
+    el = ramp.color_ramp.elements
+    el[0].position = 0.5 / 18;  el[0].color = (*CASE_COL[0],  1.0)
+    el[1].position = 1.0;        el[1].color = (1.0, 1.0, 1.0, 1.0)
+    for i in range(1, 18):
+        e = el.new((i + 0.5) / 18.0)
+        e.color = (*CASE_COL[i], 1.0)
+    links.new(color_pos, ramp.inputs["Fac"])
+
+    _cf[0] = None
+    emission = nodes.new("ShaderNodeEmission")
+    emission.location = (5000, 0)
+    emission.inputs["Strength"].default_value = 1.0
+    links.new(ramp.outputs["Color"], emission.inputs["Color"])
+    links.new(emission.outputs["Emission"], out_node.inputs["Surface"])
+    return mat
+
+
 def make_hue_material(**kwargs):
     if 'hue_value' in kwargs:
         value = kwargs.pop('hue_value')

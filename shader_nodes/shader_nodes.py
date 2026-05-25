@@ -701,3 +701,46 @@ class WhiteNoise(ShaderNode):
 
         self.std_out = self.node.outputs[std_out]
         self.node.noise_dimensions = noise_dimensions
+
+
+class EmissionShader(ShaderNode):
+    """Wraps ShaderNodeEmission. std_out = outputs["Emission"]."""
+    def __init__(self, tree, location=(0, 0), color=None, strength=1.0, **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeEmission")
+        super().__init__(tree, location=location, **kwargs)
+
+        if color is not None:
+            if isinstance(color, (list, Vector)):
+                self.node.inputs["Color"].default_value = color
+            else:
+                self.tree.links.new(color, self.node.inputs["Color"])
+
+        if isinstance(strength, (int, float)):
+            self.node.inputs["Strength"].default_value = float(strength)
+        else:
+            self.tree.links.new(strength, self.node.inputs["Strength"])
+
+        self.std_out = self.node.outputs["Emission"]
+
+
+class ShaderFrame(ShaderNode):
+    """
+    Wraps NodeFrame for shader node trees.
+    Pass color=(r,g,b) to enable a custom frame colour.
+    Use add(*nodes) to make nodes children of this frame; each argument
+    may be either a ShaderNode instance (has .node) or a raw bpy node.
+    """
+    def __init__(self, tree, location=(0, 0), label="Frame", color=None, **kwargs):
+        self.node = tree.nodes.new(type="NodeFrame")
+        kwargs.setdefault('hide', False)   # frames must not be hidden by default
+        super().__init__(tree, location=location, **kwargs)
+        self.node.label = label
+        if color is not None:
+            self.node.use_custom_color = True
+            self.node.color = color
+
+    def add(self, *nodes):
+        """Parent one or more nodes/ShaderNode instances to this frame."""
+        for n in nodes:
+            target = n.node if hasattr(n, 'node') else n
+            target.parent = self.node
