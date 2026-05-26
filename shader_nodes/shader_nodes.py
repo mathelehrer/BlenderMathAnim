@@ -952,6 +952,7 @@ class OnRightNode(ShaderNodeGroup):
 
         self.inputs = self.node.inputs
         self.outputs = self.node.outputs
+        self.std_out = self.node.outputs["Result"]
 
     def fill_group_with_node(self, group_tree, **kwargs):
         on_right = make_function(group_tree, name="Function",

@@ -1,4 +1,5 @@
 import colorsys
+import math
 import os
 from copy import deepcopy
 from random import random
@@ -8,7 +9,7 @@ import numpy as np
 from sympy import Symbol, re, im, false
 
 from extended_math_nodes.generic_nodes import SphericalHarmonics200, CMBNode
-from geometry_nodes.nodes import make_function
+from geometry_nodes.nodes import make_function, make_function_with_aux, Coord
 from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
     Vector, set_material, create_iterator_group, get_obj, animate_sky_background, \
@@ -24,7 +25,7 @@ from shader_nodes.shader_nodes import (Mapping, AttributeNode, HueSaturationValu
                                        TextureCoordinate, SeparateXYZ as SepXYZ,
                                        ColorRamp, ShaderFrame,
                                        ShaderRepeatZone, ShaderClosureZone, EvaluateClosure,
-                                       BrightContrast, RGB, PrincipledBSDF, OnRightNode)
+                                       BrightContrast, RGB, PrincipledBSDF, OnRightNode, CombineXYZ, MixNode)
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
@@ -452,8 +453,6 @@ def get_texture(material, **kwargs):
             material = make_mandelbrot_material(**kwargs)
         elif material == 'hat_tile_fractal':
             material = hat_tile_fractal(**kwargs)
-        elif material == 'hat_tile_fractal_with_closure':
-            material = hat_tile_fractal_with_closure(**kwargs)
         elif material == 'iteration':
             material = make_iteration_material(**kwargs)
         elif material == 'hue':
@@ -5081,61 +5080,25 @@ def make_hex_tile_tunnel_material(name="HexTileTunnel", **kwargs):
     return mat
 
 
-def hat_tile_fractal(iterations=8, scale=3.0, **kwargs):
+def hat_tile_fractal(**kwargs):
     """
-    Shader translation of shadertoy_example.txt using make_function (RPN) for
-    simple groups and mk_sg+layout for the complex InFractalStep iterations.
 
-    Groups:
-      BasisTiling         — make_function, RPN: 2x2 matrix -> FRACT -> (a_f,b_f)
-      FundamentalDomain   — make_function, RPN: (a_f,b_f) -> (qx,qy,half_int)
-      TRot1/TRot2         — make_function, RPN: two 120-deg rotations
-      TSelect             — make_function, RPN: sector 0/1/2 -> tp,s1,s2,no_sec,above_diag
-      InFractalStep 0..N  — mk_sg+layout; one group per bisection step in a NodeFrame
-      ColorIndex          — make_function, RPN: 18-case lookup position
-      ShaderNodeValToRGB  — CONSTANT ramp, 18 colour stops + white sentinel
-
-    Fix vs hat_tile_fractal2:
-      default-true: GLSL inFractal exhausts the loop returning true; un-terminated
-        points are inside the fractal (result=1) via  result += (1-done).
     """
-    import math as _m
-    from geometry_nodes.nodes import make_function, layout
 
-    phi = (1 + _m.sqrt(5)) / 2
+    phi = (1 + math.sqrt(5)) / 2
     phi2 = phi + 1
     phim1 = 1.0 / phi
-    r3 = _m.sqrt(3)
+    r3 = math.sqrt(3)
     r32 = r3 / 2.0
 
-    VX, VY = 3.118033988749895, r32
-    WX, WY = 0.8090169943749476, 3.1333093460129504
-    B00, B10 = 0.3454915028125263, -0.09549150281252629
-    B01, B11 = -0.0892055224432725, 0.34380717944894684
+    # torus span vectors
+    U1, U2 = 3.118033988749895, r32
 
-    COLS = [
-        (237 / 256., 28 / 256., 37 / 256.),
-        (246 / 256., 152 / 256., 0 / 256.),
-        (253 / 256., 235 / 256., 4 / 256.),
-        (4 / 256., 203 / 256., 29 / 256.),
-        (51 / 256., 115 / 256., 221 / 256.),
-        (157 / 256., 68 / 256., 184 / 256.),
-        (243 / 256., 119 / 256., 124 / 256.),
-        (250 / 256., 192 / 256., 102 / 256.),
-        (254 / 256., 247 / 256., 152 / 256.),
-        (153 / 256., 234 / 256., 164 / 256.),
-        (102 / 256., 151 / 256., 229 / 256.),
-        (181 / 256., 113 / 256., 201 / 256.),
-    ]
-    PRIMS = [-5, 2, 5, -3, 6, 3, -1, 4, 1,
-             -2, 5, 2, -6, 3, 6, -4, 1, 4]
+    # R transform (rotation plus shift by u)
+    R00, R01 = -0.5, -r32
+    R10, R11 = r32, -0.5
 
-    def _pti(pr):
-        return (-pr + 5) if pr < 0 else (pr - 1)
-
-    CASE_COL = [COLS[_pti(p)] for p in PRIMS]
-
-    mat = bpy.data.materials.new("HatTileFractal3")
+    mat = bpy.data.materials.new("HatTileFractalClosure")
     mat.use_nodes = True
     tree = mat.node_tree
     nodes = tree.nodes
@@ -5146,488 +5109,171 @@ def hat_tile_fractal(iterations=8, scale=3.0, **kwargs):
             nodes.remove(n)
     out_node.location = (2000, 0)
 
-    from shader_nodes.shader_nodes import (
-        TextureCoordinate, SeparateXYZ as SepXYZ,
-        ColorRamp, EmissionShader, ShaderFrame,
-    )
+    Coord(tree, [-20, -20], [20, 20])
 
-    # ---- parent-tree helpers ------------------------------------------------
-    def m(op, *args):
-        nd = nodes.new("ShaderNodeMath")
-        nd.operation = op
-        nd.hide = True
-        for i, a in enumerate(args):
-            if isinstance(a, (int, float)):
-                nd.inputs[i].default_value = float(a)
-            else:
-                links.new(a, nd.inputs[i])
-        return nd.outputs["Value"]
+    uv, base = _prepare_coordinates(tree, (-18, -5))
 
-    def sep(vec):
-        s = SepXYZ(tree, vector=vec)
-        return s.std_out_x, s.std_out_y
+    # ---- Repeat Zone (3 iterations) ----------------------
+    rz = ShaderRepeatZone(tree, location=(-12, 0.4), node_width=24, iterations=3)
+    rz.add_socket('VECTOR', 'uv')
+    rz.add_socket('INT', 'base')
+    rz.add_socket('INT', "result")
 
-    # ---- mk_sg: ShaderNodeTree group factory with auto-layout ---------------
-    def mk_sg(grp_name, in_names, out_names, body):
-        """
-        Creates a ShaderNodeTree group; calls layout() so internal nodes are
-        spread out (Sugiyama algorithm) rather than stacked.  body(lm,lsel,ic)
-        returns {out_name: socket}.
-        """
-        gt = bpy.data.node_groups.new(type="ShaderNodeTree", name=grp_name)
-        tn, tl = gt.nodes, gt.links
-        gi = tn.new("NodeGroupInput")
-        go = tn.new("NodeGroupOutput")
-        for n in in_names:
-            make_new_socket(gt, name=n, io="INPUT", type="NodeSocketFloat")
-        for n in out_names:
-            make_new_socket(gt, name=n, io="OUTPUT", type="NodeSocketFloat")
+    check = make_function_with_aux(tree, name="TriangleSelection",
+                                   aux_functions={
+                                       "cond": f"uv_y,{r32},<,uv_y,{r3},uv_x,*,<,*",
+                                       "cond2": "result,0,=",
+                                       "cond3": f"uv_y,{r3},1,uv_x,-,*,>"
+                                   },
+                                   functions={
+                                       "result": "1,cond2,-,result,*,"  # already different from zero
+                                                 "cond2,cond,*,base,3,i,*,+,*,+,"  # in triangle, just add one
+                                                 "cond2,cond,*,1,inFractal,-,*,cond3,*,2,*,+,"  # not in fractal but cond3, just add 2
+                                                 "cond2,cond,*,inFractal,*,+"  # in fractal, add onother one
+                                   }, inputs=["uv", "result", "base", "i", "inFractal"], outputs=["result"], hide=True,
+                                   scalars=["i", "result", "base", "cond", "cond2", "cond3", "inFractal"],
+                                   vectors=["uv"],
+                                   node_group_type="Shader", location=(-2, -3))
+    links.new(rz.iteration, check.inputs["i"])
+    links.new(rz.outputs["uv"], check.inputs["uv"])
+    links.new(rz.outputs["base"], check.inputs["base"])
+    links.new(rz.outputs["result"], check.inputs["result"])
+    links.new(rz.iteration, check.inputs["i"])
+    links.new(check.outputs["result"], rz.repeat_output.inputs["result"])
+    links.new(rz.outputs["base"], rz.repeat_output.inputs["base"])
 
-        def lm(op, *args):
-            nd = tn.new("ShaderNodeMath")
-            nd.operation = op
-            nd.hide = True
-            for i, a in enumerate(args):
-                if isinstance(a, (int, float)):
-                    nd.inputs[i].default_value = float(a)
-                else:
-                    tl.new(a, nd.inputs[i])
-            return nd.outputs["Value"]
+    rotate_uv = make_function(tree, name="Ruv",
+                              functions={
+                                  "uv": [f"uv_x,{R00},*,uv_y,{R01},*,+,{U1},+",
+                                         f"uv_x,{R10},*,uv_y,{R11},*,+,{U2},+", "1"]
+                              }, inputs=["uv"], outputs=["uv"], node_group_type="Shader",
+                              scalars=[], vectors=["uv"], hide=True, location=(-2, 0))
+    links.new(rz.outputs["uv"], rotate_uv.inputs["uv"])
+    links.new(rotate_uv.outputs["uv"], rz.repeat_output.inputs["uv"])
 
-        def lsel(c, tv, fv):
-            return lm("ADD", lm("MULTIPLY", tv, c),
-                      lm("MULTIPLY", fv, lm("SUBTRACT", 1.0, c)))
+    links.new(uv.outputs['uv'], rz.node.inputs['uv'])
+    links.new(base.outputs['base'], rz.node.inputs['base'])
 
-        in_ch = {n: gi.outputs[n] for n in in_names}
-        out_sockets = body(lm, lsel, in_ch)
-        for n, sock in out_sockets.items():
-            tl.new(sock, go.inputs[n])
+    # second repeatzone: IFS bisection for fractal membership
+    depth = 10
+    rz2 = ShaderRepeatZone(tree, location=(-12, 6), node_width=25, iterations=depth)
+    rz2.add_socket('VECTOR', 'uv')
+    rz2.add_socket('INT', 'inFractal')
+    rz2.add_socket('INT', 'isTrap')
+    rz2.add_socket('INT', 'fl')
+    rz2.add_socket('VECTOR', 'a')
+    rz2.add_socket('VECTOR', 'b')
+    rz2.add_socket('VECTOR', 'c')
+    rz2.add_socket('VECTOR', 'd')
+    rz2.add_socket('INT', 'hasFinished')
+    rz2.repeat_input.inputs['isTrap'].default_value = 1
 
-        layout(gt)  # auto-layout nodes inside the group
+    # rz2 receives the same initial UV that feeds rz (before any rotation)
+    links.new(rz.repeat_input.outputs['uv'], rz2.repeat_input.inputs['uv'])
 
-        grp = nodes.new("ShaderNodeGroup")
-        grp.name = grp_name
-        grp.node_tree = gt
-        grp.hide = True
-        return grp
+    # input values for the initial trapezoid
+    ax = InputValue(tree, name="ax", location=(-16, 8.0), value=0)
+    ay = InputValue(tree, name="ay", location=(-16, 7.5), value=0)
+    bx = InputValue(tree, name="bx", location=(-16, 7.0), value=phi2)
+    by = InputValue(tree, name="by", location=(-16, 6.5), value=0)
+    cx = InputValue(tree, name="cx", location=(-16, 6.0), value=phi2 - 0.5)
+    cy = InputValue(tree, name="cy", location=(-16, 5.5), value=r32)
+    dx = InputValue(tree, name="dx", location=(-16, 5.0), value=0.5)
+    dy = InputValue(tree, name="dy", location=(-16, 4.5), value=r32)
 
-    # ===== Stage 1: Input coordinates ========================================
-    tex = TextureCoordinate(tree, std_out='Object', location=(-10, 0), hide=False)
-    px_raw, py_raw = sep(tex.std_out)
-    px = m("DIVIDE", px_raw, scale)
-    py = m("DIVIDE", py_raw, scale)
+    vec_a = CombineXYZ(tree, x=ax.std_out, y=ay.std_out, location=(-14, 7.75), name="a")
+    vec_b = CombineXYZ(tree, x=bx.std_out, y=by.std_out, location=(-14, 6.75), name="b")
+    vec_c = CombineXYZ(tree, x=cx.std_out, y=cy.std_out, location=(-14, 5.75), name="c")
+    vec_d = CombineXYZ(tree, x=dx.std_out, y=dy.std_out, location=(-14, 4.75), name="d")
 
-    # ===== Stage 2: BasisTiling (make_function / RPN) ========================
-    # a_f = frac(B00*px + B01*py),  b_f = frac(B10*px + B11*py)
-    g_basis = make_function(nodes, functions={
-        "a_f": f"px,{B00},*,py,{B01},*,+,frac",
-        "b_f": f"px,{B10},*,py,{B11},*,+,frac",
-    }, inputs=["px", "py"], outputs=["a_f", "b_f"],
-                            scalars=["px", "py", "a_f", "b_f"],
-                            node_group_type='Shader', name="BasisTiling", location=(-8, 0))
-    links.new(px, g_basis.inputs["px"])
-    links.new(py, g_basis.inputs["py"])
+    links.new(vec_a.std_out, rz2.repeat_input.inputs['a'])
+    links.new(vec_b.std_out, rz2.repeat_input.inputs['b'])
+    links.new(vec_c.std_out, rz2.repeat_input.inputs['c'])
+    links.new(vec_d.std_out, rz2.repeat_input.inputs['d'])
 
-    # ===== Stage 3: FundamentalDomain (make_function / RPN) ==================
-    # u = (a_f+b_f) < 1
-    # mp_x = a_f*VX + b_f*WX;  tr_x = (VX+WX) - mp_x
-    # qx = u*mp_x + (1-u)*tr_x;  (same for y);  half_int = 1-u
-    _VXWX = VX + WX
-    _VYWY = VY + WY
-    _u = "a_f,b_f,+,1,<"
-    _mpx = f"a_f,{VX},*,b_f,{WX},*,+"
-    _mpy = f"a_f,{VY},*,b_f,{WY},*,+"
-    _trx = f"{_VXWX},{_mpx},-"
-    _try = f"{_VYWY},{_mpy},-"
-    g_fund = make_function(nodes, functions={
-        "qx": f"{_u},{_mpx},*,1,{_u},-,{_trx},*,+",
-        "qy": f"{_u},{_mpy},*,1,{_u},-,{_try},*,+",
-        "half_int": f"1,{_u},-",
-    }, inputs=["a_f", "b_f"], outputs=["qx", "qy", "half_int"],
-                           scalars=["a_f", "b_f", "qx", "qy", "half_int"],
-                           node_group_type='Shader', name="FundamentalDomain", location=(-6, 0))
-    links.new(g_basis.outputs["a_f"], g_fund.inputs["a_f"])
-    links.new(g_basis.outputs["b_f"], g_fund.inputs["b_f"])
+    # --- rz2 body: IFS bisection step ---
+    # new_uv = midpoint(b, a) * isTrap  +  midpoint(c, d) * (1 - isTrap)
 
-    # ===== Stage 4: TriangleSector (3 make_function groups in a NodeFrame) ===
-    fr_sect = ShaderFrame(tree, label="TriangleSector", color=(0.2, 0.3, 0.5))
+    is_trapez = make_function(tree, name="isTrapezoid",
+                              functions={
+                                  "inFractal": "isTrap,fromTrap,*,1,isTrap,-,fromPara,*,+"
+                              }, inputs=["isTrap", "fromTrap", "fromPara"], outputs=["inFractal"],
+                              scalars=["isTrap", "fromTrap", "fromPara", "inFractal"], vectors=[], hide=True,
+                              location=(10, 5), node_group_type="Shader")
+    links.new(rz2.outputs["isTrap"],is_trapez.inputs["isTrap"])
 
-    # apply_R: rotate 120 deg CCW + translate to (VX,VY)
-    # R*(x,y) = (-0.5*x - r32*y + VX,  r32*x - 0.5*y + VY)
-    def _rot_rpn(xn, yn):
-        return (f"{xn},-0.5,*,{yn},{-r32},*,+,{VX},+",
-                f"{xn},{r32},*,{yn},-0.5,*,+,{VY},+")
+    has_finished = make_function(tree, name="hasFinished",
+                                 functions={
+                                     "inFractal": "hasFinished,oldValue,*,1,hasFinished,-,newValue,*,+"
+                                 }, inputs=["hasFinished", "oldValue", "newValue"], outputs=["inFractal"],
+                                 node_group_type="Shader",
+                                 scalars=["hasFinished", "oldValue", "newValue", "inFractal"], hide=True,
+                                 location=(11, 5))
+    links.new(rz2.outputs["hasFinished"], has_finished.inputs["hasFinished"])
+    links.new(rz2.outputs["inFractal"], has_finished.inputs["oldValue"])
+    links.new(is_trapez.outputs["inFractal"], has_finished.inputs["newValue"])
+    links.new(has_finished.outputs["inFractal"], rz2.repeat_output.inputs["inFractal"])
 
-    r1x_rpn, r1y_rpn = _rot_rpn("qx", "qy")
-    g_rot1 = make_function(nodes,
-                           functions={"r1x": r1x_rpn, "r1y": r1y_rpn},
-                           inputs=["qx", "qy"], outputs=["r1x", "r1y"],
-                           scalars=["qx", "qy", "r1x", "r1y"],
-                           node_group_type='Shader', name="TRot1", location=(-4, 1))
-    fr_sect.add(g_rot1)
-    links.new(g_fund.outputs["qx"], g_rot1.inputs["qx"])
-    links.new(g_fund.outputs["qy"], g_rot1.inputs["qy"])
+    # trapezoid branch: midpoint(b, a), scaled by isTrap
+    e = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True, factor=1. / phi2,
+                       location=(-10, 13), caseA=rz2.outputs['b'], caseB=rz2.outputs['a'], hide=True, name="e")
+    f_and_g = make_function(tree,name="f,g",node_group_type="Shader",functions={
+        "f":"b,a,e,sub,add",
+        "g":"d,e,a,sub,add"
+    },vectors=["f","g","a","b","d","e"],inputs=["a","b","d","e"],outputs=["f","g"],location=(-10,12.5),hide=True)
+    links.new(rz2.outputs["a"],f_and_g.inputs["a"])
+    links.new(rz2.outputs["b"],f_and_g.inputs["b"])
+    links.new(rz2.outputs["d"],f_and_g.inputs["d"])
+    links.new(e.std_out,f_and_g.inputs["e"])
 
-    r2x_rpn, r2y_rpn = _rot_rpn("r1x", "r1y")
-    g_rot2 = make_function(nodes,
-                           functions={"r2x": r2x_rpn, "r2y": r2y_rpn},
-                           inputs=["r1x", "r1y"], outputs=["r2x", "r2y"],
-                           scalars=["r1x", "r1y", "r2x", "r2y"],
-                           node_group_type='Shader', name="TRot2", location=(-4, -1))
-    fr_sect.add(g_rot2)
-    links.new(g_rot1.outputs["r1x"], g_rot2.inputs["r1x"])
-    links.new(g_rot1.outputs["r1y"], g_rot2.inputs["r1y"])
+    pde = OnRightNode(tree, A=rz2.outputs["d"], B=e.std_out, Position=rz2.outputs["uv"], location=(-9,13),hide=True)
+    in_pde = make_function(tree, name="inPDE", functions={
+        "inFractal": "inPde,true,1,inPde,-,false"
+    }, inputs=["inPde", "true", "false" ], outputs=["inFractal"], scalars=["true", "false", "inPde", "inFractal"],
+                           location=(9, 6),
+                           hide=False, node_group_type="Shader")
+    links.new(pde.std_out, in_pde.inputs["inPde"])
+    links.new(in_pde.outputs["inFractal"],is_trapez.inputs["fromTrap"])
 
-    # in_sec(x,y) = (y < r32) * (y < r3*x)
-    def _insec(xn, yn):
-        return f"{yn},{r32},<,{yn},{xn},{r3},*,<,*"
 
-    _is0 = _insec("qx", "qy")
-    _is1 = _insec("r1x", "r1y")
-    _is2 = _insec("r2x", "r2y")
-    _s1 = f"{_is1},1,{_is0},-,*"  # is1*(1-s0)
-    _s2 = f"{_is2},1,{_is0},-,{_s1},-,*"  # is2*(1-s0-s1)
-    _tpx = f"qx,{_is0},*,r1x,{_s1},*,+,r2x,{_s2},*,+"
-    _tpy = f"qy,{_is0},*,r1y,{_s1},*,+,r2y,{_s2},*,+"
-    _nos = f"1,{_is0},-,{_s1},-,{_s2},-,0,max"
-    # above_diag = tp_y > r3*(1-tp_x); inline tp_x, tp_y fully
-    _adiag = f"{_tpy},{r3},1,{_tpx},-,*,>"
 
-    g_select = make_function(nodes, functions={
-        "tp_x": _tpx,
-        "tp_y": _tpy,
-        "s1": _s1,
-        "s2": _s2,
-        "no_sector": _nos,
-        "above_diag": _adiag,
-    }, inputs=["qx", "qy", "r1x", "r1y", "r2x", "r2y"],
-                             outputs=["tp_x", "tp_y", "s1", "s2", "no_sector", "above_diag"],
-                             scalars=["qx", "qy", "r1x", "r1y", "r2x", "r2y",
-                                      "tp_x", "tp_y", "s1", "s2", "no_sector", "above_diag"],
-                             node_group_type='Shader', name="TSelect", location=(-4, -3))
-    fr_sect.add(g_select)
-    links.new(g_fund.outputs["qx"], g_select.inputs["qx"])
-    links.new(g_fund.outputs["qy"], g_select.inputs["qy"])
-    links.new(g_rot1.outputs["r1x"], g_select.inputs["r1x"])
-    links.new(g_rot1.outputs["r1y"], g_select.inputs["r1y"])
-    links.new(g_rot2.outputs["r2x"], g_select.inputs["r2x"])
-    links.new(g_rot2.outputs["r2y"], g_select.inputs["r2y"])
+    # parallelogram branch
+    ep = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True, factor=phim1,
+                       location=(-10, 3), caseA=rz2.outputs['c'], caseB=rz2.outputs['d'], hide=True, name="e")
+    f = make_function(tree, name="f", functions={
+        "f": "b,d,e,sub,add",
+    }, vectors=["f", "b", "d", "e"], inputs=["d", "b", "e"], outputs=["f"], location=(-10, 2.5),
+                            hide=True,node_group_type="Shader")
+    links.new(rz2.outputs["b"], f.inputs["b"])
+    links.new(rz2.outputs["d"], f.inputs["d"])
+    links.new(ep.std_out, f.inputs["e"])
+    pea = OnRightNode(tree, A=e.std_out, B=rz2.outputs["a"], Position=rz2.outputs["uv"], location=(-9, 3), hide=True)
+    in_pea = make_function(tree,name="inPEA",functions={
+        "inFractal":"inPea,true,1,inPea,-,false"
+    },inputs=["inPea","true","false"],outputs=["inFractal"],scalars=["true","false","inPea","inFractal"],location=(9,3),
+                           hide=False,node_group_type="Shader")
+    links.new(pea.std_out,in_pea.inputs["inPea"])
+    links.new(in_pea.outputs["inFractal"], is_trapez.inputs["fromPara"])
 
-    # ===== Stages 5..N+4: InFractalStep (mk_sg+layout, each in a NodeFrame) =
-    # Implements one bisection iteration of the GLSL inFractal loop exactly.
-    # The computation has ~200 shared intermediate values per iteration, making
-    # pure RPN impractical; mk_sg with layout() gives the same auto-layout.
-    STATE = ["ax", "ay", "bx", "by", "cx", "cy", "dx", "dy", "is_trap", "fl", "done", "result"]
-    ITER_IN = STATE + ["tp_x", "tp_y"]
 
-    def _infractal_body(lm, lsel, ic):
-        tp_x, tp_y = ic["tp_x"], ic["tp_y"]
-        ax, ay = ic["ax"], ic["ay"]
-        bx, by_ = ic["bx"], ic["by"]
-        cx, cy = ic["cx"], ic["cy"]
-        dx, dy = ic["dx"], ic["dy"]
-        is_trap = ic["is_trap"]
-        fl = ic["fl"]
-        done = ic["done"]
-        result = ic["result"]
 
-        def lor(px, py, Ax, Ay, Bx, By):
-            return lm("GREATER_THAN",
-                      lm("SUBTRACT",
-                         lm("MULTIPLY", lm("SUBTRACT", px, Ax), lm("SUBTRACT", By, Ay)),
-                         lm("MULTIPLY", lm("SUBTRACT", py, Ay), lm("SUBTRACT", Bx, Ax))),
-                      0.0)
 
-        def lmix(ax, ay, bx, by, t):
-            return (lm("ADD", lm("MULTIPLY", lm("SUBTRACT", bx, ax), t), ax),
-                    lm("ADD", lm("MULTIPLY", lm("SUBTRACT", by, ay), t), ay))
+    # inFractal from rz2 drives the check inside rz
+    links.new(rz2.repeat_output.outputs['inFractal'], check.inputs['inFractal'])
 
-        def br(tv, pv):
-            return lsel(is_trap, tv, pv)
 
-        # --- isTrap branch ---
-        ex_t, ey_t = lmix(ax, ay, bx, by_, 1.0 / phi2)
-        fx_t = lm("ADD", bx, lm("SUBTRACT", ax, ex_t))
-        fy_t = lm("ADD", by_, lm("SUBTRACT", ay, ey_t))
-        gx_t = lm("ADD", dx, lm("SUBTRACT", ex_t, ax))
-        gy_t = lm("ADD", dy, lm("SUBTRACT", ey_t, ay))
-
-        ct1 = lor(tp_x, tp_y, dx, dy, ex_t, ey_t)
-        ct2 = lm("MULTIPLY", lor(tp_x, tp_y, gx_t, gy_t, ex_t, ey_t),
-                 lm("SUBTRACT", 1.0, ct1))
-        not12 = lm("MULTIPLY", lm("SUBTRACT", 1.0, ct1), lm("SUBTRACT", 1.0, ct2))
-        ct3 = lm("MULTIPLY", lor(tp_x, tp_y, cx, cy, fx_t, fy_t), not12)
-        ct4 = lm("MAXIMUM", lm("SUBTRACT", 1.0,
-                               lm("ADD", lm("ADD", ct1, ct2), ct3)), 0.0)
-
-        A1x, A1y = lmix(ex_t, ey_t, ax, ay, phim1)
-        B1x, B1y = lmix(ex_t, ey_t, dx, dy, phim1)
-        s_t1 = lor(tp_x, tp_y, A1x, A1y, B1x, B1y)
-        ct1_term = lm("MULTIPLY", ct1, s_t1)
-        ct1_rec = lm("MULTIPLY", ct1, lm("SUBTRACT", 1.0, s_t1))
-
-        A2x, A2y = lmix(ex_t, ey_t, dx, dy, phim1)
-        B2x, B2y = lmix(ex_t, ey_t, gx_t, gy_t, phim1)
-        s_t2 = lor(tp_x, tp_y, A2x, A2y, B2x, B2y)
-        ct2_term = lm("MULTIPLY", ct2, s_t2)
-        ct2_rec = lm("MULTIPLY", ct2, lm("SUBTRACT", 1.0, s_t2))
-
-        A3x, A3y = lmix(ex_t, ey_t, gx_t, gy_t, phim1)
-        B3x, B3y = lmix(cx, cy, fx_t, fy_t, phim1)
-        s_t3a = lor(tp_x, tp_y, A3x, A3y, fx_t, fy_t)
-        s_t3b = lor(tp_x, tp_y, B3x, B3y, gx_t, gy_t)
-        not_t3a = lm("SUBTRACT", 1.0, s_t3a)
-        ct3_term_a = lm("MULTIPLY", ct3, s_t3a)
-        ct3_term_b = lm("MULTIPLY", ct3, lm("MULTIPLY", not_t3a, s_t3b))
-        ct3_rec = lm("MULTIPLY", ct3, lm("MULTIPLY", not_t3a,
-                                         lm("SUBTRACT", 1.0, s_t3b)))
-
-        A4x, A4y = lmix(cx, cy, bx, by_, phim1)
-        B4x, B4y = lmix(cx, cy, fx_t, fy_t, phim1)
-        s_t4 = lor(tp_x, tp_y, A4x, A4y, B4x, B4y)
-        ct4_term = lm("MULTIPLY", ct4, s_t4)
-        ct4_rec = lm("MULTIPLY", ct4, lm("SUBTRACT", 1.0, s_t4))
-
-        # --- !isTrap (parallelogram) branch ---
-        ex_p, ey_p = lmix(dx, dy, cx, cy, phim1)
-        fx_p = lm("ADD", bx, lm("SUBTRACT", dx, ex_p))
-        fy_p = lm("ADD", by_, lm("SUBTRACT", dy, ey_p))
-
-        cp1 = lor(tp_x, tp_y, ex_p, ey_p, ax, ay)
-        cp2 = lm("MULTIPLY", lor(tp_x, tp_y, cx, cy, fx_p, fy_p),
-                 lm("SUBTRACT", 1.0, cp1))
-        cp3 = lm("MAXIMUM", lm("SUBTRACT", 1.0, lm("ADD", cp1, cp2)), 0.0)
-
-        Ap1x, Ap1y = lmix(ax, ay, dx, dy, phim1)
-        Bp1x, Bp1y = lmix(ax, ay, ex_p, ey_p, phim1)
-        s_p1 = lor(tp_x, tp_y, Ap1x, Ap1y, Bp1x, Bp1y)
-        cp1_term = lm("MULTIPLY", cp1, s_p1)
-        cp1_rec = lm("MULTIPLY", cp1, lm("SUBTRACT", 1.0, s_p1))
-
-        Ap2x, Ap2y = lmix(ax, ay, ex_p, ey_p, phim1)
-        Bp2x, Bp2y = lmix(cx, cy, fx_p, fy_p, phim1)
-        s_p2a = lor(tp_x, tp_y, Ap2x, Ap2y, fx_p, fy_p)
-        s_p2b = lor(tp_x, tp_y, Bp2x, Bp2y, ex_p, ey_p)
-        not_p2a = lm("SUBTRACT", 1.0, s_p2a)
-        cp2_term_a = lm("MULTIPLY", cp2, s_p2a)
-        cp2_term_b = lm("MULTIPLY", cp2, lm("MULTIPLY", not_p2a, s_p2b))
-        cp2_rec = lm("MULTIPLY", cp2, lm("MULTIPLY", not_p2a,
-                                         lm("SUBTRACT", 1.0, s_p2b)))
-
-        Ap3x, Ap3y = lmix(cx, cy, fx_p, fy_p, phim1)
-        Bp3x, Bp3y = lmix(cx, cy, bx, by_, phim1)
-        s_p3 = lor(tp_x, tp_y, Bp3x, Bp3y, Ap3x, Ap3y)
-        cp3_term = lm("MULTIPLY", cp3, s_p3)
-        cp3_rec = lm("MULTIPLY", cp3, lm("SUBTRACT", 1.0, s_p3))
-
-        # --- accumulate done / result ---
-        term_nfl = br(lm("ADD", lm("ADD", ct1_term, ct2_term), ct3_term_a),
-                      lm("ADD", cp1_term, cp2_term_a))
-        term_fl = br(lm("ADD", ct3_term_b, ct4_term),
-                     lm("ADD", cp2_term_b, cp3_term))
-
-        not_done_now = lm("SUBTRACT", 1.0, done)
-        nd_nfl = lm("MULTIPLY", term_nfl, not_done_now)
-        nd_fl = lm("MULTIPLY", term_fl, not_done_now)
-
-        new_result = lm("ADD", result,
-                        lm("ADD",
-                           lm("MULTIPLY", nd_nfl, lm("SUBTRACT", 1.0, fl)),
-                           lm("MULTIPLY", nd_fl, fl)))
-        new_done = lm("MINIMUM", lm("ADD", done, lm("ADD", nd_nfl, nd_fl)), 1.0)
-        not_done = lm("SUBTRACT", 1.0, new_done)
-
-        # --- state updates ---
-        new_ax = br(
-            lm("ADD", lm("ADD", lm("ADD",
-                                   lm("MULTIPLY", ct1_rec, dx),
-                                   lm("MULTIPLY", ct2_rec, gx_t)),
-                         lm("MULTIPLY", ct3_rec, A3x)),
-               lm("MULTIPLY", ct4_rec, fx_t)),
-            lm("ADD", lm("ADD",
-                         lm("MULTIPLY", cp1_rec, ex_p),
-                         lm("MULTIPLY", cp2_rec, Ap2x)),
-               lm("MULTIPLY", cp3_rec, fx_p)))
-        new_ay = br(
-            lm("ADD", lm("ADD", lm("ADD",
-                                   lm("MULTIPLY", ct1_rec, dy),
-                                   lm("MULTIPLY", ct2_rec, gy_t)),
-                         lm("MULTIPLY", ct3_rec, A3y)),
-               lm("MULTIPLY", ct4_rec, fy_t)),
-            lm("ADD", lm("ADD",
-                         lm("MULTIPLY", cp1_rec, ey_p),
-                         lm("MULTIPLY", cp2_rec, Ap2y)),
-               lm("MULTIPLY", cp3_rec, fy_p)))
-        new_bx = br(
-            lm("ADD", lm("ADD", lm("ADD",
-                                   lm("MULTIPLY", ct1_rec, ax),
-                                   lm("MULTIPLY", ct2_rec, dx)),
-                         lm("MULTIPLY", ct3_rec, fx_t)),
-               lm("MULTIPLY", ct4_rec, bx)),
-            lm("ADD", lm("ADD",
-                         lm("MULTIPLY", cp1_rec, dx),
-                         lm("MULTIPLY", cp2_rec, fx_p)),
-               lm("MULTIPLY", cp3_rec, bx)))
-        new_by = br(
-            lm("ADD", lm("ADD", lm("ADD",
-                                   lm("MULTIPLY", ct1_rec, ay),
-                                   lm("MULTIPLY", ct2_rec, dy)),
-                         lm("MULTIPLY", ct3_rec, fy_t)),
-               lm("MULTIPLY", ct4_rec, by_)),
-            lm("ADD", lm("ADD",
-                         lm("MULTIPLY", cp1_rec, dy),
-                         lm("MULTIPLY", cp2_rec, fy_p)),
-               lm("MULTIPLY", cp3_rec, by_)))
-        new_cx = br(
-            lm("ADD", lm("ADD", lm("ADD",
-                                   lm("MULTIPLY", ct1_rec, A1x),
-                                   lm("MULTIPLY", ct2_rec, A2x)),
-                         lm("MULTIPLY", ct3_rec, B3x)),
-               lm("MULTIPLY", ct4_rec, A4x)),
-            lm("ADD", lm("ADD",
-                         lm("MULTIPLY", cp1_rec, Ap1x),
-                         lm("MULTIPLY", cp2_rec, Bp2x)),
-               lm("MULTIPLY", cp3_rec, Ap3x)))
-        new_cy = br(
-            lm("ADD", lm("ADD", lm("ADD",
-                                   lm("MULTIPLY", ct1_rec, A1y),
-                                   lm("MULTIPLY", ct2_rec, A2y)),
-                         lm("MULTIPLY", ct3_rec, B3y)),
-               lm("MULTIPLY", ct4_rec, A4y)),
-            lm("ADD", lm("ADD",
-                         lm("MULTIPLY", cp1_rec, Ap1y),
-                         lm("MULTIPLY", cp2_rec, Bp2y)),
-               lm("MULTIPLY", cp3_rec, Ap3y)))
-        new_dx = br(
-            lm("ADD", lm("ADD", lm("ADD",
-                                   lm("MULTIPLY", ct1_rec, B1x),
-                                   lm("MULTIPLY", ct2_rec, B2x)),
-                         lm("MULTIPLY", ct3_rec, gx_t)),
-               lm("MULTIPLY", ct4_rec, B4x)),
-            lm("ADD", lm("ADD",
-                         lm("MULTIPLY", cp1_rec, Bp1x),
-                         lm("MULTIPLY", cp2_rec, ex_p)),
-               lm("MULTIPLY", cp3_rec, Bp3x)))
-        new_dy = br(
-            lm("ADD", lm("ADD", lm("ADD",
-                                   lm("MULTIPLY", ct1_rec, B1y),
-                                   lm("MULTIPLY", ct2_rec, B2y)),
-                         lm("MULTIPLY", ct3_rec, gy_t)),
-               lm("MULTIPLY", ct4_rec, B4y)),
-            lm("ADD", lm("ADD",
-                         lm("MULTIPLY", cp1_rec, Bp1y),
-                         lm("MULTIPLY", cp2_rec, ey_p)),
-               lm("MULTIPLY", cp3_rec, Bp3y)))
-        new_trap = br(lm("ADD", lm("ADD", ct1_rec, ct2_rec), ct4_rec),
-                      lm("ADD", cp1_rec, cp3_rec))
-        new_fl = br(
-            lm("ADD",
-               lm("MULTIPLY", lm("ADD", ct1_rec, ct2_rec), lm("SUBTRACT", 1.0, fl)),
-               lm("MULTIPLY", lm("ADD", ct3_rec, ct4_rec), fl)),
-            lm("ADD",
-               lm("MULTIPLY", cp1_rec, lm("SUBTRACT", 1.0, fl)),
-               lm("MULTIPLY", lm("ADD", cp2_rec, cp3_rec), fl)))
-
-        def upd(new, old):
-            return lsel(not_done, new, old)
-
-        return {
-            "ax": upd(new_ax, ax), "ay": upd(new_ay, ay),
-            "bx": upd(new_bx, bx), "by": upd(new_by, by_),
-            "cx": upd(new_cx, cx), "cy": upd(new_cy, cy),
-            "dx": upd(new_dx, dx), "dy": upd(new_dy, dy),
-            "is_trap": upd(new_trap, is_trap),
-            "fl": upd(new_fl, fl),
-            "done": new_done,
-            "result": new_result,
-        }
-
-    INIT = {
-        "ax": 0.0, "ay": 0.0,
-        "bx": phi2, "by": 0.0,
-        "cx": phi2 - 0.5, "cy": r32,
-        "dx": 0.5, "dy": r32,
-        "is_trap": 1.0, "fl": 0.0,
-        "done": 0.0, "result": 0.0,
-    }
-
-    g_prev = None
-    for _it in range(iterations):
-        fr_it = ShaderFrame(tree, label=f"Iteration {_it}", color=(0.30, 0.18, 0.18))
-
-        g_it = mk_sg(f"InFractalStep{_it}", ITER_IN, STATE, _infractal_body)
-        fr_it.add(g_it)
-        g_it.location = (-400 + _it * 200, 0)
-
-        links.new(g_select.outputs["tp_x"], g_it.inputs["tp_x"])
-        links.new(g_select.outputs["tp_y"], g_it.inputs["tp_y"])
-        if g_prev is None:
-            for sv, val in INIT.items():
-                g_it.inputs[sv].default_value = val
-        else:
-            for sv in STATE:
-                links.new(g_prev.outputs[sv], g_it.inputs[sv])
-        g_prev = g_it
-
-    # default-true: GLSL returns true after 20 iterations; un-terminated points in fractal
-    final_result = m("ADD", g_prev.outputs["result"],
-                     m("SUBTRACT", 1.0, g_prev.outputs["done"]))
-
-    # ===== ColorIndex (make_function / RPN) ==================================
-    # case = half_int*9 + sector*3 + sub;  valid_pos = (case+0.5)/18
-    # color_pos = valid_pos*(1-no_sector) + no_sector  (white sentinel at 1.0)
-    _cpos = (
-        f"half_int,9,*,"
-        f"s1,s2,2,*,+,3,*,+,"
-        f"result,1,result,-,above_diag,*,2,*,+,+,"
-        f"0.5,+,18,/,"
-        f"1,no_sector,-,*,"
-        f"no_sector,+"
-    )
-    g_color = make_function(nodes, functions={"color_pos": _cpos},
-                            inputs=["result", "half_int", "s1", "s2", "no_sector", "above_diag"],
-                            outputs=["color_pos"],
-                            scalars=["result", "half_int", "s1", "s2", "no_sector", "above_diag", "color_pos"],
-                            node_group_type='Shader', name="ColorIndex", location=(2, 0))
-    links.new(final_result, g_color.inputs["result"])
-    links.new(g_fund.outputs["half_int"], g_color.inputs["half_int"])
-    links.new(g_select.outputs["s1"], g_color.inputs["s1"])
-    links.new(g_select.outputs["s2"], g_color.inputs["s2"])
-    links.new(g_select.outputs["no_sector"], g_color.inputs["no_sector"])
-    links.new(g_select.outputs["above_diag"], g_color.inputs["above_diag"])
-
-    # ===== Color ramp (CONSTANT, 18 stops + white sentinel) ==================
-    _c_vals = [(i + 0.5) / 18.0 for i in range(18)] + [1.0]
-    _c_colors = [list(c) + [1.0] for c in CASE_COL] + [[1.0, 1.0, 1.0, 1.0]]
-    ramp = ColorRamp(tree,
-                     factor=g_color.outputs["color_pos"],
-                     values=_c_vals, colors=_c_colors,
-                     interpolation="CONSTANT",
-                     location=(3.5, 0), hide=False)
-
-    emission = EmissionShader(tree,
-                              color=ramp.std_out,
-                              strength=1.0,
-                              location=(4.5, 0), hide=False)
-    links.new(emission.std_out, out_node.inputs["Surface"])
+    _make_colors(tree, rz.repeat_output.outputs["result"], out_node, location=(8, -7))
     return mat
 
 
-def hat_tile_fractal_with_closure(iterations=8, scale=3.0, **kwargs):
-    """
-    Same visual result as hat_tile_fractal, but the N InFractalStep groups are
-    replaced by a single ShaderClosureZone that contains a ShaderRepeatZone.
-    The closure captures tp_x/tp_y from the TriangleSector stage; the repeat
-    zone iterates the bisection state (ax..result) N times using one shared body.
-    EvaluateClosure is called once per pixel to drive the whole iteration.
-    """
-    import math as _m
-    from geometry_nodes.nodes import make_function, make_function_with_aux
+def _prepare_coordinates(tree, location):
+    (x, y) = location
+    links = tree.links
 
-    phi = (1 + _m.sqrt(5)) / 2
-    phi2 = phi + 1
-    phim1 = 1.0 / phi
-    r3 = _m.sqrt(3)
+    # layout grid for orientation
+
+    phi = (1 + math.sqrt(5)) / 2
+    r3 = math.sqrt(3)
     r32 = r3 / 2.0
 
     # torus span vectors
@@ -5637,10 +5283,60 @@ def hat_tile_fractal_with_closure(iterations=8, scale=3.0, **kwargs):
     # similarity transformation
     B00, B01 = 0.3454915028125263, -0.0892055224432725
     B10, B11 = -0.09549150281252629, 0.34380717944894684
+    tex = TextureCoordinate(tree, std_out='Object', location=(x, y), hide=False)
 
-    # R transform (rotation plus shift by u)
-    R00, R01 = -0.5, -r32
-    R10, R11 = r32, -0.5
+    # transform to UV basis
+
+    g_basis = make_function(tree, functions={
+        "puv": [f"p_x,{B00},*,p_y,{B01},*,+,frac", f"p_x,{B10},*,p_y,{B11},*,+,frac"]
+    }, inputs=["p"], outputs=["puv"],
+                            vectors=["p", "puv"],
+                            node_group_type='Shader', name="WorldToUV", location=(x + 2, y))
+    links.new(tex.std_out, g_basis.inputs["p"])
+
+    # triangular selector
+
+    triangle_selector = make_function(tree, functions={
+        "lower": "1,puv_x,puv_y,+,1,>,-"
+    }, name="LowerTriangleSelector", hide=True, location=(x + 3, y), node_group_type='Shader',
+                                      inputs=["puv"], scalars=["lower"], outputs=["lower"],
+                                      vectors=["puv"])
+    links.new(g_basis.outputs["puv"], triangle_selector.inputs["puv"])
+
+    g_torus_raw = make_function(tree, functions={
+        "uv": [f"puv_x,{U1},*,puv_y,{V1},*,+", f"puv_x,{U2},*,puv_y,{V2},*,+"]
+    }, inputs=["puv", "lower"], outputs=["uv"], scalars=["lower"],
+                                vectors=["puv", "uv"], node_group_type="Shader",
+                                name="UVToTorusRaw", location=(x + 4, y + 1),
+                                )
+    links.new(g_basis.outputs["puv"], g_torus_raw.inputs["puv"])
+    links.new(triangle_selector.outputs["lower"], g_torus_raw.inputs["lower"])
+
+    g_torus = make_function(tree, functions={
+        "uv": [f"lower,uv_x,*,1,lower,-,-1,uv_x,*,{U1},+,{V1},+,*,+",
+               f"lower,uv_y,*,1,lower,-,-1,uv_y,*,{U2},+,{V2},+,*,+"]
+    }, inputs=["uv", "lower"], scalars=["lower"], vectors=["uv"], outputs=["uv"], node_group_type='Shader',
+                            name="TorusTRCustomized", location=(x + 4, y))
+    links.new(g_torus_raw.outputs["uv"], g_torus.inputs["uv"])
+    links.new(triangle_selector.outputs["lower"], g_torus.inputs["lower"])
+
+    base_constant = make_function(tree, functions={
+        "base": "1,lower,-,10,*,"
+                "lower,1,*,+"
+    }, inputs=["lower"], outputs=["base"], scalars=["base", "lower"], node_group_type='Shader',
+                                  name="baseConstant",
+                                  hide=True, location=(x + 4, y - 1))
+    links.new(triangle_selector.outputs["lower"], base_constant.inputs["lower"])
+
+    frame = ShaderFrame(tree, label="Prepare Coordinates", location=location, color=(0.8, 0.3, 0.1))
+    frame.add(base_constant, g_torus, g_torus_raw, triangle_selector, g_basis)
+
+    return g_torus, base_constant
+
+
+def _make_colors(tree, inFractal, out, location):
+    (x, y) = location
+    links = tree.links
 
     # colors
     COLS = [
@@ -5658,203 +5354,52 @@ def hat_tile_fractal_with_closure(iterations=8, scale=3.0, **kwargs):
         (181 / 256., 113 / 256., 201 / 256.),
     ]
 
-    mat = bpy.data.materials.new("HatTileFractalClosure")
-    mat.use_nodes = True
-    tree = mat.node_tree
-    nodes = tree.nodes
-    links = tree.links
-    out_node = nodes.get("Material Output")
-    for n in list(nodes):
-        if n != out_node:
-            nodes.remove(n)
-    out_node.location = (2000, 0)
-
-    # ---- parent-tree helpers ------------------------------------------------
-    def m(op, *args):
-        nd = nodes.new("ShaderNodeMath")
-        nd.operation = op
-        nd.hide = True
-        for i, a in enumerate(args):
-            if isinstance(a, (int, float)):
-                nd.inputs[i].default_value = float(a)
-            else:
-                links.new(a, nd.inputs[i])
-        return nd.outputs["Value"]
-
-    tex = TextureCoordinate(tree, std_out='Object', location=(-10, 0), hide=False)
-
-    # transform to UV basis
-
-    g_basis = make_function(nodes, functions={
-        "puv": [f"p_x,{B00},*,p_y,{B01},*,+,frac", f"p_x,{B10},*,p_y,{B11},*,+,frac"]
-    }, inputs=["p"], outputs=["puv"],
-                            vectors=["p", "puv"],
-                            node_group_type='Shader', name="WorldToUV", location=(-8, 0))
-    links.new(tex.std_out, g_basis.inputs["p"])
-
-    # triangular selector
-
-    triangle_selector = make_function(nodes, functions={
-        "lower": "1,puv_x,puv_y,+,1,>,-"
-    }, name="LowerTriangleSelector", hide=True, location=(-7, 0), node_group_type='Shader',
-                                      inputs=["puv"], scalars=["lower"], outputs=["lower"],
-                                      vectors=["puv"])
-    links.new(g_basis.outputs["puv"], triangle_selector.inputs["puv"])
-
-    g_torus_raw = make_function(nodes, functions={
-        "uv": [f"puv_x,{U1},+,puv_y,{V1},+,+", f"puv_x,{U2},+,puv_y,{V2},+,+"]
-    }, inputs=["puv", "lower"], outputs=["uv"], scalars=["lower"],
-                                vectors=["puv", "uv"], node_group_type="Shader",
-                                name="UVToTorusRaw", location=(-6, 1),
-                                )
-    links.new(g_basis.outputs["puv"], g_torus_raw.inputs["puv"])
-    links.new(triangle_selector.outputs["lower"], g_torus_raw.inputs["lower"])
-
-    g_torus = make_function(nodes, functions={
-        "uv": [f"lower,uv_x,*,1,lower,-,-1,uv_x,*,{U1},+,{V1},+,*,+",
-               f"lower,uv_y,*,1,lower,-,-1,uv_y,*,{U2},+,{V2},+,*,+"]
-    }, inputs=["uv", "lower"], scalars=["lower"], vectors=["uv"], outputs=["uv"], node_group_type='Shader',
-                            name="TorusTRCustomized", location=(-6, 0))
-    links.new(g_torus_raw.outputs["uv"], g_torus.inputs["uv"])
-    links.new(triangle_selector.outputs["lower"], g_torus.inputs["lower"])
-
-    base_constant = make_function(nodes, functions={
-        "base": "1,lower,-,9,*"
-    }, inputs=["lower"], outputs=["base"], scalars=["base", "lower"], node_group_type='Shader',
-                                  name="baseConstant",
-                                  hide=True, location=(-6, -1))
-    links.new(triangle_selector.outputs["lower"], base_constant.inputs["lower"])
-
     # prims
-    prims = make_function(nodes, functions={
-        "prim": "i,0,=,-5,*,"
-                "i,1,=,2,*,+,"
-                "i,2,=,5,*,+,"
-                "i,3,=,-3,*,+,"
-                "i,4,=,6,*,+,"
-                "i,5,=,3,*,+,"
-                "i,6,=,-1,*,+,"
-                "i,7,=,4,*,+,"
-                "i,8,=,1,*,+,"
-                "i,9,=,-2,*,+,"
-                "i,10,=,5,*,+,"
-                "i,11,=,2,*,+,"
-                "i,12,=,-6,*,+,"
-                "i,13,=,3,*,+,"
-                "i,14,=,6,*,+,"
-                "i,15,=,-4,*,+,"
-                "i,16,=,1,*,+,"
-                "i,17,=,4,*,+"
+    prims = make_function(tree, functions={
+        "prim": "i,0,=,0,*,"
+                "i,1,=,-5,*,+,"
+                "i,2,=,2,*,+,"
+                "i,3,=,5,*,+,"
+                "i,4,=,-3,*,+,"
+                "i,5,=,6,*,+,"
+                "i,6,=,3,*,+,"
+                "i,7,=,-1,*,+,"
+                "i,8,=,4,*,+,"
+                "i,9,=,1,*,+,"
+                "i,10,=,-2,*,+,"
+                "i,11,=,5,*,+,"
+                "i,12,=,2,*,+,"
+                "i,13,=,-6,*,+,"
+                "i,14,=,3,*,+,"
+                "i,15,=,6,*,+,"
+                "i,16,=,-4,*,+,"
+                "i,17,=,1,*,+,"
+                "i,18,=,4,*,+"
     }, name="Prims", inputs=["i"], outputs=["prim"], scalars=["i", "prim"],
-                          node_group_type="Shader", hide=True, location=(3, -3))
+                          node_group_type="Shader", hide=True, location=(x, y))
+    links.new(inFractal, prims.inputs['i'])
 
     # to color index
-    to_color_index = make_function(nodes, functions={
+    to_color_index = make_function(tree, functions={
         "col": "prim,0,<,-2,*,1,+,prim,*,prim,0,<,6,*,+,12,/"
     }, scalars=["col", "prim"], inputs=["prim"], outputs=["col"], name="Prim2ColorIndex",
-                                   node_group_type="Shader", hide=True, location=(4, -3)
+                                   node_group_type="Shader", hide=True, location=(x + 1, y)
                                    )
     links.new(prims.outputs["prim"], to_color_index.inputs["prim"])
 
-    # ---- Closure Zone: captures uv and base from the outer scope --------
-    cz = ShaderClosureZone(tree, location=(-4.4, 0.5), node_width=5)
-    cz.add_input('VECTOR', 'uv')
-    cz.add_input('INT', 'base')
-    cz.add_output('INT', 'result')
-
-    # ---- Repeat Zone inside closure (3 iterations) ----------------------
-    rz = ShaderRepeatZone(tree, location=(-3.3, 0.4), node_width=3, iterations=3)
-    rz.add_socket('VECTOR', 'uv')
-    rz.add_socket('INT', 'base')
-    rz.add_socket('INT', "result")
-    rz.add_socket("INT", "success")
-    rz.add_socket("INT","Iteration")
-
-
-    links.new(cz.closure_input.outputs['uv'], rz.repeat_input.inputs['uv'])
-    links.new(cz.closure_input.outputs['base'], rz.repeat_input.inputs['base'])
-
-    check = make_function_with_aux(tree, name="TriangleSelection",
-                          aux_functions={
-                              "cond": f"uv_y,{r32},<,uv_y,{r3},uv_x,*,<,*",
-                          },
-                          functions={
-                              "result": "base,3,i,*,+,cond,*",
-                              "success": "cond",
-                              "i": "i,cond,3,*,+",
-                          }, inputs=["i","uv", "result","base"], outputs=["result", "success","i"], hide=True,
-                          scalars=["i","result","success","base","cond"],vectors=["uv"],
-                          node_group_type="Shader", location=(-2, -3))
-    links.new(rz.iteration,check.inputs["i"])
-    links.new(rz.outputs["uv"],check.inputs["uv"])
-    links.new(rz.outputs["base"],check.inputs["base"])
-    links.new(rz.outputs["result"],check.inputs["result"])
-    links.new(check.outputs["i"],rz.repeat_output.inputs["Iteration"])
-    links.new(check.outputs["result"],rz.repeat_output.inputs["result"])
-    links.new(check.outputs["success"],rz.repeat_output.inputs["success"])
-
-    links.new(rz.repeat_input.outputs['uv'], rz.repeat_output.inputs['uv'])
-
-    # close the closure: RepeatOutput.base → ClosureOutput.base
-    links.new(rz.repeat_output.outputs['result'], cz.closure_output.inputs['result'])
-
-    # ---- Evaluate Closure at each pixel ---------------------------------
-    ret_val = InputValue(tree, location=(1, -1.5), value=0.0, hide=False)
-    ret_val.node.label = 'ret'
-
-    ec = EvaluateClosure(tree, closure=cz.std_out, location=(2,-1))
-    ec.add_input('VECTOR', 'uv')
-    ec.add_input('FLOAT', 'base')
-    ec.add_input('FLOAT', 'Value')
-    ec.add_output('FLOAT', 'result')
-
-    links.new(g_torus.outputs['uv'], ec.node.inputs['uv'])
-    links.new(base_constant.outputs['base'], ec.node.inputs['base'])
-    links.new(ret_val.std_out, ec.node.inputs['Value'])
-
-    links.new(ec.node.outputs['result'], prims.inputs['i'])
-
-    onRight = OnRightNode(tree, A=Vector(), B=Vector([1, 1, 1]), Position=Vector([0.5, 0, 1]), location=(-5, -4),
-                          hide=False)
-
     # color ramp
     _c_vals = [i / 12 for i in range(12)] + [1.0]
-    _c_colors = [[1.0, 1.0, 1.0, 1.0]] + [list(c) + [1.0] for c in COLS]
+    _c_colors = [[0.0, 0.0, 0.0, 1.0]] + [list(c) + [1.0] for c in COLS]
     ramp = ColorRamp(tree,
                      factor=to_color_index.outputs["col"],
                      values=_c_vals, colors=_c_colors,
                      interpolation="LINEAR",
-                     location=(5, -3), hide=False)
+                     location=(x + 2, y), hide=False)
 
     bsdf = PrincipledBSDF(tree,
                           base_color=ramp.std_out,
-                          location=(7, -3), hide=True)
-    links.new(bsdf.outputs["BSDF"], out_node.inputs["Surface"])
+                          location=(x + 4, y), hide=True)
+    links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
 
-    fr_sect = ShaderFrame(tree, label="TriangleSector", location = (-2,-4),color=(0.2, 0.3, 0.5))
-
-    #  DO NOT ERASE THIS COMMENT
-    # def _rot_rpn(xn, yn):
-    #     return (f"{xn},-0.5,*,{yn},{-r32},*,+,{U1},+",
-    #             f"{xn},{r32},*,{yn},-0.5,*,+,{U2},+")
-    #
-    # r1x_rpn, r1y_rpn = _rot_rpn("qx", "qy")
-    # g_rot1 = make_function(nodes,
-    #                        functions={"r1x": r1x_rpn, "r1y": r1y_rpn},
-    #                        inputs=["qx", "qy"], outputs=["r1x", "r1y"],
-    #                        scalars=["qx", "qy", "r1x", "r1y"],
-    #                        node_group_type='Shader', name="TRot1", location=(-4, 1))
-    # fr_sect.add(g_rot1)
-    #
-    # r2x_rpn, r2y_rpn = _rot_rpn("r1x", "r1y")
-    # g_rot2 = make_function(nodes,
-    #                        functions={"r2x": r2x_rpn, "r2y": r2y_rpn},
-    #                        inputs=["r1x", "r1y"], outputs=["r2x", "r2y"],
-    #                        scalars=["r1x", "r1y", "r2x", "r2y"],
-    #                        node_group_type='Shader', name="TRot2", location=(-4, -1))
-    # fr_sect.add(g_rot2)
-    # links.new(g_rot1.outputs["r1x"], g_rot2.inputs["r1x"])
-    # links.new(g_rot1.outputs["r1y"], g_rot2.inputs["r1y"])
-
-    # layout(tree)
-    return mat
+    frame = ShaderFrame(tree, label="Generate Colors", location=location, color=(0.2, 0.3, 0.5))
+    frame.add(*[bsdf, ramp, to_color_index, prims])
