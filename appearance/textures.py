@@ -5622,7 +5622,7 @@ def hat_tile_fractal_with_closure(iterations=8, scale=3.0, **kwargs):
     EvaluateClosure is called once per pixel to drive the whole iteration.
     """
     import math as _m
-    from geometry_nodes.nodes import make_function
+    from geometry_nodes.nodes import make_function, make_function_with_aux
 
     phi = (1 + _m.sqrt(5)) / 2
     phi2 = phi + 1
@@ -5746,22 +5746,21 @@ def hat_tile_fractal_with_closure(iterations=8, scale=3.0, **kwargs):
                 "i,16,=,1,*,+,"
                 "i,17,=,4,*,+"
     }, name="Prims", inputs=["i"], outputs=["prim"], scalars=["i", "prim"],
-                          node_group_type="Shader", hide=True, location=(0, -3))
+                          node_group_type="Shader", hide=True, location=(3, -3))
 
     # to color index
     to_color_index = make_function(nodes, functions={
         "col": "prim,0,<,-2,*,1,+,prim,*,prim,0,<,6,*,+,12,/"
     }, scalars=["col", "prim"], inputs=["prim"], outputs=["col"], name="Prim2ColorIndex",
-                                   node_group_type="Shader", hide=True, location=(1, -3)
+                                   node_group_type="Shader", hide=True, location=(4, -3)
                                    )
     links.new(prims.outputs["prim"], to_color_index.inputs["prim"])
 
     # ---- Closure Zone: captures uv and base from the outer scope --------
     cz = ShaderClosureZone(tree, location=(-4.4, 0.5), node_width=5)
     cz.add_input('VECTOR', 'uv')
-    cz.add_input('FLOAT', 'base')
-    cz.add_input('FLOAT', 'Value')
-    cz.add_output('FLOAT', 'base')
+    cz.add_input('INT', 'base')
+    cz.add_output('INT', 'result')
 
     # ---- Repeat Zone inside closure (3 iterations) ----------------------
     rz = ShaderRepeatZone(tree, location=(-3.3, 0.4), node_width=3, iterations=3)
@@ -5775,42 +5774,35 @@ def hat_tile_fractal_with_closure(iterations=8, scale=3.0, **kwargs):
     links.new(cz.closure_input.outputs['uv'], rz.repeat_input.inputs['uv'])
     links.new(cz.closure_input.outputs['base'], rz.repeat_input.inputs['base'])
 
-    check = make_function(tree, name="TriangleSelection",
+    check = make_function_with_aux(tree, name="TriangleSelection",
+                          aux_functions={
+                              "cond": f"uv_y,{r32},<,uv_y,{r3},uv_x,*,<,*",
+                          },
                           functions={
-                              "result": f"uv_y,{r32},<,uv_y,{r3},uv_x,*,base,3,i,*,+,*",
-                              "success": f"uv_y,{r32},<,uv_y,{r3},uv_x,*,<,*",
-                              "i":f"i,uv_y,{r32},<,uv_y,{r3},uv_x,*,<,*,3,*,+"
+                              "result": "base,3,i,*,+,cond,*",
+                              "success": "cond",
+                              "i": "i,cond,3,*,+",
                           }, inputs=["i","uv", "result","base"], outputs=["result", "success","i"], hide=True,
-                          scalars=["i","result","success","base"],vectors=["uv"],
-                          node_group_type="Shader", location=(0, 0))
+                          scalars=["i","result","success","base","cond"],vectors=["uv"],
+                          node_group_type="Shader", location=(-2, -3))
     links.new(rz.iteration,check.inputs["i"])
     links.new(rz.outputs["uv"],check.inputs["uv"])
     links.new(rz.outputs["base"],check.inputs["base"])
-    links.new(rz.outputs["result"],check.inputs["base"])
+    links.new(rz.outputs["result"],check.inputs["result"])
     links.new(check.outputs["i"],rz.repeat_output.inputs["Iteration"])
     links.new(check.outputs["result"],rz.repeat_output.inputs["result"])
     links.new(check.outputs["success"],rz.repeat_output.inputs["success"])
 
-    sep = SeparateXYZ(tree, location=(-2.4, 0.3), hide=False,
-                      vector=rz.repeat_input.outputs['uv'])
-
-    lt = MathNode(tree, location=(-1.5, 0.4), operation='LESS_THAN', hide=False,
-                  input0=sep.std_out_x, input1=sep.std_out_y)
-
-    add_node = MathNode(tree, location=(-1.1, 0.4), operation='ADD', hide=False,
-                        input0=rz.repeat_input.outputs['base'], input1=lt.std_out)
-
     links.new(rz.repeat_input.outputs['uv'], rz.repeat_output.inputs['uv'])
-    links.new(add_node.std_out, rz.repeat_output.inputs['base'])
 
     # close the closure: RepeatOutput.base → ClosureOutput.base
-    links.new(rz.repeat_output.outputs['base'], cz.closure_output.inputs['base'])
+    links.new(rz.repeat_output.outputs['result'], cz.closure_output.inputs['result'])
 
     # ---- Evaluate Closure at each pixel ---------------------------------
-    ret_val = InputValue(tree, location=(-1.8, -1.4), value=0.0, hide=False)
+    ret_val = InputValue(tree, location=(1, -1.5), value=0.0, hide=False)
     ret_val.node.label = 'ret'
 
-    ec = EvaluateClosure(tree, closure=cz.std_out, location=(1.9, -0.7))
+    ec = EvaluateClosure(tree, closure=cz.std_out, location=(2,-1))
     ec.add_input('VECTOR', 'uv')
     ec.add_input('FLOAT', 'base')
     ec.add_input('FLOAT', 'Value')
@@ -5832,14 +5824,14 @@ def hat_tile_fractal_with_closure(iterations=8, scale=3.0, **kwargs):
                      factor=to_color_index.outputs["col"],
                      values=_c_vals, colors=_c_colors,
                      interpolation="LINEAR",
-                     location=(2, -3), hide=False)
+                     location=(5, -3), hide=False)
 
     bsdf = PrincipledBSDF(tree,
                           base_color=ramp.std_out,
-                          location=(3, -3), hide=True)
+                          location=(7, -3), hide=True)
     links.new(bsdf.outputs["BSDF"], out_node.inputs["Surface"])
 
-    fr_sect = ShaderFrame(tree, label="TriangleSector", color=(0.2, 0.3, 0.5))
+    fr_sect = ShaderFrame(tree, label="TriangleSector", location = (-2,-4),color=(0.2, 0.3, 0.5))
 
     #  DO NOT ERASE THIS COMMENT
     # def _rot_rpn(xn, yn):

@@ -6391,6 +6391,210 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
     return group
 
 
+def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
+                           inputs=[], outputs=[], vectors=[], scalars=[], rotations=[],
+                           node_group_type="GeometryNodes",
+                           name="FunctionNode", hide=True, location=(0, 0), parent=None):
+    """
+    Like ``make_function`` but with support for auxiliary (intermediate)
+    variables. ``aux_functions`` maps an aux name to an RPN expression (or a
+    list of three RPN expressions for a vector); the aux is computed once and
+    its output socket is then exposed as an input symbol that the entries in
+    ``functions`` can reference by name. This lets repeated sub-computations
+    be factored out of the output formulas.
+
+    Aux entries are built in declaration order, so a later aux entry may
+    reference an earlier aux name. Every aux name must also be listed in
+    ``scalars`` or ``vectors`` so ``build_function`` recognises it as a known
+    symbol when it appears in a formula.
+    """
+    if hasattr(nodes_or_tree, "nodes"):
+        tree = nodes_or_tree
+        nodes = tree.nodes
+    else:
+        nodes = nodes_or_tree
+
+    if "Shader" in node_group_type:
+        tree = bpy.data.node_groups.new(type="ShaderNodeTree", name=name)
+        group = nodes.new(type="ShaderNodeGroup")
+    else:
+        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
+        group = nodes.new(type="GeometryNodeGroup")
+
+    group.name = name
+    group.node_tree = tree
+
+    tree_nodes = tree.nodes
+    tree_links = tree.links
+
+    # group input / output sockets
+    group_inputs = tree_nodes.new("NodeGroupInput")
+    group_outputs = tree_nodes.new("NodeGroupOutput")
+
+    for ins in inputs:
+        if ins in vectors:
+            make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketVector")
+        if ins in scalars:
+            make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketFloat")
+        if ins in rotations:
+            make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketRotation")
+
+    for outs in outputs:
+        if outs in vectors:
+            make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketVector")
+        if outs in scalars:
+            make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketFloat")
+        if outs in rotations:
+            make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketRotation")
+
+    # parse aux and main RPN strings into stacks of tokens
+    def _parse(funs):
+        out = {}
+        for k, v in funs.items():
+            if isinstance(v, list):
+                out[k] = [s.split(",") for s in v]
+            else:
+                out[k] = v.split(",")
+        return out
+
+    aux_stacks = _parse(aux_functions)
+    stacks = _parse(functions)
+
+    # union of all tokens across aux and main expressions, used to decide
+    # whether an input vector (or aux vector) needs a SeparateXYZ node
+    def _collect_terms(parsed):
+        terms = []
+        for v in parsed.values():
+            if isinstance(v, list) and v and isinstance(v[0], list):
+                for sub in v:
+                    terms += sub
+            else:
+                terms += v
+        return terms
+
+    all_terms = maybe_flatten(_collect_terms(aux_stacks) + _collect_terms(stacks))
+
+    # input channels: scalars pass through directly, vectors get an optional
+    # SeparateXYZ when any formula references a component
+    in_channels = {}
+    for ins in inputs:
+        if ins in scalars:
+            in_channels[ins] = group_inputs.outputs[ins]
+        if ins in vectors or ins in rotations:
+            in_channels[ins] = group_inputs.outputs[ins]
+            if ins + "_x" in all_terms or ins + "_y" in all_terms or ins + "_z" in all_terms:
+                sep = tree_nodes.new(type="ShaderNodeSeparateXYZ")
+                sep.name = ins + "Split"
+                sep.label = ins + "Split"
+                sep.hide = True
+                tree_links.new(group_inputs.outputs[ins], sep.inputs["Vector"])
+                in_channels[ins + "_x"] = sep.outputs[0]
+                in_channels[ins + "_y"] = sep.outputs[1]
+                in_channels[ins + "_z"] = sep.outputs[2]
+
+    comps = ["x", "y", "z"]
+    fcn_count = 0
+
+    # build auxiliary expressions; expose each result via an in-channel entry
+    for key, value in aux_functions.items():
+        parsed = aux_stacks[key]
+        if isinstance(value, list):
+            comb = tree_nodes.new(type="ShaderNodeCombineXYZ")
+            comb.name = "aux_" + key + "Merge"
+            comb.label = key + "Merge"
+            comb.hide = True
+            for i, comp_stack in enumerate(parsed):
+                build_function(tree, comp_stack,
+                               scalars=scalars, vectors=vectors, rotations=rotations,
+                               in_channels=in_channels,
+                               out=comb.inputs[i], fcn_count=fcn_count)
+                fcn_count += 1
+            in_channels[key] = comb.outputs[0]
+            if key + "_x" in all_terms or key + "_y" in all_terms or key + "_z" in all_terms:
+                sep = tree_nodes.new(type="ShaderNodeSeparateXYZ")
+                sep.name = "aux_" + key + "Split"
+                sep.label = key + "Split"
+                sep.hide = True
+                tree_links.new(comb.outputs[0], sep.inputs["Vector"])
+                in_channels[key + "_x"] = sep.outputs[0]
+                in_channels[key + "_y"] = sep.outputs[1]
+                in_channels[key + "_z"] = sep.outputs[2]
+        else:
+            reroute = tree_nodes.new("NodeReroute")
+            reroute.name = "aux_" + key
+            reroute.label = key
+            build_function(tree, parsed,
+                           scalars=scalars, vectors=vectors, rotations=rotations,
+                           in_channels=in_channels,
+                           out=reroute.inputs[0], fcn_count=fcn_count)
+            fcn_count += 1
+            in_channels[key] = reroute.outputs[0]
+            if key in vectors and (
+                key + "_x" in all_terms or key + "_y" in all_terms or key + "_z" in all_terms
+            ):
+                sep = tree_nodes.new(type="ShaderNodeSeparateXYZ")
+                sep.name = "aux_" + key + "Split"
+                sep.label = key + "Split"
+                sep.hide = True
+                tree_links.new(reroute.outputs[0], sep.inputs["Vector"])
+                in_channels[key + "_x"] = sep.outputs[0]
+                in_channels[key + "_y"] = sep.outputs[1]
+                in_channels[key + "_z"] = sep.outputs[2]
+
+    # output channels (identical to make_function)
+    out_channels = {}
+    for key, value in functions.items():
+        if key in scalars:
+            out_channels[key] = group_outputs.inputs[key]
+        elif key in vectors or key in rotations:
+            if isinstance(functions[key], list):
+                comb = tree_nodes.new(type="ShaderNodeCombineXYZ")
+                comb.name = key + "Merge"
+                comb.label = key + "Merge"
+                comb.hide = True
+                out_channels[key + "_x"] = comb.inputs[0]
+                out_channels[key + "_y"] = comb.inputs[1]
+                out_channels[key + "_z"] = comb.inputs[2]
+                tree_links.new(comb.outputs[0], group_outputs.inputs[key])
+            else:
+                out_channels[key] = group_outputs.inputs[key]
+
+    # build the main expressions, with aux results available via in_channels
+    for key, value in functions.items():
+        if isinstance(value, list):
+            if len(value) == 1:
+                build_function(tree, stacks[key][0],
+                               scalars=scalars, vectors=vectors, rotations=rotations,
+                               in_channels=in_channels,
+                               out=out_channels[key], fcn_count=fcn_count)
+                fcn_count += 1
+            else:
+                for i, part in enumerate(value):
+                    build_function(tree, stacks[key][i],
+                                   scalars=scalars, vectors=vectors, rotations=rotations,
+                                   in_channels=in_channels,
+                                   out=out_channels[key + "_" + comps[i]], fcn_count=fcn_count)
+                    fcn_count += 1
+        else:
+            build_function(tree, stacks[key],
+                           scalars=scalars, vectors=vectors, rotations=rotations,
+                           in_channels=in_channels,
+                           out=out_channels[key], fcn_count=fcn_count)
+            fcn_count += 1
+
+    layout(tree)
+    if hide:
+        group.hide = True
+
+    if parent:
+        group.parent = parent.node
+        location = ((location[0] + parent.location[0]) * 200, (location[1] + parent.location[1]) * 100)
+    else:
+        location = (location[0] * 200, location[1] * 100)
+    group.location = location
+    return group
+
+
 # Dispatch tables consumed by build_function.
 #
 # Scalar ops -> ShaderNodeMath. Each entry is keyed by the RPN token and
