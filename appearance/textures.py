@@ -5109,7 +5109,7 @@ def hat_tile_fractal(**kwargs):
             nodes.remove(n)
     out_node.location = (2000, 0)
 
-    Coord(tree, [-20, -20], [20, 20])
+    #  Coord(tree, [-20, -20], [20, 20])
 
     uv, base = _prepare_coordinates(tree, (-18, -5))
 
@@ -5200,7 +5200,7 @@ def hat_tile_fractal(**kwargs):
                               }, inputs=["isTrap", "fromTrap", "fromPara"], outputs=["inFractal"],
                               scalars=["isTrap", "fromTrap", "fromPara", "inFractal"], vectors=[], hide=True,
                               location=(10, 5), node_group_type="Shader")
-    links.new(rz2.outputs["isTrap"],is_trapez.inputs["isTrap"])
+    links.new(rz2.outputs["isTrap"], is_trapez.inputs["isTrap"])
 
     has_finished = make_function(tree, name="hasFinished",
                                  functions={
@@ -5216,51 +5216,516 @@ def hat_tile_fractal(**kwargs):
 
     # trapezoid branch: midpoint(b, a), scaled by isTrap
     e = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True, factor=1. / phi2,
-                       location=(-10, 13), caseA=rz2.outputs['b'], caseB=rz2.outputs['a'], hide=True, name="e")
-    f_and_g = make_function(tree,name="f,g",node_group_type="Shader",functions={
-        "f":"b,a,e,sub,add",
-        "g":"d,e,a,sub,add"
-    },vectors=["f","g","a","b","d","e"],inputs=["a","b","d","e"],outputs=["f","g"],location=(-10,12.5),hide=True)
-    links.new(rz2.outputs["a"],f_and_g.inputs["a"])
-    links.new(rz2.outputs["b"],f_and_g.inputs["b"])
-    links.new(rz2.outputs["d"],f_and_g.inputs["d"])
-    links.new(e.std_out,f_and_g.inputs["e"])
+                location=(-10, 13), caseA=rz2.outputs['b'], caseB=rz2.outputs['a'], hide=True, name="e")
+    f_and_g = make_function(tree, name="f,g", node_group_type="Shader", functions={
+        "f": "b,a,e,sub,add",
+        "g": "d,e,a,sub,add"
+    }, vectors=["f", "g", "a", "b", "d", "e"], inputs=["a", "b", "d", "e"], outputs=["f", "g"], location=(-10, 12.5),
+                            hide=True)
+    links.new(rz2.outputs["a"], f_and_g.inputs["a"])
+    links.new(rz2.outputs["b"], f_and_g.inputs["b"])
+    links.new(rz2.outputs["d"], f_and_g.inputs["d"])
+    links.new(e.std_out, f_and_g.inputs["e"])
 
-    pde = OnRightNode(tree, A=rz2.outputs["d"], B=e.std_out, Position=rz2.outputs["uv"], location=(-9,13),hide=True)
+    pde = OnRightNode(tree, A=rz2.outputs["d"], B=e.std_out, Position=rz2.outputs["uv"], location=(-9, 13), hide=True)
     in_pde = make_function(tree, name="inPDE", functions={
-        "inFractal": "inPde,true,1,inPde,-,false"
-    }, inputs=["inPde", "true", "false" ], outputs=["inFractal"], scalars=["true", "false", "inPde", "inFractal"],
+        "inFractal": "inPde,true,*,1,inPde,-,false,*,+"
+    }, inputs=["inPde", "true", "false"], outputs=["inFractal"], scalars=["true", "false", "inPde", "inFractal"],
                            location=(9, 6),
                            hide=False, node_group_type="Shader")
     links.new(pde.std_out, in_pde.inputs["inPde"])
-    links.new(in_pde.outputs["inFractal"],is_trapez.inputs["fromTrap"])
-
-
+    links.new(in_pde.outputs["inFractal"], is_trapez.inputs["fromTrap"])
 
     # parallelogram branch
     ep = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True, factor=phim1,
-                       location=(-10, 3), caseA=rz2.outputs['c'], caseB=rz2.outputs['d'], hide=True, name="e")
+                 location=(-10, 3), caseA=rz2.outputs['c'], caseB=rz2.outputs['d'], hide=True, name="e")
     f = make_function(tree, name="f", functions={
         "f": "b,d,e,sub,add",
     }, vectors=["f", "b", "d", "e"], inputs=["d", "b", "e"], outputs=["f"], location=(-10, 2.5),
-                            hide=True,node_group_type="Shader")
+                      hide=True, node_group_type="Shader")
     links.new(rz2.outputs["b"], f.inputs["b"])
     links.new(rz2.outputs["d"], f.inputs["d"])
     links.new(ep.std_out, f.inputs["e"])
-    pea = OnRightNode(tree, A=e.std_out, B=rz2.outputs["a"], Position=rz2.outputs["uv"], location=(-9, 3), hide=True)
-    in_pea = make_function(tree,name="inPEA",functions={
-        "inFractal":"inPea,true,1,inPea,-,false"
-    },inputs=["inPea","true","false"],outputs=["inFractal"],scalars=["true","false","inPea","inFractal"],location=(9,3),
-                           hide=False,node_group_type="Shader")
-    links.new(pea.std_out,in_pea.inputs["inPea"])
+    pea = OnRightNode(tree, A=ep.std_out, B=rz2.outputs["a"], Position=rz2.outputs["uv"], location=(-9, 3), hide=True)
+    in_pea = make_function(tree, name="inPEA", functions={
+        "inFractal": "inPea,true,*,1,inPea,-,false,*,+"
+    }, inputs=["inPea", "true", "false"], outputs=["inFractal"], scalars=["true", "false", "inPea", "inFractal"],
+                           location=(9, 3),
+                           hide=False, node_group_type="Shader")
+    links.new(pea.std_out, in_pea.inputs["inPea"])
     links.new(in_pea.outputs["inFractal"], is_trapez.inputs["fromPara"])
 
+    # --- Complete rz2 body ---
+    fl_sock = rz2.outputs['fl']
+    not_fl_node = make_function(tree, name="not_fl", functions={"nfl": "1,fl,-"},
+                                inputs=["fl"], outputs=["nfl"], scalars=["fl", "nfl"],
+                                node_group_type="Shader", location=(-8, 14), hide=True)
+    links.new(fl_sock, not_fl_node.inputs["fl"])
+    not_fl_sock = not_fl_node.outputs["nfl"]
 
+    # OnRightNode gives negative when Mathematica onRight is TRUE → convert to {0,1}
+    def _bool(name, raw, loc):
+        nd = make_function(tree, name=name, functions={"b": "x,0,<"},
+                           inputs=["x"], outputs=["b"], scalars=["x", "b"],
+                           node_group_type="Shader", location=loc, hide=True)
+        links.new(raw, nd.inputs["x"])
+        return nd.outputs["b"]
 
+    b_pde = _bool("b_pde", pde.std_out, (-8.5, 13))
+    links.new(b_pde, in_pde.inputs["inPde"])
+    b_pea = _bool("b_pea", pea.std_out, (-8.5, 3))
+    links.new(b_pea, in_pea.inputs["inPea"])
+
+    # --- TRAP intermediate nodes ---
+    # A_lt = mix[e, a, phim1];  B_lt = mix[e, d, phim1]  (B_lt = α_ud)
+    A_lt = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True,
+                   factor=phim1, caseA=rz2.outputs['a'], caseB=e.std_out,
+                   location=(-8, 13.5), hide=True, name="A_lt")
+    B_lt = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True,
+                   factor=phim1, caseA=rz2.outputs['d'], caseB=e.std_out,
+                   location=(-8, 13.0), hide=True, name="B_lt")
+    pAB = OnRightNode(tree, A=A_lt.std_out, B=B_lt.std_out, Position=rz2.outputs['uv'],
+                      location=(-7.5, 13.5), hide=True)
+    b_pAB = _bool("b_pAB", pAB.std_out, (-7, 13.5))
+
+    pge = OnRightNode(tree, A=f_and_g.outputs['g'], B=e.std_out, Position=rz2.outputs['uv'],
+                      location=(-9, 12), hide=True)
+    b_pge = _bool("b_pge", pge.std_out, (-8.5, 12))
+
+    # β_ud = mix[e, g, phim1]  (β_ud = γ_cp — shared by upside-down and central-para)
+    beta_ud = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True,
+                      factor=phim1, caseA=f_and_g.outputs['g'], caseB=e.std_out,
+                      location=(-8, 11.5), hide=True, name="beta_ud")
+    pab = OnRightNode(tree, A=B_lt.std_out, B=beta_ud.std_out, Position=rz2.outputs['uv'],
+                      location=(-7.5, 12), hide=True)
+    b_pab = _bool("b_pab", pab.std_out, (-7, 12))
+
+    pcf = OnRightNode(tree, A=rz2.outputs['c'], B=f_and_g.outputs['f'],
+                      Position=rz2.outputs['uv'], location=(-9, 10), hide=True)
+    b_pcf = _bool("b_pcf", pcf.std_out, (-8.5, 10))
+
+    # δ_cp = mix[c, f, phim1]  (δ_cp = λ_rt — shared by central-para and right-triangle)
+    delta_cp = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True,
+                       factor=phim1, caseA=f_and_g.outputs['f'], caseB=rz2.outputs['c'],
+                       location=(-8, 9.5), hide=True, name="delta_cp")
+    pgf = OnRightNode(tree, A=beta_ud.std_out, B=f_and_g.outputs['f'],
+                      Position=rz2.outputs['uv'], location=(-7.5, 10), hide=True)
+    b_pgf = _bool("b_pgf", pgf.std_out, (-7, 10))
+    pdg = OnRightNode(tree, A=delta_cp.std_out, B=f_and_g.outputs['g'],
+                      Position=rz2.outputs['uv'], location=(-7.5, 9), hide=True)
+    b_pdg = _bool("b_pdg", pdg.std_out, (-7, 9))
+
+    # κ_rt = mix[c, b, phim1]  (κ_rt = δ_rt_p — shared with para right-triangle)
+    kappa_rt = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True,
+                       factor=phim1, caseA=rz2.outputs['b'], caseB=rz2.outputs['c'],
+                       location=(-8, 8.5), hide=True, name="kappa_rt")
+    pkl = OnRightNode(tree, A=kappa_rt.std_out, B=delta_cp.std_out,
+                      Position=rz2.outputs['uv'], location=(-7.5, 8), hide=True)
+    b_pkl = _bool("b_pkl", pkl.std_out, (-7, 8))
+
+    # --- PARA intermediate nodes ---
+    # A_lt_p = mix[a, d, phim1];  B_lt_p = mix[a, e_p, phim1]  (B_lt_p = α_cp_p)
+    A_lt_p = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True,
+                     factor=phim1, caseA=rz2.outputs['d'], caseB=rz2.outputs['a'],
+                     location=(-8, 3.5), hide=True, name="A_lt_p")
+    B_lt_p = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True,
+                     factor=phim1, caseA=ep.std_out, caseB=rz2.outputs['a'],
+                     location=(-8, 3.0), hide=True, name="B_lt_p")
+    pABp = OnRightNode(tree, A=A_lt_p.std_out, B=B_lt_p.std_out, Position=rz2.outputs['uv'],
+                       location=(-7.5, 3.5), hide=True)
+    b_pABp = _bool("b_pABp", pABp.std_out, (-7, 3.5))
+
+    pcf_p = OnRightNode(tree, A=rz2.outputs['c'], B=f.outputs['f'],
+                        Position=rz2.outputs['uv'], location=(-9, 2), hide=True)
+    b_pcfp = _bool("b_pcfp", pcf_p.std_out, (-8.5, 2))
+
+    # β_cp_p = mix[c, f_p, phim1]  (β_cp_p = γ_rt_p)
+    beta_cpp = MixNode(tree, data_type='VECTOR', factor_mode='UNIFORM', clamp_factor=True,
+                       factor=phim1, caseA=f.outputs['f'], caseB=rz2.outputs['c'],
+                       location=(-8, 1.5), hide=True, name="beta_cpp")
+    paf = OnRightNode(tree, A=B_lt_p.std_out, B=f.outputs['f'],
+                      Position=rz2.outputs['uv'], location=(-7.5, 2), hide=True)
+    b_paf = _bool("b_paf", paf.std_out, (-7, 2))
+    pbe = OnRightNode(tree, A=beta_cpp.std_out, B=ep.std_out,
+                      Position=rz2.outputs['uv'], location=(-7.5, 1), hide=True)
+    b_pbe = _bool("b_pbe", pbe.std_out, (-7, 1))
+    pdgp = OnRightNode(tree, A=kappa_rt.std_out, B=beta_cpp.std_out,
+                       Position=rz2.outputs['uv'], location=(-7.5, 0), hide=True)
+    b_pdgp = _bool("b_pdgp", pdgp.std_out, (-7, 0))
+
+    # --- TRAP inFractal: nested mux, innermost → outermost ---
+    # right-triangle: inFractal = pkl*fl
+    in_pkl_n = make_function(tree, name="in_pkl", functions={"inFractal": "pkl,fl,*"},
+                             inputs=["pkl", "fl"], outputs=["inFractal"],
+                             scalars=["pkl", "fl", "inFractal"],
+                             node_group_type="Shader", location=(-5, 8), hide=True)
+    links.new(b_pkl, in_pkl_n.inputs["pkl"])
+    links.new(fl_sock, in_pkl_n.inputs["fl"])
+
+    # central-para δg: inFractal = pdg*fl
+    in_pdg_n = make_function(tree, name="in_pdg", functions={"inFractal": "pdg,fl,*"},
+                             inputs=["pdg", "fl"], outputs=["inFractal"],
+                             scalars=["pdg", "fl", "inFractal"],
+                             node_group_type="Shader", location=(-5, 9), hide=True)
+    links.new(b_pdg, in_pdg_n.inputs["pdg"])
+    links.new(fl_sock, in_pdg_n.inputs["fl"])
+
+    # central-para γf mux: pgf=1→not_fl, pgf=0→fromPDG
+    in_pgf_n = make_function(tree, name="in_pgf", functions={
+        "inFractal": "pgf,not_fl,*,1,pgf,-,fromPDG,*,+"
+    }, inputs=["pgf", "not_fl", "fromPDG"], outputs=["inFractal"],
+                             scalars=["pgf", "not_fl", "fromPDG", "inFractal"],
+                             node_group_type="Shader", location=(-4, 9.5), hide=True)
+    links.new(b_pgf, in_pgf_n.inputs["pgf"])
+    links.new(not_fl_sock, in_pgf_n.inputs["not_fl"])
+    links.new(in_pdg_n.outputs["inFractal"], in_pgf_n.inputs["fromPDG"])
+
+    # pcf mux: pcf=1→fromCP, pcf=0→fromRT
+    in_pcf_n = make_function(tree, name="in_pcf", functions={
+        "inFractal": "pcf,fromCP,*,1,pcf,-,fromRT,*,+"
+    }, inputs=["pcf", "fromCP", "fromRT"], outputs=["inFractal"],
+                             scalars=["pcf", "fromCP", "fromRT", "inFractal"],
+                             node_group_type="Shader", location=(-3, 9), hide=True)
+    links.new(b_pcf, in_pcf_n.inputs["pcf"])
+    links.new(in_pgf_n.outputs["inFractal"], in_pcf_n.inputs["fromCP"])
+    links.new(in_pkl_n.outputs["inFractal"], in_pcf_n.inputs["fromRT"])
+
+    # upside-down: inFractal = pab*not_fl
+    in_pab_n = make_function(tree, name="in_pab_ud", functions={"inFractal": "pab,not_fl,*"},
+                             inputs=["pab", "not_fl"], outputs=["inFractal"],
+                             scalars=["pab", "not_fl", "inFractal"],
+                             node_group_type="Shader", location=(-5, 12), hide=True)
+    links.new(b_pab, in_pab_n.inputs["pab"])
+    links.new(not_fl_sock, in_pab_n.inputs["not_fl"])
+
+    # pge mux: pge=1→fromUD, pge=0→fromCPRT
+    in_pge_n = make_function(tree, name="in_pge", functions={
+        "inFractal": "pge,fromUD,*,1,pge,-,fromCPRT,*,+"
+    }, inputs=["pge", "fromUD", "fromCPRT"], outputs=["inFractal"],
+                             scalars=["pge", "fromUD", "fromCPRT", "inFractal"],
+                             node_group_type="Shader", location=(-2, 11), hide=True)
+    links.new(b_pge, in_pge_n.inputs["pge"])
+    links.new(in_pab_n.outputs["inFractal"], in_pge_n.inputs["fromUD"])
+    links.new(in_pcf_n.outputs["inFractal"], in_pge_n.inputs["fromCPRT"])
+
+    # left-triangle: inFractal = pAB*not_fl
+    in_pAB_n = make_function(tree, name="in_pAB_lt", functions={"inFractal": "pAB,not_fl,*"},
+                             inputs=["pAB", "not_fl"], outputs=["inFractal"],
+                             scalars=["pAB", "not_fl", "inFractal"],
+                             node_group_type="Shader", location=(-5, 13.5), hide=True)
+    links.new(b_pAB, in_pAB_n.inputs["pAB"])
+    links.new(not_fl_sock, in_pAB_n.inputs["not_fl"])
+    links.new(in_pAB_n.outputs["inFractal"], in_pde.inputs["true"])
+    links.new(in_pge_n.outputs["inFractal"], in_pde.inputs["false"])
+
+    # --- PARA inFractal ---
+    in_pdgp_n = make_function(tree, name="in_pdgp", functions={"inFractal": "pdgp,fl,*"},
+                              inputs=["pdgp", "fl"], outputs=["inFractal"],
+                              scalars=["pdgp", "fl", "inFractal"],
+                              node_group_type="Shader", location=(-5, 0), hide=True)
+    links.new(b_pdgp, in_pdgp_n.inputs["pdgp"])
+    links.new(fl_sock, in_pdgp_n.inputs["fl"])
+
+    in_pbe_n = make_function(tree, name="in_pbe", functions={"inFractal": "pbe,fl,*"},
+                             inputs=["pbe", "fl"], outputs=["inFractal"],
+                             scalars=["pbe", "fl", "inFractal"],
+                             node_group_type="Shader", location=(-5, 1.5), hide=True)
+    links.new(b_pbe, in_pbe_n.inputs["pbe"])
+    links.new(fl_sock, in_pbe_n.inputs["fl"])
+
+    in_paf_n = make_function(tree, name="in_paf", functions={
+        "inFractal": "paf,not_fl,*,1,paf,-,fromPBE,*,+"
+    }, inputs=["paf", "not_fl", "fromPBE"], outputs=["inFractal"],
+                             scalars=["paf", "not_fl", "fromPBE", "inFractal"],
+                             node_group_type="Shader", location=(-4, 2), hide=True)
+    links.new(b_paf, in_paf_n.inputs["paf"])
+    links.new(not_fl_sock, in_paf_n.inputs["not_fl"])
+    links.new(in_pbe_n.outputs["inFractal"], in_paf_n.inputs["fromPBE"])
+
+    in_pcfp_n = make_function(tree, name="in_pcfp", functions={
+        "inFractal": "pcfp,fromCP,*,1,pcfp,-,fromRT,*,+"
+    }, inputs=["pcfp", "fromCP", "fromRT"], outputs=["inFractal"],
+                              scalars=["pcfp", "fromCP", "fromRT", "inFractal"],
+                              node_group_type="Shader", location=(-3, 1), hide=True)
+    links.new(b_pcfp, in_pcfp_n.inputs["pcfp"])
+    links.new(in_paf_n.outputs["inFractal"], in_pcfp_n.inputs["fromCP"])
+    links.new(in_pdgp_n.outputs["inFractal"], in_pcfp_n.inputs["fromRT"])
+
+    in_pABp_n = make_function(tree, name="in_pABp_lt", functions={"inFractal": "pABp,not_fl,*"},
+                              inputs=["pABp", "not_fl"], outputs=["inFractal"],
+                              scalars=["pABp", "not_fl", "inFractal"],
+                              node_group_type="Shader", location=(-5, 3.5), hide=True)
+    links.new(b_pABp, in_pABp_n.inputs["pABp"])
+    links.new(not_fl_sock, in_pABp_n.inputs["not_fl"])
+    links.new(in_pABp_n.outputs["inFractal"], in_pea.inputs["true"])
+    links.new(in_pcfp_n.outputs["inFractal"], in_pea.inputs["false"])
+
+    # --- hasFinished update ---
+    hf_trap = make_function(tree, name="hf_trap", functions={
+        "hf": ("pde,pAB,*,"
+               "1,pde,-,pge,*,pab,*,+,"
+               "1,pde,-,1,pge,-,*,pcf,*,pgf,*,+,"
+               "1,pde,-,1,pge,-,*,pcf,*,1,pgf,-,*,pdg,*,+,"
+               "1,pde,-,1,pge,-,*,1,pcf,-,*,pkl,*,+")
+    }, inputs=["pde", "pge", "pcf", "pAB", "pab", "pgf", "pdg", "pkl"],
+                            outputs=["hf"],
+                            scalars=["pde", "pge", "pcf", "pAB", "pab", "pgf", "pdg", "pkl", "hf"],
+                            node_group_type="Shader", location=(0, 11), hide=True)
+    for name_, sock_ in [("pde", b_pde), ("pge", b_pge), ("pcf", b_pcf),
+                         ("pAB", b_pAB), ("pab", b_pab), ("pgf", b_pgf),
+                         ("pdg", b_pdg), ("pkl", b_pkl)]:
+        links.new(sock_, hf_trap.inputs[name_])
+
+    hf_para = make_function(tree, name="hf_para", functions={
+        "hf": ("pea,pABp,*,"
+               "1,pea,-,pcfp,*,paf,*,+,"
+               "1,pea,-,pcfp,*,1,paf,-,*,pbe,*,+,"
+               "1,pea,-,1,pcfp,-,*,pdgp,*,+")
+    }, inputs=["pea", "pcfp", "pABp", "paf", "pbe", "pdgp"],
+                            outputs=["hf"],
+                            scalars=["pea", "pcfp", "pABp", "paf", "pbe", "pdgp", "hf"],
+                            node_group_type="Shader", location=(0, 3), hide=True)
+    for name_, sock_ in [("pea", b_pea), ("pcfp", b_pcfp), ("pABp", b_pABp),
+                         ("paf", b_paf), ("pbe", b_pbe), ("pdgp", b_pdgp)]:
+        links.new(sock_, hf_para.inputs[name_])
+
+    new_hf_node = make_function(tree, name="new_hf", functions={
+        "hf": "hasFinished,1,hasFinished,-,isTrap,hf_trap,*,1,isTrap,-,hf_para,*,+,*,+"
+    }, inputs=["hasFinished", "isTrap", "hf_trap", "hf_para"], outputs=["hf"],
+                                scalars=["hasFinished", "isTrap", "hf_trap", "hf_para", "hf"],
+                                node_group_type="Shader", location=(12, 7), hide=True)
+    links.new(rz2.outputs["hasFinished"], new_hf_node.inputs["hasFinished"])
+    links.new(rz2.outputs["isTrap"], new_hf_node.inputs["isTrap"])
+    links.new(hf_trap.outputs["hf"], new_hf_node.inputs["hf_trap"])
+    links.new(hf_para.outputs["hf"], new_hf_node.inputs["hf_para"])
+    links.new(new_hf_node.outputs["hf"], rz2.repeat_output.inputs["hasFinished"])
+
+    # --- Gate scalars for continue cases ---
+    trap_gates = make_function(tree, name="trap_gates", functions={
+        "g_lt": "pde,1,pAB,-,*",
+        "g_ud": "1,pde,-,pge,*,1,pab,-,*",
+        "g_cp": "1,pde,-,1,pge,-,*,pcf,*,1,pgf,-,*,1,pdg,-,*",
+        "g_rt": "1,pde,-,1,pge,-,*,1,pcf,-,*,1,pkl,-,*",
+    }, inputs=["pde", "pge", "pcf", "pAB", "pab", "pgf", "pdg", "pkl"],
+                               outputs=["g_lt", "g_ud", "g_cp", "g_rt"],
+                               scalars=["pde", "pge", "pcf", "pAB", "pab", "pgf", "pdg", "pkl",
+                                        "g_lt", "g_ud", "g_cp", "g_rt"],
+                               node_group_type="Shader", location=(0, 10), hide=True)
+    for name_, sock_ in [("pde", b_pde), ("pge", b_pge), ("pcf", b_pcf),
+                         ("pAB", b_pAB), ("pab", b_pab), ("pgf", b_pgf),
+                         ("pdg", b_pdg), ("pkl", b_pkl)]:
+        links.new(sock_, trap_gates.inputs[name_])
+    g_lt = trap_gates.outputs["g_lt"]
+    g_ud = trap_gates.outputs["g_ud"]
+    g_cp = trap_gates.outputs["g_cp"]
+    g_rt = trap_gates.outputs["g_rt"]
+
+    para_gates = make_function(tree, name="para_gates", functions={
+        "g_lt_p": "pea,1,pABp,-,*",
+        "g_cp_p": "1,pea,-,pcfp,*,1,paf,-,*,1,pbe,-,*",
+        "g_rt_p": "1,pea,-,1,pcfp,-,*,1,pdgp,-,*",
+    }, inputs=["pea", "pcfp", "pABp", "paf", "pbe", "pdgp"],
+                               outputs=["g_lt_p", "g_cp_p", "g_rt_p"],
+                               scalars=["pea", "pcfp", "pABp", "paf", "pbe", "pdgp",
+                                        "g_lt_p", "g_cp_p", "g_rt_p"],
+                               node_group_type="Shader", location=(0, 2), hide=True)
+    for name_, sock_ in [("pea", b_pea), ("pcfp", b_pcfp), ("pABp", b_pABp),
+                         ("paf", b_paf), ("pbe", b_pbe), ("pdgp", b_pdgp)]:
+        links.new(sock_, para_gates.inputs[name_])
+    g_lt_p = para_gates.outputs["g_lt_p"]
+    g_cp_p = para_gates.outputs["g_cp_p"]
+    g_rt_p = para_gates.outputs["g_rt_p"]
+
+    # --- Scalar state updates (isTrap, fl) ---
+    # Trap: isTrap=0 only for C_cp, else 1
+    new_isTrap_trap = make_function(tree, name="nisTrap_trap", functions={"isTrap": "1,g_cp,-"},
+                                    inputs=["g_cp"], outputs=["isTrap"],
+                                    scalars=["g_cp", "isTrap"],
+                                    node_group_type="Shader", location=(2, 10.5), hide=True)
+    links.new(g_cp, new_isTrap_trap.inputs["g_cp"])
+
+    # Trap: fl flips for C_lt and C_ud, stays for others
+    new_fl_trap = make_function(tree, name="nfl_trap", functions={
+        "fl": "g_lt,g_ud,+,not_fl,*,1,g_lt,-,g_ud,-,fl,*,+"
+    }, inputs=["g_lt", "g_ud", "not_fl", "fl"], outputs=["fl"],
+                                scalars=["g_lt", "g_ud", "not_fl", "fl"],
+                                node_group_type="Shader", location=(2, 10), hide=True)
+    links.new(g_lt, new_fl_trap.inputs["g_lt"])
+    links.new(g_ud, new_fl_trap.inputs["g_ud"])
+    links.new(not_fl_sock, new_fl_trap.inputs["not_fl"])
+    links.new(fl_sock, new_fl_trap.inputs["fl"])
+
+    # Para: isTrap=0 only for C_cp_p, else 1
+    new_isTrap_para = make_function(tree, name="nisTrap_para", functions={"isTrap": "1,g_cp_p,-"},
+                                    inputs=["g_cp_p"], outputs=["isTrap"],
+                                    scalars=["g_cp_p", "isTrap"],
+                                    node_group_type="Shader", location=(2, 2.5), hide=True)
+    links.new(g_cp_p, new_isTrap_para.inputs["g_cp_p"])
+
+    # Para: fl flips only for C_lt_p
+    new_fl_para = make_function(tree, name="nfl_para", functions={
+        "fl": "g_lt_p,not_fl,*,1,g_lt_p,-,fl,*,+"
+    }, inputs=["g_lt_p", "not_fl", "fl"], outputs=["fl"],
+                                scalars=["g_lt_p", "not_fl", "fl"],
+                                node_group_type="Shader", location=(2, 2), hide=True)
+    links.new(g_lt_p, new_fl_para.inputs["g_lt_p"])
+    links.new(not_fl_sock, new_fl_para.inputs["not_fl"])
+    links.new(fl_sock, new_fl_para.inputs["fl"])
+
+    cur_isTrap = rz2.outputs['isTrap']
+    new_isTrap_node = make_function(tree, name="new_isTrap", functions={
+        "isTrap": "sel,nisTrap_trap,*,1,sel,-,nisTrap_para,*,+"
+    }, inputs=["sel", "nisTrap_trap", "nisTrap_para"], outputs=["isTrap"],
+                                    scalars=["sel", "nisTrap_trap", "nisTrap_para", "isTrap"],
+                                    node_group_type="Shader", location=(7, 7), hide=True)
+    links.new(cur_isTrap, new_isTrap_node.inputs["sel"])
+    links.new(new_isTrap_trap.outputs["isTrap"], new_isTrap_node.inputs["nisTrap_trap"])
+    links.new(new_isTrap_para.outputs["isTrap"], new_isTrap_node.inputs["nisTrap_para"])
+    links.new(new_isTrap_node.outputs["isTrap"], rz2.repeat_output.inputs["isTrap"])
+
+    new_fl_node = make_function(tree, name="new_fl", functions={
+        "fl": "sel,nfl_trap,*,1,sel,-,nfl_para,*,+"
+    }, inputs=["sel", "nfl_trap", "nfl_para"], outputs=["fl"],
+                                scalars=["sel", "nfl_trap", "nfl_para", "fl"],
+                                node_group_type="Shader", location=(7, 6.5), hide=True)
+    links.new(cur_isTrap, new_fl_node.inputs["sel"])
+    links.new(new_fl_trap.outputs["fl"], new_fl_node.inputs["nfl_trap"])
+    links.new(new_fl_para.outputs["fl"], new_fl_node.inputs["nfl_para"])
+    links.new(new_fl_node.outputs["fl"], rz2.repeat_output.inputs["fl"])
+
+    # --- Vector state updates via make_function (ShaderNodeGroup → repeat_output compatible) ---
+    # Trap branch: weighted sum over gates; only one gate active per iteration.
+    # na: C_lt→d, C_ud→g, C_cp→gamma(=β_ud=γ_cp), C_rt→f, else→a
+    # nb: C_lt→a, C_ud→d, C_cp→f,               C_rt→b,  else→b
+    # nc: C_lt→A_lt, C_ud→B_lt, C_cp→delta, C_rt→kappa, else→c
+    # nd: C_lt→B_lt, C_ud→gamma, C_cp→g,    C_rt→delta, else→d
+    new_trap = make_function(tree, name="new_trap", functions={
+        "na": [
+            "g_lt,d_x,*,g_ud,g_x,*,+,g_cp,gamma_x,*,+,g_rt,f_x,*,+,1,g_lt,-,g_ud,-,g_cp,-,g_rt,-,a_x,*,+",
+            "g_lt,d_y,*,g_ud,g_y,*,+,g_cp,gamma_y,*,+,g_rt,f_y,*,+,1,g_lt,-,g_ud,-,g_cp,-,g_rt,-,a_y,*,+",
+            "0"],
+        "nb": [
+            "g_lt,a_x,*,g_ud,d_x,*,+,g_cp,f_x,*,+,1,g_lt,-,g_ud,-,g_cp,-,b_x,*,+",
+            "g_lt,a_y,*,g_ud,d_y,*,+,g_cp,f_y,*,+,1,g_lt,-,g_ud,-,g_cp,-,b_y,*,+",
+            "0"],
+        "nc": [
+            "g_lt,A_lt_x,*,g_ud,B_lt_x,*,+,g_cp,delta_x,*,+,g_rt,kappa_x,*,+,1,g_lt,-,g_ud,-,g_cp,-,g_rt,-,c_x,*,+",
+            "g_lt,A_lt_y,*,g_ud,B_lt_y,*,+,g_cp,delta_y,*,+,g_rt,kappa_y,*,+,1,g_lt,-,g_ud,-,g_cp,-,g_rt,-,c_y,*,+",
+            "0"],
+        "nd": [
+            "g_lt,B_lt_x,*,g_ud,gamma_x,*,+,g_cp,g_x,*,+,g_rt,delta_x,*,+,1,g_lt,-,g_ud,-,g_cp,-,g_rt,-,d_x,*,+",
+            "g_lt,B_lt_y,*,g_ud,gamma_y,*,+,g_cp,g_y,*,+,g_rt,delta_y,*,+,1,g_lt,-,g_ud,-,g_cp,-,g_rt,-,d_y,*,+",
+            "0"],
+    }, inputs=["a", "b", "c", "d", "f", "g", "gamma", "delta", "kappa", "A_lt", "B_lt",
+               "g_lt", "g_ud", "g_cp", "g_rt"],
+                             outputs=["na", "nb", "nc", "nd"],
+                             scalars=["g_lt", "g_ud", "g_cp", "g_rt"],
+                             vectors=["na", "nb", "nc", "nd", "a", "b", "c", "d", "f", "g", "gamma", "delta", "kappa",
+                                      "A_lt", "B_lt"],
+                             node_group_type="Shader", location=(7, 9), hide=True)
+    links.new(rz2.outputs['a'], new_trap.inputs['a'])
+    links.new(rz2.outputs['b'], new_trap.inputs['b'])
+    links.new(rz2.outputs['c'], new_trap.inputs['c'])
+    links.new(rz2.outputs['d'], new_trap.inputs['d'])
+    links.new(f_and_g.outputs['f'], new_trap.inputs['f'])
+    links.new(f_and_g.outputs['g'], new_trap.inputs['g'])
+    links.new(beta_ud.std_out, new_trap.inputs['gamma'])
+    links.new(delta_cp.std_out, new_trap.inputs['delta'])
+    links.new(kappa_rt.std_out, new_trap.inputs['kappa'])
+    links.new(A_lt.std_out, new_trap.inputs['A_lt'])
+    links.new(B_lt.std_out, new_trap.inputs['B_lt'])
+    links.new(g_lt, new_trap.inputs['g_lt'])
+    links.new(g_ud, new_trap.inputs['g_ud'])
+    links.new(g_cp, new_trap.inputs['g_cp'])
+    links.new(g_rt, new_trap.inputs['g_rt'])
+
+    # Para branch:
+    # na: C_lt_p→ep, C_cp_p→B_lt_p, C_rt_p→f_p, else→a
+    # nb: C_lt_p→d,  C_cp_p→f_p,    C_rt_p→b,   else→b
+    # nc: C_lt_p→A_lt_p, C_cp_p→beta_cpp, C_rt_p→kappa, else→c
+    # nd: C_lt_p→B_lt_p, C_cp_p→ep,       C_rt_p→beta_cpp, else→d
+    new_para = make_function(tree, name="new_para", functions={
+        "na": [
+            "g_lt_p,ep_x,*,g_cp_p,B_lt_p_x,*,+,g_rt_p,f_p_x,*,+,1,g_lt_p,-,g_cp_p,-,g_rt_p,-,a_x,*,+",
+            "g_lt_p,ep_y,*,g_cp_p,B_lt_p_y,*,+,g_rt_p,f_p_y,*,+,1,g_lt_p,-,g_cp_p,-,g_rt_p,-,a_y,*,+",
+            "0"],
+        "nb": [
+            "g_lt_p,d_x,*,g_cp_p,f_p_x,*,+,1,g_lt_p,-,g_cp_p,-,b_x,*,+",
+            "g_lt_p,d_y,*,g_cp_p,f_p_y,*,+,1,g_lt_p,-,g_cp_p,-,b_y,*,+",
+            "0"],
+        "nc": [
+            "g_lt_p,A_lt_p_x,*,g_cp_p,beta_cpp_x,*,+,g_rt_p,kappa_x,*,+,1,g_lt_p,-,g_cp_p,-,g_rt_p,-,c_x,*,+",
+            "g_lt_p,A_lt_p_y,*,g_cp_p,beta_cpp_y,*,+,g_rt_p,kappa_y,*,+,1,g_lt_p,-,g_cp_p,-,g_rt_p,-,c_y,*,+",
+            "0"],
+        "nd": [
+            "g_lt_p,B_lt_p_x,*,g_cp_p,ep_x,*,+,g_rt_p,beta_cpp_x,*,+,1,g_lt_p,-,g_cp_p,-,g_rt_p,-,d_x,*,+",
+            "g_lt_p,B_lt_p_y,*,g_cp_p,ep_y,*,+,g_rt_p,beta_cpp_y,*,+,1,g_lt_p,-,g_cp_p,-,g_rt_p,-,d_y,*,+",
+            "0"],
+    }, inputs=["a", "b", "c", "d", "ep", "f_p", "A_lt_p", "B_lt_p", "beta_cpp", "kappa",
+               "g_lt_p", "g_cp_p", "g_rt_p"],
+                             vectors=["na", "nb", "nc", "nd", "a", "b", "c", "d", "ep", "f_p", "gamma", "delta", "kappa",
+                                      "A_lt_p", "B_lt_p","beta_cpp"],
+                             outputs=["na", "nb", "nc", "nd"],
+                             scalars=["g_lt_p", "g_cp_p", "g_rt_p"],
+                             node_group_type="Shader", location=(7, 4), hide=True)
+    links.new(rz2.outputs['a'], new_para.inputs['a'])
+    links.new(rz2.outputs['b'], new_para.inputs['b'])
+    links.new(rz2.outputs['c'], new_para.inputs['c'])
+    links.new(rz2.outputs['d'], new_para.inputs['d'])
+    links.new(ep.std_out, new_para.inputs['ep'])
+    links.new(f.outputs['f'], new_para.inputs['f_p'])
+    links.new(A_lt_p.std_out, new_para.inputs['A_lt_p'])
+    links.new(B_lt_p.std_out, new_para.inputs['B_lt_p'])
+    links.new(beta_cpp.std_out, new_para.inputs['beta_cpp'])
+    links.new(kappa_rt.std_out, new_para.inputs['kappa'])
+    links.new(g_lt_p, new_para.inputs['g_lt_p'])
+    links.new(g_cp_p, new_para.inputs['g_cp_p'])
+    links.new(g_rt_p, new_para.inputs['g_rt_p'])
+
+    # Final mux: isTrap=1 → trap result, isTrap=0 → para result
+    final_abcd = make_function(tree, name="final_abcd", functions={
+        "new_a": [
+            "isTrap,na_trap_x,*,1,isTrap,-,na_para_x,*,+",
+            "isTrap,na_trap_y,*,1,isTrap,-,na_para_y,*,+",
+            "0"],
+        "new_b": [
+            "isTrap,nb_trap_x,*,1,isTrap,-,nb_para_x,*,+",
+            "isTrap,nb_trap_y,*,1,isTrap,-,nb_para_y,*,+",
+            "0"],
+        "new_c": [
+            "isTrap,nc_trap_x,*,1,isTrap,-,nc_para_x,*,+",
+            "isTrap,nc_trap_y,*,1,isTrap,-,nc_para_y,*,+",
+            "0"],
+        "new_d": [
+            "isTrap,nd_trap_x,*,1,isTrap,-,nd_para_x,*,+",
+            "isTrap,nd_trap_y,*,1,isTrap,-,nd_para_y,*,+",
+            "0"],
+    }, inputs=["na_trap", "nb_trap", "nc_trap", "nd_trap",
+               "na_para", "nb_para", "nc_para", "nd_para", "isTrap"],
+                               outputs=["new_a", "new_b", "new_c", "new_d"],
+                               scalars=["isTrap"],
+                               vectors=["na_trap", "nb_trap", "nc_trap", "nd_trap",
+               "na_para", "nb_para", "nc_para", "nd_para","new_a", "new_b", "new_c", "new_d"],
+                               node_group_type="Shader", location=(9, 7), hide=True)
+    links.new(new_trap.outputs['na'], final_abcd.inputs['na_trap'])
+    links.new(new_trap.outputs['nb'], final_abcd.inputs['nb_trap'])
+    links.new(new_trap.outputs['nc'], final_abcd.inputs['nc_trap'])
+    links.new(new_trap.outputs['nd'], final_abcd.inputs['nd_trap'])
+    links.new(new_para.outputs['na'], final_abcd.inputs['na_para'])
+    links.new(new_para.outputs['nb'], final_abcd.inputs['nb_para'])
+    links.new(new_para.outputs['nc'], final_abcd.inputs['nc_para'])
+    links.new(new_para.outputs['nd'], final_abcd.inputs['nd_para'])
+    links.new(cur_isTrap, final_abcd.inputs['isTrap'])
+    links.new(final_abcd.outputs['new_a'], rz2.repeat_output.inputs['a'])
+    links.new(final_abcd.outputs['new_b'], rz2.repeat_output.inputs['b'])
+    links.new(final_abcd.outputs['new_c'], rz2.repeat_output.inputs['c'])
+    links.new(final_abcd.outputs['new_d'], rz2.repeat_output.inputs['d'])
+
+    # uv is the test point p — constant across iterations
+    links.new(rz2.outputs['uv'], rz2.repeat_output.inputs['uv'])
 
     # inFractal from rz2 drives the check inside rz
     links.new(rz2.repeat_output.outputs['inFractal'], check.inputs['inFractal'])
-
 
     _make_colors(tree, rz.repeat_output.outputs["result"], out_node, location=(8, -7))
     return mat

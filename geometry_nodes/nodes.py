@@ -6221,6 +6221,7 @@ class Structure:
         self.left = None
         self.right = None
         self.out = None
+        self.extra = None  # third operand slot for ternary operators
 
 
 def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[], scalars=[], rotations=[],
@@ -6394,19 +6395,53 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
 def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
                            inputs=[], outputs=[], vectors=[], scalars=[], rotations=[],
                            node_group_type="GeometryNodes",
-                           name="FunctionNode", hide=True, location=(0, 0), parent=None):
+                           name="FunctionNode", hide=True, location=(0, 0), parent=None,
+                           custom_ops={}):
     """
     Like ``make_function`` but with support for auxiliary (intermediate)
-    variables. ``aux_functions`` maps an aux name to an RPN expression (or a
-    list of three RPN expressions for a vector); the aux is computed once and
-    its output socket is then exposed as an input symbol that the entries in
-    ``functions`` can reference by name. This lets repeated sub-computations
-    be factored out of the output formulas.
+    variables and custom operator nodes.
 
-    Aux entries are built in declaration order, so a later aux entry may
-    reference an earlier aux name. Every aux name must also be listed in
-    ``scalars`` or ``vectors`` so ``build_function`` recognises it as a known
-    symbol when it appears in a formula.
+    ``aux_functions`` maps an aux name to an RPN expression (or a list of
+    three RPN expressions for a vector); the aux is computed once and its
+    output socket is then exposed as an input symbol that the entries in
+    ``functions`` can reference by name.  Aux entries are built in declaration
+    order, so a later aux may reference an earlier one.  Every aux name must
+    also be listed in ``scalars`` or ``vectors``.
+
+    ``custom_ops`` extends the RPN operator vocabulary with user-defined
+    nodes.  It is a dict mapping an operator token (the string that appears in
+    a formula) to a spec dict with the following keys:
+
+        "type"     (required) – Blender node type string, e.g. "ShaderNodeMix"
+        "output"   (required) – output socket name or index
+        "inputs"   (optional) – sequence of socket names or indices consumed
+                                 from the RPN stack.  Length determines arity:
+                                   1 element  → unary   (one pop)
+                                   2 elements → binary  (two pops: right, left)
+                                   3 elements → ternary (three pops: right, left, extra)
+                                 The pop order in RPN is: right first, left second,
+                                 extra third; so ``"t,a,b,op"`` gives right=b,
+                                 left=a, extra=t.
+        "settings" (optional) – dict of node attributes to set after creation,
+                                 e.g. {"data_type": "FLOAT", "factor_mode": "UNIFORM"}
+        "defaults" (optional) – dict of input socket name/index → default_value
+                                 for fixed inputs (e.g. the blend factor)
+        "unary"    (optional) – True if the operator consumes only one operand
+        "label"    (optional) – label shown on the node
+
+    Example — a linear-blend (MixNode) with a fixed factor of 0.5::
+
+        custom_ops = {
+            "mix05": {
+                "type": "ShaderNodeMix",
+                "settings": {"data_type": "FLOAT", "factor_mode": "UNIFORM",
+                             "clamp_factor": True},
+                "defaults": {"Factor": 0.5},
+                "inputs": ("A", "B"),
+                "output": "Result",
+            }
+        }
+        # usage in an RPN formula: "caseA,caseB,mix05"
     """
     if hasattr(nodes_or_tree, "nodes"):
         tree = nodes_or_tree
@@ -6507,7 +6542,8 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
                 build_function(tree, comp_stack,
                                scalars=scalars, vectors=vectors, rotations=rotations,
                                in_channels=in_channels,
-                               out=comb.inputs[i], fcn_count=fcn_count)
+                               out=comb.inputs[i], fcn_count=fcn_count,
+                               custom_ops=custom_ops)
                 fcn_count += 1
             in_channels[key] = comb.outputs[0]
             if key + "_x" in all_terms or key + "_y" in all_terms or key + "_z" in all_terms:
@@ -6526,7 +6562,8 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
             build_function(tree, parsed,
                            scalars=scalars, vectors=vectors, rotations=rotations,
                            in_channels=in_channels,
-                           out=reroute.inputs[0], fcn_count=fcn_count)
+                           out=reroute.inputs[0], fcn_count=fcn_count,
+                           custom_ops=custom_ops)
             fcn_count += 1
             in_channels[key] = reroute.outputs[0]
             if key in vectors and (
@@ -6566,20 +6603,23 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
                 build_function(tree, stacks[key][0],
                                scalars=scalars, vectors=vectors, rotations=rotations,
                                in_channels=in_channels,
-                               out=out_channels[key], fcn_count=fcn_count)
+                               out=out_channels[key], fcn_count=fcn_count,
+                               custom_ops=custom_ops)
                 fcn_count += 1
             else:
                 for i, part in enumerate(value):
                     build_function(tree, stacks[key][i],
                                    scalars=scalars, vectors=vectors, rotations=rotations,
                                    in_channels=in_channels,
-                                   out=out_channels[key + "_" + comps[i]], fcn_count=fcn_count)
+                                   out=out_channels[key + "_" + comps[i]], fcn_count=fcn_count,
+                                   custom_ops=custom_ops)
                     fcn_count += 1
         else:
             build_function(tree, stacks[key],
                            scalars=scalars, vectors=vectors, rotations=rotations,
                            in_channels=in_channels,
-                           out=out_channels[key], fcn_count=fcn_count)
+                           out=out_channels[key], fcn_count=fcn_count,
+                           custom_ops=custom_ops)
             fcn_count += 1
 
     layout(tree)
@@ -6659,7 +6699,7 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                    fcn_count=0, out=None, unary=None,
                    last_operator=None,
                    last_structure=None,
-                   length=1, height=0, level=[0]):
+                   length=1, height=0, level=[0], custom_ops={}, arity=None):
     """
     recursive build of a node-group function
 
@@ -6691,15 +6731,21 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
     left_empty = True
     if unary:
         right_empty = False  # no need for a right sub-group_tree
+        extra_empty = False
+    elif arity == 3:
+        right_empty = True
+        extra_empty = True   # ternary: needs right, left, and extra operands
     else:
         right_empty = True
+        extra_empty = False
 
-    # a variable that a new operator is assigned to
+    # a variable that a new operator is assigned to; arity tracks ternary custom ops
     new_node_math = None
+    new_node_arity = None
 
-    while (left_empty or right_empty) and len(stack) > 0:
+    while (left_empty or right_empty or extra_empty) and len(stack) > 0:
         next_element = stack.pop()
-        if next_element in OPERATORS:
+        if next_element in OPERATORS or next_element in custom_ops:
             # warning not all possible operators have been implemented yet
             # always implement them on the fly when needed
             unary = False  # default case, unary operators explicitly overwrite this variable
@@ -6794,6 +6840,35 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                 new_node_structure.left = new_node_math.inputs["Rotation"]
                 new_node_structure.out = new_node_math.outputs["Rotation"]
                 unary = True
+            elif next_element in custom_ops:
+                # User-defined custom operator node.
+                # spec keys:
+                #   "type"     – Blender node type string (required)
+                #   "settings" – dict of node attributes to set (optional)
+                #   "defaults" – dict of input socket name/index → default value (optional)
+                #   "inputs"   – sequence of socket names/indices consumed from the RPN stack:
+                #                  1 element → unary,  2 → binary,  3 → ternary
+                #                  order: (left, right[, extra])  ↔  (2nd pop, 1st pop[, 3rd pop])
+                #   "output"   – output socket name or index (required)
+                #   "unary"    – True if only one stack operand (optional, overrides len(inputs))
+                #   "label"    – node label (optional)
+                spec = custom_ops[next_element]
+                new_node_math = tree.nodes.new(type=spec["type"])
+                for _attr, _val in spec.get("settings", {}).items():
+                    setattr(new_node_math, _attr, _val)
+                for _sock, _val in spec.get("defaults", {}).items():
+                    new_node_math.inputs[_sock].default_value = _val
+                if spec.get("label"):
+                    new_node_math.label = spec["label"]
+                new_node_structure = Structure()
+                _inp = spec.get("inputs", ())
+                new_node_structure.left  = new_node_math.inputs[_inp[0]] if len(_inp) > 0 else None
+                new_node_structure.right = new_node_math.inputs[_inp[1]] if len(_inp) > 1 else None
+                new_node_structure.extra = new_node_math.inputs[_inp[2]] if len(_inp) > 2 else None
+                new_node_structure.out   = new_node_math.outputs[spec["output"]]
+                unary = spec.get("unary", False)
+                new_node_arity = len(_inp)
+
             elif next_element in ("cadd", "csub", "cmul", "cdiv", "cscale", "cconj", "cabs", "cexp"):
                 # complex math (ComplexMathNode group): z, w as complex numbers in a VECTOR
                 # binary: cadd/csub/cmul/cdiv (right=w VECTOR), cscale (right=lambda FLOAT)
@@ -6869,6 +6944,9 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                 #             group_tree.links.new(new_node_math.outputs[0], last_operator.inputs[i])
                 #             break
                 left_empty = False
+            elif extra_empty:
+                tree.links.new(new_node_structure.out, last_structure.extra)
+                extra_empty = False
 
         elif next_element in scalars or next_element in vectors or next_element in rotations:
             if last_operator is None:
@@ -6879,6 +6957,9 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
             elif left_empty:
                 tree.links.new(in_channels[next_element], last_structure.left)
                 left_empty = False
+            elif extra_empty:
+                tree.links.new(in_channels[next_element], last_structure.extra)
+                extra_empty = False
 
         # remove _x, _y, _z flag for parameter detection
         elif next_element[0:-2] in vectors or next_element[0:-2] in rotations:
@@ -6891,6 +6972,9 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
             elif left_empty:
                 tree.links.new(src, last_structure.left)
                 left_empty = False
+            elif extra_empty:
+                tree.links.new(src, last_structure.extra)
+                extra_empty = False
         # check for simple numbers and unit vectors
         else:
             if next_element == "pi":
@@ -6931,6 +7015,9 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                 last_operator.label = next_element + last_operator.label
                 # last_operator.inputs[0].default_value = number
                 left_empty = False
+            elif extra_empty:
+                last_structure.extra.default_value = number
+                extra_empty = False
             else:
                 raise "Something went wrong. The number " + next_element + " is left over."
 
@@ -6939,8 +7026,9 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
             build_function(tree, stack, scalars=scalars, vectors=vectors, rotations=rotations, in_channels=in_channels,
                            out=out, fcn_count=fcn_count, length=length - 1, unary=unary, last_operator=new_node_math,
                            last_structure=new_node_structure, height=height,
-                           level=new_level)
+                           level=new_level, custom_ops=custom_ops, arity=new_node_arity)
             new_node_math = None
+            new_node_arity = None
 
 
 def layout(tree, mode="Sugiyama"):
