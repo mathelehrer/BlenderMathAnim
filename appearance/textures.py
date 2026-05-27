@@ -5309,26 +5309,65 @@ def hat_tile_fractal(**kwargs):
         links.new(make_aux2.outputs[v], make_cond.inputs[v])
     links.new(rz2.outputs["uv"], make_cond.inputs["uv"])
 
+    variables_vector = ["a", "b", "c", "d"]
+    variables_scalar = ["isTrap", "result", "exit"]
+
     update_vectors = ["new_a","new_b","new_c","new_d"]
     update_scalars = ["new_isTrap","new_result","new_exit"]
     updates = update_scalars+update_vectors
-    update_values = make_function_with_aux(tree,name="updateValues",
+    update_values = make_function_with_aux(tree,name="updateValues",custom_ops=custom_ops,
                                            functions={
-                                               "new_a":["0","0","0"],
-                                               "new_b":["0","0","0"],
-                                               "new_c":["0","0","0"],
-                                               "new_d":["0","0","0"],
-                                               "new_isTrap":"0",
-                                               "new_result":"0",
-                                                "new_exit":"0"
+                                               # isTrap=T: cond1→a=d; ¬c1,c3→a=g1; ¬c1,¬c3,c5,¬c6,¬c7→a=k1; ¬c1,¬c3,¬c5,¬c8→a=f1
+                                               # isTrap=F: c9→a=e2; ¬c9,c11,¬c12,¬c13→a=c2; ¬c9,¬c11,¬c14→a=f2
+                                               "new_a":"isTrap,"
+                                                       "cond1,d,cond3,g1,cond5,cond6,a,cond7,a,k1,ifv,ifv,cond8,a,f1,ifv,ifv,ifv,"
+                                                       "cond9,e2,cond11,cond12,a,cond13,a,c2,ifv,ifv,cond14,a,f2,ifv,ifv,ifv,"
+                                                       "ifv",
+                                               # isTrap=T: cond1→b=a; ¬c1,c3→b=d; ¬c1,¬c3,c5,¬c6,¬c7→b=f1; else→b=b
+                                               # isTrap=F: c9→b=d; ¬c9,c11,¬c12,¬c13→b=f2; else→b=b
+                                               "new_b":"isTrap,"
+                                                       "cond1,a,cond3,d,cond5,cond6,b,cond7,b,f1,ifv,ifv,b,ifv,ifv,ifv,"
+                                                       "cond9,d,cond11,cond12,b,cond13,b,f2,ifv,ifv,b,ifv,ifv,"
+                                                       "ifv",
+                                               # isTrap=T: cond1→c=a1; ¬c1,c3→c=c1; ¬c1,¬c3,c5,¬c6,¬c7→c=l1; ¬c1,¬c3,¬c5,¬c8→c=m1
+                                               # isTrap=F: c9→c=a2; ¬c9,c11,¬c12,¬c13→c=d2; ¬c9,¬c11,¬c14→c=l2
+                                               "new_c":"isTrap,"
+                                                       "cond1,a1,cond3,c1,cond5,cond6,c,cond7,c,l1,ifv,ifv,cond8,c,m1,ifv,ifv,ifv,"
+                                                       "cond9,a2,cond11,cond12,c,cond13,c,d2,ifv,ifv,cond14,c,l2,ifv,ifv,"
+                                                       "ifv",
+                                               # isTrap=T: cond1→d=b1; ¬c1,c3→d=d1; ¬c1,¬c3,c5,¬c6,¬c7→d=g1; ¬c1,¬c3,¬c5,¬c8→d=n1
+                                               # isTrap=F: c9→d=b2; ¬c9,c11,¬c12,¬c13→d=e2; ¬c9,¬c11,¬c14→d=k2
+                                               "new_d":"isTrap,"
+                                                       "cond1,b1,cond3,d1,cond5,cond6,d,cond7,d,g1,ifv,ifv,cond8,d,n1,ifv,ifv,ifv,"
+                                                       "cond9,b2,cond11,cond12,d,cond13,d,e2,ifv,ifv,cond14,d,k2,ifv,ifv,"
+                                                       "ifv",
+                                               # isTrap=T: only ¬c1,¬c3,c5,¬c6,¬c7 → isTrap=False; else isTrap=True
+                                               # isTrap=F: only ¬c9,c11,¬c12,¬c13 → isTrap=False; else isTrap=True
+                                               "new_isTrap":"isTrap,"
+                                                            "cond1,1,cond3,1,cond5,cond6,1,cond7,1,0,iff,iff,1,iff,iff,iff,"
+                                                            "cond9,1,cond11,cond12,1,cond13,1,0,iff,iff,1,iff,iff,"
+                                                            "iff",
+                                               # fl flips on: isTrap∧c1(both sub-cases), isTrap∧¬c1∧c3(both), isTrap∧¬c1∧¬c3∧c5∧c6(return)
+                                               #              ¬isTrap∧c9(both), ¬isTrap∧¬c9∧c11∧c12(return)
+                                               # fl unchanged otherwise (returns fl or no-return with no flip)
+                                               "new_result":"isTrap,"
+                                                            "cond1,1,result,-,cond3,1,result,-,cond5,cond6,1,result,-,result,iff,result,iff,iff,iff,"
+                                                            "cond9,1,result,-,cond11,cond12,1,result,-,result,iff,result,iff,iff,"
+                                                            "iff",
+                                               # exit=1 on any Return: isTrap→(c1∧c2)|(¬c1∧c3∧c4)|(¬c1∧¬c3∧c5∧(c6|c7))|(¬c1∧¬c3∧¬c5∧c8)
+                                               #                        ¬isTrap→(c9∧c10)|(¬c9∧c11∧(c12|c13))|(¬c9∧¬c11∧c14)
+                                               "new_exit":"isTrap,"
+                                                          "cond1,cond2,cond3,cond4,cond5,cond6,1,cond7,iff,cond8,iff,iff,iff,"
+                                                          "cond9,cond10,cond11,cond12,1,cond13,iff,cond14,iff,iff,"
+                                                          "iff",
                                            },
-                                           node_group_type="Shader", inputs=inputs + aux1 + aux2 + ["uv"]+conds,
-                                           outputs=updates, vectors=inputs + aux1 + aux2 + ["uv"]+update_vectors,
-                                           scalars=conds+update_scalars,
+                                           node_group_type="Shader", inputs=variables_scalar+variables_vector + aux1 + aux2 +conds,
+                                           outputs=updates, vectors=inputs + aux1 + aux2 +update_vectors+variables_vector,
+                                           scalars=conds+update_scalars+variables_scalar,
                                            hide=True, location=[-8,5]
                                            )
 
-    for v in inputs:
+    for v in variables_scalar+variables_vector:
         links.new(rz2.outputs[v], update_values.inputs[v])
     for v in aux1:
         links.new(make_aux1.outputs[v], update_values.inputs[v])

@@ -477,7 +477,7 @@ class MathNode(ShaderNode):
 
 
 class VectorMathNode(ShaderNode):
-    def __init__(self, tree, location=(0, 0), operation='ADD', input0=None, input1=None, input2=None, **kwargs):
+    def __init__(self, tree, location=(0, 0), operation='ADD', input0=None, input1=None, input2=None, scale=None, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeVectorMath")
         super().__init__(tree, location, **kwargs)
 
@@ -499,6 +499,11 @@ class VectorMathNode(ShaderNode):
                 self.node.inputs[2].default_value = input2
             else:
                 self.tree.links.new(input2, self.node.inputs[2])
+        if scale is not None:
+            if isinstance(scale, (float, int)):
+                self.node.inputs["Scale"].default_value = scale
+            else:
+                self.tree.links.new(scale, self.node.inputs["Scale"])
 
 
 class Mapping(ShaderNode):
@@ -996,23 +1001,22 @@ class IfNode(ShaderNodeGroup):
         self.std_out = self.node.outputs["Result"]
 
     def fill_group_with_node(self, group_tree, **kwargs):
+        cond = self.group_inputs.outputs["Condition"]
+        yes = self.group_inputs.outputs["Yes"]
+        no = self.group_inputs.outputs["No"]
+        result_in = self.group_outputs.inputs["Result"]
+
         if self._data_type == "VECTOR":
-            fn = make_function(
-                group_tree, name="IfFunction",
-                functions={"result": "yes,cond,scale,no,1,cond,-,scale,add"},
-                inputs=["cond", "yes", "no"], outputs=["result"],
-                scalars=["cond"], vectors=["yes", "no", "result"],
-                node_group_type="Shader",
-            )
+            # result = yes*cond + no*(1-cond)  (component-wise via SCALE + ADD)
+            scale_yes = VectorMathNode(group_tree, operation='SCALE', input0=yes, scale=cond)
+            one_minus_cond = MathNode(group_tree, operation='SUBTRACT', input0=1.0, input1=cond)
+            scale_no = VectorMathNode(group_tree, operation='SCALE', input0=no, scale=one_minus_cond.std_out)
+            add_v = VectorMathNode(group_tree, operation='ADD', input0=scale_yes.std_out, input1=scale_no.std_out)
+            group_tree.links.new(add_v.std_out, result_in)
         else:
-            fn = make_function(
-                group_tree, name="IfFunction",
-                functions={"result": "cond,yes,*,1,cond,-,no,*,+"},
-                inputs=["cond", "yes", "no"], outputs=["result"],
-                scalars=["cond", "yes", "no", "result"],
-                node_group_type="Shader",
-            )
-        group_tree.links.new(self.group_inputs.outputs["Condition"], fn.inputs["cond"])
-        group_tree.links.new(self.group_inputs.outputs["Yes"], fn.inputs["yes"])
-        group_tree.links.new(self.group_inputs.outputs["No"], fn.inputs["no"])
-        group_tree.links.new(fn.outputs["result"], self.group_outputs.inputs["Result"])
+            # result = cond*yes + (1-cond)*no
+            mul_yes = MathNode(group_tree, operation='MULTIPLY', input0=cond, input1=yes)
+            one_minus_cond = MathNode(group_tree, operation='SUBTRACT', input0=1.0, input1=cond)
+            mul_no = MathNode(group_tree, operation='MULTIPLY', input0=one_minus_cond.std_out, input1=no)
+            add = MathNode(group_tree, operation='ADD', input0=mul_yes.std_out, input1=mul_no.std_out)
+            group_tree.links.new(add.std_out, result_in)
