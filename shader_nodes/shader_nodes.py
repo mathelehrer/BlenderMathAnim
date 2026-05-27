@@ -965,3 +965,54 @@ class OnRightNode(ShaderNodeGroup):
         group_tree.links.new(self.group_inputs.outputs["Position"], on_right.inputs["pos"])
 
         group_tree.links.new( on_right.outputs["result"],self.group_outputs.inputs["Result"])
+
+
+class IfNode(ShaderNodeGroup):
+    """
+    Ternary selector: Result = Yes if Condition else No.
+
+    Condition is interpreted as a 0/1 scalar (any non-zero treated as true via
+    the blend Condition*Yes + (1-Condition)*No).  The data_type kwarg picks the
+    socket type used for Yes/No/Result; sockets and internal wiring are
+    generated accordingly.
+    """
+    _ALLOWED_DATA_TYPES = ("INT", "FLOAT", "VECTOR")
+
+    def __init__(self, tree, data_type='FLOAT', **kwargs):
+        if data_type not in self._ALLOWED_DATA_TYPES:
+            raise ValueError(
+                f"IfNode data_type must be one of {self._ALLOWED_DATA_TYPES}, got {data_type!r}"
+            )
+        self._data_type = data_type
+        super().__init__(
+            tree,
+            inputs={"Condition": "FLOAT", "Yes": data_type, "No": data_type},
+            outputs={"Result": data_type},
+            name="IfNode",
+            **kwargs,
+        )
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+        self.std_out = self.node.outputs["Result"]
+
+    def fill_group_with_node(self, group_tree, **kwargs):
+        if self._data_type == "VECTOR":
+            fn = make_function(
+                group_tree, name="IfFunction",
+                functions={"result": "yes,cond,scale,no,1,cond,-,scale,add"},
+                inputs=["cond", "yes", "no"], outputs=["result"],
+                scalars=["cond"], vectors=["yes", "no", "result"],
+                node_group_type="Shader",
+            )
+        else:
+            fn = make_function(
+                group_tree, name="IfFunction",
+                functions={"result": "cond,yes,*,1,cond,-,no,*,+"},
+                inputs=["cond", "yes", "no"], outputs=["result"],
+                scalars=["cond", "yes", "no", "result"],
+                node_group_type="Shader",
+            )
+        group_tree.links.new(self.group_inputs.outputs["Condition"], fn.inputs["cond"])
+        group_tree.links.new(self.group_inputs.outputs["Yes"], fn.inputs["yes"])
+        group_tree.links.new(self.group_inputs.outputs["No"], fn.inputs["no"])
+        group_tree.links.new(fn.outputs["result"], self.group_outputs.inputs["Result"])

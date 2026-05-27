@@ -6412,7 +6412,17 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
     nodes.  It is a dict mapping an operator token (the string that appears in
     a formula) to a spec dict with the following keys:
 
-        "type"     (required) – Blender node type string, e.g. "ShaderNodeMix"
+        "type"     (required) – either a Blender node type string
+                                 (e.g. "ShaderNodeMix") or a Python wrapper class
+                                 for a custom ShaderNodeGroup
+                                 (e.g. OnRightNode from shader_nodes.shader_nodes).
+                                 If a class is given it is instantiated as
+                                 cls(tree, **spec.get("class_kwargs", {})) and the
+                                 resulting Blender group node is taken from
+                                 instance.node; the spec's "inputs"/"output" then
+                                 refer to that group's socket names.
+        "class_kwargs" (optional) – kwargs forwarded to the wrapper class
+                                 constructor when "type" is a class.
         "output"   (required) – output socket name or index
         "inputs"   (optional) – sequence of socket names or indices consumed
                                  from the RPN stack.  Length determines arity:
@@ -6843,7 +6853,14 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
             elif next_element in custom_ops:
                 # User-defined custom operator node.
                 # spec keys:
-                #   "type"     – Blender node type string (required)
+                #   "type"     – either a Blender node type string (e.g. "ShaderNodeMix")
+                #                or a Python wrapper class for a custom ShaderNodeGroup
+                #                (e.g. OnRightNode from shader_nodes.shader_nodes).
+                #                When a class is given, it is instantiated as
+                #                cls(tree, **spec.get("class_kwargs", {})) and the
+                #                underlying Blender node is taken from instance.node.
+                #   "class_kwargs" – kwargs forwarded to the wrapper class constructor
+                #                    (optional, only used when "type" is a class)
                 #   "settings" – dict of node attributes to set (optional)
                 #   "defaults" – dict of input socket name/index → default value (optional)
                 #   "inputs"   – sequence of socket names/indices consumed from the RPN stack:
@@ -6853,7 +6870,13 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                 #   "unary"    – True if only one stack operand (optional, overrides len(inputs))
                 #   "label"    – node label (optional)
                 spec = custom_ops[next_element]
-                new_node_math = tree.nodes.new(type=spec["type"])
+                _spec_type = spec["type"]
+                if isinstance(_spec_type, str):
+                    new_node_math = tree.nodes.new(type=_spec_type)
+                else:
+                    # treat as a Python wrapper class that builds a ShaderNodeGroup
+                    _instance = _spec_type(tree, **spec.get("class_kwargs", {}))
+                    new_node_math = _instance.node
                 for _attr, _val in spec.get("settings", {}).items():
                     setattr(new_node_math, _attr, _val)
                 for _sock, _val in spec.get("defaults", {}).items():
