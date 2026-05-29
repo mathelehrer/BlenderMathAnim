@@ -960,9 +960,15 @@ class OnRightNode(ShaderNodeGroup):
         self.std_out = self.node.outputs["Result"]
 
     def fill_group_with_node(self, group_tree, **kwargs):
+        # ((pos-a) x (pos-b))).z == ((b-a) x (pos-a)).z ; <0 means pos is on the
+        # right of the directed segment a->b. Threshold to a strict 0/1 so the
+        # value is a real boolean: IfNode blends as cond*Yes+(1-cond)*No, which
+        # only selects cleanly for cond in {0,1} (a raw signed area makes every
+        # downstream isTrap/exit/result drift off the integers). Flip "<" to ">"
+        # if the membership comes out inverted.
         on_right = make_function(group_tree, name="Function",
                                  functions={
-                                    "result":"pos,a,sub,pos,b,sub,cross,e_z,dot"
+                                    "result":"pos,a,sub,pos,b,sub,cross,e_z,dot,0,<"
                                  }, inputs=["a","b","pos"], outputs=["result"],
                                  scalars=["result"], vectors=["a","b","pos"],node_group_type="Shader")
         group_tree.links.new(self.group_inputs.outputs["A"], on_right.inputs["a"])

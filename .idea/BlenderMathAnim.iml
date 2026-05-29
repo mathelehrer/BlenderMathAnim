@@ -8,6 +8,7 @@
       <excludeFolder url="file://$MODULE_DIR$/video_penrose/data" />
       <excludeFolder url="file://$MODULE_DIR$/video_penrose2/appends" />
       <excludeFolder url="file://$MODULE_DIR$/video_penrose2/data" />
+      <excludeFolder url="file://$MODULE_DIR$/mathematics/geometry/data" />
       <excludeFolder url="file://$MODULE_DIR$/mathematics/geometry/media" />
       <excludeFolder url="file://$MODULE_DIR$/mathematics/groups/media/blend" />
       <excludeFolder url="file://$MODULE_DIR$/mathematics/groups/media/raster" />
@@ -36,9 +37,9 @@
       <excludeFolder url="file://$MODULE_DIR$/video_primes2/media" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/.venv1" />
-      <excludeFolder url="file://$MODULE_DIR$/mathematics/geometry/data_sav" />
+      <excludeFolder url="file://$MODULE_DIR$/.venv2" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.11 (BlenderMathAnim)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.11 (.venv2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

@@ -6393,7 +6393,7 @@ def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[]
 
 
 def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
-                           inputs=[], outputs=[], vectors=[], scalars=[], rotations=[],
+                           inputs=[], outputs=[], vectors=[], scalars=[], integers=[], rotations=[],
                            node_group_type="GeometryNodes",
                            name="FunctionNode", hide=True, location=(0, 0), parent=None,
                            custom_ops={}):
@@ -6407,6 +6407,10 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
     ``functions`` can reference by name.  Aux entries are built in declaration
     order, so a later aux may reference an earlier one.  Every aux name must
     also be listed in ``scalars`` or ``vectors``.
+
+    ``integers`` lists variable names that behave exactly like ``scalars`` in
+    the RPN evaluation but whose group sockets are created as
+    ``NodeSocketInt`` instead of ``NodeSocketFloat``.
 
     ``custom_ops`` extends the RPN operator vocabulary with user-defined
     nodes.  It is a dict mapping an operator token (the string that appears in
@@ -6481,6 +6485,8 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
             make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketVector")
         if ins in scalars:
             make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketFloat")
+        if ins in integers:
+            make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketInt")
         if ins in rotations:
             make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketRotation")
 
@@ -6489,6 +6495,8 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
             make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketVector")
         if outs in scalars:
             make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketFloat")
+        if outs in integers:
+            make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketInt")
         if outs in rotations:
             make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketRotation")
 
@@ -6504,6 +6512,10 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
 
     aux_stacks = _parse(aux_functions)
     stacks = _parse(functions)
+
+    # integers behave like scalars inside the RPN evaluation; only the group
+    # socket type differs, so merge them for variable-token recognition
+    scalar_vars = list(scalars) + list(integers)
 
     # union of all tokens across aux and main expressions, used to decide
     # whether an input vector (or aux vector) needs a SeparateXYZ node
@@ -6523,7 +6535,7 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
     # SeparateXYZ when any formula references a component
     in_channels = {}
     for ins in inputs:
-        if ins in scalars:
+        if ins in scalars or ins in integers:
             in_channels[ins] = group_inputs.outputs[ins]
         if ins in vectors or ins in rotations:
             in_channels[ins] = group_inputs.outputs[ins]
@@ -6550,7 +6562,7 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
             comb.hide = True
             for i, comp_stack in enumerate(parsed):
                 build_function(tree, comp_stack,
-                               scalars=scalars, vectors=vectors, rotations=rotations,
+                               scalars=scalar_vars, vectors=vectors, rotations=rotations,
                                in_channels=in_channels,
                                out=comb.inputs[i], fcn_count=fcn_count,
                                custom_ops=custom_ops)
@@ -6570,7 +6582,7 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
             reroute.name = "aux_" + key
             reroute.label = key
             build_function(tree, parsed,
-                           scalars=scalars, vectors=vectors, rotations=rotations,
+                           scalars=scalar_vars, vectors=vectors, rotations=rotations,
                            in_channels=in_channels,
                            out=reroute.inputs[0], fcn_count=fcn_count,
                            custom_ops=custom_ops)
@@ -6591,7 +6603,7 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
     # output channels (identical to make_function)
     out_channels = {}
     for key, value in functions.items():
-        if key in scalars:
+        if key in scalars or key in integers:
             out_channels[key] = group_outputs.inputs[key]
         elif key in vectors or key in rotations:
             if isinstance(functions[key], list):
@@ -6611,7 +6623,7 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
         if isinstance(value, list):
             if len(value) == 1:
                 build_function(tree, stacks[key][0],
-                               scalars=scalars, vectors=vectors, rotations=rotations,
+                               scalars=scalar_vars, vectors=vectors, rotations=rotations,
                                in_channels=in_channels,
                                out=out_channels[key], fcn_count=fcn_count,
                                custom_ops=custom_ops)
@@ -6619,14 +6631,14 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
             else:
                 for i, part in enumerate(value):
                     build_function(tree, stacks[key][i],
-                                   scalars=scalars, vectors=vectors, rotations=rotations,
+                                   scalars=scalar_vars, vectors=vectors, rotations=rotations,
                                    in_channels=in_channels,
                                    out=out_channels[key + "_" + comps[i]], fcn_count=fcn_count,
                                    custom_ops=custom_ops)
                     fcn_count += 1
         else:
             build_function(tree, stacks[key],
-                           scalars=scalars, vectors=vectors, rotations=rotations,
+                           scalars=scalar_vars, vectors=vectors, rotations=rotations,
                            in_channels=in_channels,
                            out=out_channels[key], fcn_count=fcn_count,
                            custom_ops=custom_ops)
@@ -7021,7 +7033,10 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                         vals.append(float(numbers[i]))
                 number = Vector(vals)
             else:
-                number = float(next_element)
+                try:
+                    number = int(next_element)
+                except ValueError:
+                    number = float(next_element)
             if last_operator is None:
                 out.default_value = number
             elif right_empty:
