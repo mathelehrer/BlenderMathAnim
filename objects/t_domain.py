@@ -16,6 +16,28 @@ class TDomain(BObject):
     """
 
     def __init__(self, radius=10, resolution=10, removed_circles=[[1 + 1j, 1], [-1 - 1j, 1]], **kwargs):
+        """Create a punctured disc (T-domain) with mesh boundary snapping.
+
+        A regular polar mesh of radius ``radius`` is built, then for each
+        entry in ``removed_circles`` the vertices inside that circle are
+        snapped onto its boundary so the mesh edges follow the removed-disc
+        boundary cleanly. Optionally registers a sequence of conformal
+        transformation shape keys for animation.
+
+        Args:
+            radius: Outer radius of the polar mesh.
+            resolution: Number of radial *and* angular subdivisions.
+            removed_circles: List of ``[complex_center, radius]`` pairs
+                describing the discs to punch out (each ``complex_center``
+                is a complex number ``x + 1j*y``). Defaults to two
+                unit discs at ``+1+i`` and ``-1-i``.
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'T'``.
+                * ``conformal_transformations`` (list): Optional list of
+                  conformal maps; each is registered as a shape key and
+                  drives a shader mixer (see :meth:`next_shape`).
+                * Standard BObject kwargs.
+        """
         self.kwargs = kwargs
         name = self.get_from_kwargs('name', 'T')
 

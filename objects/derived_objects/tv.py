@@ -6,7 +6,22 @@ from utils.constants import OBJECT_APPEARANCE_TIME, FRAME_RATE, DEFAULT_ANIMATIO
 
 
 class TV(BObject):
+    """A television model loaded from a bundled .blend asset.
+
+    The screen surface can play movies via :meth:`set_movie` /
+    :meth:`start_movie` / :meth:`stop_movie`.
+    """
+
     def __init__(self,**kwargs):
+        """Load a TV model and bind the screen sub-object.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``rotation_euler`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``colors`` (list[str]): Two-entry list ``[chassis, screen]``.
+                  Defaults to ``['drawing', 'screen']``.
+        """
         self.kwargs = kwargs
         location = self.get_from_kwargs('location',[0,0,0])
         rotation = self.get_from_kwargs('rotation_euler',[0,0,0])

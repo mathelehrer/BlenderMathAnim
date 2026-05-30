@@ -38,7 +38,20 @@ def f(w, h):
 
 
 class ReflectableBilliardPaper(BObject):
+    """A grid-paper :class:`Plane` whose copies can be unfolded around their
+    edges to visualise billiard-trajectory reflections."""
+
     def __init__(self, width=10, height=10, location=[0, 0, 0], **kwargs):
+        """Build a reflectable billiards paper of given dimensions.
+
+        Args:
+            width: Number of grid columns. Defaults to 10.
+            height: Number of grid rows. Defaults to 10.
+            location: World location of the paper.
+            **kwargs: Forwarded to :class:`Plane`, the modifier, and
+                :class:`BObject`. ``name`` defaults to
+                ``'ReflectableBilliardPaper'``.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs("name", "ReflectableBilliardPaper")
         self.height = height
@@ -58,7 +71,21 @@ class ReflectableBilliardPaper(BObject):
         return begin_time+transition_time
 
 class BilliardPaper(BObject):
+    """A simple grid-paper :class:`Plane` with explicit horizontal/vertical
+    cylinder lines and optional :class:`BilliardsBall` overlay."""
+
     def __init__(self, width=10, height=10, location=[0, 0, 0], **kwargs):
+        """Build a billiards paper with cylinder grid lines.
+
+        Args:
+            width, height: Grid dimensions.
+            location: World location of the paper.
+            **kwargs: Forwarded to :class:`Plane` and :class:`BObject`.
+                Supported keys:
+                * ``paper_color`` (str): Background material name.
+                  Defaults to ``'gray_1'``.
+                * ``name`` (str): Defaults to ``'BilliardPaper'``.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', "BilliardPaper")
         self.height = height
@@ -118,7 +145,25 @@ class BilliardPaper(BObject):
         return begin_time + transition_time
 
 class BilliardsTable(BObject):
+    """A textured billiards table driven by :class:`BilliardsTableModifier`."""
+
     def __init__(self, width=10, height=10, **kwargs):
+        """Build a billiards table with cloth, rim, and grid materials.
+
+        Args:
+            width, height: Table dimensions.
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                Supported keys:
+                * ``radius`` (float): Pocket radius. Defaults to 1.
+                * ``grid_radius_ratio`` (float): Grid-to-pocket size
+                  ratio. Defaults to 4.
+                * ``table_cloth_material`` (str): Defaults to
+                  ``'billiards_cloth_material'``.
+                * ``table_rim_material`` (str): Defaults to
+                  ``'plastic_background'``.
+                * ``grid_material`` (str): Defaults to ``'plastic_example'``.
+                * ``name`` (str): Defaults to ``'BilliardsTable'``.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', 'BilliardsTable')
         self.height = height
@@ -166,7 +211,29 @@ class BilliardsTable(BObject):
         super().__init__(obj=cube.ref_obj, name=self.name, **kwargs)
 
 class BilliardsBall(BObject):
+    """A billiards ball with animated trace, driven by :class:`BilliardsBallModifier`."""
+
     def __init__(self, width=10, height=10, subdivisions=5, **kwargs):
+        """Build a billiards ball that travels along a procedural trajectory.
+
+        Args:
+            width, height: Dimensions of the table the ball bounces on.
+            subdivisions: Geometry-nodes subdivision count (controls
+                trace smoothness). Defaults to 5.
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                Supported keys:
+                * ``radius`` (float): Ball radius. Defaults to 1.
+                * ``speed`` (float): Ball speed. Defaults to 1.
+                * ``grid_radius_ratio`` (float): Defaults to 4.
+                * ``initial_position`` (list[float]): Defaults to
+                  ``[0, 0, radius]``.
+                * ``ball_material`` (str): Defaults to
+                  ``'billiards_ball_material'``.
+                * ``trace_material`` (str): Defaults to ``'text'``.
+                * ``start_time`` (float): Frame index where animation
+                  begins. Defaults to 0.
+                * ``name`` (str): Defaults to ``'BilliardsBall'``.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', 'BilliardsBall')
         self.height = height
@@ -229,7 +296,24 @@ class BilliardsBall(BObject):
         return super().disappear(begin_time=begin_time, transition_time=transition_time, slot=2, **kwargs)
 
 class BilliardBallReal(BObject):
+    """A photorealistic numbered billiard ball driven by
+    :class:`BilliardBallRealModifier` (no trajectory, just rendering)."""
+
     def __init__(self, width=10, height=10, subdivisions=5, **kwargs):
+        """Build a realistic billiard ball with number decal.
+
+        Args:
+            width, height, subdivisions: Same as :class:`BilliardsBall`.
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                Supported keys:
+                * ``color`` (str): Ball base color. Defaults to ``'black'``.
+                * ``number`` (str | callable): Number to print on the ball.
+                  Defaults to ``'8'``. Callables are evaluated with kwargs.
+                * ``solid`` (bool): Solid vs striped ball. Defaults to ``False``.
+                * ``text_color``: Color/material for the number decal.
+                * ``scale`` (list[float]): Defaults to ``[1, 1, 1]``.
+                * ``name`` (str): Defaults to ``'BilliardsBall'``.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', 'BilliardsBall')
         self.height = height
@@ -284,7 +368,17 @@ class BilliardBallReal(BObject):
         super().__init__(obj=cube.ref_obj, name=self.name, **kwargs)
 
 class ScoreTable(BObject):
+    """A 3D grid that 'lights up' selected (row, col) cells via
+    :class:`ScoreTableModifier`. Used to mark billiard-trajectory hits."""
+
     def __init__(self, width=10, height=10, **kwargs):
+        """Build a score table of size ``width x height``.
+
+        Args:
+            width, height: Grid dimensions.
+            **kwargs: Forwarded to :class:`ScoreTableModifier` and
+                :class:`BObject`. ``name`` defaults to ``'ScoreTable'``.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', 'ScoreTable')
         self.height = height

@@ -12,6 +12,17 @@ class EmptyCube(BObject):
     Creates an empty as bounding box for a curve
     """
     def __init__(self, **kwargs):
+        """Create a cube-shaped empty (no mesh, useful as a bounding box).
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'Empty_cube'``.
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``scale`` (list[float]): Defaults to ``[0, 0, 0]``
+                  (zero-sized; caller usually overrides).
+                * ``apply_location``, ``apply_scale``, ``apply_rotation``
+                  (bool): Bake transforms into the empty. Default ``False``.
+        """
         self.kwargs = kwargs
         location = self.get_from_kwargs('location',[0,0,0])
         scale = self.get_from_kwargs('scale',[0,0,0])
@@ -32,6 +43,14 @@ class EmptyArrow(BObject):
     Creates an empty arrow
     """
     def __init__(self, **kwargs):
+        """Create a single-arrow empty (Blender's ``SINGLE_ARROW`` type).
+
+        Useful as a constraint target or as a visual placeholder.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults
+                to ``'Empty_arrow'``. Standard ``apply_*`` flags supported.
+        """
         self.kwargs = kwargs
         name = self.get_from_kwargs('name',"Empty_arrow")
 
@@ -50,6 +69,12 @@ class EmptyAxes(BObject):
     Creates an empty as axes
     """
     def __init__(self, **kwargs):
+        """Create a plain-axes empty (Blender's ``PLAIN_AXES`` type).
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults
+                to ``'axes_empty'``. Standard ``apply_*`` flags supported.
+        """
         self.kwargs = kwargs
         name = self.get_from_kwargs('name',"axes_empty")
 

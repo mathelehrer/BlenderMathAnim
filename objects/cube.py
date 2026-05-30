@@ -13,6 +13,29 @@ class Cube(BObject):
     """
 
     def __init__(self,**kwargs):
+        """Create a unit cube (2x2x2, centred on its origin by default).
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Object name. Defaults to ``'Cube'``.
+                * ``location`` (Vector | list[float]): Final world location.
+                  Defaults to the origin.
+                * ``origin`` (Vector | list[float]): Pivot/origin of the cube
+                  in world space. If different from ``location`` the mesh is
+                  shifted so the origin lies at the given point, then
+                  ``apply_location`` is forced to ``True``.
+                * ``apply_location`` (bool): If ``True``, apply the location
+                  to the mesh data so the object's local origin becomes the
+                  world origin. Defaults to ``False`` (auto-enabled when
+                  ``origin`` differs from ``location``).
+                * ``apply_scale`` (bool): Apply scale to mesh data.
+                  Defaults to ``False``.
+                * ``apply_rotation`` (bool): Apply rotation to mesh data.
+                  Defaults to ``False``.
+                * ``scale``, ``rotation_euler``, ``rotation_quaternion``,
+                  ``color``, ``smooth``, ``bevel``, etc. forwarded to
+                  :class:`BObject`.
+        """
         self.kwargs =kwargs
 
         cube = ibpy.add_cube()

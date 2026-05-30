@@ -107,6 +107,33 @@ class SVGBObject(BObject):
     """
 
     def __init__(self, filename, **kwargs):
+        """Import an SVG file as a Blender curve hierarchy.
+
+        Each path in the SVG becomes a child :class:`BObject` curve.
+        Paths are aligned, optionally scaled, and registered for later
+        morphing (handled by subclasses such as :class:`SimpleTexBObject`).
+
+        Args:
+            filename: Path to the source SVG file (resolved by
+                :meth:`get_file_path`).
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Container name. Defaults to ``'SVG'``.
+                * ``vert_align_centers`` (str | bool): Vertical-centre
+                  alignment policy. Defaults to ``'x_and_y'``.
+                * ``aligned`` (str): Horizontal alignment of the figure
+                  inside its bounding box. One of ``'left'`` (default),
+                  ``'center'``, ``'right'``.
+                * ``color`` (str | list[str]): Per-path color. Defaults
+                  to ``'drawing'``.
+                * ``text_size`` (str): One of ``'normal'``, ``'Large'``,
+                  ``'Huge'``. Defaults to ``'normal'``.
+                * ``scale`` (float): Uniform scale applied during import.
+                * ``remove_svg_data`` (bool): If ``True``, the intermediate
+                  SVG curve data is removed once paths are rendered.
+                  Defaults to ``False``.
+                * ``bevel`` (float): Bevel depth applied to imported paths.
+                * Standard BObject kwargs.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', 'SVG')
         super().__init__(name=self.name, **kwargs)

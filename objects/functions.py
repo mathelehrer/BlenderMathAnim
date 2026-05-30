@@ -6,7 +6,23 @@ from utils.constants import DEFAULT_ANIMATION_TIME
 
 
 class SimpleFunction(BObject):
+    """Plot ``y = f(x)`` as a polyline mesh driven by a :class:`SimpleFunctionModifier`."""
+
     def __init__(self,function=lambda x:x,domain=[0,10],num_points=100,name="SimpleFunction",**kwargs):
+        """Sample ``function`` over ``domain`` and build an edge-only polyline.
+
+        The polyline is then dressed by a geometry-nodes modifier so the
+        curve can grow over time (see :meth:`grow`).
+
+        Args:
+            function: Callable ``x -> z`` -- the function to plot.
+                Points are placed at ``(x, 0, z)``.
+            domain: ``[x_min, x_max]`` sample range. Defaults to ``[0, 10]``.
+            num_points: Number of sample points. Defaults to 100.
+            name: Object name. Defaults to ``'SimpleFunction'``.
+            **kwargs: Forwarded to :class:`SimpleFunctionModifier` and
+                :class:`BObject`.
+        """
         vertices = []
         self.num_points = num_points
 

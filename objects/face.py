@@ -17,13 +17,34 @@ class Face(BObject, NodeMixin):
     """
 
     def __init__(self, vertices, face, origin, index=0, index_base=1, colors=['example', 'text', 'drawing'], **kwargs):
-        """
-        :param vertices: a list of vertices
-        :param face: the vertices of the list, that define the face
-        :param origin: the origin of the corresponding polyhedron
-        :param index:
-        :param index_base:
-        :param kwargs:
+        """Create a single face of a polyhedron: filled polygon + vertex spheres + edge cylinders.
+
+        Vertices on the face are sorted by polar angle around the face
+        centre so the polygon winds correctly even if the input order is
+        arbitrary. Also doubles as an ``anytree`` node so faces can form
+        an unfolding tree (used by :class:`Polyhedron`).
+
+        Args:
+            vertices: List of all vertices of the parent polyhedron.
+            face: Iterable of vertex indices (into ``vertices``) that
+                form this face.
+            origin: World-space origin of the parent polyhedron (used
+                to orient the outward normal).
+            index: Face index within the polyhedron. Used for default
+                naming.
+            index_base: 0 or 1 -- whether ``face`` indices are 0-based
+                or 1-based. Defaults to 1.
+            colors: ``[vertex_colors, edge_colors, face_colors]`` -- each
+                a list. ``vertex_colors`` is indexed by vertex; ``edge_colors``
+                and ``face_colors`` use only their first entry. Defaults
+                to ``['example', 'text', 'drawing']``.
+            **kwargs: Forwarded to children and :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'face_<index>'``.
+                * ``vertex_radius`` (float): Radius of corner spheres.
+                  Defaults to 0.2.
+                * ``edge_radius`` (float): Radius of edge cylinders.
+                  Defaults to 0.02.
+                * Standard appearance kwargs.
         """
 
         self.kwargs = kwargs

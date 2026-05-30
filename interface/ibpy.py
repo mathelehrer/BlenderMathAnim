@@ -1236,6 +1236,37 @@ def add_camera(location=[0, 0, 0], rotation=[0, 0, 0]):
     cam.lens = 30
 
 
+def camera_set_track(target,influence,begin_time=0):
+    obj = get_obj(target)
+    cam = get_camera()
+    set_camera_view_to(target)
+    c=TRACK_TO_DICTIONARY[(cam,target)]
+    c.influence = influence
+    insert_keyframe(c,'influence',begin_time)
+
+
+def camera_set_damped_track(target, influence, begin_time=0, track_axis='TRACK_NEGATIVE_Z'):
+    """Aim the camera at ``target`` with a Damped Track constraint.
+
+    Unlike ``camera_set_track`` (which adds a TRACK_TO constraint that pins a
+    world ``up_axis``), Damped Track rotates the camera by the shortest arc to
+    point its track axis at the target and leaves the roll alone. That removes
+    the heavy roll/spin Track To produces when the camera is near top-down and
+    the target orbits below it (e.g. following the moving tip of a closed
+    curve). The constraint is stored in ``TRACK_TO_DICTIONARY`` under the same
+    ``(camera, target)`` key, so its influence can be ramped afterwards with
+    ``camera_change_track_influence``.
+    """
+    cam = get_camera()
+    constraint = cam.constraints.new('DAMPED_TRACK')
+    constraint.target = get_obj(target)
+    constraint.track_axis = track_axis
+    TRACK_TO_DICTIONARY[(cam, target)] = constraint
+    constraint.influence = influence
+    insert_keyframe(constraint, 'influence', begin_time * FRAME_RATE)
+    return begin_time
+
+
 def set_camera_location(location=[0, -20, 0], frame=0):
     cam = get_camera()
     cam.location = location
@@ -1365,7 +1396,9 @@ def camera_change_follow_influence(target, start, end, begin_time=0, transition_
     insert_keyframe(c, 'influence', (begin_time + transition_time) * FRAME_RATE)
 
 
-def camera_follow(target, initial_value, final_value, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
+def camera_follow(target, initial_value, final_value, begin_time=0,
+                  transition_time=OBJECT_APPEARANCE_TIME,
+                  max_influence=1):
     constraint = CAMERA_FOLLOW_PATH_TARGET_DICTIONARY[target]
     for c in CAMERA_FOLLOW_PATHS:
         begin_frame = begin_time * FRAME_RATE
@@ -1377,7 +1410,7 @@ def camera_follow(target, initial_value, final_value, begin_time=0, transition_t
             insert_keyframe(c, 'influence', begin_frame + 1)
         else:
             insert_keyframe(c, 'influence', begin_frame)
-            c.influence = 1
+            c.influence = max_influence
             insert_keyframe(c, 'influence', begin_frame + 1)
 
             c.offset_factor = initial_value
@@ -2302,6 +2335,9 @@ def get_materials(bob):
     obj = get_obj(bob)
     return [slot.material for slot in obj.material_slots]
 
+def get_material_at_slot(bob,slot):
+    obj = get_obj(bob)
+    return obj.material_slots[slot].material
 
 def get_material(material, **kwargs):
     if isinstance(material, bpy.types.Material):
@@ -7208,13 +7244,129 @@ def set_bevel_factor_start_keyframe(data, start, frame):
 # animations
 
 
+def iter_action_fcurves(action):
+    """Yield every f-curve of an action across Blender versions.
+
+    Legacy actions (Blender < 4.4) expose ``action.fcurves`` directly. Slotted
+    actions (Blender >= 4.4, and the only model in 5.0) store them under
+    ``action.layers[*].strips[*].channelbags[*].fcurves``; the legacy
+    ``fcurves`` attribute was removed, so accessing it raises AttributeError.
+    """
+    legacy = getattr(action, "fcurves", None)
+    if legacy is not None:
+        for fcurve in legacy:
+            yield fcurve
+        return
+    for layer in getattr(action, "layers", []):
+        for strip in getattr(layer, "strips", []):
+            for channelbag in getattr(strip, "channelbags", []):
+                for fcurve in channelbag.fcurves:
+                    yield fcurve
+
+
 def set_linear_fcurves(bob):
     obj = get_obj(bob)
-    fcurves = obj.animation_data.action.fcurves
-    for fcurve in fcurves:
-        for kp in fcurve.keyframe_points:
-            if kp.interpolation == 'BEZIER':
-                kp.interpolation = 'LINEAR'
+    # An object can carry animation in two places:
+    #   * obj.animation_data            -> location, rotation, ...
+    #   * obj.data.animation_data       -> curve grow (bevel_factor_start/end)
+    # Curve growth keyframes are stored on the curve data-block, so we have to
+    # walk both containers to set every keyframe to linear interpolation.
+    holders = [obj]
+    data = getattr(obj, "data", None)
+    if data is not None and hasattr(data, "animation_data"):
+        holders.append(data)
+
+    for holder in holders:
+        anim = holder.animation_data
+        if anim is None or anim.action is None:
+            continue
+        for fcurve in iter_action_fcurves(anim.action):
+            for kp in fcurve.keyframe_points:
+                if kp.interpolation == 'BEZIER':
+                    kp.interpolation = 'LINEAR'
+
+
+def _rpn_to_infix(rpn, var_expr='t'):
+    """Convert a comma-separated RPN string (the convention used by ``make_function``
+    and ``GeoCurve``) into an infix Python expression string.
+
+    The single variable ``t`` is replaced by ``var_expr`` (wrapped in
+    parentheses), so the caller can inline an arbitrary sub-expression for the
+    curve parameter. Only the operators/functions of Blender's *safe* driver
+    expression evaluator are emitted, so the result can be used directly as a
+    driver expression without enabling Python auto-execution.
+    """
+    unary = {'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+             'sqrt', 'exp', 'log', 'abs', 'floor', 'ceil'}
+    binary = {'+', '-', '*', '/', '**', '%'}
+    stack = []
+    for token in rpn.split(','):
+        token = token.strip()
+        if token == '':
+            continue
+        if token == 't':
+            stack.append('(' + var_expr + ')')
+        elif token in unary:
+            a = stack.pop()
+            stack.append('%s(%s)' % (token, a))
+        elif token in binary:
+            b = stack.pop()
+            a = stack.pop()
+            stack.append('(%s%s%s)' % (a, token, b))
+        else:  # numeric literal
+            stack.append(token)
+    if not stack:
+        return '0'
+    return stack[-1]
+
+
+def add_driver(bob, functions, domain=[0,1], begin_time=0, transition_time=1):
+    """
+    Drive the location of an object by a given function
+    Linear interpolation is assumed.
+    The growth fraction at the current frame is
+
+    The function is evaluated at the paramter p
+    p = clamp((frame / fps - t0) / duration, 0, 1)
+
+    i.e. exactly the ``(t - t0) / duration`` percentage that governs the curve's
+    growth (``t = frame / fps`` in seconds). The driven point is the curve
+    evaluated at the parameter ``s = s0 + p * (s1 - s0)`` where ``[s0, s1]`` is
+    ``domain`` -- so the empty tracks the tip of the curve as it is drawn.
+
+    Args:
+        bob: the BObject (or raw object) whose ``location`` is driven.
+        functions: list of 1..3 RPN strings (same syntax as ``GeoCurve``), one
+            per location component x, y, z, using the variable ``t``. Components
+            beyond the length of the list are left undriven.
+        domain: ``[s0, s1]`` parameter range of the curve.
+        t0: start time (seconds) of the growth, i.e. the ``begin_time`` passed
+            to ``curve.grow``.
+        duration: growth ``transition_time`` in seconds.
+        fps: frames per second (defaults to the project ``FRAME_RATE``).
+
+    The expressions only use Blender's safe driver subset (``frame``, ``min``,
+    ``max``, ``sin``/``cos``/..., ``+ - * /``), so the drivers evaluate without
+    enabling Python auto-execution.
+    """
+    obj = get_obj(bob)
+    s0, s1 = domain
+
+    # clamped growth percentage p, then the curve parameter s
+    p_expr = "min(max((frame/%r-%r)/%r,0),1)" % (float(FRAME_RATE), float(begin_time), float(transition_time))
+    s_expr = "(%r+%s*(%r-%r))" % (float(s0), p_expr, float(s1), float(s0))
+
+    for i, rpn in enumerate(functions[:3]):
+        try:
+            obj.driver_remove('location', i)
+        except (TypeError, RuntimeError):
+            pass
+        fcurve = obj.driver_add('location', i)
+        driver = fcurve.driver
+        driver.type = 'SCRIPTED'
+        driver.use_self = False
+        driver.expression = _rpn_to_infix(rpn, var_expr=s_expr)
+    return obj
 
 
 def set_linear_action_modifier(bob):

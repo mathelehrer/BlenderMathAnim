@@ -7,7 +7,26 @@ from utils.constants import OBJECT_APPEARANCE_TIME, FRAME_RATE, DEFAULT_ANIMATIO
 
 
 class PersonWithCape(BObject):
+    """A person model wearing a cloth-simulated cape.
+
+    The cape is pinned to a small ring of vertices at the neck and
+    collides with the body so it drapes naturally."""
+
     def __init__(self,**kwargs):
+        """Load the person-with-cape asset and configure cloth physics.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``rotation_euler`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``colors`` (list[str]): ``[person_color, cape_color]``.
+                  Defaults to ``['gray_8', 'important']``.
+                * ``name`` (str): Defaults to ``'PersonWithCape'``.
+                * ``simulation_start`` (float): Cloth bake start
+                  in seconds. Defaults to 0.
+                * ``simulation_duration`` (float): Cloth bake duration
+                  in seconds.
+        """
         self.kwargs = kwargs
         location = self.get_from_kwargs('location',[0,0,0])
         rotation = self.get_from_kwargs('rotation_euler',[0,0,0])

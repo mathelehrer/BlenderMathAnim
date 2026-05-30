@@ -19,25 +19,32 @@ ey=Vector([0,1,0])
 ez=Vector([0,0,1])
 
 class BRubiksCube(BObject):
-    def __init__(self, **kwargs):
-        """
-        This version of the cube contains all the transformations
-        the cubies are labelled from the back to the front and from top to bottom
-        top level
-        1 2 3
-        4 5 6
-        7 8 9
-        middle level
-        10 11 12
-        13 14 15
-        16 17 18
-        bottom level
-        19 20 21
-        22 23 24
-        25 26 27
+    """A 3x3x3 Rubik's Cube built from 27 individual cubie :class:`Cube` objects.
 
-        the cube 1 is corner of the top, left and back face
-        the cube 27 is corner of the bottom, front and right face
+    Cubies are labelled back-to-front and top-to-bottom:
+
+    * **Top layer** (Z=top):   ``1, 2, 3`` / ``4, 5, 6`` / ``7, 8, 9``
+    * **Middle layer**:        ``10, 11, 12`` / ``13, 14, 15`` / ``16, 17, 18``
+    * **Bottom layer**:        ``19, 20, 21`` / ``22, 23, 24`` / ``25, 26, 27``
+
+    So cubie 1 is the top-left-back corner and cubie 27 is the
+    bottom-right-front corner. Use the layer/face rotation methods to
+    permute these cubies as the cube turns.
+    """
+
+    def __init__(self, **kwargs):
+        """Build a 3x3x3 Rubik's Cube with per-cubie geometry.
+
+        Args:
+            **kwargs: Forwarded to each cubie and :class:`BObject`.
+                Supported keys:
+                * ``name`` (str): Defaults to ``'RubiksCube3x3'``.
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``rotation_euler`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``colors`` (list[str]): 7-entry palette
+                  ``[background, text, blue, red, green, orange, yellow]``.
+                * ``emission`` (float): Sticker emission. Defaults to 0.1.
+                * Standard appearance kwargs.
         """
         self.kwargs = kwargs
         location = self.get_from_kwargs('location', [0, 0, 0])
@@ -401,22 +408,29 @@ class BRubiksCube(BObject):
         return begin_time+transition_time
 
 class BRubiksCubeLocalCenters(BObject):
+    """A Rubik's Cube variant where each cubie has its own local origin
+    (loaded from the ``RubiksCube3x3LocalCenters`` asset). Useful when
+    individual cubie rotations need clean pivots.
+
+    Cubie numbering matches :class:`BRubiksCube` (1..27, back-to-front,
+    top-to-bottom).
+    """
+
     def __init__(self, **kwargs):
-        """
-        This cube allows the decomposition into cubies
-        the cubies are labelled from the back to the front and from top to bottom
-        top level
-        1 2 3
-        4 5 6
-        7 8 9
-        middle level
-        10 11 12
-        13 14 15
-        16 17 18
-        bottom level
-        19 20 21
-        22 23 24
-        25 26 27
+        """Load the local-centers cube asset and recolor its materials.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'RubiksCube3x3'``.
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``rotation_euler`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``colors`` (list[str]): 7-entry palette
+                  ``[background, text, blue, red, green, orange, yellow]``.
+                  Used to override the asset's default materials with
+                  ``'plastic_<color>'`` variants.
+                * ``emission`` (float | list[float]): Sticker emission.
+                  A single float is broadcast across all materials.
+                  Defaults to 0.1.
         """
         self.kwargs = kwargs
         location = self.get_from_kwargs('location', [0, 0, 0])

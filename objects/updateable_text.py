@@ -7,7 +7,29 @@ from utils.constants import OBJECT_APPEARANCE_TIME, FRAME_RATE
 
 
 class UpdateableTextWithNumbers(SimpleTexBObject):
+    """A LaTeX text object that automatically updates its embedded numeric
+    value(s) by scanning a per-frame value function and chaining morphs."""
+
     def __init__(self, string_function, value_function, **kwargs):
+        """Build an auto-updating numeric text.
+
+        ``value_function(frame)`` is called at every frame within an update
+        window (see :meth:`update_value`) and converted to a rounded
+        string; whenever the rounded value changes, a new morph target is
+        appended so the on-screen text smoothly transitions.
+
+        Args:
+            string_function: Callable ``*numeric_strings -> latex_string``.
+                Receives the rounded value(s) already formatted via
+                :func:`number2string` and returns the LaTeX expression to
+                render. Single- or multi-value forms are supported.
+            value_function: Callable ``frame -> float | sequence``. Returns
+                the value(s) at a given frame.
+            **kwargs: Forwarded to :class:`SimpleTexBObject`. Supported keys:
+                * ``number_of_digits`` (int): Decimal digits to round to.
+                  Defaults to 0 (integer rounding).
+                * Standard LaTeX/BObject kwargs (``color``, ``location``, ...).
+        """
         self.value_function = value_function
         self.string_function = string_function
         self.kwargs = kwargs

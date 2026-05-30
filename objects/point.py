@@ -17,6 +17,21 @@ class Point(Sphere):
     """
 
     def __init__(self, coordinate_system, coordinates=(0,0,0), size = 1, material='example', **kwargs):
+        """Create a point drawn as a small sphere inside a coordinate system.
+
+        Args:
+            coordinate_system: The :class:`CoordinateSystem` the point lives in.
+                Used to map ``coordinates`` to a world location and to
+                register the point as a child.
+            coordinates: ``(x, y, z)`` location of the point in the
+                coordinate system's coordinates (not world coordinates).
+            size: Visual scale. The underlying sphere uses radius ``size / 10``.
+            material: Material name forwarded to the sphere shader. Common
+                values: ``'example'``, ``'important'``, ``'text'``.
+            **kwargs: Forwarded to :class:`Sphere` / :class:`BObject`.
+                Notable keys: ``name`` (default ``'P'``), ``mesh_type``
+                (``'uv'`` or ``'ico'``), ``smooth``, ``color``.
+        """
         self.kwargs = kwargs
         name = self.get_from_kwargs('name','P')
         self.kwargs.pop('name')
@@ -28,6 +43,16 @@ class Point(Sphere):
 class PointCloudModifier(GeometryNodesModifier):
 
     def __init__(self,size=0,**kwargs):
+        """Build a geometry-nodes modifier that draws a point cloud as
+        instanced ico-spheres with a per-instance reveal animation.
+
+        Args:
+            size: Number of points in the cloud. Used inside the selector
+                node to convert frame progress into a per-instance index
+                cutoff (so points appear sequentially).
+            **kwargs: Forwarded to :func:`glow_at_appearance` (material
+                colour/emission setup) and to the geometry-nodes base.
+        """
         self.size = size
         self.kwargs = kwargs
         super().__init__(name="PointCloudModifier",group_input=True, automatic_layout=True)
@@ -79,6 +104,20 @@ class PointCloud(BObject):
     Create a point cloud using geometry nodes
     """
     def __init__(self, points = None,**kwargs):
+        """Create a point cloud rendered as instanced spheres via geometry nodes.
+
+        The cloud is implemented as a vertex-only mesh plus a
+        :class:`PointCloudModifier` that instances a small ico-sphere at
+        every vertex. Use :meth:`appear` to animate the gradual reveal.
+
+        Args:
+            points: Iterable of ``(x, y, z)`` world locations -- one per
+                point in the cloud. If ``None``, the object is created in
+                a degenerate state (no mesh, no modifier).
+            **kwargs: Forwarded to :class:`BObject` (``name`` defaults to
+                ``'PointCloud'``) and to :class:`PointCloudModifier` for
+                appearance styling (emission, color, etc.).
+        """
         if points:
             name = get_from_kwargs(kwargs,"name","PointCloud")
             super().__init__(mesh=create_mesh(vertices = points),name=name,**kwargs)

@@ -16,6 +16,30 @@ class Rope(BObject):
     """
 
     def __init__(self, length=1,thickness=1,start=Vector(),end=Vector(),folded=True, folding_direction =Vector([1,0,0]),resolution=10, **kwargs):
+        """Create a hanging rope mesh fixed at two endpoints via hook empties.
+
+        Two hook empties (``<name>_Hook_start``, ``<name>_Hook_end``) are
+        attached to the rope's first and last vertices; cloth-simulation
+        hooks let the rope drape between the endpoints. If
+        ``length > |end - start|``, the rope has slack and dips along
+        ``folding_direction``.
+
+        Args:
+            length: Total length of the rope (>= distance from
+                ``start`` to ``end``).
+            thickness: Tube thickness multiplier (final radius is
+                ``thickness * 0.01``).
+            start: World-space start point (Vector or list).
+            end: World-space end point (Vector or list).
+            folded: If ``True``, the rope is pre-folded along
+                ``folding_direction`` so the cloth solver has a sensible
+                initial pose.
+            folding_direction: Unit Vector indicating which way the
+                slack falls. Defaults to ``Vector([1, 0, 0])``.
+            resolution: Number of mesh subdivisions along the rope.
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults
+                to ``'Rope'``. Standard appearance kwargs.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', 'Rope')
         self.length=length

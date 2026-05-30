@@ -13,9 +13,24 @@ pi = np.pi
 
 class BQuadrilateral(BObject):
     def __init__(self, vertices,name="Quadrilateral",resolution=100,geo_rotation=None, **kwargs):
-        """
-        make a rectangular frame defined by its corner vertices. If length and width are switched,
-        just cycle the vertices by one vertex
+        """Create a rectangular quadrilateral driven by a geometry-nodes modifier.
+
+        Implemented as a unit cube hosting a :class:`QuadModifier`. The
+        modifier rebuilds the cube's mesh into a parametric quad of given
+        width and height oriented by ``normal``. Use :meth:`grow` to animate
+        the quad's reveal.
+
+        Args:
+            vertices: Four corner vertices ``[v0, v1, v2, v3]`` (Vector or
+                list). ``|v0 - v1|`` is the width, ``|v0 - v3|`` is the
+                height, and ``(v0-v1) x (v0-v3)`` defines the surface
+                normal. Cycle the vertices to swap width/height.
+            name: Modifier and object name. Defaults to ``'Quadrilateral'``.
+            resolution: Modifier mesh resolution. Higher values give a
+                smoother result at increased cost.
+            geo_rotation: Optional rotation forwarded to the modifier.
+            **kwargs: Forwarded to :class:`QuadModifier` and :class:`BObject`
+                (``color``, ``location``, ...).
         """
         self.vertices = [to_vector(v) for v in vertices]
 

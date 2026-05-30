@@ -16,7 +16,15 @@ pi = np.pi
 
 
 class Suzanne(BObject):
+    """Blender's monkey-head test model 'Suzanne' loaded from a bundled OBJ file."""
+
     def __init__(self,**kwargs):
+        """Load Suzanne from ``suzanne.obj``.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults to
+                ``'Suzanne'``. Standard appearance kwargs.
+        """
         self.kwargs = kwargs
         self.name=self.get_from_kwargs('name','Suzanne')
         #

@@ -20,6 +20,24 @@ class PArrow(GeoBObject):
 
     '''
     def __init__(self,**kwargs):
+        """Build an arrow asset spanning from ``start`` to ``end``.
+
+        Loads the bundled ``Arrow`` mesh, scales its Z to match the
+        ``start -> end`` distance, and orients via a rotation quaternion
+        so the tip points toward ``end``.
+
+        Args:
+            **kwargs: Forwarded to :class:`GeoBObject`. Supported keys:
+                * ``start`` (Vector): Tail location. Defaults to ``Vector()``.
+                * ``end`` (Vector): Tip location. Defaults to ``Vector([0, 0, 1])``.
+                * ``thickness`` (float): Scaling factor applied during
+                  :meth:`grow`. Defaults to 1.
+                * ``name`` (str): Defaults to ``'Arrow'``. Each arrow
+                  must have a unique name to avoid import conflicts.
+                * ``loop_cuts`` (int): Extra subdivisions along the
+                  arrow's body (scaled by length).
+                * Standard appearance kwargs.
+        """
         self.kwargs = kwargs
         self.start = to_vector(self.get_from_kwargs('start',Vector()))
         self.end = to_vector(self.get_from_kwargs('end',Vector([0,0,1])))

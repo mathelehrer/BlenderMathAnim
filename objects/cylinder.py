@@ -15,14 +15,38 @@ class Cylinder(GeoBObject):
     Create a cylinder with a descent mesh:
     """
     def __init__(self, start=None,end=None,location=[0, 0, 0], length=1, radius=0.1, cyl_radii=None, **kwargs):
-        """
-        :param location:
-        :param start:
-        :param end:
-        :param length:
-        :param radius:
-        :param cyl_radii:
-        :param kwargs:
+        """Create a cylinder.
+
+        The cylinder's axis is aligned with the local Z axis. Its length is
+        encoded as ``scale.z = length / 2`` and its radius as ``scale.x`` and
+        ``scale.y``. Use :meth:`from_start_to_end` to build a cylinder
+        spanning two world-space points.
+
+        Args:
+            start: Optional start point of the cylinder axis (world coords).
+                Stored for use by :meth:`grow` (``modus='from_start'``),
+                :meth:`move_end_point`, etc. Not used by default for placement.
+            end: Optional end point (world coords). Same purpose as ``start``.
+            location: World location of the cylinder's centre. Defaults to
+                the origin.
+            length: Length of the cylinder along the local Z axis. Defaults to 1.
+            radius: Cylinder radius. Overridden by ``cyl_radii`` if provided.
+            cyl_radii: Optional ``[rx, ry]`` for an elliptical cross-section.
+                When ``None``, both radii are derived from ``thickness``
+                (default ``10 * radius``, then scaled by 0.1).
+            **kwargs: Forwarded to :class:`GeoBObject`. Notable keys:
+                * ``name`` (str): Defaults to ``'Cylinder'``.
+                * ``vertices`` (int): Number of vertices on the circular
+                  cross-section. Defaults to 32 (smoother = higher).
+                * ``loop_cuts`` (int): Number of edge-loop subdivisions
+                  along the cylinder length (scaled by ``length``).
+                * ``thickness`` (float): Overrides default radii;
+                  internally multiplied by 0.1.
+                * ``rotation_euler`` / ``rotation_quaternion``: Standard
+                  rotation kwargs. The quaternion is stored on ``self.quaternion``.
+                * ``label_rotation`` (list[float]): Euler rotation applied to
+                  labels attached to this cylinder. Defaults to ``[pi/2, pi/2, 0]``.
+                * Standard BObject kwargs (``color``, ``smooth``, ``bevel``, ...).
         """
         self.kwargs = kwargs
         self.start=to_vector(start)

@@ -7,12 +7,27 @@ from utils.utils import to_vector
 
 
 class ReferenceImage(BObject):
-    """
-    Create a cube:
-
-    """
+    """Load an image file as a Blender reference image (image empty)."""
 
     def __init__(self,name,**kwargs):
+        """Place an image at a world location with origin/location offset support.
+
+        Args:
+            name: Path to the image file (forwarded to
+                :func:`ibpy.add_reference_image`).
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Object name override. Defaults to
+                  ``'ReferenceImage'`` when not provided.
+                * ``location`` (list[float]): World location. Defaults
+                  to ``[0, 0, 0]``.
+                * ``origin`` (list[float]): Pivot/origin of the image
+                  in world space. If different from ``location``, the
+                  mesh is shifted and ``apply_location`` is forced on.
+                * ``apply_location`` (bool), ``apply_scale`` (bool),
+                  ``apply_rotation`` (bool): Bake the corresponding
+                  transform into the mesh data. Default ``False``.
+                * Standard appearance kwargs.
+        """
         self.kwargs =kwargs
 
         img = ibpy.add_reference_image(name)

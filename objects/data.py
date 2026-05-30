@@ -6,10 +6,25 @@ from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
 
 
 class Data(BObject):
-    def __init__(self,data=None,coordinate_system=None,name="DataObject",**kwargs):
-        """
-        Two dimensional data that is converted into geometry that can be displayed in a coordinate system
+    """A 2D data series that lives inside a 2D :class:`CoordinateSystem2`,
+    rendered via a :class:`DataModifier` geometry-nodes modifier.
 
+    The modifier handles point/line styling and per-frame reveal."""
+
+    def __init__(self,data=None,coordinate_system=None,name="DataObject",**kwargs):
+        """Wrap a list of 2D points as a coordinate-system-aware data series.
+
+        Args:
+            data: Iterable of ``(x, y)`` (or ``(x, y, z)``) points used
+                as mesh vertices.
+            coordinate_system: Optional :class:`CoordinateSystem2`; if
+                provided, the data is registered into it and the
+                modifier picks up the per-axis domains.
+            name: Object name. Defaults to ``'DataObject'``.
+            **kwargs: Forwarded to :class:`DataModifier` and :class:`BObject`.
+                If ``linesize`` is present, consecutive points are
+                connected into a polyline; otherwise the points are
+                shown as isolated dots.
         """
         # create edges, when the option linesize appears as keyword argument
         edges =[]
@@ -71,10 +86,20 @@ class Data(BObject):
                                   transition_time=transition_time)
 
 class Data3D(BObject):
-    def __init__(self,data=None,coordinate_system=None,name="DataObject",**kwargs):
-        """
-        Three dimensional data that is converted into geometry that can be displayed in a coordinate system
+    """A 3D data series that lives inside a 3D :class:`CoordinateSystem2`,
+    rendered via a :class:`DataModifier3D` geometry-nodes modifier."""
 
+    def __init__(self,data=None,coordinate_system=None,name="DataObject",**kwargs):
+        """Wrap a list of 3D points as a coordinate-system-aware data series.
+
+        Args:
+            data: Iterable of ``(x, y, z)`` points used as mesh vertices.
+            coordinate_system: Optional 3D :class:`CoordinateSystem2`.
+                Per-axis domains, lengths, and origin are extracted
+                and passed to the modifier.
+            name: Object name. Defaults to ``'DataObject'``.
+            **kwargs: Forwarded to :class:`DataModifier3D`. If ``linesize``
+                is present the points are joined into a polyline.
         """
         # create edges, when the option linesize appears as keyword argument
         edges =[]

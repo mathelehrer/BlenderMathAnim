@@ -14,32 +14,45 @@ from utils.kwargs import get_from_kwargs
 from utils.utils import to_vector
 
 class CoordinateSystem2(BObject):
+    """Geometry-nodes-based coordinate system using :class:`NumberLine2` axes.
+
+    Newer sibling of :class:`CoordinateSystem` -- supports interactive
+    zoom (linear / logarithmic) on each axis via modifier inputs.
+    """
+
     def __init__(self,**kwargs):
+        """Create a 2D or 3D coordinate system with geometry-nodes axes.
+
+        Args:
+            **kwargs: All parameters supplied via kwargs. Supported keys:
+                * ``origin`` (list[float]): Coordinate-system origin.
+                  Defaults to ``[0, 0, 0]``.
+                * ``dimension`` (int): ``2`` or ``3``. Defaults to 2.
+                  (Use :class:`NumberLine` directly for 1D.)
+                * ``location`` (Vector): World location. Defaults to ``(0, 0, 0)``.
+                * ``lengths`` (list[float]): Axis lengths. Defaults to ``[7, 7, 7]``.
+                * ``radii`` (list[float]): Per-axis radius. Defaults to
+                  ``[0.05, 0.05, 0.05]``.
+                * ``domains`` (list[list[float]]): Per-axis ``[min, max]``.
+                  Defaults to ``[[0, 10], [0, 10], [0, 10]]``.
+                * ``tic_labels`` (list): Per-axis tic-label spec; either
+                  the literal string ``'AUTO'`` or a list of labels.
+                  Defaults to ``['AUTO', 'AUTO', 'AUTO']``.
+                * ``n_tics`` (list[int]): Per-axis tic count. Defaults to
+                  ``[2, 2, 2]``.
+                * ``tic_label_digits`` (list[bool | int]): Per-axis digit
+                  spec for auto-generated tic labels.
+                * ``tic_label_shifts`` (list[Vector]): Per-axis label offsets.
+                * ``colors`` (list[str]): Per-axis colors. Defaults to
+                  ``['drawing', 'drawing', 'drawing']``.
+                * ``axes_labels`` (dict): ``{'x': ..., 'y': ..., 'z': ...}``
+                  -- LaTeX axis labels (defaults to ``'AUTO'``).
+                * ``include_zeros`` (list[bool]): Whether to include the
+                  zero tic. Defaults to ``[True, True, True]``.
+                * ``data``: Optional data row to add as a child.
+                * ``name`` (str): Defaults to ``'<dim>D-CoordinateSystem'``.
+                * Standard BObject kwargs.
         """
-            creates a coordinate system
-
-            use dim=2 for two-dimensional and dim=3 for three-dimensional coordinate systems
-            the length of the arrays should correspond to the number of dimensions
-
-            for each dimension an Numberline is created
-            in geometry nodes
-            :param origin: origin of coordinate system
-            :param dimension: number of axes (2 or 3), use numberline for one-dimensional coordinate system
-            :param location: location of coordinate system
-            :param lengths: length of axes in world coordinates
-            :param radii: radius of axes in world coordinates
-            :param domains: domains of axes
-            :param tic_labels: labels for tics of axes, either lists or ["AUTO"]*3
-            :param n_tics: number of tics for each axis, either lists or [2]*3
-            :param tic_label_digits: whether to display digits for tic labels, either lists or [False]*3
-            :param tic_label_shifts: shifts for tic labels, either lists or [Vector()]*3
-            :param colors: colors of axes, either lists or ["drawing"]*3
-            :param axes_labels: labels for axes, either dicts or {"x":"AUTO","y":"AUTO","z":"AUTO"}
-            :param include_zeros: whether to include zero on axes, either lists or [True]*3
-            :param data:
-            :param name: name of coordinate system
-
-            """
 
         self.kwargs = kwargs
         self.data_rows =[]
@@ -195,8 +208,67 @@ class CoordinateSystem(BObject):
     """
 
     def __init__(self, **kwargs):
-        """
-        Constructor for CoordinateSystem
+        """Create a 2D or 3D coordinate system with one :class:`NumberLine` per axis.
+
+        Each axis is laid out along a fixed direction:
+
+        * ``'HORIZONTAL'`` -- world +X (used for x)
+        * ``'VERTICAL'``   -- world +Z (used for y in 2D, z in 3D)
+        * ``'DEEP'``       -- world +Y (used for y in 3D only)
+
+        Note the coordinate mapping convention used by :meth:`coords2location`
+        in 2D: input ``(x, y)`` maps to world ``(X, 0, Y)`` so the "y" axis
+        is drawn vertically on screen.
+
+        Args:
+            **kwargs: Standalone coordinate-system configuration. Supported
+                keys (most are per-axis lists):
+                * ``dim`` (int): Number of axes. ``2`` or ``3``. Defaults to 2.
+                * ``dynamic`` (bool): If ``True``, axes are built as
+                  :class:`DynamicNumberLine` so their range can be changed
+                  at animation time. Defaults to ``False``.
+                * ``origin`` (list[float]): Per-axis offset added to every
+                  coordinate before drawing. Defaults to ``[0, 0, 0]``.
+                * ``location_of_origin`` (Vector): World location of the
+                  origin point. Defaults to ``(0, 0, 0)``.
+                * ``lengths`` (list[float]): Physical lengths of each axis
+                  in world units. Defaults to ``[2, 2, 2]``.
+                * ``radii`` (list[float]): Per-axis cylinder radii.
+                  Defaults to ``[0.05, 0.05, 0.05]``.
+                * ``domains`` (list[list[float]]): Per-axis ``[min, max]``
+                  ranges in coordinate-system units. Defaults to
+                  ``[[-1, 1], [-1, 1], [-1, 1]]``.
+                * ``all_n_tics`` (list[int]): Number of major tic marks
+                  per axis. Defaults to ``[10, 10, 10]``.
+                * ``all_tic_labels`` (list): Either the literal string
+                  ``'AUTO'`` per axis (auto-generated labels) or an array
+                  of explicit labels.
+                * ``labels`` (list[str]): LaTeX label per axis. Defaults
+                  to ``['x', 'y']`` (2D) or ``['x', 'y', 'z']`` (3D).
+                * ``colors``, ``label_colors`` (list[str]): Per-axis color
+                  names. ``label_colors`` defaults to ``colors``.
+                * ``label_digits`` (list[int]): Decimal digits used in
+                  auto-generated tic labels. Defaults to ``[1, 1, 1]``.
+                * ``label_units`` (list[str]): Unit string appended to
+                  tic labels. Defaults to ``['', '', '']``.
+                * ``label_positions`` (list[str]): One of ``'left'`` /
+                  ``'right'`` per axis. Defaults to ``['left', ...]``.
+                * ``label_closenesses``, ``axis_label_closenesses``
+                  (list[float]): Per-axis label-to-axis distance multipliers.
+                * ``label_sizes`` (list[str]): Per-axis label font size
+                  (e.g. ``'normal'``, ``'large'``).
+                * ``include_zeros`` (list[bool]): Whether to draw the
+                  zero tic on each axis. Defaults to
+                  ``[True, False, False]``.
+                * ``tip_lengths`` (list[float | None]): Per-axis arrow-tip
+                  length override.
+                * ``shadings`` (list): Per-axis shading override.
+                * ``ranges`` (list[list]): For ``dynamic=True``, the
+                  set of available ranges per axis.
+                * ``rotation_euler`` (list[float]): Applied to the whole
+                  coordinate system after construction.
+                * ``name`` (str): Defaults to ``'CoordinateSystem'``.
+                * Standard BObject kwargs.
         """
         self.kwargs = kwargs
         self.origin = self.get_from_kwargs('origin', [0, 0, 0])
@@ -838,6 +910,18 @@ class DynamicCoordinateSystem(CoordinateSystem):
         otherwise it's a regular coordinate system
     """
     def __init__(self,**kwargs):
+        """Create a :class:`CoordinateSystem` whose tic labels are
+        :class:`DigitalRange` objects.
+
+        Equivalent to ``CoordinateSystem(dynamic=True, ...)``.
+
+        Args:
+            **kwargs: Same keys as :class:`CoordinateSystem`, with
+                ``dynamic=True`` forced internally. ``name`` defaults to
+                ``'DynamicCoordinateSystem'``. The ``ranges`` kwarg (list
+                of per-axis value sets) is especially useful here so each
+                tic label can morph between specific values.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name','DynamicCoordinateSystem')
         super().__init__(dynamic=True,name=self.name, **kwargs)

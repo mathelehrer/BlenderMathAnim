@@ -4,8 +4,19 @@ from objects.bobject import BObject
 
 
 class ValueTracker(BObject):
+    """A scalar value that can be tracked, animated, and combined with
+    in-place arithmetic. Holds the value as the first component of a single
+    point so it can be linked to drivers / animation channels."""
 
     def __init__(self, value=0, **kwargs):
+        """Create a value tracker.
+
+        Args:
+            value: Initial scalar value.
+            **kwargs: Forwarded to :class:`BObject` (``name``, ``location``,
+                etc.). The tracker is invisible by default -- it exists
+                purely as a data container.
+        """
         super().__init__(**kwargs)
         self.points = np.zeros((1, 3))
         self.set_value(value)

@@ -32,7 +32,36 @@ def load_data(filename):
 
 
 class FreeHandText(BObject):
+    """Text rendered from hand-drawn point-stroke data stored on disk.
+
+    Each line of the source file encodes one stroke (one letter or letter
+    part) as a list of ``(x, y)`` points. Strokes are loaded, simplified,
+    aligned, and turned into beveled bezier curves so they can be 'written'
+    with :meth:`grow`.
+    """
+
     def __init__(self, filename, eps=0.01, **kwargs):
+        """Load hand-drawn point data and turn it into animated text strokes.
+
+        Args:
+            filename: Filename (without extension) under :data:`DATA_DIR`.
+                The file is read as ``<filename>.text`` and must contain one
+                stroke per line in ``(x1,y1),(x2,y2),...`` format.
+            eps: Squared-distance threshold for stroke simplification --
+                consecutive points closer than ``sqrt(eps)`` are merged.
+                Lower values keep more detail; higher values give faster
+                draw times.
+            **kwargs: Forwarded to :class:`BObject` and the underlying
+                bezier curves. Supported keys:
+                * ``bevel_depth`` (float): Stroke tube radius. Defaults to 0.01.
+                * ``aligned`` (str): Alignment of the strokes. One of:
+
+                  - ``'center'`` -- recentre strokes on their centroid.
+                  - ``'left'``   -- (not implemented).
+                  - ``'right'``  -- (not implemented).
+                * ``color`` (str): Stroke color. Defaults to ``'text'``.
+                * Standard BObject kwargs.
+        """
         self.kwargs = kwargs
         self.parts = load_data(filename)
         self.clean_data(eps)

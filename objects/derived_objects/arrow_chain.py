@@ -23,6 +23,37 @@ class ArrowChain(BObject):
     """
 
     def __init__(self,number=1,lengths=[1],periods = [1],**kwargs):
+        """Build a chain of arrows linked tip-to-tail by vertex parenting.
+
+        Each new arrow's base is parented to vertex 65 (the tip mesh-vertex)
+        of the previous arrow, so the chain can pivot freely at each joint.
+        Used for Fourier-series-style rotating arrow animations.
+
+        Args:
+            number: Number of arrows in the chain. Defaults to 1.
+            lengths: Per-arrow lengths. If shorter than ``number``, the
+                last value is reused. Negative lengths flip the arrow's
+                phase by ``pi``.
+            periods: Per-arrow rotation period multipliers (used by
+                :meth:`draw` to determine relative rotation rates).
+            **kwargs: Forwarded to each child arrow and :class:`BObject`.
+                Supported keys:
+                * ``thickness`` (float): Defaults to 1.
+                * ``name`` (str): Defaults to ``'ArrowChain'``.
+                * ``phases`` (list[float]): Per-arrow initial phase
+                  offset. Defaults to ``[]``; populated automatically
+                  from negative ``lengths``.
+                * ``colors`` (list[str]): Per-arrow colors. With three
+                  colors the second/third are selected by the sign of
+                  the corresponding ``period``. With ``'hue'`` the color
+                  is computed from the phase. Defaults to
+                  ``['plastic_drawing']``.
+                * ``emission`` (float): Defaults to 0.
+                * ``rotation_euler`` (Vector): Base rotation applied to
+                  all arrows.
+                * ``keep_proportions`` (bool): If ``True``, deeper
+                  arrows get a thinner cross-section. Defaults to ``False``.
+        """
         self.kwargs = kwargs
         self.thickness= self.get_from_kwargs('thickness',1)
         self.name = self.get_from_kwargs('name','ArrowChain')

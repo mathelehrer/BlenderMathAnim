@@ -13,6 +13,14 @@ class Explosion(BObject):
 
     """
     def __init__(self,remove_bobs):
+        """Equip each object with a particle system + explode modifier and add
+        wind/turbulence so calling :meth:`explode` blows them apart.
+
+        Args:
+            remove_bobs: List of :class:`BObject` instances to explode.
+                Objects with ``'hand_writing'`` in their name are skipped
+                (they wouldn't render visibly during the explosion).
+        """
         self.bobs = remove_bobs
         self.psms={} # dictionary for the particle system modifiers
         self.ems={} # dictionary for the explode modifiers

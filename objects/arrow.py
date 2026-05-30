@@ -14,6 +14,33 @@ class Arrow(BObject):
     Create a cylinder with a descent mesh:
     """
     def __init__(self,children=None, location=[0, 0, 0], rotation_euler=[0, 0, 0], length=1, radius=0.1, **kwargs):
+        """Create an arrow (cylinder stem + cone tip) pointing along ``+Z``.
+
+        Two construction paths:
+
+        * Direct: pass ``length`` and ``radius`` -- a stem/tip pair is built.
+        * Pre-built: pass a ``[stem_cylinder, tip_cone]`` pair via
+          ``children`` (used by :meth:`from_start_to_end`). In this mode the
+          kwargs ``start`` and ``end`` (vectors) must also be supplied so
+          :meth:`grow` knows the geometry.
+
+        Args:
+            children: Optional pre-built ``[Cylinder, Cone]`` pair. When
+                provided, ``length`` and ``radius`` are ignored and the
+                ``start``/``end`` kwargs are required.
+            location: World location of the arrow's origin.
+            rotation_euler: Euler rotation of the whole arrow.
+            length: Total arrow length (stem + tip) along local Z.
+                Used when ``children`` is ``None``.
+            radius: Stem radius. Tip base radius is ``2 * radius``. Used
+                when ``children`` is ``None``.
+            **kwargs: Forwarded to children and to :class:`BObject`.
+                Supported keys:
+                * ``name`` (str): Defaults to ``'Arrow'``.
+                * ``start``, ``end`` (Vector): Required when ``children``
+                  is provided; consumed by :meth:`grow`.
+                * Standard appearance kwargs (``color``, ...).
+        """
         if children:
             super().__init__(children=children,**kwargs)
             self.cyl = children[0]

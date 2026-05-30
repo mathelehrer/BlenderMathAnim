@@ -19,9 +19,21 @@ from utils.kwargs import get_from_kwargs
 
 
 class Permutation(BObject):
+    """Visual representation of a permutation of up to nine elements,
+    driven by a :class:`PermutationModifier` geometry-nodes modifier."""
+
     def __init__(self,n=8,number_of_cycles=1,**kwargs):
-        """
-        visual representation of a permutation for at most nine elements
+        """Create a permutation visualisation.
+
+        Args:
+            n: Number of elements being permuted. Must be <= 9.
+                Defaults to 8.
+            number_of_cycles: Maximum number of cycles to display
+                simultaneously (drives the modifier's cycle-buffer size).
+                Defaults to 1.
+            **kwargs: Forwarded to :class:`PermutationModifier` and
+                :class:`BObject`. Container name is fixed to
+                ``'Permutation'``.
         """
         cube = Cube()
 

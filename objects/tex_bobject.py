@@ -28,6 +28,31 @@ class TexBObject(BObject):
     """
 
     def __init__(self, *expressions, **kwargs):
+        """Build a sequence of LaTeX expressions packaged as morph targets.
+
+        Each expression is rendered into its own :class:`SimpleTexBObject`
+        and parented under a single container. Use :meth:`write` to write
+        the first one, then :meth:`next` to morph from each expression to
+        the next.
+
+        Args:
+            *expressions: One or more LaTeX strings to render. The first
+                is the starting expression; subsequent ones become morph
+                targets that can be reached with :meth:`next`.
+            **kwargs: Forwarded to each :class:`SimpleTexBObject` child and
+                to :class:`BObject`. Supported keys:
+                * ``typeface`` (str): TeX typeface. Defaults to ``'default'``.
+                * ``name`` (str): Container name. Defaults to ``'Extended_Tex'``.
+                * ``text_only`` (bool): If ``True``, do not produce SVG outlines.
+                * ``location`` (Vector): World location. Defaults to ``Vector()``.
+                * ``rotation_euler`` (list[float]): Euler rotation.
+                  Defaults to ``[pi/2, 0, 0]`` (text upright, facing camera).
+                * ``scale`` (float): Uniform scale. Defaults to 1.
+                * ``color`` (str) or ``colors`` (list[str]): Single color for
+                  all expressions, or one color per expression. Defaults
+                  to ``'text'``.
+                * Standard BObject kwargs.
+        """
         self.kwargs = kwargs
         typeface = self.get_from_kwargs('typeface', 'default')
         name = self.get_from_kwargs('name', 'Extended_Tex')
@@ -200,7 +225,31 @@ class FastTexBObject(SVGBObject):
         """
 
     def __init__(self, expression, **kwargs):
+        """Render a LaTeX expression as a single merged-spline curve.
 
+        Faster than :class:`SimpleTexBObject` for static text because all
+        glyph splines are merged into one bezier curve, but morphing /
+        per-letter animation is unavailable.
+
+        Args:
+            expression: LaTeX string to render.
+            **kwargs: Forwarded to :class:`SVGBObject`. Supported keys:
+                * ``centered`` (bool): Centre the merged glyphs on the
+                  object origin. Defaults to ``False``.
+                * ``typeface`` (str): TeX typeface. Defaults to ``'default'``.
+                * ``rotation_euler`` (list[float]): Defaults to
+                  ``[pi/2, 0, 0]`` (text upright).
+                * ``color`` (str | list[str]): Glyph color(s). Defaults to
+                  ``['text']``.
+                * ``text_only`` (bool): If ``True``, omit SVG outlines.
+                * ``recreate`` (bool): Force re-rendering of cached SVGs.
+                * ``thickness`` (float): Z-axis scaling for the merged
+                  curve (visual extrude). Defaults to 1.
+                * ``vert_align_centers`` (bool): Vertical-centre alignment.
+                  Defaults to ``True``.
+                * ``name`` (str): Defaults to ``'tex'``.
+                * Standard BObject kwargs.
+        """
         start = time.perf_counter()
         self.kwargs = kwargs
         self.centered = self.get_from_kwargs('centered', False)
@@ -299,6 +348,42 @@ class SimpleTexBObject(SVGBObject):
     """
 
     def __init__(self, expression, **kwargs):
+        """Render a LaTeX expression as one SVG-derived bezier curve per glyph.
+
+        Each glyph becomes a child object so the expression can be
+        animated letter-by-letter (write-on, morph, color shift) via
+        :meth:`write`, :meth:`add_to_morph_chain`, etc.
+
+        Args:
+            expression: LaTeX string. May contain inline color/typeface
+                directives parsed by the underlying SVG generator.
+            **kwargs: Forwarded to :class:`SVGBObject`. Supported keys:
+                * ``centered`` (bool): Centre the whole text on the origin.
+                  Defaults to ``False``.
+                * ``typeface`` (str): TeX typeface. Defaults to ``'default'``.
+                * ``text_only`` (bool): Skip outline construction.
+                * ``recreate`` (bool): Force fresh SVG generation
+                  (bypass cache).
+                * ``center_letters_origin`` (bool): Centre each letter on
+                  its own origin (vs the line baseline). Defaults to ``False``.
+                * ``rotation_euler`` (list[float]): Defaults to
+                  ``[pi/2, 0, 0]`` (text upright). Skipped when
+                  ``rotation_quaternion`` is given.
+                * ``color`` (str | list[str]): Glyph color(s).
+                  Defaults to ``['text']``.
+                * ``brighter`` (float): Emission boost. Defaults to 0.
+                * ``emission`` (float): Base emission. Defaults to 0.5.
+                * ``thickness`` (float): Z-axis scale per letter (final
+                  value ``thickness * 0.01``). Defaults to 1.
+                * ``bevel`` (float): Bevel depth (final ``bevel * 0.005``).
+                  Defaults to 0.
+                * ``vert_align_centers`` (bool): Vertically centre letters.
+                  Defaults to ``True``.
+                * ``shadow`` (bool): Cast shadows. Defaults to ``True``.
+                * ``name`` (str): Defaults to ``'tex'``.
+                * ``outlined`` (bool | None): Add SVG outlines if set.
+                * Standard BObject kwargs.
+        """
         # store for copies
         self.expression_copy = expression
         self.kwargs_copy = kwargs.copy()
@@ -1727,6 +1812,30 @@ class MultiLineTexBObject(SimpleTexBObject):
     """
 
     def __init__(self, expression, **kwargs):
+        """Render a multi-line LaTeX expression with per-line grouping.
+
+        Lines are detected from the LaTeX source and grouped so each line
+        can fade in/out independently. Intended for paragraphs and slide
+        text where per-letter writing would be too expensive.
+
+        Args:
+            expression: LaTeX string. Newlines / ``\\\\`` separators are
+                detected via :meth:`count_number_of_lines`.
+            **kwargs: Forwarded to :class:`SimpleTexBObject`. Notable keys:
+                * ``centered`` (bool): Centre the whole block. Defaults to ``False``.
+                * ``typeface`` (str): TeX typeface. Defaults to ``'default'``.
+                * ``text_only`` (bool): Skip outlines. Defaults to ``False``.
+                * ``rotation_euler`` (list[float]): Defaults to ``[pi/2, 0, 0]``.
+                * ``color`` (str | list[str]): Glyph color(s).
+                  Defaults to ``['text']``.
+                * ``brighter`` (float), ``emission`` (float), ``bevel``
+                  (float), ``thickness`` (float): As for
+                  :class:`SimpleTexBObject`. ``bevel`` is scaled by 0.005.
+                * ``vert_align_centers`` (bool): Defaults to ``False``
+                  (unlike single-line which defaults to ``True``).
+                * ``name`` (str), ``shadow`` (bool): As usual.
+                * Standard BObject kwargs.
+        """
         self.kwargs = kwargs
         self.expression = expression
         self.centered = self.get_from_kwargs('centered', False)

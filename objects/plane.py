@@ -22,6 +22,37 @@ class Plane(BObject):
     """
 
     def __init__(self, u=[-1, 1], v=[-1, 1], normal=None, resolution=10, uniformization=True, **kwargs):
+        """Create a subdivided plane (lying in the local XY plane by default).
+
+        Unlike Blender's built-in plane (4 vertices), this plane is rebuilt
+        into a regular grid so that it can be deformed by modifiers, shape
+        keys, or shader-driven displacement.
+
+        Args:
+            u: ``[u_min, u_max]`` extent along the local X axis. Defaults
+                to ``[-1, 1]``.
+            v: ``[v_min, v_max]`` extent along the local Y axis. Defaults
+                to ``[-1, 1]``.
+            normal: Optional surface normal (Vector or list). If provided,
+                the plane is rotated so its local Z axis aligns with this
+                normal (stored as ``self.quaternion``).
+            resolution: Number of subdivisions per axis. Either an int
+                (same for both axes) or ``[res_u, res_v]``. Defaults to 10.
+            uniformization: If ``True``, additional subdivisions are added
+                so quads stay roughly square when ``u`` and ``v`` differ in
+                extent (e.g. ``u=[-10, 10]``, ``v=[-1, 1]``).
+            **kwargs: Forwarded to :class:`BObject`. Notable keys:
+                * ``name`` (str): Defaults to ``'Plane'``.
+                * ``apply_scale`` (bool): Apply the ``scale`` kwarg to the
+                  mesh data instead of the object transform. Defaults to ``True``.
+                * ``apply_location`` (bool): Apply the location to mesh
+                  data. Defaults to ``True``.
+                * ``subdivide_boundary`` (bool): Add four extra loop cuts
+                  at each boundary edge (useful for smoother boundary
+                  deformations). Defaults to ``False``.
+                * ``scale``, ``location``, ``color``, ``smooth``, etc.
+                  forwarded to :class:`BObject`.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', "Plane")
 

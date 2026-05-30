@@ -13,7 +13,23 @@ from utils.constants import RES_SVG_DIR, FRAME_RATE, DEFAULT_ANIMATION_TIME
 
 
 class Voter(SVGBObject):
+    """A voter-icon SVG (a person + ballot) animated with a hand-writing
+    reveal in :meth:`appear`."""
+
     def __init__(self, **kwargs):
+        """Load the voter SVG.
+
+        Args:
+            **kwargs: Forwarded to :class:`SVGBObject`. Supported keys:
+                * ``scale`` (float): Multiplier on top of internal 0.05
+                  scaling. Defaults to 1.
+                * ``aligned`` (str): Horizontal alignment.
+                  Defaults to ``'left'``.
+                * ``thickness`` (float): Stroke extrude. Defaults to 1.
+                * ``emission`` (float): Material emission. Defaults to 0.5.
+                * ``shadow`` (bool): Cast shadows. Defaults to ``True``.
+                * Standard SVG/BObject kwargs.
+        """
         self.kwargs = kwargs
         scale = self.get_from_kwargs('scale', 1)
         scale *= 0.05

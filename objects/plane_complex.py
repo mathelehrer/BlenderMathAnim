@@ -36,12 +36,36 @@ class ComplexPlane(Plane):
     """
 
     def __init__(self, coordinate_system, functions, u=[-1, 1], v=[-1, 1], resolution=10, location=None, **kwargs):
-        """
-        :param coordinate_system: the coordinate system, where the plane is located in
-        :param u: =[-1,1]
-        :param v: =[-1,1]
-        :param resolution: The mesh resolution can be chosen, default 19
-        :param kwargs:
+        """Create a plane mapped by one or more complex functions.
+
+        Each function in ``functions`` is baked into a shape key, so the
+        plane's surface can morph between the functions via
+        :meth:`next_shape`. Blender limits the chain to 8 functions.
+
+        Args:
+            coordinate_system: :class:`CoordinateSystem` to add the plane
+                to (or ``None`` for world space).
+            functions: Either a single ``complex -> complex`` callable
+                or a list of such callables. If ``None``, no shader is
+                applied (raw plane). Pass an empty list to fall back to
+                the identity map.
+            u: ``[u_min, u_max]`` extent along the real axis.
+                Defaults to ``[-1, 1]``.
+            v: ``[v_min, v_max]`` extent along the imaginary axis.
+                Defaults to ``[-1, 1]``.
+            resolution: Mesh subdivisions per axis.
+            location: Plane location in the coordinate system. If ``None``,
+                defaults to ``Plane``'s computed centre.
+            **kwargs: Forwarded to :class:`Plane`. Supported keys:
+                * ``name`` (str): Defaults to ``'ComplexPlane'``.
+                * ``shape`` (bool): If ``True``, also deform vertex
+                  positions when registering shape keys; if ``False``,
+                  only the shader is affected. Defaults to ``True``.
+                * ``conformal_transformations`` (list): Optional list of
+                  conformal transformations; mutually exclusive with
+                  ``functions`` (drives a transformation-specific shader).
+                * ``alpha``, ``metallic``, ``roughness``, ``smooth``, etc.
+                  -- standard appearance kwargs.
         """
         self.kwargs = kwargs
         if functions is not None:

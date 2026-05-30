@@ -13,6 +13,21 @@ class DigitalNumber(SimpleTexBObject):
     """
 
     def __init__(self, value, prefix="", suffix="", **kwargs):
+        """Render a digital number with optional prefix/suffix LaTeX.
+
+        Args:
+            value: Initial numeric value to display.
+            prefix: Static LaTeX prepended to the number (e.g. ``r"x = "``).
+            suffix: Static LaTeX appended to the number (e.g. ``r"\\,\\text{m}"``).
+            **kwargs: Forwarded to :class:`SimpleTexBObject`. Supported keys:
+                * ``signed`` (bool): If ``True``, non-negative values are
+                  prefixed with a leading ``+``. Defaults to ``True``.
+                * ``number_of_digits`` (int): Decimal digits kept.
+                  Defaults to 0 (the value is shown as an integer).
+                * ``aligned`` (str): Text alignment. Defaults to ``'right'``.
+                * Standard LaTeX kwargs (``color``, ``location``,
+                  ``rotation_euler``, ...).
+        """
         self.value = value
         self.kwargs = kwargs
         self.prefix = prefix
@@ -121,6 +136,35 @@ class DigitalRange(BObject):
     """
 
     def __init__(self, values, **kwargs):
+        """Build a digital number that can morph between a fixed set of values.
+
+        All morphs are wired up at construction time so :meth:`show` can
+        flip to any value with O(1) cost. Internally each value is rendered
+        as a :class:`SimpleTexBObject` child and the children are chained
+        as shape keys on the first child.
+
+        Args:
+            values: List of numeric values that the digit can display.
+            **kwargs: Forwarded to each :class:`SimpleTexBObject` and to
+                :class:`BObject`. Supported keys:
+                * ``digits`` (int): Decimal digits to round to. Defaults to 0.
+                * ``initial_value`` (float): Value shown right after
+                  :meth:`write`. Defaults to ``values[0]``.
+                * ``name`` (str): Container name. Defaults to ``'DigitalRange'``.
+                * ``signed`` (bool): Sign-prefix non-negative values.
+                  Defaults to ``True``.
+                * ``location``, ``rotation_euler``, ``scale``: Standard
+                  transforms applied to the container.
+                * ``sorting`` (str): How children are ordered. One of:
+
+                  - ``'BY_LENGTH'`` -- longest string first (default;
+                    helps reuse glyphs when morphing).
+                  - ``'DESC'``     -- numerically descending.
+                  - ``'ASC'``      -- numerically ascending.
+                * ``prefix``, ``suffix`` (str): LaTeX strings wrapped around
+                  each value.
+                * Standard BObject/LaTeX kwargs.
+        """
         self.kwargs = kwargs
         self.values = values
         self.digits = self.get_from_kwargs('digits',0)

@@ -216,6 +216,21 @@ class CodeParser(BObject):
     '''
 
     def __init__(self, filename, **kwargs):
+        """Parse a Python source file into classes and module-level code.
+
+        Reads ``filename``, separates imports from the rest, splits the
+        remainder into classes (each :class:`ClassText`), and stores them
+        on ``self.classes`` for later display by :class:`CodeDisplay`.
+
+        Limitations: no support for comments, and assignments must have
+        spaces around ``=`` to avoid being treated as key=value pairs.
+
+        Args:
+            filename: Path to the Python source file to parse.
+            **kwargs: Forwarded to :class:`BObject` (the parser also
+                inherits from BObject so it can host visualisations of
+                the parse tree).
+        """
         with open(filename) as f:
             lines = f.readlines()
         for i, line in enumerate(lines):

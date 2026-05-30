@@ -629,12 +629,17 @@ class OutputMaterial(ShaderNode):
 
 
 class PrincipledBSDF(ShaderNode):
-    def __init__(self, tree, location=(0, 0), base_color=None,**kwargs):
+    def __init__(self, tree, location=(0, 0), base_color=None,alpha=None,**kwargs):
         self.node = tree.nodes.new(type="ShaderNodeBsdfPrincipled")
         super().__init__(tree, location=location, **kwargs)
 
         if base_color:
             tree.links.new(base_color, self.node.inputs["Base Color"])
+        if alpha:
+            if isinstance(alpha,(int, float)):
+                self.node.inputs["Alpha"].default_value = alpha
+            else:
+                self.tree.links.new(alpha, self.node.inputs["Alpha"])
 
 
 class PrincipledVolume(ShaderNode):

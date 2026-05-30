@@ -126,7 +126,24 @@ enter_interval = 0.5
 
 
 class Laptop(BObject):
+    """A laptop model loaded from a bundled .blend asset, with animatable
+    keyboard keys and screen materials."""
+
     def __init__(self, **kwargs):
+        """Load the laptop asset and prepare per-key handles.
+
+        The asset contains a Display + Keypad + Screen + 79 individual
+        keys (``Key.000`` .. ``Key.078``) plus per-key letter paths.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``rotation_euler`` (list[float]): Defaults to ``[pi/2, 0, 0]``.
+                * ``colors`` (list[str]): Per-object colors -- chassis,
+                  display, screen, keys, etc. The default fills in a
+                  reasonable gray/screen palette.
+                * ``name`` (str): Defaults to ``'Laptop'``.
+        """
         self.kwargs = kwargs
         location = self.get_from_kwargs('location', [0, 0, 0])
         rotation = self.get_from_kwargs('rotation_euler', [np.pi / 2, 0, 0])

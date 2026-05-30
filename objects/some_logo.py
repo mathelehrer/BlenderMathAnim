@@ -19,6 +19,18 @@ class SoME(BObject):
     Create the summer of Math exposition logo:
     """
     def __init__(self, location=[0, 0, 0], rotation_euler=[0, 0, 0], **kwargs):
+        """Build the SoME (Summer of Math Exposition) logo.
+
+        Combines a thin gradient-colored :class:`Torus`, the LaTeX
+        word ``SoME``, and five connecting :class:`Cylinder` edges
+        (two of them dashed) to reproduce the official SoME mark.
+
+        Args:
+            location: World location of the logo.
+            rotation_euler: Logo rotation.
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults
+                to ``'SoMELogo'``.
+        """
         self.kwargs = kwargs
         name = self.get_from_kwargs('name','SoMELogo')
         r = 6

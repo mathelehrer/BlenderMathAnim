@@ -26,14 +26,24 @@ class Circle(Function):
                  num_points=100,
                  color='example',
                  **kwargs):
-        """
+        """Create a circle in a 2D coordinate system as a parametric bezier curve.
 
-        :param coordinate_system:
-        :param center:
-        :param num_points:
-        :param color:
-        :param mode:
-        :param kwargs:
+        The underlying :class:`Function` is built in ``mode='PARAMETRIC'`` with
+        the parametrisation ``phi -> (cx + r*cos(phi), cy + r*sin(phi))``.
+
+        Args:
+            coordinate_system: The :class:`CoordinateSystem` to draw into.
+                If ``None``, the curve is placed in world space.
+            center: ``[cx, cy]`` -- centre of the circle in the coordinate
+                system's coordinates.
+            radius: Radius of the circle (in coordinate-system units).
+            num_points: Bezier control points used for the curve. Higher
+                yields a smoother circle.
+            color: Color name forwarded to the underlying :class:`Function`
+                (e.g. ``'example'``, ``'drawing'``, ``'important'``).
+            **kwargs: Forwarded to :class:`Function` (and ultimately
+                :class:`BObject`): ``name``, ``thickness``, ``color_mode``,
+                ``location``, ``rotation_euler``, etc.
         """
         super().__init__(lambda x: Vector([center[0] + radius * np.cos(x), center[1] + radius * np.sin(x)]), coordinate_system,
                          [0, 2.1 * np.pi], num_points=num_points, color=color, mode='PARAMETRIC', **kwargs)
@@ -52,13 +62,27 @@ class Circle2(Curve):
                  num_points=100,
                  color='example',
                  **kwargs):
-        """
+        """Create a circle in world space as a bezier curve.
 
-        :param center:
-        :param num_points:
-        :param color:
-        :param mode:
-        :param kwargs:
+        Unlike :class:`Circle`, this class does not require a coordinate
+        system and supports being placed in either the XY or XZ plane.
+
+        Args:
+            center: ``[c1, c2]`` -- centre of the circle. The two components
+                are interpreted in the plane selected by ``mode``.
+            radius: Radius of the circle in world units.
+            num_points: Bezier control points used for the curve.
+            color: Color name forwarded to the underlying :class:`Curve`.
+            **kwargs: Forwarded to :class:`Curve`. Notable keys:
+                * ``mode`` (str): Plane in which the circle lives. One of:
+
+                  - ``'XY'`` -- circle lies in the XY plane (default).
+                  - ``'XZ'`` -- circle lies in the XZ plane.
+                * ``domain`` (list[float]): Parameter range. Defaults to
+                  ``[0, 2*pi*(1 + 2/num_points)]`` -- slight overshoot
+                  ensures the curve closes cleanly.
+                * Standard BObject kwargs (``name``, ``location``,
+                  ``rotation_euler``, ``thickness``, ...).
         """
 
         self.center = center
@@ -87,7 +111,24 @@ class Circle2(Curve):
 
 
 class BezierCircle(BObject):
+    """A thin wrapper around Blender's built-in bezier circle primitive."""
+
     def __init__(self,radius=1,location=Vector(),rotation_euler=Vector(),**kwargs):
+        """Create a Blender bezier circle.
+
+        Args:
+            radius: Circle radius.
+            location: World location of the centre.
+            rotation_euler: Euler rotation applied to the curve.
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'BezierCircle'``.
+                * ``color`` (str): Defaults to ``'drawing'``.
+                * ``brighter`` (float): Emission boost. Defaults to 0.
+                * ``thickness`` (float): If > 0, applied as bevel depth
+                  (``thickness / 100``) to give the curve a visible tube.
+                * ``resolution`` (int): Curve render resolution (``resolution_u``).
+                  Defaults to 12.
+        """
         self.kwargs = kwargs
         self.start = [0, 0, -0.5]
         name=self.get_from_kwargs('name','BezierCircle')
@@ -103,7 +144,27 @@ class BezierCircle(BObject):
 
 
 class RightAngle(BObject):
+    """A 90-degree arc paired with a small dot, drawn as the classic
+    'right-angle' indicator used in geometry diagrams."""
+
     def __init__(self,radius=1,location=Vector(), **kwargs):
+        """Create a right-angle indicator (quarter-arc + dot).
+
+        Args:
+            radius: Radius of the quarter-arc.
+            location: World location of the angle's corner.
+            **kwargs: Forwarded to children and :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'RightAngle'``.
+                * ``mode`` (str): Plane of the arc. One of:
+
+                  - ``'XY'`` -- arc and dot lie in the XY plane (default).
+                  - ``'XZ'`` -- arc and dot lie in the XZ plane.
+                * ``rotation_euler`` (list[float]): Euler rotation applied
+                  to the whole indicator.
+                * ``thickness`` (float): Sphere thickness (dot radius scales
+                  with ``thickness / 5``). Defaults to 0.2.
+                * Standard BObject kwargs.
+        """
         self.kwargs = kwargs
         mode = self.get_from_kwargs('mode', 'XY')
         name= self.get_from_kwargs('name','RightAngle')
@@ -128,7 +189,23 @@ class RightAngle(BObject):
 
 
 class CircleArc(Circle2):
+    """A circular arc (partial circle) drawn as a bezier curve."""
+
     def __init__(self, center=Vector(), radius=1, start_angle=0, end_angle=np.pi * 2, **kwargs):
+        """Create a circular arc.
+
+        Args:
+            center: ``Vector`` (or list) -- centre of the arc.
+            radius: Arc radius.
+            start_angle: Starting angle in radians.
+            end_angle: Ending angle in radians (``start_angle + 2*pi`` for a
+                full circle). The arc sweep equals ``end_angle - start_angle``.
+            **kwargs: Forwarded to :class:`Circle2`. Notable keys:
+                * ``name`` (str): Defaults to ``'Arc'``.
+                * ``mode`` (str): ``'XY'`` or ``'XZ'``; selects the plane.
+                * ``num_points``, ``color``, ``thickness``, and standard
+                  BObject kwargs.
+        """
         self.kwargs = kwargs
         self.start = start_angle
         self.end = end_angle

@@ -13,15 +13,34 @@ from utils.kwargs import get_from_kwargs
 
 class BSlider(BObject):
     def __init__(self,label:str,**kwargs):
-        """
-        possible customizations
-        range: [-1,1]
-        orientation: "HORIZONTAL"|"VERTICAL"
-        dimension: [1,0.25,0.25]
-        location: [0,0,0]
-        side_segments: 2
-        shape: "cubic" | "cylinder"
+        """Create an interactive slider widget driven by a :class:`SliderModifier`.
 
+        The slider is built from a cube whose mesh is replaced by the
+        modifier (track + handle). A :class:`SimpleTexBObject` label and
+        optionally a :class:`NumberLine2` are placed alongside it.
+
+        Args:
+            label: LaTeX expression rendered next to the slider.
+            **kwargs: Forwarded to the modifier and children. Supported keys:
+                * ``dimensions`` (list[float]): Slider body dimensions
+                  ``[width, depth, length]``. Defaults to ``[0.25, 0.25, 1.5]``.
+                * ``range`` (list[float]): Min/max values reported via
+                  :attr:`slider_value_slot`. Defaults to ``[-1, 1]``.
+                * ``orientation`` (str): Track orientation. One of:
+
+                  - ``'HORIZONTAL'`` -- along world X (default).
+                  - ``'VERTICAL'``   -- along world Z.
+                * ``shape`` (str): Handle shape. One of:
+
+                  - ``'cubic'``    -- box handle.
+                  - ``'cylinder'`` -- cylindrical handle.
+                * ``side_segments`` (int): Mesh resolution on the handle.
+                  Defaults to 2.
+                * ``numberline`` (any | None): If truthy, attach a
+                  :class:`NumberLine2` alongside the slider track.
+                * ``location`` (list[float]): Slider location. Defaults
+                  to ``[0, 0, 0]``.
+                * Standard BObject kwargs (``color``, etc.).
         """
         self.dimensions=get_from_kwargs(kwargs,"dimensions",[0.25,0.25,1.5])
         self.slider = Cube()

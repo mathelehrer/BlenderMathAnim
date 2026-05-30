@@ -24,20 +24,28 @@ class Logo(CoordinateSystem):
 
     def __init__(self, location=[0, 0, 0],
                  details=10, length=1, colors=['important', 'example', 'drawing'], thickness=0.1, **kwargs):
-        """
+        """Render the project logo (a Ford-style packing of circles) inside a :class:`CoordinateSystem`.
 
-        example:
+        Example:
+            >>> logo = Logo(location=[7, 0, 0], length=10,
+            ...             colors=['important', 'drawing', 'drawing'],
+            ...             thickness=0.1, details=100)
+            >>> logo.appear(begin_times=prime_occurance_times,
+            ...             transition_times=[1])
 
-        logo = Logo(location=[7, 0, 0], length=10, colors=['important', 'drawing', 'drawing'],thickness=0.1,details=100)
-        logo.appear(begin_times=prime_occurance_times, transition_times=[1])
-
-
-        :param location:
-        :param detail:
-        :param length:
-        :param colors:
-        :param thickness:
-        :param kwargs:
+        Args:
+            location: Origin of the embedded coordinate system.
+                Defaults to ``[0, 0, 0]``.
+            details: Number of circles per Ford row. Higher values give a
+                denser packing. Defaults to 10.
+            length: Length of each coordinate axis (the logo fits inside
+                ``[-length, length] x [0, 2*length]``). Defaults to 1.
+            colors: Three color names ``[red, green, blue]`` -- one per
+                Ford row. Defaults to ``['important', 'example', 'drawing']``.
+            thickness: Per-circle thickness multiplier (scaled by sqrt(2r)
+                or sqrt(6r) per row). Defaults to 0.1.
+            **kwargs: Forwarded to :class:`CoordinateSystem` (``name``,
+                ``scale``, ``text_size``, ...).
         """
 
         super().__init__(dim=2, lengths=[length, length], radii=[0.03, 0.03], domains=[[-1, 1], [0, 2]],

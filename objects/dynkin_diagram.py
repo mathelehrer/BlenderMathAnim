@@ -18,10 +18,40 @@ pi = np.pi
 class DynkinDiagram(BObject):
 
     def __init__(self, dim=3, labels=[], graph=None, move_to_center=False, **kwargs):
-        """
-        example:
+        """Render a Dynkin diagram (a node-and-edge graph used in Lie theory).
 
-        DynkinDiagram(location=[0, 0, 0],dim=3,labels=["4",""])
+        Two construction modes:
+
+        * **Linear** (default): a chain of ``dim`` nodes connected by
+          edges, with ``labels`` written above each edge.
+        * **Tree** (``graph`` argument): an :mod:`anytree`-shaped graph
+          recursively laid out from the root; useful for E6/E7/E8 forks.
+
+        Each node is drawn as a :class:`Sphere` paired with a
+        :class:`Circle2` ring (for marking "active" / "crossed" nodes).
+        Edges are :class:`Cylinder` instances; labels are :class:`Text`.
+
+        Example:
+            >>> DynkinDiagram(location=[0, 0, 0], dim=3, labels=["4", ""])
+
+        Args:
+            dim: Number of nodes (used in linear mode).
+            labels: Edge labels (used in linear mode, len = ``dim - 1``).
+                Use ``""`` to render an unlabelled edge.
+            graph: Optional ``anytree``-style root node for tree mode.
+                Each node's ``name`` attribute must be a tuple
+                ``(node_index, is_active)``.
+            move_to_center: If ``True``, the diagram's centroid is
+                shifted to the requested ``location``.
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'DynkinDiagram'``.
+                * ``scale`` (float | list[float]): Defaults to ``[1, 1, 1]``.
+                * ``text_size`` (str): One of ``'normal'``, ``'Large'``,
+                  ``'Huge'``. Defaults to ``'Large'``.
+                * ``dynkin_label_shift`` (Vector): Per-label offset.
+                * ``no_threes`` / ``without_threes`` (bool): Skip edges
+                  labelled ``'3'`` (the implicit-3 convention).
+                * Standard appearance kwargs.
         """
         self.name = get_from_kwargs(kwargs, "name", "DynkinDiagram")
         self.dim = dim

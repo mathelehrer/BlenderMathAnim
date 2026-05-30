@@ -17,7 +17,24 @@ from utils.io_operations import convert_files_to_csv_data
 from utils.kwargs import get_from_kwargs
 
 class BenfordFilesDiagram(BObject):
+    """A Benford-law bar chart computed from filename lengths in a directory.
+
+    Renders the leading-digit distribution as animated bars on a
+    :class:`Plane`, driven by :class:`BenfordFilesDiagramModifier`.
+    """
+
     def __init__(self,path="/usr",max_length=35,max_data=2000, **kwargs):
+        """Build a Benford diagram from the contents of ``path``.
+
+        Args:
+            path: Root directory to scan. Defaults to ``'/usr'``.
+            max_length: Maximum filename length displayed.
+            max_data: Maximum number of files to include.
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                Supported keys: ``numer_material``, ``highlighted_number_material``,
+                ``bar_material`` (color names), ``transition_frames``
+                (animation duration in frames), ``start_time`` (seconds).
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs("name", "BenfordFilesDiagram")
 
@@ -52,7 +69,17 @@ class BenfordFilesDiagram(BObject):
 
 
 class BenfordFibonacciDiagram(BObject):
+    """A Benford-law bar chart computed from Fibonacci numbers.
+
+    The diagram updates as more Fibonacci values are added via
+    :meth:`add_data`."""
+
     def __init__(self, **kwargs):
+        """Build a Benford diagram for an interactively-extended Fibonacci sequence.
+
+        Args:
+            **kwargs: Same shading kwargs as :class:`BenfordFilesDiagram`.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs("name", "BenfordDiagram")
 
@@ -91,7 +118,14 @@ class BenfordFibonacciDiagram(BObject):
 
 
 class BenfordDiagram(BObject):
+    """A generic Benford-law bar chart driven by :class:`BenfordDiagramModifier`."""
+
     def __init__(self, **kwargs):
+        """Build a blank Benford diagram (data is supplied via the modifier).
+
+        Args:
+            **kwargs: Same shading kwargs as :class:`BenfordFilesDiagram`.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs("name", "BenfordFibonacciDiagram")
 
@@ -125,7 +159,24 @@ class BenfordDiagram(BObject):
 
 
 class BenfordInterval(BObject):
+    """A number-line-style helper that visualises which leading digit a
+    given value would have, driven by :class:`BenfordIntervalModifier`."""
+
     def __init__(self, **kwargs):
+        """Build a Benford interval display.
+
+        Args:
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                Supported keys:
+                * ``scale`` (float | list[float]): Scale applied to the plane.
+                  Defaults to 1.
+                * ``location`` (list[float]): World location.
+                  Defaults to ``[0, 0, 0]``.
+                * ``axis_material``, ``tic_material``, ``label_material``
+                  (str): Color names for the axis, tic marks, and labels.
+                  Defaults: ``'text'``, ``'text'``, ``'important'``.
+                * Standard BObject kwargs.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs("name", "BenfordInterval")
 

@@ -7,7 +7,23 @@ from utils.constants import FRAME_RATE, OBJECT_APPEARANCE_TIME
 
 
 class TransBObject(BObject):
+    """A :class:`BObject` whose surface can morph through a list of
+    pre-registered transformations.
+
+    Each transformation is baked into a shape key and into a per-shape
+    shader 'dialer'; calling :meth:`next_shape` triggers both
+    simultaneously.
+    """
+
     def __init__(self,transformations = None, **kwargs):
+        """Create a transformable BObject.
+
+        Args:
+            transformations: Optional list of vertex-level callables.
+                Each one becomes one shape key + one color-mixer dialer.
+                If ``None``, the object behaves like a normal BObject.
+            **kwargs: Forwarded to :class:`BObject`.
+        """
         super().__init__(**kwargs)
 
         # only call this after the mesh has been created

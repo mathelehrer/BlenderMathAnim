@@ -6,6 +6,12 @@ class Blend(BObject):
 
     '''
     def __init__(self,**kwargs):
+        """Load a pre-built 'Blend' .blend asset and wrap it as a BObject.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults
+                to ``'Blend'``. Standard appearance/transform kwargs.
+        """
         self.kwargs = kwargs
         name=self.get_from_kwargs('name','Blend')
         blend = BObject.from_file("Blend",name=name)

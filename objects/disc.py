@@ -15,6 +15,20 @@ class Disc(BObject):
     Create a disc with descent mesh:
     """
     def __init__(self, radius=1, resolution=10,location =Vector(), **kwargs):
+        """Create a flat disc lying in the XY plane.
+
+        Args:
+            radius: Outer radius of the disc.
+            resolution: Either an int (used for both radial and angular
+                segments) or ``[res_r, res_phi]``. Higher values produce a
+                smoother circular boundary.
+            location: Centre of the disc in world coordinates. The location
+                is baked into the mesh vertices (the object's origin remains
+                at the world origin).
+            **kwargs: Forwarded to :class:`BObject`. Notable keys:
+                ``name`` (defaults to ``'Disc'``), ``color``, ``scale``,
+                ``smooth``, ``rotation_euler``, etc.
+        """
         self.kwargs = kwargs
         self.radius = radius
         if isinstance(resolution,list) and len(list)>1:
@@ -78,7 +92,18 @@ class Disc(BObject):
 
 
 class TransformedDisc(Disc):
+    """A :class:`Disc` whose vertices are deformed by an arbitrary mapping."""
+
     def __init__(self,transformation=lambda x:x,**kwargs):
+        """Create a disc whose vertices are pushed through ``transformation``.
+
+        Args:
+            transformation: Callable ``Vector -> Vector`` applied to every
+                vertex of the underlying disc mesh. The default identity
+                produces a regular flat disc.
+            **kwargs: Forwarded to :class:`Disc` (``radius``, ``resolution``,
+                ``location``, ``name``, etc.).
+        """
         self.transformation = transformation
         super().__init__(**kwargs)
 
@@ -102,6 +127,16 @@ class Annulus(BObject):
     """
 
     def __init__(self, r_in=0, r_out=1, resolution=10, **kwargs):
+        """Create a flat annulus (ring) lying in the XY plane.
+
+        Args:
+            r_in: Inner radius. Use ``0`` for a full disc.
+            r_out: Outer radius.
+            resolution: Number of subdivisions used for both the radial and
+                angular directions.
+            **kwargs: Forwarded to :class:`BObject` (``name`` defaults to
+                ``'Annulus'``; also ``color``, ``location``, ``scale``, etc.).
+        """
         self.kwargs = kwargs
 
         self.name = self.get_from_kwargs('name', 'Annulus')
@@ -144,6 +179,19 @@ class DynamicAnnulus(BObject):
     """
 
     def __init__(self, radius=1, resolution=10, **kwargs):
+        """Create an annulus that can morph between a full disc and a thin ring.
+
+        A chain of shape keys is generated, one per discrete inner radius from
+        ``0`` to ``radius``. Use :meth:`set_inner_radius` to animate towards
+        any of those values.
+
+        Args:
+            radius: Outer radius of the annulus.
+            resolution: Number of subdivisions in both directions. Also
+                determines the number of shape-key snapshots (one per step).
+            **kwargs: Forwarded to :class:`BObject` (``name`` defaults to
+                ``'Annulus'``; standard color/transform kwargs).
+        """
         self.kwargs = kwargs
         self.shape_keys = []
         self.name = self.get_from_kwargs('name', 'Annulus')

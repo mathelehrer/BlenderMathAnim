@@ -7,7 +7,31 @@ from utils.constants import OBJECT_APPEARANCE_TIME, FRAME_RATE, DEFAULT_ANIMATIO
 
 
 class Flag(BObject):
+    """A cloth-simulated flag (post + waving cloth) loaded from a bundled .blend file.
+
+    The cloth is pinned at the top row of vertices to the post; cloth
+    physics gives the wave. Use :meth:`set_text` to swap in dynamically
+    generated text images onto the flag surface.
+    """
+
     def __init__(self,**kwargs):
+        """Load a flag asset and configure cloth physics.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``rotation_euler`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``colors`` (list[str]): Per-sub-object colors.
+                  Defaults to ``['drawing']``.
+                * ``name`` (str): Defaults to ``'Flag'``.
+                * ``mirror`` (bool): If ``True``, mirror the cloth
+                  (so the flag flies in the opposite direction).
+                  Defaults to ``False``.
+                * ``simulation_start`` (float): Cloth bake start
+                  in seconds. Defaults to 0.
+                * ``simulation_duration`` (float): Cloth bake duration
+                  in seconds.
+        """
         self.text_count=0
         self.kwargs = kwargs
         location = self.get_from_kwargs('location',[0,0,0])

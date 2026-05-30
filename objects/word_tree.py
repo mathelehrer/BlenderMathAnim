@@ -14,6 +14,17 @@ class TreeNode(Node):
     Just a container that collects all the data provided inside a node"
     """
     def __init__(self,word="",parent=None):
+        """Create a tree node holding a word and 2D layout coordinates.
+
+        Used by :class:`WordTree` to represent the tree before it is
+        rendered as 3D geometry.
+
+        Args:
+            word: Word stored at this node (used as the node's label
+                and ``anytree`` name).
+            parent: Optional parent :class:`TreeNode`. Inherits
+                ``anytree`` parenting semantics.
+        """
         self.word = word
         self.parent = parent
         self.x = 0
@@ -149,11 +160,26 @@ def create_mesh_from_word_list(word_list, dimensions = [240,108]):
 
 
 class WordTree(BObject):
-    def __init__(self,word_list=[],instances=[], **kwargs):
-        """
-        A tree that is used for visualizing the isometries CoxB3
-        We want to display the words, the permutations and the 3d representation in a tree-like structure
+    """A 3D tree visualisation of a list of group-element words, driven by
+    :class:`WordTreeModifier`. Each level of the tree corresponds to one
+    application of a generator; instanced 3D shapes can be placed at
+    each node to show the cumulative effect."""
 
+    def __init__(self,word_list=[],instances=[], **kwargs):
+        """Build a word tree.
+
+        Args:
+            word_list: List of word strings to lay out (e.g.
+                ``['', 'a', 'b', 'ab', 'ba', ...]``). Each word becomes
+                a tree node; common prefixes share an ancestor.
+            instances: List of pre-built :class:`BObject` instances to
+                attach at each node (e.g. one cube per group element,
+                showing the effect of the word).
+            **kwargs: Forwarded to :class:`WordTreeModifier` and
+                :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'WordTree'``.
+                * ``location`` (list[float]): Tree origin. Defaults to ``[0, 0, 0]``.
+                * Standard appearance kwargs.
         """
 
         vertices,edges,levels=create_mesh_from_word_list(word_list)

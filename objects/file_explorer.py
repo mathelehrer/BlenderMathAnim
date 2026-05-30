@@ -12,7 +12,25 @@ from utils.io_operations import list_files_with_sizes_recursive, convert_files_t
 
 
 class FileExplorer(BObject):
+    """A scrollable file-explorer visualisation driven by a
+    :class:`FileExplorerModifier` geometry-nodes modifier.
+
+    Scans a directory, dumps its contents to a CSV, then renders the
+    file listing on a :class:`Plane`. Use :meth:`scroll` to animate
+    scrolling through the listing."""
+
     def __init__(self, path="/usr",max_length=35,max_data=2000,**kwargs):
+        """Build a file explorer for the given directory.
+
+        Args:
+            path: Root directory to enumerate. Defaults to ``'/usr'``.
+            max_length: Maximum filename length displayed (longer names
+                are truncated). Defaults to 35.
+            max_data: Maximum number of files to include in the listing.
+                Defaults to 2000.
+            **kwargs: Forwarded to :class:`Plane`, :class:`FileExplorerModifier`,
+                and :class:`BObject`. ``name`` defaults to ``'FileExplorer'``.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs("name", "FileExplorer")
 

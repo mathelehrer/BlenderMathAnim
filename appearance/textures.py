@@ -9,7 +9,7 @@ import numpy as np
 from sympy import Symbol, re, im, false
 
 from extended_math_nodes.generic_nodes import SphericalHarmonics200, CMBNode
-from geometry_nodes.nodes import make_function, make_function_with_aux, Coord
+from geometry_nodes.nodes import make_function, make_function, Coord
 from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
     Vector, set_material, create_iterator_group, get_obj, animate_sky_background, \
@@ -18,7 +18,6 @@ from interface.ibpy import customize_material, make_alpha_frame, create_group_fr
 from interface.interface_constants import TRANSMISSION, SPECULAR, EMISSION, blender_version
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
-from new_stuff.textures import hat_tile_fractal
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import (Mapping, AttributeNode, HueSaturationValueNode, \
                                        MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ,

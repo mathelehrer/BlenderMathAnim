@@ -6,7 +6,16 @@ from utils.constants import DEFAULT_ANIMATION_TIME
 
 
 class DefaultGrid(BObject):
+    """A fixed-size 24x13 reference grid drawn in the world XZ plane,
+    bounded by a 4-cylinder frame. Used as a backdrop for 2D scenes."""
+
     def __init__(self):
+        """Construct the default grid (no parameters).
+
+        Geometry is hard-coded: frame at ``x in [-12, 12]``, ``z in [-6.5, 6.5]``,
+        with one horizontal cylinder per integer ``z`` in ``[-6, 6]`` and one
+        vertical cylinder per integer ``x`` in ``[-11, 11]``.
+        """
         xmin = -12
         xmax = 12
         zmin = -6.5

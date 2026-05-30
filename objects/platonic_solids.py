@@ -41,7 +41,15 @@ def orient_face(s, vertices):
     return s
 
 class Tetrahedron(BObject):
+    """Regular tetrahedron with canonical coordinates."""
+
     def __init__(self,**kwargs):
+        """Create a regular tetrahedron.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults
+                to ``'Tetrahedron'``. Standard appearance kwargs.
+        """
         self.kwargs = kwargs
         self.name=self.get_from_kwargs('name','Tetrahedron')
         # vertices from wikipedia
@@ -83,7 +91,15 @@ class Tetrahedron(BObject):
         super().__init__(mesh=create_mesh(vertices,edges,faces),name=self.name,**kwargs)
 
 class Octahedron(BObject):
+    """Regular octahedron with canonical coordinates."""
+
     def __init__(self, **kwargs):
+        """Create a regular octahedron.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults
+                to ``'Octahedron'``. Standard appearance kwargs.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', 'Octahedron')
         # vertices from wikipedia
@@ -128,7 +144,15 @@ class Octahedron(BObject):
         super().__init__(mesh=create_mesh(vertices, edges, faces), name=self.name, **kwargs)
 
 class Icosahedron(BObject):
+    """Regular icosahedron with canonical golden-ratio coordinates."""
+
     def __init__(self,**kwargs):
+        """Create a regular icosahedron.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults
+                to ``'Icosahedron'``. Standard appearance kwargs.
+        """
         self.kwargs = kwargs
         self.name=self.get_from_kwargs('name','Icosahedron')
         # vertices from wikipedia
@@ -166,7 +190,21 @@ class Icosahedron(BObject):
         super().__init__(mesh=create_mesh(vertices,edges,faces),name=self.name,**kwargs)
 
 class Dodecahedron(BObject):
+    """Regular dodecahedron, optionally subdivided into a
+    rhombicosidodecahedral mesh for finer triangulation."""
+
     def __init__(self,**kwargs):
+        """Create a (possibly subdivided) regular dodecahedron.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'Dodecahedron'``.
+                * ``sub_divide`` (int): Number of edge subdivisions.
+                  ``0`` (default) produces the plain dodecahedron.
+                  ``2`` yields a small rhombicosidodecahedral expansion
+                  (pentagons + squares + triangles).
+                * Standard appearance kwargs.
+        """
         self.kwargs = kwargs
         self.name=self.get_from_kwargs('name','Dodecahedron')
         # vertices from wikipedia
@@ -319,7 +357,19 @@ class Dodecahedron(BObject):
 
 
 class SubdividedPentagon(BObject):
+    """A regular pentagon subdivided into a smaller pentagon-of-pentagons
+    (or related figures, depending on ``middle_squeeze``)."""
+
     def __init__(self, **kwargs):
+        """Create a subdivided pentagon.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'Pentagon'``.
+                * ``middle_squeeze`` (float): Amount by which interior
+                  vertices are pulled toward the centre. Defaults to 0.
+                * Standard appearance kwargs.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', 'Pentagon')
 

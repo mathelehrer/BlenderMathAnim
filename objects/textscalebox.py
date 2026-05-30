@@ -5,7 +5,23 @@ from utils.constants import DEFAULT_ANIMATION_TIME
 
 
 class TextScaleBox(BObject):
+    """A container that wraps existing text children and propagates the
+    parent's transform onto itself so the group can be scaled / animated
+    as a unit (and re-inserted at its grandparent's level)."""
+
     def __init__(self, children=None,name="ScaleBox"):
+        """Wrap text children in a scaling container.
+
+        The first child's parent is used to source location/rotation/scale,
+        and that parent's parent (the grandparent) becomes the new parent
+        of this box -- typically a :class:`Display` -- so the box behaves
+        as a drop-in replacement for the original text grouping.
+
+        Args:
+            children: List of pre-built text BObjects to wrap. If empty
+                or ``None``, the box is created at the world origin.
+            name: Object name. Defaults to ``'ScaleBox'``.
+        """
         location = Vector()
         rotation = Vector()
         grandparent = None

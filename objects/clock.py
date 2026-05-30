@@ -17,6 +17,25 @@ class Clock(BObject):
     Create a clock with Roman numerals:
     """
     def __init__(self,radius=6, location=[0, 0, 0], rotation_euler=[0, 0, 0],colors=['drawing','important'], **kwargs):
+        """Create an analog clock with Roman-numeral hour labels.
+
+        The clock consists of:
+
+        * a :class:`BezierCircle` outline,
+        * a :class:`PArrow` minute hand,
+        * twelve :class:`SimpleTexBObject` hour labels (I..XII).
+
+        Args:
+            radius: Outer radius of the clock face (the internal layout
+                ignores the parameter and uses a fixed radius of 6 --
+                kept for compatibility).
+            location: World location of the clock centre.
+            rotation_euler: Euler rotation of the whole clock.
+            colors: ``[face_color, hand_color]`` pair. Defaults to
+                ``['drawing', 'important']``.
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults
+                to ``'Clock'``.
+        """
         self.kwargs = kwargs
         name = self.get_from_kwargs('name','Clock')
         r = 6

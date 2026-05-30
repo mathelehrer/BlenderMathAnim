@@ -7,20 +7,39 @@ from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
 
 
 class Table(BObject):
-    def __init__(self, bob_array: object, **kwargs: object) -> object:
-        """
-        add objects left-aligned to allow proper alignment inside table
-        :param bob_array:
-        :param kwargs:
+    """Lay out a 2D grid of pre-built BObjects as a table."""
 
-        example
-        cube_string=["Anton", "Berta", "Caesar", "Diana","Eda", "Frida", "Gabriela", "Helena"]
-         b_cubes = np.array([SimpleTexBObject(cube_string,color='drawing') for cube_string in cube_strings])
-        table = Table(b_cubes.reshape((8, 4)), bufferx=0.4, buffery=0.4)
-        table.rotate(rotation_euler=[-np.pi / 2, 0, 0], begin_time=0, transition_time=0)
-        display.add_text_in(table, line=5, indent=4)
-        [table.write_row(i, begin_time=t0 + i * 1, transition_time=1) for i in range(8)]
-        t0 += 0.5 + 8 * 1
+    def __init__(self, bob_array: object, **kwargs: object) -> object:
+        """Arrange a 2D array of BObjects into a table with alignment/padding.
+
+        Each cell's :meth:`get_text_bounding_box` is queried to compute
+        per-column widths and per-row heights; cells are then positioned
+        according to the per-column alignment.
+
+        Example:
+            >>> cube_strings = ["Anton", "Berta", "Caesar", "Diana"]
+            >>> b_cubes = np.array([SimpleTexBObject(s, color='drawing')
+            ...                     for s in cube_strings])
+            >>> table = Table(b_cubes.reshape((2, 2)),
+            ...               bufferx=0.4, buffery=0.4)
+
+        Args:
+            bob_array: 2D array (``rows`` x ``columns``) of cell objects.
+                Use ``None`` for an empty cell. All cells must support
+                :meth:`get_text_bounding_box`.
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``bufferx`` (float): Horizontal spacing factor between
+                  columns. Defaults to 0.4.
+                * ``buffery`` (float): Vertical spacing factor between
+                  rows. Defaults to 0.8.
+                * ``head_sep`` (float): Extra spacing after the first row
+                  (header separator).
+                * ``foot_sep`` (float): Extra spacing before the last row.
+                * ``alignment`` (list[str]): Per-column alignment. Each
+                  entry is one of ``'l'`` (left), ``'c'`` (center, default),
+                  ``'r'`` (right).
+                * ``name`` (str): Defaults to ``'Table'``.
+                * Standard BObject kwargs.
         """
         self.kwargs=kwargs
         self.array = bob_array
@@ -158,20 +177,15 @@ class Table(BObject):
         return self.array[row][col]
 
 class Table2(BObject):
-    def __init__(self, bob_array: object, **kwargs: object) -> object:
-        """
-        add objects left-aligned to allow proper alignment inside table
-        :param bob_array:
-        :param kwargs:
+    """Alternative table layout (variant of :class:`Table`)."""
 
-        example
-        cube_string=["Anton", "Berta", "Caesar", "Diana","Eda", "Frida", "Gabriela", "Helena"]
-         b_cubes = np.array([SimpleTexBObject(cube_string,color='drawing') for cube_string in cube_strings])
-        table = Table(b_cubes.reshape((8, 4)), bufferx=0.4, buffery=0.4)
-        table.rotate(rotation_euler=[-np.pi / 2, 0, 0], begin_time=0, transition_time=0)
-        display.add_text_in(table, line=5, indent=4)
-        [table.write_row(i, begin_time=t0 + i * 1, transition_time=1) for i in range(8)]
-        t0 += 0.5 + 8 * 1
+    def __init__(self, bob_array: object, **kwargs: object) -> object:
+        """Arrange a 2D array of BObjects into a table (variant layout).
+
+        Same interface as :class:`Table` -- see that class for the full
+        kwarg list (``bufferx``, ``buffery``, ``head_sep``, ``foot_sep``,
+        ``alignment``, ``name``). The layout differs slightly in how
+        morphing texts are sized.
         """
         self.kwargs=kwargs
         self.array = bob_array

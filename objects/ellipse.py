@@ -20,14 +20,27 @@ class Ellipse(Curve):
                  num_points=20,
                  color='example',
                  **kwargs):
-        """
+        """Create an ellipse as a parametric bezier curve.
 
-        :param center:
-        :param num_points:
-        :param ratio:
-        :param color:
-        :param mode:
-        :param kwargs:
+        The X axis is stretched by ``ratio`` relative to the Y axis,
+        producing semi-axes ``(ratio * radius, radius)``.
+
+        Args:
+            center: ``[c1, c2]`` -- centre of the ellipse (interpreted in
+                the plane selected by ``type``).
+            radius: Reference (smaller) semi-axis length. The longer
+                semi-axis is ``ratio * radius``.
+            ratio: Aspect ratio of the major to minor axis. Defaults to 2.
+            num_points: Bezier control points. Defaults to 20.
+            color: Material color forwarded to :class:`Curve`.
+            **kwargs: Forwarded to :class:`Curve`. Supported keys:
+                * ``type`` (str): Plane the ellipse lives in. One of:
+
+                  - ``'XY'`` -- ellipse in the XY plane (default).
+                  - ``'XZ'`` -- ellipse in the XZ plane.
+                * ``domain`` (list[float]): Parameter range. Defaults to
+                  ``[0, 2*pi]``.
+                * Standard BObject kwargs.
         """
 
         self.ratio = ratio

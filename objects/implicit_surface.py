@@ -52,6 +52,22 @@ class ImplicitSurface(BObject):
                  level=0.0,
                  name="ImplicitSurface",
                  **kwargs):
+        """Extract the level set ``f(x, y, z) = level`` via marching tetrahedra.
+
+        Args:
+            f: Either a callable ``f(x, y, z) -> float`` or a string
+                expression (parsed by :func:`parse_implicit_function`,
+                e.g. ``"x*x + y*y + z*z - 1"``).
+            bounds: ``((xmin, xmax), (ymin, ymax), (zmin, zmax))`` --
+                axis-aligned sampling box.
+            resolution: Number of samples per axis. Either an int
+                (used for all three axes) or a 3-tuple. Higher gives a
+                finer mesh and longer build time.
+            level: Iso-value to extract. Defaults to 0 (zero level set).
+            name: Object name.
+            **kwargs: Forwarded to :class:`BObject` (``color``, ``smooth``,
+                ``location``, ...).
+        """
         self.f = parse_implicit_function(f)
         self.bounds = bounds
         if isinstance(resolution, int):
@@ -84,6 +100,26 @@ class CoordinateLines(BObject):
                  bevel_resolution=2,
                  name="CoordinateLines",
                  **kwargs):
+        """Trace iso-lines of a scalar field on top of an existing surface.
+
+        Args:
+            surface: A pre-built :class:`ImplicitSurface` whose vertices
+                and faces are reused.
+            g: Callable ``g(x, y, z) -> float`` -- the scalar field whose
+                level sets are traced (e.g. longitude/latitude/curvature).
+            levels: Iterable of iso-values to draw.
+            modular: If ``True``, ``g`` is treated as periodic with
+                period ``period`` (e.g. ``atan2`` for longitude). Uses
+                :func:`trace_iso_lines_modular` instead of plain tracing.
+            period: Period of ``g`` when ``modular=True``. Defaults to
+                ``2*pi``.
+            thickness: Bevel depth applied to the curve splines. Use 0
+                for hairline polylines without bevel.
+            bevel_resolution: Cross-section resolution for the curve bevel
+                (when ``thickness > 0``). Defaults to 2.
+            name: Object name.
+            **kwargs: Forwarded to :class:`BObject` (``color``, etc.).
+        """
         if modular:
             polys_per_level = trace_iso_lines_modular(
                 surface.verts, surface.faces, g, levels, period=period)

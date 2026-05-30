@@ -13,15 +13,28 @@ from utils.kwargs import get_from_kwargs
 r2 = 1/2**0.5
 
 class IsometryCube(BObject):
+    """A cube used to visualise the B3 isometry group (the symmetries of a cube).
+
+    Can be rendered as a wireframe, with labelled vertices, or with
+    colored faces.
+    """
+
     def __init__(self, permutation=None,label=False,**kwargs):
-        """
-        a cube that is used for visualizing the isometries CoxB3
-        the cube can appear as
+        """Build an isometry cube.
 
-        * a simple wireframe
-        * with labelled vertices
-        * with colored faces
-
+        Args:
+            permutation: Optional permutation of the 48 cube isometries
+                applied to the cube's vertex labels. ``None`` means
+                identity.
+            label: If ``True``, render a LaTeX label for the current
+                group element on the cube. Defaults to ``False``.
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'IsometryCube'``.
+                * ``word`` (str): LaTeX label used when ``label=True``.
+                * ``location`` (Vector | list[float]): World location.
+                * ``rotation_euler`` (Euler): Defaults to ``Euler((0, 0, 0))``.
+                * ``scale`` (list[float]): Defaults to ``[1, 1, 1]``.
+                * Standard BObject kwargs.
         """
         rotation_euler=get_from_kwargs(kwargs,'rotation_euler',Euler((0,0,0)))
         cube = Cube()
@@ -248,10 +261,17 @@ class IsometryCube(BObject):
         return begin_time+transition_time
 
 class IsometrySphere(BObject):
-    def __init__(self, permutation=None,**kwargs):
-        """
-        a sphere that is used for visualizing the isometries CoxB3
+    """Sphere variant of :class:`IsometryCube` for visualising B3 isometries
+    on a sphere instead of a cube."""
 
+    def __init__(self, permutation=None,**kwargs):
+        """Build an isometry sphere.
+
+        Args:
+            permutation: Optional permutation applied to the labelled
+                points on the sphere.
+            **kwargs: Same supported keys as :class:`IsometryCube`
+                (``name``, ``location``, ``rotation_euler``, ``scale``, ...).
         """
         rotation_euler=get_from_kwargs(kwargs,'rotation_euler',Euler((0,0,0)))
         cube = Cube()

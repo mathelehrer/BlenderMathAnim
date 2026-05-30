@@ -24,6 +24,23 @@ class RevolutionSolid(BObject):
     """
 
     def __init__(self, function, x_max=1, resolution=10, **kwargs):
+        """Build a solid of revolution by rotating ``y = f(x)`` about the X axis.
+
+        The profile ``(x, f(x))`` is sampled at ``resolution + 1`` points,
+        then revolved around the X axis with ``resolution`` angular slices.
+        End caps are added automatically.
+
+        Args:
+            function: Profile curve as a callable ``x -> y``. ``y >= 0``
+                is assumed; ``y = 0`` collapses to the axis (singular point).
+            x_max: Right boundary of the domain. Sampling runs from 0 to
+                ``x_max``. Defaults to 1.
+            resolution: Number of samples along ``x`` (= number of angular
+                slices, = number of subdivisions per ring). Higher values
+                give a smoother solid.
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults to
+                ``'RevolutionSolid'``. Standard color/transform kwargs.
+        """
         self.kwargs = kwargs
 
         self.name= self.get_from_kwargs('name','RevolutionSolid')

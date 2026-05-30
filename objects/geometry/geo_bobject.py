@@ -10,7 +10,19 @@ from utils.utils import to_vector
 
 
 class GeoBObject(BObject):
+    """A :class:`BObject` extension that can carry a text label, supports
+    copy semantics, and exposes a ``label_rotation`` knob used by labels."""
+
     def __init__(self, **kwargs):
+        """Create a geo-aware BObject.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``label_rotation`` (list[float]): Euler rotation
+                  applied to text labels attached via
+                  :meth:`write_name_as_label`. Defaults to ``[0, 0, 0]``.
+                * Standard BObject kwargs.
+        """
         self.kwargs = kwargs
         self.label_sep = 1
         self.label=None

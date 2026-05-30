@@ -15,6 +15,26 @@ class Book(BObject):
     """
 
     def __init__(self, scale=[1, 1, 0.4], pages=100, cover_thickness=0.01, page_thickness=0.002, **kwargs):
+        """Create a foldable book with animated cover, spine, and pages.
+
+        Cover + back + spine are built as cubes constrained with PIVOT,
+        COPY_ROTATION, and LIMIT_ROTATION constraints; pages are
+        individually hooked via vertex groups so they can bend and turn.
+        Use :meth:`open`, :meth:`closed`, :meth:`turn_page`, and
+        :meth:`set_cover_image` / :meth:`set_page_image` to drive the
+        animation.
+
+        Args:
+            scale: ``[width, height, half_depth]`` of the closed book.
+                Defaults to ``[1, 1, 0.4]``.
+            pages: Number of pages to insert. Defaults to 100.
+            cover_thickness: Thickness of cover/back/spine.
+                Defaults to 0.01.
+            page_thickness: Thickness of each page. Defaults to 0.002.
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults
+                to ``'Book'``. The book always lives in a dedicated
+                ``'BookCollection'`` Blender collection.
+        """
         self.kwargs = kwargs
         self.scale = scale
         self.cover_thickness = 0.01

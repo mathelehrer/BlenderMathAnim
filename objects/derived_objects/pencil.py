@@ -5,7 +5,19 @@ from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME
 
 
 class Pencil(BObject):
+    """A pencil model (wood + mine) loaded from a bundled .blend asset."""
+
     def __init__(self,**kwargs):
+        """Load a pencil from the bundled asset library.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``rotation_euler`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``colors`` (list[str]): One color per part
+                  (``Wood``, ``Mine``). Defaults to ``['drawing']``.
+                  Object name is fixed to ``'Pencil'``.
+        """
         self.kwargs = kwargs
         location = self.get_from_kwargs('location',[0,0,0])
         rotation = self.get_from_kwargs('rotation_euler',[0,0,0])

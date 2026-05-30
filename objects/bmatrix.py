@@ -14,6 +14,24 @@ class BMatrix(SimpleTexBObject):
             return False
 
     def __init__(self, entries, pre_word="",after_word="", **kwargs):
+        """Render a numeric matrix as a LaTeX ``\\begin{array}`` expression.
+
+        Args:
+            entries: 2D numeric array (``numpy.ndarray`` or similar with
+                a ``.shape`` attribute) holding the matrix entries.
+            pre_word: LaTeX string prepended to the matrix
+                (e.g. ``r"M = "``).
+            after_word: LaTeX string appended after the matrix
+                (e.g. ``r"\\,."``).
+            **kwargs: Forwarded to :class:`SimpleTexBObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'Matrix'``.
+                * ``mapping`` (dict): Optional ``{float: str}`` map that
+                  substitutes special LaTeX strings for matched numeric
+                  entries (using :meth:`similar` with tolerance 0.01).
+                  Useful for rendering symbolic constants like
+                  ``{1.0: r"\\pi"}``.
+                * Standard LaTeX kwargs (``color``, ``location``, ...).
+        """
         self.kwargs = kwargs
         self.entries = entries
 

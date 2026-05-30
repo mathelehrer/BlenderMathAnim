@@ -47,16 +47,16 @@ def simplify(word):
     return newword
 
 class GeoRubiksCube(BObject):
-    def __init__(self, name="GeoRubiksCube",**kwargs):
-        """
-        possible customizations
-        range: [-1,1]
-        orientation: "HORIZONTAL"|"VERTICAL"
-        dimension: [1,0.25,0.25]
-        location: [0,0,0]
-        side_segments: 2
-        shape: "cubic" | "cylinder"
+    """A 3x3x3 Rubik's Cube driven by a :class:`RubiksCubeModifier`
+    geometry-nodes graph. Faces can be rotated via Singmaster moves."""
 
+    def __init__(self, name="GeoRubiksCube",**kwargs):
+        """Build a Rubik's Cube as a single cube + modifier.
+
+        Args:
+            name: Object name. Defaults to ``'GeoRubiksCube'``.
+            **kwargs: Forwarded to :class:`RubiksCubeModifier` and
+                :class:`BObject`. Standard appearance/transform kwargs.
         """
         cube = Cube()
 
@@ -306,15 +306,16 @@ class GeoRubiksCube(BObject):
 
 class GeoRubiksCubeUnfold(BObject):
     def __init__(self, name="Rubik'sCubeUnfold",**kwargs):
-        """
-        possible customizations
-        range: [-1,1]
-        orientation: "HORIZONTAL"|"VERTICAL"
-        dimension: [1,0.25,0.25]
-        location: [0,0,0]
-        side_segments: 2
-        shape: "cubic" | "cylinder"
+        """Build an unfoldable Rubik's Cube (cross-net view).
 
+        Each face can be hinged outward independently, exposing the
+        net layout used for stab-chain visualisations.
+
+        Args:
+            name: Object name. Defaults to ``"Rubik'sCubeUnfold"``.
+            **kwargs: Forwarded to :class:`RubiksCubeUnfolded` modifier
+                and :class:`BObject`. ``location`` is captured separately
+                to avoid clashing with internal node-graph naming.
         """
         cube = Cube()
         # take out location from the kwargs, since the argument collides with the node setup
@@ -1032,16 +1033,18 @@ class GeoRubiksCubeUnfold(BObject):
         return begin_time
 
 class GeoRubiksSphere(BObject):
-    def __init__(self, **kwargs):
-        """
-        possible customizations
-        range: [-1,1]
-        orientation: "HORIZONTAL"|"VERTICAL"
-        dimension: [1,0.25,0.25]
-        location: [0,0,0]
-        side_segments: 2
-        shape: "cubic" | "cylinder"
+    """A spherical Rubik's-Cube variant driven by :class:`RubiksSphereModifier`.
 
+    Same move set as :class:`GeoRubiksCube`, but the stickers live on a
+    sphere instead of a cube.
+    """
+
+    def __init__(self, **kwargs):
+        """Build a sphere-shaped Rubik's puzzle.
+
+        Args:
+            **kwargs: Forwarded to :class:`RubiksSphereModifier` and
+                :class:`BObject`. Standard appearance/transform kwargs.
         """
         cube = Cube()
         name = get_from_kwargs(kwargs,"name","RubiksSphereModifier")
@@ -1293,8 +1296,17 @@ class RubiksCubeStabChain(BObject):
 
 
 class GeoRubiksCube4x4Unfold(BObject):
+    """Unfoldable 4x4x4 Rubik's-style cube driven by
+    :class:`RubiksCube4x4UnfoldedModifier`."""
+
     def __init__(self, name="Rubik'sCube4x4Unfold",**kwargs):
-        """
+        """Build an unfoldable 4x4x4 Rubik's cube.
+
+        Args:
+            name: Object name. Defaults to ``"Rubik'sCube4x4Unfold"``.
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                ``location`` is captured separately to avoid node-graph
+                naming clashes.
         """
         cube = Cube()
         # take out location from the kwargs, since the argument collides with the node setup
@@ -2009,8 +2021,15 @@ class GeoRubiksCube4x4Unfold(BObject):
         return begin_time
 
 class GeoMegaMinx(BObject):
+    """Megaminx-style dodecahedral Rubik's puzzle driven by a geometry-nodes modifier."""
+
     def __init__(self, name="Rubik'sMegaMix",**kwargs):
-        """
+        """Build a megaminx puzzle on a :class:`Dodecahedron` base mesh.
+
+        Args:
+            name: Object name. Defaults to ``"Rubik'sMegaMix"``.
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                Standard appearance/transform kwargs.
         """
         dodecahedron = Dodecahedron()
         face = SubdividedPentagon(middle_squeeze=0.70)
@@ -2044,12 +2063,26 @@ class GeoMegaMinx(BObject):
         return begin_time + transition_time
 
 class SingmasterDisplay(BObject):
+    """Display a Singmaster-notation move sequence as a row-column grid of
+    colored move icons, driven by :class:`SingmasterDisplayModifier`."""
+
     def __init__(self,word="FRDLB",rows =1, columns=5,spacing=5,colors=["text","joker","important"], **kwargs):
-        """
-            prepare a display of representation
-            The user can specify the displayed word
-            the number of rows
-            and the number of columns
+        """Build a Singmaster move-sequence display.
+
+        Letter case matters: uppercase = clockwise quarter turn,
+        lowercase = counter-clockwise. Letters are mapped to face slots
+        F/B/R/L/U/D internally.
+
+        Args:
+            word: Singmaster move string (e.g. ``"FRUR'U'F'"``).
+                Defaults to ``"FRDLB"``.
+            rows: Number of rows in the grid layout. Defaults to 1.
+            columns: Number of columns. Defaults to 5.
+            spacing: Spacing between icons (in world units). Defaults to 5.
+            colors: ``[base_text, joker, important]`` color names for
+                the move icons. Defaults to ``['text', 'joker', 'important']``.
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                ``name`` defaults to ``'Singmaster_<word>'``.
         """
 
         # load mesh data

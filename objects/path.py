@@ -22,6 +22,26 @@ class Path(BObject):
     """
 
     def __init__(self, location=Vector(), path_indices=[0, 0, 0, 0], **kwargs):
+        """Create a lattice path encoded as a sequence of relative directions.
+
+        Each ``path_indices`` entry selects how the current direction
+        rotates before the next step:
+
+        * ``0`` -- keep the current direction (straight).
+        * ``1`` -- rotate the current direction +90 deg in the XY plane.
+        * ``2`` -- rotate the current direction -90 deg in the XY plane.
+
+        Each step places a magnet-colored :class:`Sphere` vertex and a
+        :class:`Cylinder` edge whose color encodes the step type
+        (``'text'`` straight, ``'drawing'`` left, ``'gray_3'`` right).
+        Each vertex gets a random shader value (+/-1) to mimic an Ising spin.
+
+        Args:
+            location: Starting world location of the path.
+            path_indices: List of direction-rotation codes (0/1/2) as above.
+            **kwargs: Forwarded to :class:`BObject`. ``name`` defaults to
+                ``'Path'``; standard color/transform kwargs.
+        """
         self.kwargs = kwargs
         name = self.get_from_kwargs('name', 'Path')
         path = Vector([0, 1, 0])
@@ -92,6 +112,17 @@ class BiswanathanPath(Path):
     """
 
     def __init__(self,**kwargs):
+        """Generate a random self-avoiding closed lattice path.
+
+        The constructor retries until it finds a path that returns to its
+        starting vertex without ever reusing an edge (a closed Eulerian
+        walk). The resulting code is then passed up to :class:`Path` to
+        build the geometry.
+
+        Args:
+            **kwargs: Forwarded to :class:`Path`. ``name`` defaults to
+                ``'Biswanathan'``; standard color/transform kwargs.
+        """
         self.kwargs = kwargs
         name = self.get_from_kwargs('name','Biswanathan')
 

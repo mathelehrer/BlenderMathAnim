@@ -4,7 +4,20 @@ from objects.empties import EmptyAxes
 
 
 class CameraPlane(EmptyAxes):
+    """A plain-axes empty intended to act as a camera-aligned parent.
+
+    Children parented to a :class:`CameraPlane` follow the camera; use
+    :meth:`align_with_camera_location` to update the plane's rotation
+    whenever the camera moves.
+    """
+
     def __init__(self,**kwargs):
+        """Create a camera-aligned empty.
+
+        Args:
+            **kwargs: Forwarded to :class:`EmptyAxes`. Object name is
+                fixed to ``'CameraPlane'``.
+        """
         super().__init__(name="CameraPlane",**kwargs)
 
     def add(self,bob):

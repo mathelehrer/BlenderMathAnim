@@ -24,9 +24,26 @@ class Sphere(GeoBObject):
     """
 
     def     __init__(self, r=1, **kwargs):
-        """
-        :param r:  radius of the sphere
-        :param kwargs:
+        """Create a sphere.
+
+        Args:
+            r: Radius of the sphere.
+            **kwargs: Forwarded to :class:`GeoBObject`. Supported keys:
+                * ``mesh_type`` (str): Sphere topology. One of:
+
+                  - ``'ico'`` -- icosphere (regular triangles). Default.
+                  - ``'uv'``  -- UV-sphere (longitude/latitude quads).
+                * ``resolution`` (int): For ``mesh_type='ico'``, the number
+                  of subdivisions (each step ~quadruples the triangle count).
+                  For ``mesh_type='uv'``, used as both u- and v-segments.
+                  Defaults to 4.
+                * ``smooth`` (bool): Apply smooth shading. Defaults to ``True``.
+                * ``scale`` (list[float] | float): Object scale.
+                  Defaults to ``[1, 1, 1]``.
+                * ``name`` (str): Defaults to ``'ICO-Sphere'`` or
+                  ``'UV-Sphere'`` depending on ``mesh_type``.
+                * Standard BObject kwargs (``color``, ``location``,
+                  ``rotation_euler``, ...).
         """
         self.kwargs = kwargs
         self.scale = self.get_from_kwargs('scale', [1,1,1])
@@ -57,6 +74,21 @@ class HalfSphere(BObject):
     """
 
     def __init__(self, radius=1, resolution=10, location=Vector(), **kwargs):
+        """Create a hemisphere built from scratch as a manual mesh.
+
+        The half-sphere sits on the XY plane, capping at ``+Z``. Building
+        from scratch (instead of using Blender's primitives) gives a
+        deformation-friendly mesh.
+
+        Args:
+            radius: Sphere radius.
+            resolution: Number of polar and azimuthal subdivisions.
+                Higher values give a smoother surface at a denser mesh cost.
+            location: World location of the sphere's centre. Baked into
+                vertex positions (the object's origin stays at the world origin).
+            **kwargs: Forwarded to :class:`BObject` (``name`` defaults to
+                ``'HalfSphere'``; also color/transform kwargs).
+        """
         self.kwargs = kwargs
         self.radius = radius
         self.resolution = resolution
@@ -126,6 +158,25 @@ class StackOfSpheres(BObject):
        """
 
     def __init__(self, radius=1, dim=5, number_of_spheres=None, **kwargs):
+        """Build a tetrahedral close-packed stack of spheres.
+
+        Spheres are placed on a face-centred cubic lattice clipped by a
+        cone-shaped envelope so the stack forms a pyramid. Use :meth:`appear`
+        to reveal or hide spheres incrementally.
+
+        Args:
+            radius: Radius of each sphere (also the lattice spacing scale).
+            dim: Pyramid edge length (in spheres). Ignored when
+                ``number_of_spheres`` is provided.
+            number_of_spheres: If set, ``dim`` is chosen automatically so
+                the stack contains at least this many spheres (max 115).
+            **kwargs: Forwarded to each :class:`Sphere` and to the container
+                :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'StackOfSpheres'``.
+                * ``location`` (list[float]): Stack origin. Defaults to ``[0, 0, 0]``.
+                * ``scale`` (list[float]): Stack scale. Defaults to ``[1, 1, 1]``.
+                * Standard appearance kwargs forwarded to each sphere.
+        """
         self.kwargs = kwargs
         self.spheres = []
         self.visible_spheres = 0
@@ -248,7 +299,21 @@ def get_polar_coordinates(vertex, curvature, location):
 
 
 class SphereOnVertexInstancer(BObject):
+    """Spawn one :class:`Sphere` per vertex of an existing :class:`BObject`."""
+
     def __init__(self,bob,**kwargs):
+        """Place a sphere at every vertex location of ``bob``.
+
+        Args:
+            bob: A :class:`BObject` whose mesh vertices are queried for
+                world-space locations.
+            **kwargs: Forwarded to each :class:`Sphere` child and to the
+                container :class:`BObject`. Supported keys:
+                * ``radius`` (float): Sphere radius. Defaults to 1.
+                * ``name`` (str): Container name. Defaults to
+                  ``'SphereOnVertexInstancer'``.
+                * Standard appearance/transform kwargs.
+        """
         radius = get_from_kwargs(kwargs,"radius",1)
         name = get_from_kwargs(kwargs,"name","SphereOnVertexInstancer")
         # create a sphere for each vertex of the BObject bob
@@ -278,11 +343,26 @@ class MultiSphere(BObject):
        """
 
     def __init__(self, locations, curvatures, **kwargs):
-        """
+        """Bake many spheres of varying curvature into a single mesh.
 
-        :param locations:
-        :param curvatures:
-        :param kwargs: remaining parameters the same as for sphere
+        Each ``(location, curvature)`` pair produces one sphere of radius
+        ``1/curvature`` centred at the complex ``location``. The result is a
+        single Blender object (one mesh) with per-vertex color encoding the
+        curvature and a shape key that maps each sphere through circle
+        inversion. Designed for use with Apollonian/Schottky packings.
+
+        Args:
+            locations: List of complex-valued centres ``z = x + i*y``. The
+                imaginary part is interpreted as the world-Y coordinate.
+            curvatures: List of curvatures ``k = 1/r``, one per location.
+                Spheres with ``k > max_curvature`` are skipped.
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'MultiSphere'``.
+                * ``mesh_type`` (str): ``'iso'`` (default) or ``'uv'``.
+                * ``max_curvature`` (float): Spheres above this curvature
+                  are skipped (avoids generating tiny invisible spheres).
+                  Defaults to 100.
+                * Forwarded BObject kwargs (``location``, ``scale``, ...).
         """
 
         self.kwargs = kwargs

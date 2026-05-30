@@ -12,7 +12,29 @@ from utils.constants import RES_SVG_DIR, FRAME_RATE
 
 
 class Paws(SVGBObject):
+    """A pair of paw-prints SVG repeated to form a walking trail.
+
+    Each additional step copies the original paw mesh and offsets it
+    along X. :meth:`appear` animates the prints with a hand-writing-style
+    write-on, leaving filled paws behind.
+    """
+
     def __init__(self, steps=2, **kwargs):
+        """Load the paw-prints SVG and produce ``steps`` paw pairs.
+
+        Args:
+            steps: Total number of paw-prints to draw. Internally
+                ``ceil(steps / 2)`` paw pairs are drawn. Defaults to 2.
+            **kwargs: Forwarded to :class:`SVGBObject`. Supported keys:
+                * ``scale`` (float): Multiplier applied on top of the
+                  fixed 0.05 internal scaling. Defaults to 1.
+                * ``aligned`` (str): Horizontal alignment.
+                  Defaults to ``'left'``.
+                * ``thickness`` (float): Stroke extrude. Defaults to 1.
+                * ``shadow`` (bool): Cast shadows. Defaults to ``True``.
+                * Standard SVG/BObject kwargs (``color`` per stroke,
+                  ``emission``, ...).
+        """
         self.kwargs = kwargs
         scale = self.get_from_kwargs('scale', 1)
         scale *= 0.05

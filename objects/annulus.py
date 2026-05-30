@@ -25,6 +25,22 @@ class Disc2(TransBObject):
     """
 
     def __init__(self, r=1, center=Vector(), resolution=10, transformations=None, **kwargs):
+        """Create a transformable disc.
+
+        Unlike :class:`Disc`, the centre and radius are baked into the mesh
+        vertex positions, and the disc can carry a list of transformations
+        each registered as a shape key (via the :class:`TransBObject` base).
+
+        Args:
+            r: Disc radius.
+            center: World-space centre of the disc (Vector or list).
+            resolution: Either an int or ``[res_r, res_phi]`` -- radial and
+                angular subdivisions.
+            transformations: Optional list of vertex-level transformations
+                forwarded to :class:`TransBObject` to drive morphs.
+            **kwargs: Forwarded to :class:`TransBObject` (``name`` defaults
+                to ``'Disc'``; also color/transform kwargs).
+        """
         self.kwargs = kwargs
         center = to_vector(center)
 
@@ -92,6 +108,19 @@ class Annulus2(TransBObject):
 
     def __init__(self, r=[0.5, 1], phi=[0, 2 * np.pi], resolution=10,
                  transformations=None, **kwargs):
+        """Create a transformable annulus (or ring sector) standalone of any
+        coordinate system.
+
+        Args:
+            r: ``[r_in, r_out]`` radial extent. Use ``r_in=0`` for a full disc.
+            phi: ``[phi_min, phi_max]`` angular extent in radians. Use
+                ``[0, 2*pi]`` for a closed ring.
+            resolution: Number of subdivisions in both directions.
+            transformations: Optional list of vertex-level transformations
+                forwarded to :class:`TransBObject` for morphing.
+            **kwargs: Forwarded to :class:`TransBObject` (``name`` defaults to
+                ``'Annulus'``; also color/transform kwargs).
+        """
         self.kwargs = kwargs
         self.phi = phi
         self.resolution = resolution
@@ -231,6 +260,23 @@ class Annulus(ComplexPlane):
 
     def __init__(self, r=[1, 2], phi=[0, 2 * np.pi], location=None, resolution=10, coordinate_system=None,
                  functions=None, **kwargs):
+        """Create an annulus on a complex plane, drawn into a coordinate system.
+
+        Args:
+            r: ``[r_in, r_out]`` radial extent. ``r_in=0`` gives a full disc.
+            phi: ``[phi_min, phi_max]`` angular extent in radians.
+            location: World location of the annulus origin. Defaults to
+                ``(0.5*(r_in+r_out), 0, 0)`` (so the inner-outer midline is
+                centred on the X axis).
+            resolution: Number of subdivisions in both directions.
+            coordinate_system: Optional :class:`CoordinateSystem` to register
+                the annulus into.
+            functions: Optional list of complex functions used to map the
+                annulus (forwarded to :class:`ComplexPlane` for shader
+                construction).
+            **kwargs: Forwarded to :class:`ComplexPlane` (``name`` defaults
+                to ``'Annulus'``; also color/transform kwargs).
+        """
         self.kwargs = kwargs
         if location is None:
             location = (0.5 * (r[1] + r[0]), 0, 0)

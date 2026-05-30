@@ -5,7 +5,23 @@ from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME
 
 
 class Pin(BObject):
+    """A pin model (glass head + metal needle) loaded from a bundled .blend asset."""
+
     def __init__(self,**kwargs):
+        """Load a pin model.
+
+        The head color is wrapped with ``'glass_'`` and a metal
+        material is appended for the needle.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'Pin'``.
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``rotation_euler`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``colors`` (list[str]): One entry for the head colour.
+                  Defaults to ``['drawing']``.
+                * ``emission`` (float): Defaults to 0.
+        """
         self.kwargs = kwargs
         self.name=self.get_from_kwargs('name','Pin')
         location = self.get_from_kwargs('location',[0,0,0])

@@ -6224,179 +6224,11 @@ class Structure:
         self.extra = None  # third operand slot for ternary operators
 
 
-def make_function(nodes_or_tree, functions={}, inputs=[], outputs=[], vectors=[], scalars=[], rotations=[],
+def make_function(nodes_or_tree, functions={}, aux_functions={},
+                  inputs=[], outputs=[], vectors=[], scalars=[], integers=[], rotations=[],
                   node_group_type="GeometryNodes",
-                  name="FunctionNode", hide=True, location=(0, 0), parent=None):
-    """
-    this will be the optimized prototype for a flexible function generator
-    functions: a dictionary that contains a key for every output. If the key is in vectors,
-     either a list of three functions is required or a function with vector output
-    :return:
-    """
-    if hasattr(nodes_or_tree, "nodes"):
-        tree = nodes_or_tree
-        nodes = tree.nodes
-    else:
-        nodes = nodes_or_tree
-
-    if "Shader" in node_group_type:
-        tree = bpy.data.node_groups.new(type="ShaderNodeTree", name=name)
-        group = nodes.new(type="ShaderNodeGroup")
-    else:
-        tree = bpy.data.node_groups.new(type="GeometryNodeTree", name=name)
-        group = nodes.new(type="GeometryNodeGroup")
-
-    group.name = name
-    group.node_tree = tree
-
-    tree_nodes = tree.nodes
-    tree_links = tree.links
-
-    # create inputs and outputs
-    group_inputs = tree_nodes.new("NodeGroupInput")
-    group_outputs = tree_nodes.new("NodeGroupOutput")
-
-    for ins in inputs:
-        if ins in vectors:
-            make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketVector")
-        if ins in scalars:
-            make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketFloat")
-        if ins in rotations:
-            make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketRotation")
-
-    for outs in outputs:
-        if outs in vectors:
-            make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketVector")
-        if outs in scalars:
-            make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketFloat")
-        if outs in rotations:
-            make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketRotation")
-
-    # create stack structure from function structure
-    stacks = {}
-    for key, value in functions.items():
-        if isinstance(value, list):
-            stacks[key] = []
-            for v in value:
-                stacks[key].append(v.split(","))
-        else:
-            stacks[key] = value.split(",")
-
-    all_stacks = []
-    all_terms = []
-    for value in stacks.values():
-        if isinstance(value, list):
-            all_stacks += value
-            all_terms += value
-            # p6majo 20240801 strange behaviour for scalar functions
-            # for v in value:
-            #     all_terms += v
-        else:
-            all_stacks.append(value)
-            all_terms += value
-
-    # find the longest function and position group_inputs and group_outputs
-    lengths = []
-    for stack in all_stacks:
-        length = 1
-        for s in stack:
-            if s in OPERATORS:
-                length += 1
-        lengths.append(length)
-
-    length = max(lengths)
-    length //= 2
-    width = 200
-    left = -length * width
-    right = 0
-    length = -1
-    group_inputs.location = (left, 0)
-    group_outputs.location = (width, 0)
-
-    # prepare output channels
-    out_channels = {}
-    combine_counter = 0
-    for key, value in functions.items():
-        if key in scalars:
-            out_channels[key] = group_outputs.inputs[key]
-        elif key in vectors or key in rotations:
-            if isinstance(functions[key], list):
-                comb = tree_nodes.new(type="ShaderNodeCombineXYZ")
-                comb.name = key + "Merge"
-                comb.label = key + "Merge"
-                comb.location = (right, combine_counter * width / 2)
-                comb.hide = True
-                combine_counter += 1
-                out_channels[key + "_x"] = comb.inputs[0]
-                out_channels[key + "_y"] = comb.inputs[1]
-                out_channels[key + "_z"] = comb.inputs[2]
-                tree_links.new(comb.outputs[0], group_outputs.inputs[key])
-            else:
-                out_channels[key] = group_outputs.inputs[key]
-
-    # prepare inputs
-    in_channels = {}
-    separate_counter = 0
-    length = 0
-
-    all_terms = maybe_flatten(all_terms)
-    for ins in inputs:
-        if ins in scalars:
-            in_channels[ins] = group_inputs.outputs[ins]
-        if ins in vectors or ins in rotations:
-            in_channels[ins] = group_inputs.outputs[ins]
-            if ins + "_x" in all_terms or ins + "_y" in all_terms or ins + "_z" in all_terms:
-                sep = tree_nodes.new(type="ShaderNodeSeparateXYZ")
-                sep.name = ins + "Split"
-                sep.label = ins + "Split"
-                tree_links.new(group_inputs.outputs[ins], sep.inputs["Vector"])
-                sep.location = (left + width, separate_counter * width / 2)
-                sep.hide = True
-                in_channels[ins + "_x"] = sep.outputs[0]
-                in_channels[ins + "_y"] = sep.outputs[1]
-                in_channels[ins + "_z"] = sep.outputs[2]
-                separate_counter += 1
-
-    # now the functions are constructed
-    fcn_count = 0  # function index to get a separation in the node editor
-    comps = ["x", "y", "z"]
-    for key, value in functions.items():
-        if isinstance(value, list):
-            if len(value) == 1:
-                build_function(tree, stacks[key][0], scalars=scalars, vectors=vectors, rotations=rotations,
-                               in_channels=in_channels,
-                               out=out_channels[key], fcn_count=fcn_count)
-                fcn_count += 1
-            else:
-                for i, part in enumerate(value):
-                    build_function(tree, stacks[key][i], scalars=scalars, vectors=vectors, rotations=rotations,
-                                   in_channels=in_channels,
-                                   out=out_channels[key + "_" + comps[i]], fcn_count=fcn_count)
-                    fcn_count += 1
-        else:
-            build_function(tree, stacks[key], scalars=scalars, vectors=vectors, rotations=rotations,
-                           in_channels=in_channels,
-                           out=out_channels[key], fcn_count=fcn_count)
-            fcn_count += 1
-
-    layout(tree)
-    if hide:
-        group.hide = True
-
-    if parent:
-        group.parent = parent.node
-        location = ((location[0] + parent.location[0]) * 200, (location[1] + parent.location[1]) * 100)
-    else:
-        location = (location[0] * 200, location[1] * 100)
-    group.location = location
-    return group
-
-
-def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
-                           inputs=[], outputs=[], vectors=[], scalars=[], integers=[], rotations=[],
-                           node_group_type="GeometryNodes",
-                           name="FunctionNode", hide=True, location=(0, 0), parent=None,
-                           custom_ops={}):
+                  name="FunctionNode", hide=True, location=(0, 0), parent=None,
+                  custom_ops={}):
     """
     Like ``make_function`` but with support for auxiliary (intermediate)
     variables and custom operator nodes.
@@ -6589,7 +6421,7 @@ def make_function_with_aux(nodes_or_tree, functions={}, aux_functions={},
             fcn_count += 1
             in_channels[key] = reroute.outputs[0]
             if key in vectors and (
-                key + "_x" in all_terms or key + "_y" in all_terms or key + "_z" in all_terms
+                    key + "_x" in all_terms or key + "_y" in all_terms or key + "_z" in all_terms
             ):
                 sep = tree_nodes.new(type="ShaderNodeSeparateXYZ")
                 sep.name = "aux_" + key + "Split"
@@ -6756,7 +6588,7 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
         extra_empty = False
     elif arity == 3:
         right_empty = True
-        extra_empty = True   # ternary: needs right, left, and extra operands
+        extra_empty = True  # ternary: needs right, left, and extra operands
     else:
         right_empty = True
         extra_empty = False
@@ -6897,10 +6729,10 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                     new_node_math.label = spec["label"]
                 new_node_structure = Structure()
                 _inp = spec.get("inputs", ())
-                new_node_structure.left  = new_node_math.inputs[_inp[0]] if len(_inp) > 0 else None
+                new_node_structure.left = new_node_math.inputs[_inp[0]] if len(_inp) > 0 else None
                 new_node_structure.right = new_node_math.inputs[_inp[1]] if len(_inp) > 1 else None
                 new_node_structure.extra = new_node_math.inputs[_inp[2]] if len(_inp) > 2 else None
-                new_node_structure.out   = new_node_math.outputs[spec["output"]]
+                new_node_structure.out = new_node_math.outputs[spec["output"]]
                 unary = spec.get("unary", False)
                 new_node_arity = len(_inp)
 

@@ -13,6 +13,16 @@ class Wind(BObject):
     creates a wind field
     """
     def __init__(self, **kwargs):
+        """Create a wind force field.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``rotation_euler`` (list[float]): Wind direction.
+                  Defaults to ``[0, 0, 0]``.
+                * ``strength`` (float): Wind strength. Defaults to 1.
+                * ``name`` (str): Defaults to ``'Wind'``.
+        """
         self.kwargs = kwargs
         location = self.get_from_kwargs('location',[0,0,0])
         rotation = self.get_from_kwargs('rotation_euler',[0,0,0])
@@ -28,6 +38,14 @@ class Turbulence(BObject):
     creates a turbulence field
     """
     def __init__(self,**kwargs):
+        """Create a turbulence force field.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``strength`` (float): Turbulence intensity. Defaults to 1.
+                * ``name`` (str): Defaults to ``'Turbulence'``.
+        """
         self.kwargs=kwargs
         location = self.get_from_kwargs('location', [0, 0, 0])
         strength = self.get_from_kwargs('strength', 1)
@@ -42,6 +60,18 @@ class Force(BObject):
     creates a turbulence field
     """
     def __init__(self,**kwargs):
+        """Create a directional force field.
+
+        Despite the class's brief docstring, ``Force`` is a generic
+        push/pull force field (not specifically turbulence). The
+        :meth:`disappear` method linearly decays its strength to 0.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``strength`` (float): Force magnitude. Defaults to 1.
+                * ``name`` (str): Defaults to ``'Force'``.
+        """
         self.kwargs=kwargs
         location = self.get_from_kwargs('location', [0, 0, 0])
         self.strength = self.get_from_kwargs('strength', 1)

@@ -30,7 +30,20 @@ def f(w, h):
         return 0
 
 class BilliardsTableRound(BObject):
+    """Round (circular) billiards table driven by :class:`BilliardsTableRoundModifier`."""
+
     def __init__(self,radius=4,  **kwargs):
+        """Build a circular billiards table.
+
+        Args:
+            radius: Table radius (controls the modifier's grid ratio).
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                Supports the same material kwargs as :class:`BilliardsTable`:
+                ``table_cloth_material``, ``table_rim_material``,
+                ``grid_material``, plus ``grid_radius_ratio``
+                (defaults to ``radius + 1``). ``name`` defaults to
+                ``'BilliardsTableRound'``.
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', 'BilliardsTableRound')
 
@@ -71,7 +84,34 @@ class BilliardsTableRound(BObject):
         super().__init__(obj=cube.ref_obj, name=self.name, **kwargs)
 
 class BilliardBallRound(BObject):
+    """A billiard ball bouncing on a round table along a rational-angle
+    trajectory. Number of reflection points = denominator of ``ratio``."""
+
     def __init__(self, ratio = Fraction(1,7), radius = 10, number=8, time_per_path=1,prime=1039,**kwargs):
+        """Build a round-table billiard ball with rational reflection ratio.
+
+        Args:
+            ratio: Sliding-angle ratio between successive reflections.
+                One of:
+
+                * ``Fraction(p, q)`` -- exactly ``q`` reflection points.
+                * ``(p, q)`` tuple -- promoted to ``Fraction(p, q)``.
+                * ``int q`` -- treated as ``Fraction(1, q)``.
+                * ``float`` -- approximated using ``prime`` reflection points.
+            radius: Table radius. Defaults to 10.
+            number: Ball number (1..15). Determines the ball's color
+                (via ``'billiard_<number>'``) and whether it's solid
+                (1..8) or striped (9..15).
+            time_per_path: Seconds spent travelling between two
+                consecutive reflection points. Defaults to 1.
+            prime: Number of reflection points used when ``ratio`` is
+                a non-rational float. Defaults to 1039.
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                Supported keys:
+                * ``text_color`` (str | material): Color of the number decal.
+                * ``trace_material`` (str): Defaults to ``'example'``.
+                * ``name`` (str): Defaults to ``'BilliardBallRound'``.
+        """
         self.kwargs = kwargs
 
         if isinstance(ratio,tuple):

@@ -8,16 +8,22 @@ class PlaneWithSingularPoints(Plane):
     def __init__(self, special_x=[0.5], special_y=[-0.5, 0.5], u=[-1, 1], v=[-1, 1], location=[0, 0, 0],
                  resolution=10, detail=5,
                  **kwargs):
-        """
-        Create a plane whose mesh is more dense at the special values of u and v
-        :param special_u:
-        :param special_v:
-        :param u:
-        :param v:
-        :param location:
-        :param resolution: mesh resolution, number of cuts in u and v direction
-        :param detail:be careful with larger than 10, the grid might be spoiled due to rounding issues
-        :param kwargs:
+        """Create a plane with extra mesh density around given singular points.
+
+        Useful when rendering complex functions whose features (poles,
+        zeros, branch points) need a fine mesh around specific coordinates.
+
+        Args:
+            special_x: List of x-values where the mesh should be refined.
+            special_y: List of y-values where the mesh should be refined.
+            u: ``[u_min, u_max]`` extent along the X axis.
+            v: ``[v_min, v_max]`` extent along the Y axis.
+            location: World location of the plane.
+            resolution: Base mesh resolution (subdivisions per axis).
+            detail: Number of subdivision passes around each special
+                value. Be cautious with ``detail > 10`` -- rounding
+                issues may spoil the grid.
+            **kwargs: Forwarded to :class:`Plane`.
         """
 
         self.detail = detail
@@ -35,16 +41,20 @@ class ComplexPlaneWithSingularPoints(ComplexPlane):
     def __init__(self, coord, functions, special_x=[0.5], special_y=[-0.5, 0.5], u=[-1, 1], v=[-1, 1],
                  resolution=10, detail=5,
                  **kwargs):
-        """
-        Create a plane whose mesh is more dense at the special values of u and v
-        :param special_x:
-        :param special_y:
-        :param u:
-        :param v:
-        :param location:
-        :param resolution: mesh resolution, number of cuts in u and v direction
-        :param detail:be careful with larger than 10, the grid might be spoiled due to rounding issues
-        :param kwargs:
+        """Create a :class:`ComplexPlane` with extra mesh density at singular points.
+
+        Args:
+            coord: :class:`CoordinateSystem` to add the plane to (or ``None``).
+            functions: Single complex function or list of complex functions
+                that will be applied to the plane (see :class:`ComplexPlane`).
+            special_x: List of x-values where the mesh should be refined.
+            special_y: List of y-values where the mesh should be refined.
+            u: ``[u_min, u_max]`` extent along the real axis.
+            v: ``[v_min, v_max]`` extent along the imaginary axis.
+            resolution: Base mesh resolution.
+            detail: Number of refinement passes per special coordinate.
+                Be cautious with ``detail > 10``.
+            **kwargs: Forwarded to :class:`ComplexPlane`.
         """
         self.detail = detail
         self.special_x = special_x

@@ -13,6 +13,26 @@ class Container(object):
     """
 
     def __init__(self, **kwargs):
+        """Wrap an existing Blender object as a lightweight BObject-like container.
+
+        Unlike :class:`BObject`, ``Container`` does not own its mesh -- it
+        takes an existing object via the ``obj`` kwarg. Use to group and
+        animate objects that were not created through the BObject pipeline.
+
+        Args:
+            **kwargs: Supported keys:
+                * ``obj`` (required): The existing Blender object (or
+                  name) to wrap. Without it, construction raises.
+                * ``name`` (str): Object rename target. Defaults to
+                  ``'b_object'`` (leaves the name untouched).
+                * ``scale`` (float | list[float]): Initial scale.
+                  Defaults to 1.
+                * ``location`` (list[float]): Optional override of the
+                  Blender object's location.
+                * ``rotation_euler`` (list[float]) **or**
+                  ``rotation_quaternion`` (Quaternion): Optional rotation
+                  override (mode switches automatically).
+        """
         # register bpy object from sub class or create default object
         self.appeared = False
         self.kwargs = kwargs

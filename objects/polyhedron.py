@@ -603,12 +603,42 @@ class Polyhedron(BObject):
     """
 
     def __init__(self, vertices, faces, **kwargs):
-        """
-        :param vertices: vertices
-        :param edges: edges in terms of vertices
-        :param faces: faces in terms of vertices
-        :param index_one: if True -> counting starts at one
-        :param kwargs:
+        """Create a polyhedron from vertices and face index tuples.
+
+        Two construction modes:
+
+        * **simple**: a single mesh is built directly from
+          ``(vertices, faces)``. Fast and lightweight. Use
+          :meth:`from_points` or :meth:`from_solid_type` for canonical
+          Platonic/Archimedean solids.
+        * **non-simple** (default): each face is built as a separate
+          :class:`Face` child object (with its own vertex spheres, edges,
+          and shaded interior). Required for unfolding, per-face labelling,
+          and animated growth via :meth:`grow`/:meth:`unfold`.
+
+        Args:
+            vertices: List of vertex positions (Vector or list).
+            faces: List of faces. Each entry is either:
+
+                * a list/tuple of vertex indices (the polygon's vertices),
+                  or
+                * a pre-built :class:`Face` instance.
+            **kwargs: Forwarded to children and :class:`BObject`. Supported keys:
+                * ``simple`` (bool): Use the simple construction mode.
+                  Defaults to ``False``.
+                * ``name`` (str): Defaults to ``'Polyhedron'``.
+                * ``coordinate_system``: Optional :class:`CoordinateSystem`
+                  to register into; vertices are mapped through it.
+                * ``index_base`` (int): Index used for face / vertex
+                  labelling. Defaults to 1.
+                * ``vertex_radius`` (float): Radius of vertex spheres
+                  on each face. Defaults to 0.1.
+                * ``location`` (list[float]): Container origin.
+                  Defaults to ``[0, 0, 0]``.
+                * ``vertex_colors``, ``face_colors`` (list[str]): Color
+                  palettes for vertices and faces. Default to
+                  ``['example']`` and ``['drawing']``.
+                * Standard BObject kwargs.
         """
 
         self.simple = get_from_kwargs(kwargs, 'simple', False)
@@ -921,7 +951,34 @@ class Polyhedron(BObject):
 
 
 class PolyhedronWithModifier(BObject):
+    """A polyhedron drawn as a single mesh with a :class:`PolyhedronViewModifier`
+    geometry-nodes modifier, enabling per-face-class coloring and animated
+    transitions between conjugacy-class color mixes."""
+
     def __init__(self, vertices, faces, **kwargs):
+        """Create a polyhedron whose appearance is driven by a geometry-nodes modifier.
+
+        Each face is assigned to a material slot based on its conjugacy
+        class (passed in via ``face_classes``), enabling per-class shading
+        and animated mix transitions.
+
+        Args:
+            vertices: List of vertex positions.
+            faces: List of face index tuples.
+            **kwargs: Forwarded to :class:`BObject` and the modifier.
+                Supported keys:
+                * ``name`` (str): Defaults to ``'PolyhedronWithModifier'``.
+                * ``group``: Optional symmetry group (stored for :meth:`copy`).
+                * ``signature``: Optional Coxeter/Goursat signature
+                  (stored for :meth:`copy`).
+                * ``face_classes`` (dict): Mapping
+                  ``MeshFace -> conjugacy class``; used to assign material
+                  slots and initial mix values.
+                * ``color`` (str): If ``'color_dict'`` (default), per-slot
+                  colors are pulled from the face-size color dictionary;
+                  otherwise a flat color name.
+                * Standard BObject kwargs (``location``, ``scale``, ...).
+        """
         self.vertices = vertices
         self.faces = faces
         self.kwargs = kwargs

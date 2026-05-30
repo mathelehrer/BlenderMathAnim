@@ -5,7 +5,17 @@ from utils.constants import OBJECT_APPEARANCE_TIME
 
 
 class WallWithDoor(BObject):
+    """A wall + hinged door model. Use :meth:`open_door` to swing the door."""
+
     def __init__(self,**kwargs):
+        """Load the wall-with-door asset.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``rotation_euler`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``colors`` (list[str]): Defaults to ``['drawing']``.
+        """
         self.kwargs = kwargs
         location = self.get_from_kwargs('location',[0,0,0])
         rotation = self.get_from_kwargs('rotation_euler',[0,0,0])

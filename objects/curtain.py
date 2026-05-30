@@ -9,7 +9,32 @@ from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
 
 
 class Curtain(BObject):
+    """A cloth-simulated curtain anchored at top vertices via hook empties.
+
+    A subdivided plane carrying a CLOTH modifier is pinned along its
+    top row of vertices to a row of empty objects. Moving the empties
+    (via :meth:`open` and :meth:`close`) opens or closes the curtain.
+    """
+
     def __init__(self,**kwargs):
+        """Create a cloth curtain.
+
+        Args:
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'Curtain'``.
+                * ``rotation_euler`` (list[float]): Defaults to
+                  ``[pi/2, 0, 0]`` (curtain hangs in the XZ plane).
+                * ``color`` (str): Defaults to ``'important'``.
+                * ``scale`` (list[float]): Defaults to ``[1, 1, 1]``.
+                * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
+                * ``number_of_hooks`` (int): Number of pin points along
+                  the top edge. Defaults to 5.
+                * ``simulation_start`` (float): Cloth bake start time
+                  in seconds. Defaults to 0.
+                * ``simulation_duration`` (float): Cloth bake duration
+                  in seconds.
+                * Standard BObject kwargs.
+        """
         self.kwargs=kwargs
         # set default values
         self.name=self.get_from_kwargs('name','Curtain')

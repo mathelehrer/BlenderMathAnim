@@ -58,19 +58,61 @@ class Function(BObject):
                  mode='2D',
                  thickness=1,
                  **kwargs):
-        """
+        """Build a bezier-curve representation of one or several functions.
 
-        :param mappings:
-        :param coordinate_system:
-        :param domain:
-        :param num_points:
-        :param color:
-        :param colors:
-        :param script:
-        :param hue_functions:
-        :param color_mode: 'simple_color', 'hue_colors', 'script', 'voronoi'
-        :param mode:
-        :param kwargs:
+        The curve is constructed in object space and then placed into the supplied
+        coordinate system. If more than one mapping is supplied, the additional
+        mappings are stored as shape keys so the curve can morph between them
+        (see :meth:`next`).
+
+        Args:
+            mappings: A single callable or a list of callables that define the
+                function(s) to plot. The expected signature depends on ``mode``:
+
+                * ``mode='2D'``     -> ``f(x) -> y``, the curve is ``(x, f(x))``.
+                * ``mode='PARAMETRIC'`` -> ``f(t) -> [x, y, z]`` (or a 2-vector),
+                  the curve is ``(x(t), y(t), z(t))``.
+
+                Providing a list creates morph targets so the curve can animate
+                from one mapping to the next.
+            coordinate_system: The :class:`CoordinateSystem` the curve is drawn
+                into. Used to convert function output into world locations and
+                to register the function as a child. May be ``None`` for raw
+                world-space placement.
+            domain: ``[min, max]`` interval over which the mapping is sampled.
+                Defaults to ``coordinate_system.get_domain()`` when ``None``.
+            num_points: Number of bezier control points sampled across ``domain``.
+                Higher values give smoother curves at the cost of memory.
+            color: Color name used when ``color_mode='simple_color'``. Common
+                values are presentation-scheme names such as ``'example'``,
+                ``'text'``, ``'important'``, ``'drawing'``.
+            colors: List of colors consumed by ``color_mode='voronoi'`` to
+                generate a multi-color voronoi shader on the curve.
+            script: Reverse-polish-notation shader expression used when
+                ``color_mode='script'`` to drive emission color from position.
+            hue_functions: Pair of RPN expressions ``[hue_x, hue_y]`` used when
+                ``color_mode='hue_color'`` to derive a complex hue from position
+                (e.g. ``["x,x,*,y,y,*,-,1,-", "x,y,*,2,*"]`` for ``1 - z**2``).
+            color_mode: Selects which shader is applied. One of:
+
+                * ``'simple_color'`` -- single solid color (default).
+                * ``'hue_color'``    -- complex-phase coloring driven by
+                  ``hue_functions``.
+                * ``'script'``       -- shader expression in ``script``.
+                * ``'voronoi'``      -- voronoi pattern using ``colors``.
+            mode: Sampling mode for ``mappings``. One of:
+
+                * ``'2D'``         -- treat each mapping as ``y = f(x)``.
+                * ``'PARAMETRIC'`` -- treat each mapping as ``f(t) -> vector``.
+            thickness: Multiplier for the bezier curve bevel depth
+                (final depth ``= 0.05 * thickness``). Controls the visual width
+                of the curve.
+            **kwargs: Forwarded to :class:`BObject`. Notable keys:
+                ``name`` (object name), ``location``, ``rotation_euler``,
+                ``scale``, ``input`` (consumed by hue-color shader,
+                defaults to ``'geometry_position'``),
+                ``bevel_factor_mapping_end`` (default ``'RESOLUTION'``),
+                ``extrude`` (default ``0.005``).
         """
         self.kwargs = kwargs
         if not isinstance(mappings, list):
@@ -252,6 +294,8 @@ class Function(BObject):
 
 
 class SimpleFunction(BObject):
+    """A function plotted as a chain of cylinder segments (no bezier curve)."""
+
     def __init__(self, mappings, coordinate_system,
                  domain=None,
                  num_points=100,
@@ -259,6 +303,30 @@ class SimpleFunction(BObject):
                  color='example',
                  mode='2D',
                  **kwargs):
+        """Build a function as a chain of cylinder segments between sampled points.
+
+        Useful when the curve must support per-segment animation or when the
+        bezier-based :class:`Function` is undesirable.
+
+        Args:
+            mappings: A single callable or a list of callables. See
+                :class:`Function` for the expected signature per ``mode``.
+            coordinate_system: The :class:`CoordinateSystem` the curve is
+                drawn into. Required.
+            domain: ``[min, max]`` interval to sample. Defaults to the
+                coordinate system's domain when ``None``.
+            num_points: Number of sampling points. ``num_points`` cylinder
+                segments are produced.
+            radius: Radius (in world units) of each cylinder segment.
+            color: Color name applied to every segment (e.g. ``'example'``,
+                ``'text'``, ``'important'``).
+            mode: Sampling mode for ``mappings``. One of:
+
+                * ``'2D'``         -- ``y = f(x)``.
+                * ``'PARAMETRIC'`` -- ``f(t) -> [x, y, z]``.
+            **kwargs: Forwarded to :class:`BObject` (``name``, ``location``,
+                ``scale``, etc.).
+        """
         if not isinstance(mappings, list):
             mappings = [mappings]
 
@@ -335,6 +403,9 @@ class SimpleFunction(BObject):
 
 
 class PieceWiseFunction(BObject):
+    """A function that is split into independent :class:`Function` pieces at
+    singular points (poles, discontinuities)."""
+
     def __init__(self, mappings, coordinate_system,
                  singular_points,
                  domain=[0, 1],
@@ -344,6 +415,28 @@ class PieceWiseFunction(BObject):
                  hue_functions=["x", "y"],
                  mode='2D', EPS=0.001,
                  **kwargs):
+        """Build a piecewise bezier curve, skipping a small neighbourhood of
+        each singular point so poles are not rendered.
+
+        Args:
+            mappings: Single callable or list of callables. See
+                :class:`Function` for the signature per ``mode``.
+            coordinate_system: The :class:`CoordinateSystem` to draw into.
+            singular_points: List of x-values (in ``mode='2D'``) or t-values
+                (in ``mode='PARAMETRIC'``) where the function is singular or
+                discontinuous. The domain is split at these points.
+            domain: ``[min, max]`` interval over which to sample.
+            num_points: Bezier control points per piece (passed through to
+                :class:`Function`).
+            color: Color name applied to every piece.
+            script: RPN shader script forwarded to each :class:`Function`.
+            hue_functions: ``[hue_x, hue_y]`` RPN expressions forwarded to
+                each :class:`Function`.
+            mode: Sampling mode -- one of ``'2D'`` or ``'PARAMETRIC'``.
+            EPS: Half-width of the gap (in domain units) cut around each
+                singular point so the rendered curve avoids the singularity.
+            **kwargs: Forwarded to :class:`Function` and :class:`BObject`.
+        """
 
         self.kwargs = kwargs
         name = self.get_from_kwargs('name', 'Piecewise_Function')
@@ -392,11 +485,44 @@ class PieceWiseFunction(BObject):
 
 
 class MeshFunction(BObject):
+    """A function represented as a true tube mesh (not a bezier curve), using
+    the Frenet frame of the embedding to sweep a circular cross-section."""
+
     def __init__(self, embedding=lambda x: Vector([x, 0, 0]),
                  velocity=lambda x: Vector([1, 0, 0]),
                  acceleration=lambda x: Vector(),
                  transformations=[],color=None,
                  domain=[0, 1], num_points=100, thickness=1, smooth=True, **kwargs):
+        """Build a tube mesh by sweeping a circle along an embedded curve.
+
+        At each sampled parameter ``t``, a Frenet frame ``(tau, n, b)`` is
+        computed from ``velocity(t)`` and ``acceleration(t)``; a circle of
+        radius ``0.1 * thickness`` is placed in the ``(n, b)`` plane at
+        ``embedding(t)``. The resulting strip of circles is connected into
+        a quad mesh. Each ``transformation`` adds a shape key that morphs
+        the original embedding under the given transformation, enabling
+        animated deformations.
+
+        Args:
+            embedding: Callable ``t -> Vector(x, y, z)`` -- the curve's
+                position in world space.
+            velocity: Callable ``t -> Vector`` -- the first derivative of
+                ``embedding``. Used to define the tangent of the Frenet frame.
+            acceleration: Callable ``t -> Vector`` -- the second derivative
+                of ``embedding``. Used to compute the normal of the Frenet frame.
+            transformations: List of transformation objects (each with
+                ``trafo``, ``d_trafo``, ``d2_trafo`` methods). Each is added as
+                a shape key, allowing morphs via :meth:`next`.
+            color: Either a color name (forwarded to material) or ``None`` to
+                use a per-vertex complex-phase color map derived from
+                ``embedding(t).x + 1j * embedding(t).z``.
+            domain: ``[t_min, t_max]`` parameter interval.
+            num_points: Resolution along the curve (number of cross-sections).
+            thickness: Multiplier for the tube radius (radius = ``0.1 * thickness``).
+            smooth: If ``True``, apply smooth shading to the resulting mesh.
+            **kwargs: Forwarded to :class:`BObject` (``name``, ``location``,
+                ``scale``, etc.).
+        """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', 'MeshFunction')
         self.embedding = embedding

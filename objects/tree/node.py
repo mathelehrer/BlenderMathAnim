@@ -19,6 +19,37 @@ class Node(BObject, NodeMixin):
     """
 
     def __init__(self, element, parent=None, to_string=str, action='right',**kwargs):
+        """Build a labelled tree node + frame + connector cylinder.
+
+        Args:
+            element: Underlying object the node represents (typically a
+                group element with optional ``shortest_word`` attribute
+                and ``kwargs``/``matrix`` for matrix nodes).
+            parent: Optional parent :class:`Node`. If provided, a
+                cylinder is drawn from this node's elliptical frame to
+                the parent's frame.
+            to_string: Callable that turns ``element`` into a display
+                string. Defaults to ``str``.
+            action: One of ``'right'`` / ``'left'`` -- picks which
+                color entry of ``color_function(element)`` is used for
+                the connector. Defaults to ``'right'``.
+            **kwargs: Forwarded to :class:`TexBObject`/:class:`BMatrix`
+                and :class:`BObject`. Supported keys:
+                * ``thickness`` (float): Frame line thickness. Defaults to 0.01.
+                * ``bevel`` (float): Font bevel.
+                * ``color_function`` (callable): ``element -> [color]``;
+                  used for both text and connector colors.
+                * ``name`` (str): Defaults to ``'Node'``.
+                * ``node_circles`` (bool): Draw the elliptical frame.
+                  Defaults to ``True``.
+                * ``display_mode`` (str): One of:
+
+                  - ``'word'``   -- render the element as LaTeX
+                    via :class:`TexBObject` (default).
+                  - other        -- render as a :class:`BMatrix`.
+                * ``location`` (list[float]): World position. Defaults to ``[0, 0, 0]``.
+                * ``scale`` (float): Defaults to 1.
+        """
         self.action= action
         self.kwargs = kwargs
         self.current_mapping = None  # if there is more than one expression in the node

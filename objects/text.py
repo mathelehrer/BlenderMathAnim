@@ -21,13 +21,40 @@ class Text(BObject):
     A new class for a text object based on geometry nodes
     """
     def __init__(self,expression,sample_points=101, **kwargs):
-        """
-        example:
-        text = Text("Hallo Welt",color="drawing",outline_color="example",aligned="center",
-        emission=0.5,outline_emission=2)
-        text.write(begin_time=1,transition_time=1)
+        """Create a text object driven by a geometry-nodes :class:`TextModifier`.
 
+        Each glyph is rendered into a curve, then instanced and animated via
+        the modifier. Suitable for fast write-on animations of plain text
+        (use :class:`SimpleTexBObject` for LaTeX with morphing).
 
+        Example:
+            >>> text = Text("Hallo Welt", color="drawing",
+            ...             outline_color="example", aligned="center",
+            ...             emission=0.5, outline_emission=2)
+            >>> text.write(begin_time=1, transition_time=1)
+
+        Args:
+            expression: Text string to render.
+            sample_points: Number of samples taken along each glyph curve
+                (higher = smoother outlines, slower). Defaults to 101.
+            **kwargs: Forwarded to :class:`TextModifier` and :class:`BObject`.
+                Supported keys:
+                * ``name`` (str): Defaults to ``'TextObject'``.
+                * ``rotation`` (Vector): Local glyph rotation.
+                  Defaults to ``(pi/2, 0, 0)`` (text faces +Y).
+                * ``location`` (Vector): Local glyph offset.
+                * ``color`` (str): Glyph fill color. Defaults to ``'text'``.
+                * ``outline_color`` (str): Outline color. Defaults to ``color``.
+                * ``emission`` (float): Glyph emission. Defaults to 0.
+                * ``emission_outline`` (float): Outline emission. Defaults to 1.
+                * ``outline_radius`` (float): Outline tube thickness.
+                  Defaults to 0.01.
+                * ``keep_outline`` (bool): If ``True``, the outline stays
+                  visible alongside the filled glyph. Defaults to ``False``.
+                * ``aligned`` (str): Horizontal alignment, e.g. ``'left'``,
+                  ``'center'``, ``'right'`` (parsed by the modifier).
+                * ``scale`` (float): Text scale. Defaults to 1.
+                * Standard BObject kwargs.
         """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name',"TextObject")
@@ -132,14 +159,30 @@ class MorphText(BObject):
     A new class for a morphing text object based on geometry nodes
     """
     def __init__(self,expression1,expression2,morph_shift=Vector(),sample_points=101, **kwargs):
-        """
-        example:
-        text = MorphText(r"\text{Hallo Welt}",\text{"Welcome!"},sample_points=1001,color="drawing",outline_color="example",aligned="center",
-        emission=0.5,outline_emission=2)
-        t0  = 1
-        t0 = 0.5+ text.write(begin_time=1,transition_time=1)
-        t0 = 0.5 + text.morph(begin_time=t0,transition_time=1)
+        """Create a morphing-text object based on a :class:`MorphTextModifier`.
 
+        The modifier produces two synchronised glyph sets so the displayed
+        text can morph from ``expression1`` to ``expression2`` via
+        :meth:`morph` after being written with :meth:`write`.
+
+        Example:
+            >>> text = MorphText(r"\\text{Hallo Welt}", r"\\text{Welcome!}",
+            ...                  sample_points=1001, color="drawing",
+            ...                  outline_color="example", aligned="center",
+            ...                  emission=0.5, outline_emission=2)
+            >>> t0 = 0.5 + text.write(begin_time=1, transition_time=1)
+            >>> t0 = 0.5 + text.morph(begin_time=t0, transition_time=1)
+
+        Args:
+            expression1: Initial text string.
+            expression2: Target text string.
+            morph_shift: Vector offset applied to the morph target's
+                position (controls the spatial direction of the morph).
+            sample_points: Samples per glyph curve. Defaults to 101.
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                Same keys as :class:`Text`: ``name``, ``rotation``,
+                ``location``, ``color``, ``outline_color``, ``emission``,
+                ``emission_outline``, ``aligned``, ``scale``, etc.
         """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name',"TextObject")
@@ -198,7 +241,25 @@ def below(out,buffer_y=200):
     return out.location-Vector((0,buffer_y))
 
 class TextModifier(GeometryNodesModifier):
+    """Geometry-nodes modifier that draws a single text expression with
+    a write-on animation and optional outline."""
+
     def __init__(self,expression,**kwargs):
+        """Build the geometry-nodes graph for a single text expression.
+
+        Args:
+            expression: Text to render. A LaTeX-/geo-font collection is
+                generated on demand and referenced by hash inside the graph.
+            **kwargs: Forwarded to the base modifier and shader. Supported:
+                * ``name`` (str): Defaults to ``'GeoText'``.
+                * ``sample_points`` (int): Samples per glyph curve.
+                  Defaults to 101.
+                * ``color``, ``outline_color`` (str): Fill / outline colors.
+                * ``emission`` (float), ``emission_outline`` (float):
+                  Emission strengths.
+                * ``location`` (Vector), ``rotation`` (Vector),
+                  ``scale`` (float): Per-modifier text transform.
+        """
         self.expression = expression
         self.number_of_letters =0
         self.sample_points = get_from_kwargs(kwargs,'sample_points',101)
@@ -269,7 +330,22 @@ class TextModifier(GeometryNodesModifier):
 
 
 class MorphTextModifier(GeometryNodesModifier):
+    """Geometry-nodes modifier that morphs between two text expressions."""
+
     def __init__(self,expression1,expression2,**kwargs):
+        """Build the morph-text geometry-node graph.
+
+        Args:
+            expression1: Source text.
+            expression2: Target text.
+            **kwargs: Forwarded to the base modifier. Supported:
+                * ``name`` (str): Defaults to ``'GeoText'``.
+                * ``sample_points`` (int): Per-glyph samples. Defaults to 101.
+                * ``morph_shift`` (Vector): Spatial offset for the morph
+                  target's centroid. Defaults to ``Vector()``.
+                * ``color``, ``outline_color``, ``emission``,
+                  ``emission_outline``: Shader settings.
+        """
         self.expression1 = expression1
         self.expression2 = expression2
         self.number_of_letters =0

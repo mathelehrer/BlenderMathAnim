@@ -12,6 +12,14 @@ class LightProbe(BObject):
     """
 
     def __init__(self, **kwargs):
+        """Create an Eevee light probe.
+
+        Args:
+            **kwargs: Forwarded to :func:`ibpy.add_light_probe` and
+                :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'Probe'``.
+                * ``rotation_euler`` (list[float]): Defaults to ``[0, 0, 0]``.
+        """
         self.kwargs=kwargs
         name= self.get_from_kwargs('name',"Probe")
         self.rotation_euler = self.get_from_kwargs('rotation_euler',[0,0,0])
@@ -27,6 +35,18 @@ class SpotLight(BObject):
     specify location, radius,scale,energy
     """
     def __init__(self, **kwargs):
+        """Create a spotlight (optionally tracking a target).
+
+        Args:
+            **kwargs: Forwarded to :func:`ibpy.add_spot_light` and
+                :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'SpotLight'``.
+                * ``energy`` (float): Light energy in W. Defaults to 10.
+                * ``target`` (:class:`BObject`): Object to point at
+                  using a TRACK_TO constraint.
+                * Standard transform kwargs (``location``, ``rotation_euler``,
+                  ``radius``, ``scale``).
+        """
         self.kwargs = kwargs
         name=self.get_from_kwargs('name','SpotLight')
 
@@ -67,6 +87,23 @@ class AreaLight(BObject):
     specify location, radius,scale,energy
     """
     def __init__(self,target = None, **kwargs):
+        """Create an area light (optionally tracking a target).
+
+        Args:
+            target: Optional :class:`BObject` to point at via TRACK_TO.
+            **kwargs: Forwarded to :func:`ibpy.add_area_light` and
+                :class:`BObject`. Supported keys:
+                * ``energy`` (float): Defaults to 10.
+                * ``color`` (str): Defaults to ``'text'``.
+                * ``shape`` (str): One of ``'SQUARE'`` (default),
+                  ``'RECTANGLE'``, ``'DISK'``, ``'ELLIPSE'``.
+                * ``size`` (float): Light primary dimension. Defaults to 1.
+                * ``size_y`` (float): Secondary dimension (rectangle/ellipse).
+                  Defaults to 1.
+                * ``diffuse_factor``, ``specular_factor``, ``volume_factor``
+                  (float): Per-pass contribution. Defaults to 1.
+                * ``name`` (str): Defaults to ``'AreaLight'``.
+        """
         self.kwargs = kwargs
         # default arguments that are used in the construction
         # they are removed that they are not used again in the construction of the wrapper

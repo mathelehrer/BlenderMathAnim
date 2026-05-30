@@ -19,13 +19,30 @@ class Polygon(BObject):
     """
 
     def __init__(self, vertices, obj=None, initial_function=None, edges=None, index=0, reordering=True,**kwargs):
-        """
-        :param vertices: a list of vertices
-        :param face: the vertices of the list, that define the face
-        :param origin: the origin of the corresponding polyhedron
-        :param index:
-        :param index_base:
-        :param kwargs:
+        """Create a single planar polygon (one face) from a list of vertices.
+
+        Args:
+            vertices: List of polygon vertices (Vector, list, or similar).
+                When ``reordering=True``, they are sorted into a convex CCW
+                order so the face renders correctly even if the input is
+                in arbitrary order.
+            obj: Optional pre-built Blender object to use. When supplied,
+                a fresh mesh is *not* created (typically used by
+                :meth:`batch_create`).
+            initial_function: Optional ``Vector -> Vector`` mapping applied
+                to each vertex when the mesh is built. Useful for placing
+                the polygon under a deformation.
+            edges: Optional explicit list of ``[i, j]`` edges. If ``None``,
+                the polygon's edges are derived as the cyclic vertex sequence.
+            index: Index used when forming default names / for batch
+                workflows (does not affect geometry).
+            reordering: If ``True``, sort vertices into convex CCW order.
+                Disable when the input is already in the desired order.
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'<n>gon_<index>'``.
+                * ``thickness`` (float): If present, adds a solidify
+                  modifier of the given thickness.
+                * Standard BObject kwargs (``color``, ``location``, ...).
         """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', str(len(vertices)) + "gon_" + str(index))
@@ -171,13 +188,20 @@ class Triangle(BObject):
         """
 
     def __init__(self, name='Triangle', **kwargs):
-        """
-        :param vertices: a list of vertices
-        :param face: the vertices of the list, that define the face
-        :param origin: the origin of the corresponding polyhedron
-        :param index:
-        :param index_base:
-        :param kwargs:
+        """Create an equilateral triangle subdivided into four sub-triangles.
+
+        The triangle is built with side length 1, centred on its centroid
+        ``(0, 0, 0)``. It is internally split into four smaller triangles
+        (one at each corner and one centre triangle) so per-vertex colors
+        can encode each corner with a distinct hue.
+
+        Args:
+            name: Object name.
+            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+                * ``thickness`` (float): Solidify thickness applied as a
+                  modifier. Defaults to 0.1.
+                * ``offset`` (float): Solidify offset. Defaults to 0.
+                * Standard BObject kwargs.
         """
         self.kwargs = kwargs
         new_mesh = bpy.data.meshes.new(name + "_mesh")

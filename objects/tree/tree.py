@@ -14,6 +14,35 @@ class Tree(BObject):
 
     """
     def __init__(self, root_element, width, height,**kwargs):
+        """Lay out and instantiate a tree of :class:`Node` objects from an
+        ``anytree``-style root element.
+
+        Args:
+            root_element: Root node of the abstract tree. Children are
+                discovered via the ``anytree`` ``.children`` attribute.
+            width: Horizontal extent of the tree layout in world units.
+            height: Vertical extent of the tree layout in world units.
+            **kwargs: Forwarded to each :class:`Node` and :class:`BObject`.
+                Supported keys:
+                * ``name`` (str): Defaults to ``'group_tree'``.
+                * ``location`` (Vector | list[float]): Tree origin.
+                  Defaults to ``Vector([0, 0, 0])``.
+                * ``scale`` (float): Per-level scale of the first level
+                  (subsequent levels shrink by ``level_shrink=0.7``).
+                  Defaults to 1.
+                * ``node_thickness`` (float): Per-node frame thickness.
+                  Defaults to 0.2.
+                * ``node_circles`` (bool): Draw the elliptical frames.
+                  Defaults to ``True``.
+                * ``direction`` (str): Layout direction. One of:
+
+                  - ``'up_down'`` -- root at top, leaves at bottom (default).
+                  - other         -- left-to-right layout using
+                    ``level_positions`` if provided.
+                * ``level_positions`` (list[float] | None): Per-level
+                  X-coordinate fractions for non-up-down layouts.
+                * Standard appearance kwargs (forwarded to each node).
+        """
         self.kwargs = kwargs
         self.root_element = root_element
         self.root_node = None

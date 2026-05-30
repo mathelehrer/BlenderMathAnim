@@ -19,13 +19,28 @@ class Text(BObject):
     A new class for a text object based on geometry nodes
     """
     def __init__(self,expression,sample_points=101, **kwargs):
-        """
-        example:
-        text = Text("Hallo Welt",color="drawing",outline_color="example",aligned="center",
-        emission=0.5,outline_emission=2)
-        text.write(begin_time=1,transition_time=1)
+        """Create a text object driven by a geometry-nodes :class:`TextModifier`.
 
+        Sibling of :class:`objects.text.Text` -- this revision uses a
+        slightly different shader-wiring path inside the modifier.
 
+        Example:
+            >>> text = Text("Hallo Welt", color="drawing",
+            ...             outline_color="example", aligned="center",
+            ...             emission=0.5, outline_emission=2)
+            >>> text.write(begin_time=1, transition_time=1)
+
+        Args:
+            expression: Text string to render.
+            sample_points: Samples per glyph curve. Defaults to 101.
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                Supported keys include ``name`` (default ``'TextObject'``),
+                ``rotation`` (default ``(pi/2, 0, 0)``), ``location``,
+                ``color`` (default ``'text'``), ``outline_color`` (default
+                ``color``), ``emission`` (default 0), ``emission_outline``
+                (default 1), ``aligned`` (``'left'`` | ``'center'`` |
+                ``'right'``), ``scale`` (default 1), plus standard BObject
+                kwargs.
         """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name',"TextObject")
@@ -85,14 +100,21 @@ class MorphText(BObject):
     A new class for a morphing text object based on geometry nodes
     """
     def __init__(self,expression1,expression2,morph_shift=Vector(),sample_points=101, **kwargs):
-        """
-        example:
-        text = MorphText(r"\text{Hallo Welt}",\text{"Welcome!"},sample_points=1001,color="drawing",outline_color="example",aligned="center",
-        emission=0.5,outline_emission=2)
-        t0  = 1
-        t0 = 0.5+ text.write(begin_time=1,transition_time=1)
-        t0 = 0.5 + text.morph(begin_time=t0,transition_time=1)
+        """Create a morphing-text object using :class:`MorphTextModifier`.
 
+        Equal-length expression morph (each source letter maps to one
+        target letter). Use :class:`MorphText2` when the target text is
+        longer than the source.
+
+        Args:
+            expression1: Source text.
+            expression2: Target text (same letter count as ``expression1``).
+            morph_shift: World-space offset applied to the morph target
+                centroid -- controls the direction of the morph motion.
+            sample_points: Samples per glyph curve. Defaults to 101.
+            **kwargs: Same as :class:`Text` (``name``, ``rotation``,
+                ``location``, ``color``, ``outline_color``, ``emission``,
+                ``emission_outline``, ``aligned``, ``scale``, ...).
         """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name',"TextObject")
@@ -155,14 +177,18 @@ class MorphText2(BObject):
 
     """
     def __init__(self,expression1,expression2,morph_shift=Vector(),sample_points=101, **kwargs):
-        """
-        example:
-        text = MorphText(r"\text{Hallo Welt}",\text{"Welcome!"},sample_points=1001,color="drawing",outline_color="example",aligned="center",
-        emission=0.5,outline_emission=2)
-        t0  = 1
-        t0 = 0.5+ text.write(begin_time=1,transition_time=1)
-        t0 = 0.5 + text.morph(begin_time=t0,transition_time=1)
+        """Create a morphing text where the target may be *longer* than the source.
 
+        Letters that have no source counterpart appear at the end of the
+        word during :meth:`morph`. Use :class:`MorphText3` for explicit
+        per-letter fixing.
+
+        Args:
+            expression1: Source text.
+            expression2: Target text (may be longer than ``expression1``).
+            morph_shift: Vector offset applied to the morph target.
+            sample_points: Samples per glyph curve. Defaults to 101.
+            **kwargs: Same set as :class:`Text`/:class:`MorphText`.
         """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name',"TextObject")
@@ -237,14 +263,23 @@ class MorphText3(BObject):
 
     """
     def __init__(self,expression1,expression2,src_fix=[],target_fix=[],sample_points=101, **kwargs):
-        """
-        example:
-        text = MorphText(r"\text{Hallo Welt}",\text{"Welcome!"},sample_points=1001,color="drawing",outline_color="example",aligned="center",
-        emission=0.5,outline_emission=2)
-        t0  = 1
-        t0 = 0.5+ text.write(begin_time=1,transition_time=1)
-        t0 = 0.5 + text.morph(begin_time=t0,transition_time=1)
+        """Create a morphing text with selected letters held fixed in place.
 
+        ``src_fix`` indices in ``expression1`` map one-to-one to
+        ``target_fix`` indices in ``expression2``; those letters stay put
+        during the morph while all other letters interpolate.
+
+        Args:
+            expression1: Source text.
+            expression2: Target text. May be longer than the source.
+            src_fix: Indices (into ``expression1``) of letters that
+                should not move during the morph. Must be in ascending
+                order and the same length as ``target_fix``.
+            target_fix: Indices (into ``expression2``) that pair up
+                one-to-one with ``src_fix`` -- each fixed source letter
+                ends up at its paired target index.
+            sample_points: Samples per glyph curve. Defaults to 101.
+            **kwargs: Same set as :class:`Text`/:class:`MorphText`.
         """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name',"TextObject")
@@ -320,7 +355,27 @@ def below(out,buffer_y=200):
     return out.location-Vector((0,buffer_y))
 
 class TextModifier(GeometryNodesModifier):
+    """Geometry-nodes graph for the v2 single-expression text object.
+
+    Drives the write-on animation, outline rendering, and per-letter
+    material slots used by :class:`Text` and friends in this module.
+    """
+
     def __init__(self,expression,**kwargs):
+        """Construct the modifier graph.
+
+        Args:
+            expression: Text to render. The corresponding glyph collection
+                is generated on demand and referenced by hash in the graph.
+            **kwargs: Forwarded to the base modifier and materials.
+                Supported keys:
+                * ``name`` (str): Modifier name. Defaults to ``'GeoText'``.
+                * ``sample_points`` (int): Samples per glyph curve.
+                  Defaults to 101.
+                * ``color``, ``outline_color``, ``emission``,
+                  ``emission_outline``, ``aligned``, ``location``,
+                  ``rotation``, ``scale``: As for :class:`Text`.
+        """
         self.expression = expression
         self.number_of_letters =0
         self.sample_points = get_from_kwargs(kwargs,'sample_points',101)
@@ -390,7 +445,18 @@ class TextModifier(GeometryNodesModifier):
         tree.links.new(transform_geometry.geometry_out,out.inputs['Geometry'])
 
 class MorphTextModifier(GeometryNodesModifier):
+    """Geometry-nodes graph that morphs between two equal-length expressions."""
+
     def __init__(self,expression1,expression2,**kwargs):
+        """Build the equal-length morph-text modifier graph.
+
+        Args:
+            expression1: Source text.
+            expression2: Target text (same letter count as ``expression1``).
+            **kwargs: Same kwarg set as :class:`TextModifier`. Adds
+                ``morph_shift`` (Vector, default ``Vector()``) -- spatial
+                shift applied to the morph target collection.
+        """
         self.expression1 = expression1
         self.expression2 = expression2
         self.number_of_letters =0
@@ -468,7 +534,17 @@ class MorphTextModifier(GeometryNodesModifier):
         tree.links.new(transform_geometry.geometry_out,out.inputs['Geometry'])
 
 class MorphTextModifier2(GeometryNodesModifier):
+    """Geometry-nodes graph that morphs to a (possibly longer) target text."""
+
     def __init__(self,expression1,expression2,**kwargs):
+        """Build the variable-length morph-text modifier graph.
+
+        Args:
+            expression1: Source text.
+            expression2: Target text. May be longer than ``expression1``;
+                extra letters appear at the tail end during the morph.
+            **kwargs: Same kwarg set as :class:`MorphTextModifier`.
+        """
         self.expression1 = expression1
         self.expression2 = expression2
         self.number_of_letters =0
@@ -546,7 +622,20 @@ class MorphTextModifier2(GeometryNodesModifier):
         tree.links.new(transform_geometry.geometry_out,out.inputs['Geometry'])
 
 class MorphTextModifier3(GeometryNodesModifier):
+    """Geometry-nodes graph that morphs while respecting per-letter
+    fixed-position pins (see :class:`MorphText3`)."""
+
     def __init__(self,expression1,expression2,**kwargs):
+        """Build the pin-aware morph-text modifier graph.
+
+        Args:
+            expression1: Source text.
+            expression2: Target text.
+            **kwargs: Same kwarg set as :class:`MorphTextModifier2`. The
+                actual fixed-letter wiring (``SrcFixSwitch`` /
+                ``TargetFixSwitch``) is performed by the wrapping
+                :class:`MorphText3` after construction.
+        """
         self.expression1 = expression1
         self.expression2 = expression2
         self.number_of_letters =0

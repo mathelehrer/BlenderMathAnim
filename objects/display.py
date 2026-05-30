@@ -21,17 +21,37 @@ class Display(Plane):
                  shadow=True, show_lines=False,
                  roughness=1, apply_scale=False,
                  apply_location=False, **kwargs):
-        """
+        """Create a glass-like display plane that can host text columns and lines.
 
-        :param location:
-        :param scales:
-        :param rotation_euler:
-        :param number_of_lines:
-        :param columns:
-        :param flat:
-        :param shadow:
-        :param show_lines:
-        :param kwargs:
+        The display behaves like a presentation slide: text is laid out
+        in ``columns`` columns of ``number_of_lines`` lines each. Cursor
+        and direction helpers (``up``, ``down``, ``left``, ``right``,
+        ``top``, ``bottom``, ``left_edge``, ``right_edge``, ``title_line``)
+        are exposed so callers can position labels symbolically.
+
+        Args:
+            location: World location of the display centre.
+                Defaults to ``[12, 0, 0]``.
+            scales: ``[scale_x, scale_y]`` or ``[scale_x, scale_y, scale_z]``
+                sizing the display plane. Defaults to ``[4, 6]``.
+            rotation_euler: Display rotation. Default is ``[pi/2, 0, 0]``
+                (face the camera). A small Z-axis tilt is added unless
+                ``flat=True`` (see below).
+            number_of_lines: Number of text lines that fit vertically.
+                Defaults to 5.
+            columns: Number of side-by-side text columns. Defaults to 1.
+            shadow: Cast shadows. Defaults to ``True``.
+            show_lines: Show debug line markers. Defaults to ``False``.
+            roughness: Material roughness. Defaults to 1 (matte glass).
+            apply_scale: Apply scale to mesh data. Defaults to ``False``.
+            apply_location: Apply location to mesh data. Defaults to ``False``.
+            **kwargs: Forwarded to :class:`Plane`. Supported keys:
+                * ``flat`` (bool | float): If ``True``, the display is
+                  perfectly vertical. If ``False`` (default), the display
+                  is tilted by ``-pi/15`` around Z. A float multiplies
+                  that tilt.
+                * ``name`` (str): Defaults to ``'Display'``.
+                * Standard appearance kwargs.
         """
 
         self.kwargs = kwargs
@@ -464,9 +484,19 @@ class Display(Plane):
 
 
 class InfinityDisplay(Display):
+    """A :class:`Display` that scrolls its lines: when a new line is added
+    past ``number_of_lines``, the oldest line shifts off and existing lines
+    move up to make room."""
+
     def __init__(self, location=[12, 0, 0], scales=[4, 6, 4], rotation_euler=[np.pi / 2, 0, 0], number_of_lines=5,
                  columns=1,
                  flat=False, shadow=True, show_lines=False, **kwargs):
+        """Create an infinitely scrolling display.
+
+        Args:
+            location, scales, rotation_euler, number_of_lines, columns,
+            flat, shadow, show_lines, **kwargs: Same as :class:`Display`.
+        """
         super().__init__(location=location, scales=scales, rotation_euler=rotation_euler,
                          number_of_lines=number_of_lines, columns=columns, flat=flat, show_lines=show_lines,
                          shadow=shadow, **kwargs)
@@ -507,7 +537,23 @@ class DisplayOld(BObject):
                  rotation_euler=[np.pi / 2, 0, 0],
                  line_spacing=1, columns=1,
                  flat=False, shadow=False, **kwargs):
+        """Legacy display implementation (predecessor of :class:`Display`).
 
+        Uses a solidified plane and explicit ``line_spacing`` instead of
+        ``number_of_lines``-based auto layout. Kept for backward
+        compatibility; prefer :class:`Display` for new code.
+
+        Args:
+            location: World location of the display.
+            scales: ``[scale_x, scale_y, scale_z]``. Defaults to ``[4, 6, 4]``.
+            rotation_euler: Display rotation. Defaults to ``[pi/2, 0, 0]``.
+            line_spacing: Explicit line spacing in display units.
+                Defaults to 1.
+            columns: Number of text columns. Defaults to 1.
+            flat: If ``True``, omit the ``-pi/15`` Z-tilt. Defaults to ``False``.
+            shadow: Cast shadows. Defaults to ``False``.
+            **kwargs: Forwarded to :class:`BObject`.
+        """
         plane = ibpy.add_plane()
 
         modifier_solid = plane.modifiers.new(name='solid', type='SOLIDIFY')
@@ -626,14 +672,20 @@ class DisplayOld(BObject):
 
 
 class CodeDisplay(Display):
-    def __init__(self, code_parser, class_index=0, **kwargs):
-        """
-        displays the class of class_index that is hosted by the code_parser
-        use class_index=-1 for code that is not contained in a class
+    """A :class:`Display` pre-populated with source code parsed by a
+    :class:`CodeParser`. Each class in the file gets its own page."""
 
-        :param code_parser: the code_parser, whose code is to be displayed
-        :param class_index: index of the class that is selected for display
-        :param kwargs:
+    def __init__(self, code_parser, class_index=0, **kwargs):
+        """Create a display showing one class from a parsed source file.
+
+        Args:
+            code_parser: A :class:`CodeParser` that has already parsed
+                a Python source file. Its ``classes`` list is used as
+                the page source.
+            class_index: Index into ``code_parser.classes`` selecting
+                which class to display. Use ``-1`` to display top-level
+                (non-class) code.
+            **kwargs: Forwarded to :class:`Display`.
         """
         self.kwargs = kwargs
         self.code_parser = code_parser
@@ -680,6 +732,25 @@ class GlassDisplay(Display):
                  shadow=True, show_lines=False,
                  apply_scale=False,
                  apply_location=False, shift=[0, 0, 0], metallic=0, color='text', ior = 1.45, **kwargs):
+        """Create a glass-look :class:`Display`.
+
+        The material is forced to ``'fake_glass_' + color``, with
+        ``roughness=0`` and ``override_material=True`` so descendant text
+        materials don't override the glass shader.
+
+        Args:
+            location, scales, rotation_euler, number_of_lines, columns,
+            shadow, show_lines, apply_scale, apply_location: Same as
+                :class:`Display`.
+            shift: World-space offset added to every text child (the
+                ``standard_shift`` kwarg internally) to nudge text into
+                the glass interior. Defaults to ``[0, 0, 0]``.
+            metallic: Material metallic factor. Defaults to 0.
+            color: Base color of the underlying ``'fake_glass_<color>'``
+                material. Defaults to ``'text'``.
+            ior: Index of refraction. Defaults to 1.45.
+            **kwargs: Forwarded to :class:`Display`.
+        """
         super().__init__(location=location, scales=scales, number_of_lines=number_of_lines, columns=columns,
                          rotation_euler=rotation_euler, shadow=shadow, roughness=0,
                          show_lines=show_lines, apply_location=apply_location, apply_scale=apply_scale,

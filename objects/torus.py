@@ -15,15 +15,33 @@ class Torus(GeoBObject):
     Create a Torus with a descent mesh:
     """
     def __init__(self, **kwargs):
-        """
-        example:
-        torus = Torus(
-        location=(0,0,0),
-        rotation_euler=(np.pi/2,0,0),
-        major_segments=96,
-        minor_segments=24,
-        major_radius=20,
-        minor_radius=0.1)
+        """Create a torus.
+
+        Example:
+            >>> torus = Torus(
+            ...     location=(0, 0, 0),
+            ...     rotation_euler=(np.pi/2, 0, 0),
+            ...     major_segments=96,
+            ...     minor_segments=24,
+            ...     major_radius=20,
+            ...     minor_radius=0.1,
+            ... )
+
+        Args:
+            **kwargs: Forwarded to :class:`GeoBObject`. Supported keys:
+                * ``major_radius`` (float): Distance from the centre of the
+                  torus to the centre of its tube. Defaults to 10.
+                * ``minor_radius`` (float): Radius of the tube itself.
+                  Defaults to 0.1.
+                * ``major_segments`` (int): Segments around the main ring.
+                  Defaults to 96.
+                * ``minor_segments`` (int): Segments around the tube
+                  cross-section. Defaults to 96.
+                * ``loop_cuts`` (int): Extra subdivisions of all edges.
+                * ``location``, ``rotation_euler``, ``rotation_quaternion``,
+                  ``name`` (default ``'Torus'``), ``label_rotation``
+                  (default ``[pi/2, pi/2, 0]``), plus standard BObject
+                  appearance kwargs (``color``, ``smooth``, ``bevel``, ...).
         """
         self.kwargs = kwargs
 

@@ -13,6 +13,23 @@ class Cone(BObject):
     """
 
     def __init__(self, location=[0, 0, 0], length=1, radius=0.1, **kwargs):
+        """Create a cone aligned with the local Z axis.
+
+        The base sits at the bottom (``-Z``) and the tip at the top (``+Z``).
+        Length is encoded as ``scale.z = length`` and the base radius as
+        ``scale.x = scale.y = radius``.
+
+        Args:
+            location: World location of the cone's origin. Defaults to ``[0, 0, 0]``.
+            length: Height of the cone (base to tip) along the local Z axis.
+            radius: Base radius of the cone.
+            **kwargs: Forwarded to :class:`BObject`. Notable keys:
+                * ``name`` (str): Defaults to ``'Cone'``.
+                * ``loop_cuts`` (int): Number of subdivisions along the height
+                  (scaled by ``length``). Useful for smooth deformations.
+                * ``color``, ``smooth``, ``bevel``, ``rotation_euler``, etc.
+                  forwarded to :class:`BObject`.
+        """
         self.kwargs =kwargs
         self.start=[0,0,-0.5]
         cone = add_cone()
