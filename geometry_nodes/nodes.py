@@ -5785,6 +5785,37 @@ class ShowNormalsNode(NodeGroup):
         create_from_xml(tree, "ShowNormals_nodes", **kwargs)
 
 
+class OnRightNode(NodeGroup):
+    """
+    Geometry-node port of shader_nodes.shader_nodes.OnRightNode.
+
+    Result = 1 if ``Position`` lies on the right of the directed segment
+    A -> B, else 0.  Computed as sign of ((pos-A) x (pos-B)).z < 0.
+    """
+
+    def __init__(self, tree, **kwargs):
+        self.name = get_from_kwargs(kwargs, "name", "OnRightNode")
+        super().__init__(tree,
+                         inputs={"A": "VECTOR", "B": "VECTOR", "Position": "VECTOR"},
+                         outputs={"Result": "INT"},
+                         auto_layout=False, name=self.name, **kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+        self.std_out = self.node.outputs["Result"]
+
+    def fill_group_with_node(self, tree, **kwargs):
+        on_right = make_function(tree, name="Function",
+                                 functions={
+                                     "result": "pos,a,sub,pos,b,sub,cross,e_z,dot,0,<"
+                                 }, inputs=["a", "b", "pos"], outputs=["result"],
+                                 scalars=["result"], vectors=["a", "b", "pos"])
+        tree.links.new(self.group_inputs.outputs["A"], on_right.inputs["a"])
+        tree.links.new(self.group_inputs.outputs["B"], on_right.inputs["b"])
+        tree.links.new(self.group_inputs.outputs["Position"], on_right.inputs["pos"])
+        tree.links.new(on_right.outputs["result"], self.group_outputs.inputs["Result"])
+
+
 # aux functions #
 
 def get_attributes(line):
@@ -6226,6 +6257,7 @@ class Structure:
 
 def make_function(nodes_or_tree, functions={}, aux_functions={},
                   inputs=[], outputs=[], vectors=[], scalars=[], integers=[], rotations=[],
+                  booleans=[],
                   node_group_type="GeometryNodes",
                   name="FunctionNode", hide=True, location=(0, 0), parent=None,
                   custom_ops={}):
@@ -6243,6 +6275,11 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
     ``integers`` lists variable names that behave exactly like ``scalars`` in
     the RPN evaluation but whose group sockets are created as
     ``NodeSocketInt`` instead of ``NodeSocketFloat``.
+
+    ``booleans`` likewise lists variable names that behave like ``scalars`` in
+    the RPN evaluation but whose group sockets are created as
+    ``NodeSocketBool``.  Combine with the ``not``/``and``/``or`` operators (the
+    ``FunctionNodeBooleanMath`` node) for boolean logic, e.g. ``"exit,not"``.
 
     ``custom_ops`` extends the RPN operator vocabulary with user-defined
     nodes.  It is a dict mapping an operator token (the string that appears in
@@ -6319,6 +6356,8 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
             make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketFloat")
         if ins in integers:
             make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketInt")
+        if ins in booleans:
+            make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketBool")
         if ins in rotations:
             make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketRotation")
 
@@ -6329,6 +6368,8 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
             make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketFloat")
         if outs in integers:
             make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketInt")
+        if outs in booleans:
+            make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketBool")
         if outs in rotations:
             make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketRotation")
 
@@ -6345,9 +6386,9 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
     aux_stacks = _parse(aux_functions)
     stacks = _parse(functions)
 
-    # integers behave like scalars inside the RPN evaluation; only the group
-    # socket type differs, so merge them for variable-token recognition
-    scalar_vars = list(scalars) + list(integers)
+    # integers and booleans behave like scalars inside the RPN evaluation; only
+    # the group socket type differs, so merge them for variable-token recognition
+    scalar_vars = list(scalars) + list(integers) + list(booleans)
 
     # union of all tokens across aux and main expressions, used to decide
     # whether an input vector (or aux vector) needs a SeparateXYZ node
@@ -6367,7 +6408,7 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
     # SeparateXYZ when any formula references a component
     in_channels = {}
     for ins in inputs:
-        if ins in scalars or ins in integers:
+        if ins in scalars or ins in integers or ins in booleans:
             in_channels[ins] = group_inputs.outputs[ins]
         if ins in vectors or ins in rotations:
             in_channels[ins] = group_inputs.outputs[ins]
@@ -6435,7 +6476,7 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
     # output channels (identical to make_function)
     out_channels = {}
     for key, value in functions.items():
-        if key in scalars or key in integers:
+        if key in scalars or key in integers or key in booleans:
             out_channels[key] = group_outputs.inputs[key]
         elif key in vectors or key in rotations:
             if isinstance(functions[key], list):

@@ -18,6 +18,7 @@ from interface.ibpy import customize_material, make_alpha_frame, create_group_fr
 from interface.interface_constants import TRANSMISSION, SPECULAR, EMISSION, blender_version
 from mathematics.parsing.parser import ExpressionConverter
 from mathematics.spherical_harmonics import SphericalHarmonics
+from new_stuff.textures import hat_tile_fractal
 from physics.constants import temp2rgb, type2temp
 from shader_nodes.shader_nodes import (Mapping, AttributeNode, HueSaturationValueNode, \
                                        MathNode, MixRGB, InputValue, GradientTexture, ImageTexture, SeparateXYZ,
@@ -3658,6 +3659,7 @@ def make_magnet_material():
         coords = nodes.new(type='ShaderNodeTexCoord')
         coords.location = (-1200, 0)
         links.new(coords.outputs['Generated'], sep_xyz.inputs['Vector'])
+        return material
 
 
 def make_sign_material():
