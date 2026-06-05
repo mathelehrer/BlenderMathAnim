@@ -1750,6 +1750,7 @@ class InstanceOnPoints(GreenNode):
                  selection=None,
                  instance=None,
                  instance_index=None,
+                 pick_instance=False,
                  rotation=Vector([0, 0, 0]),
                  scale=Vector([1, 1, 1]), **kwargs
                  ):
@@ -1777,15 +1778,20 @@ class InstanceOnPoints(GreenNode):
             self.tree.links.new(instance, self.node.inputs["Instance"])
         if instance_index:
             self.tree.links.new(instance_index, self.node.inputs["Instance Index"])
+        if isinstance(pick_instance,bool):
+            self.node.inputs["Pick Instance"].default_value = pick_instance
+        else:
+            self.tree.links.new(pick_instance, self.node.inputs["Pick Instance"])
 
 
 class InstanceOnEdges(GreenNode):
     def __init__(self, tree, location=(0, 0), selection=None,
                  radius=0.1, resolution=8, name="InstanceOnEdges", **kwargs
                  ):
-        mesh2curve = MeshToCurve(tree, selection=selection)
-        profile = CurveCircle(tree, resolution=resolution, radius=radius, name=name + "Circle")
-        curve2mesh = CurveToMesh(tree, profile_curve=profile.geometry_out)
+        (x,y)=location
+        mesh2curve = MeshToCurve(tree, selection=selection,location=(x,y))
+        profile = CurveCircle(tree, resolution=resolution, radius=radius, name=name + "Circle",location=(x,y-1))
+        curve2mesh = CurveToMesh(tree, profile_curve=profile.geometry_out,location=(x+1,y))
         tree.links.new(mesh2curve.geometry_out, curve2mesh.geometry_in)
 
         self.node = curve2mesh
@@ -3843,6 +3849,9 @@ class RepeatZone(GreenNode):
         :return:
         """
         self.repeat_output.repeat_items.new(socket_type, name)
+
+    def del_socket(self,name=""):
+        self.repeat_output.repeat_items.remove(self.repeat_output.repeat_items.get(name))
 
     def join_in_geometries(self, out_socket_name=None):
         join = JoinGeometry(self.tree, geometry=self.repeat_input.outputs[0:-1])
