@@ -373,7 +373,11 @@ File and directory constants
 '''
 LOC_FILE_DIR = os.getcwd()
 ###
-THIS_DIR = os.path.join(LOC_FILE_DIR,"..")
+# Resource files (files/, fonts, hdri, presets, ...) live in the BlenderMathAnim
+# source tree, not in the current working directory. Anchor THIS_DIR to this
+# module's location (BlenderMathAnim/utils/constants.py -> BlenderMathAnim) so
+# resources resolve no matter where a scene is launched from.
+THIS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RES_DIR = os.path.join(THIS_DIR, "files")
 RES_DIR2 = os.path.join(THIS_DIR, "files2")
 RES_XML = os.path.join(RES_DIR, "xml")
