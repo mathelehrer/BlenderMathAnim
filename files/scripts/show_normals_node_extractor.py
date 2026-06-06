@@ -156,7 +156,7 @@ cur = os.curdir
 path=os.path.abspath(cur)
 # unfortunately you have to find your proper file location, I don't know how to preset this
 # the following is my setup, which most won't work in your case
-path = os.path.join(path,"/home/jmartin/PycharmProjects/BlenderMathAnim/files/xml/ShowNormals_nodes.xml")
+path = os.path.join(path,"/home/jmartin/PycharmProjects/BlenderMathAnimWorkspace/BlenderMathAnim/files/xml/ShowNormals_nodes.xml")
 print(path)
 with open(path, 'w') as f:
     print("success")

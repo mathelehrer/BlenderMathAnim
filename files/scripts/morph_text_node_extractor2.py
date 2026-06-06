@@ -157,6 +157,6 @@ filedata+=append('</NODE_XML>')
 
 # store data to file
 
-with open("/home/jmartin/blendermathamin/files2/xml/geo_morph_fonts2.xml", 'w') as f:
+with open("/home/jmartin/PycharmProjects/BlenderMathAnimWorkspace/files2/xml/geo_morph_fonts2.xml", 'w') as f:
     print("success")
     f.write(filedata)

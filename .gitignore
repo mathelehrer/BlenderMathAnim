@@ -1,3 +1,13 @@
 appends
 media
 data
+__pycache__/
+*.pyc
+*.egg-info/
+
+# old per-project virtualenv is gone; the workspace uses the shared .venv at the workspace root
+venv/
+.venv/
+
+# PyCharm: the IDE config lives in the workspace-root .idea, not here
+.idea/

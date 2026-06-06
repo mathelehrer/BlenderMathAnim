@@ -160,6 +160,6 @@ filedata+=append('</NODE_XML>')
 
 # store data to file
 
-with open("/home/jmartin/blendermathamin/files/xml/geo_morph_fonts3.xml", 'w') as f:
+with open("/home/jmartin/PycharmProjects/BlenderMathAnimWorkspace/files/xml/geo_morph_fonts3.xml", 'w') as f:
     print("success")
     f.write(filedata)

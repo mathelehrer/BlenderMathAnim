@@ -1,0 +1,45 @@
+[project]
+name = "blendermathanim"
+version = "0.1.0"
+description = "Shared library for mathematical animations in Blender (appearance, objects, mathematics, geometry/shader nodes, ...)."
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "p6majo", email = "p6majo@gmx.de" }]
+# bpy wheels are Python-locked: bpy>=5.1 ships cp313 only and requires Python 3.13.
+# Pinned to 3.13 to match the installed Blender 5.1.2 (which bundles Python 3.13).
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "bpy",
+    "numpy",
+    "scipy",
+    "sympy",
+    "anytree",
+    "networkx",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Flat layout: the library packages live at the repo root. List them explicitly so the
+# editable install exposes them as top-level imports (import appearance, from objects import ...)
+# and so build-time auto-discovery does not trip over the video_* project dirs or the files/ data dir.
+# (setuptools' editable install writes a stable import finder, avoiding per-run reinstall churn.)
+[tool.setuptools]
+packages = [
+    "appearance",
+    "compositions",
+    "extended_math_nodes",
+    "geometry_nodes",
+    "grandalf",
+    "interface",
+    "mathematics",
+    "objects",
+    "perform",
+    "physics",
+    "shader_nodes",
+    "tools",
+    "utils",
+    "addons",
+    "examples",
+]

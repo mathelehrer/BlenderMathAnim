@@ -3,7 +3,7 @@ blender -b --python run_all.py -- <module> <Class> <out_dir> [samples W H]
 """
 import sys, os, importlib
 
-REPO = "/home/jmartin/PycharmProjects/BlenderMathAnim"
+REPO = "/home/jmartin/PycharmProjects/BlenderMathAnimWorkspace/BlenderMathAnim"
 sys.path.insert(0, REPO)
 import bpy
 
