@@ -296,21 +296,15 @@ class BObject(object):
                 # change made on 2023-04-13 for the laptop class
                 # obj_name = name + '_' + objects[i]
                 # converted to
-                bpy_name = obj.name
                 obj_name = name + '_' + obj.name
                 if i == 0:
                     # added kwargs on 2024-12-08 to treat all cubies of the rubik's cube equivalently
                     bobs.append(BObject(obj=obj, color=col, name=obj_name, emission=emission, **kwargs))
                 else:
                     bobs.append(BObject(obj=obj, color=col, name=obj_name, **kwargs))
-                #IMPORTED_OBJECTS.append(obj_name)
-                IMPORTED_OBJECTS.append(bpy_name)  # 2025-02-18 to allow multiple imports of the same object
             return bobs
         else:
             obj = import_object(filename)
-            IMPORTED_OBJECTS.append(
-                obj.name)  # save the name of the later object to keep track and do not assign it to two references
-            # print(IMPORTED_OBJECTS)
             if not with_wrapper:
                 return obj
             return BObject(obj=obj, **kwargs)
@@ -1100,28 +1094,27 @@ def import_object(filename):
         filename
     ) + '.blend'
 
+    # Identify the appended object by diffing the object set before/after the
+    # append. This is robust when the same object is imported several times:
+    # Blender suffixes duplicates (".001", ".002", ...), so matching by name
+    # would pick a wrong (earlier) object. The set difference is exact.
+    before = set(bpy.data.objects)
     bpy.ops.wm.append(
         filepath=filepath,
         directory=os.path.join(filepath, 'Mesh'),
         filename=filename
     )
+    new_objs = [o for o in bpy.data.objects if o not in before]
 
-    new_obj = None
-    for obj in bpy.data.objects:
-        if filename == obj.name:
-            new_obj = obj
-            break
-
-    if not new_obj:  # an object with precisely the name hasn't been found, maybe due to canonical renaming
-        for obj in bpy.data.objects:
-            if filename in obj.name and obj.name not in IMPORTED_OBJECTS:
-                new_obj = obj
-                break
-
-    if new_obj is None:
+    if not new_objs:
         raise Warning('Did not find object with same name as file')
 
-    return new_obj
+    # An append may pull in more than one object; prefer the one whose base
+    # name (before any ".001" suffix) matches the requested name.
+    for obj in new_objs:
+        if obj.name.split('.')[0] == filename:
+            return obj
+    return new_objs[0]
 
 
 def import_objects(filename, objects):
@@ -1134,14 +1127,28 @@ def import_objects(filename, objects):
 
     objs = []
     for obj in objects:
+        # Diff the object set around each append so we always grab exactly the
+        # newly created object, even when the same primitive (e.g. the flag's
+        # "Post"/"Cloth") has already been imported and Blender has suffixed the
+        # duplicate with ".001", ".002", ... The old substring match
+        # (``obj in o.name``) collected every previously imported copy too,
+        # which broke the 1:1 mapping to ``objects`` and corrupted names.
+        before = set(bpy.data.objects)
         bpy.ops.wm.append(
             filepath=filepath,
             directory=os.path.join(filepath, 'Mesh'),
             filename=obj
         )
+        new_objs = [o for o in bpy.data.objects if o not in before]
 
-        for o in bpy.data.objects:
-            if obj in o.name and o.name not in IMPORTED_OBJECTS:
-                objs.append(o)
+        if not new_objs:
+            # Tolerate phantom entries (an object name that isn't actually in
+            # the .blend): skip it rather than aborting the whole import.
+            print("import_objects: append of %r from %s produced no new object; skipping"
+                  % (obj, filename))
+            continue
+
+        match = next((o for o in new_objs if o.name.split('.')[0] == obj), new_objs[0])
+        objs.append(match)
 
     return objs

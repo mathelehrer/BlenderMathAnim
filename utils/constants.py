@@ -73,7 +73,6 @@ elif QUALITY == 'exceptional':
 '''
 global fields
 '''
-IMPORTED_OBJECTS = []  # array that keeps track of all imported objects, to avoid that an imported object is referenced twice
 IMPORTED_CURVES = []
 '''
 Colors

@@ -1,4 +1,4 @@
-from mathematics.groups.coxeter_group import CoxeterGroup4D
+from mathematics.groups.coxeter_group import CoxeterGroup4D, DEFAULT_DATA_PATH
 from mathematics.algebra.field_extensions import QR, FMatrix, FVector, EpsilonTensor
 
 COXA4_SIGNATURES = {
@@ -36,7 +36,6 @@ COXA4_SEEDS = {
     "x3o3x3x": FVector.parse("[5-5*r5,5-9*r5,-15+11*r5,-5+5*r5]"),
     "x3x3x3x": FVector.parse("[1,3,-3,-1]"),
 }
-_DEFAULT_PATH = "../mathematics/geometry/data/"
 
 
 class CoxA4(CoxeterGroup4D):
@@ -61,7 +60,7 @@ class CoxA4(CoxeterGroup4D):
         epsilon = EpsilonTensor(4, root_modulus=5, root_string="r5")
 
         super().__init__("coxA4", normals, generators, zero, epsilon, identity,
-                         path=path or _DEFAULT_PATH,signatures=COXA4_SIGNATURES,seeds=COXA4_SEEDS)
+                         path=path or DEFAULT_DATA_PATH,signatures=COXA4_SIGNATURES,seeds=COXA4_SEEDS)
 
     def _suffix(self, signature):
         if isinstance(signature, tuple):

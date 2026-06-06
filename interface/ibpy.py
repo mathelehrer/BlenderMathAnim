@@ -7819,12 +7819,12 @@ def find_center_of_highest_vertices(obj):
 
 
 def get_bounding_box(bob):
-    x_min = np.Infinity
-    x_max = -np.Infinity
-    y_min = np.Infinity
-    y_max = -np.Infinity
-    z_min = np.Infinity
-    z_max = -np.Infinity
+    x_min = np.inf
+    x_max = -np.inf
+    y_min = np.inf
+    y_max = -np.inf
+    z_min = np.inf
+    z_max = -np.inf
     if isinstance(bob, (list, tuple)):
         for bo in bob:
             obj = get_obj(bo)
@@ -7880,12 +7880,12 @@ def get_bounding_box(bob):
 
 
 def get_bounding_box_for_letter(letter):
-    x_min = np.Infinity
-    x_max = -np.Infinity
-    y_min = np.Infinity
-    y_max = -np.Infinity
-    z_min = np.Infinity
-    z_max = -np.Infinity
+    x_min = np.inf
+    x_max = -np.inf
+    y_min = np.inf
+    y_max = -np.inf
+    z_min = np.inf
+    z_max = -np.inf
     obj = letter.ref_obj
     loc = obj.location
     bb = obj.bound_box  # eight corner coordinates of the surrounding box
@@ -7908,8 +7908,8 @@ def get_bounding_box_for_letter(letter):
 def analyse_bound_box(bob):
     obj = get_obj(bob)
     bb = obj.bound_box
-    xmin = ymin = zmin = np.Infinity
-    xmax = ymax = zmax = -np.Infinity
+    xmin = ymin = zmin = np.inf
+    xmax = ymax = zmax = -np.inf
     for b in bb:
         if b[0] < xmin:
             xmin = b[0]
@@ -7924,8 +7924,8 @@ def analyse_bound_box(bob):
         if b[2] > zmax:
             zmax = b[2]
     if xmin == 0 and xmax == 0 and ymin == 0 and ymax == 0 and zmin == 0 and zmax == 0:
-        xmin = ymin = zmin = np.Infinity
-        xmax = ymax = zmax = -np.Infinity
+        xmin = ymin = zmin = np.inf
+        xmax = ymax = zmax = -np.inf
         for child in obj.children:
             [cxmin, cxmax, cymin, cymax, czmin, czmax] = analyse_bound_box(child)
             location = child.location

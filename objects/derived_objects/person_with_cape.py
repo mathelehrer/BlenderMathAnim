@@ -51,7 +51,7 @@ class PersonWithCape(BObject):
         # find neck vertices, to identify vertices that get hooked
         # these are basically the once which are closest to the center of the cut out circle (-0.03,-0.52)
         center = Vector([0.03,0.52,0])
-        min = np.Infinity
+        min = np.inf
         for v in verts:
             if (v.co-center).length<min:
                 min=(v.co-center).length

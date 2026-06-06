@@ -2219,9 +2219,9 @@ class Unfolder4D2:
         the application of the rotation is not a simple matrix multiplication,
          since the center of the rotation is not (0,0,0,0)
 
-        from the data of the rotation (three plane points and a rotation matrix) we can compute the projection operator P = u\otimes uT +v\ovtimes vT
+        from the data of the rotation (three plane points and a rotation matrix) we can compute the projection operator P = u otimes uT +v ovtimes vT
 
-        The projection operator P = u\otimes uT +v\ovtimes vT
+        The projection operator P = u otimes uT +v otimes vT
         """
 
         p = rotation[0]

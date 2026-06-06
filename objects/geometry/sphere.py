@@ -198,7 +198,7 @@ class StackOfSpheres(BObject):
             elif number_of_spheres <= 115:
                 self.dim = 7
         else:
-            number_of_spheres = np.Infinity
+            number_of_spheres = np.inf
             self.dim = dim
         r3 = np.sqrt(3)
         r6 = np.sqrt(6)

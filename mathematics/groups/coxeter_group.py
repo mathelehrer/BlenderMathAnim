@@ -13,6 +13,12 @@ from mathematics.algebra.field_extensions import QR, FMatrix, FVector
 from mathematics.geometry.meshface import MeshFace
 from utils.string_utils import show_inline_progress_in_terminal
 
+# Default location of the precomputed Coxeter-group data (.dat) files. Anchored
+# to this module's location (mathematics/groups/ -> mathematics/geometry/data)
+# so it resolves regardless of the current working directory.
+DEFAULT_DATA_PATH = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "geometry", "data"))
+
 
 def process_element(args):
     elements, first_cell, vertices, vertex2index = args

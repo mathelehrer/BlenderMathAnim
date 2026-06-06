@@ -129,12 +129,12 @@ class Text(BObject):
         :param texBObject:
         :return:
         '''
-        x_min = np.Infinity
-        x_max = -np.Infinity
-        y_min = np.Infinity
-        y_max = -np.Infinity
-        z_min = np.Infinity
-        z_max = -np.Infinity
+        x_min = np.inf
+        x_max = -np.inf
+        y_min = np.inf
+        y_max = -np.inf
+        z_min = np.inf
+        z_max = -np.inf
         obj = self.ref_obj
         loc = obj.location
         bb = obj.bound_box  # eight corner coordinates of the surrounding box

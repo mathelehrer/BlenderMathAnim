@@ -26,7 +26,9 @@ class InfoPanel(BObject):
         location = self.get_from_kwargs('location',[0,0,0])
         rotation = self.get_from_kwargs('rotation_euler',[0,0,0])
         colors = self.get_from_kwargs('colors',['drawing'])
-        bobs = BObject.from_file("InfoPanel_wlog", objects=["InfoPanel", "Text"],colors=colors)
+        # The InfoPanel_wlog.blend asset contains a single object ("InfoPanel");
+        # only bobs[0] is used below.
+        bobs = BObject.from_file("InfoPanel_wlog", objects=["InfoPanel"],colors=colors)
         self.info = bobs[0]
         self.info.ref_obj.scale = [0.2,0.2,1.5]
         self.info.ref_obj.location=[-2,0,1.5]

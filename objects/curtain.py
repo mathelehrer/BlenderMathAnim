@@ -64,8 +64,8 @@ class Curtain(BObject):
         verts = plane.data.vertices
 
         # find top row, to identify vertices that get hooked
-        y_max = -np.Infinity
-        self.x_min = np.Infinity
+        y_max = -np.inf
+        self.x_min = np.inf
         for v in verts:
             if v.co[1]>y_max:
                 y_max=v.co[1]

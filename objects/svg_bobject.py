@@ -9,7 +9,7 @@ from interface import ibpy
 from interface.ibpy import get_splines, add_bezier_spline, link, is_hidden, un_hide, set_active, set_edit_mode, \
     set_object_mode, hide, un_link, select, un_select
 from objects.bobject import BObject
-from utils.constants import TEX_LOCAL_SCALE_UP, SVG_DIR, DEFAULT_ANIMATION_TIME, IMPORTED_OBJECTS, IMPORTED_CURVES
+from utils.constants import TEX_LOCAL_SCALE_UP, SVG_DIR, DEFAULT_ANIMATION_TIME, IMPORTED_CURVES
 from utils.utils import add_lists_by_element
 
 

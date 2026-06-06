@@ -7,7 +7,7 @@ from utils.constants import OBJECT_APPEARANCE_TIME, FRAME_RATE, DEFAULT_ANIMATIO
 
 
 class Flag(BObject):
-    """A cloth-simulated flag (post + waving cloth) loaded from a bundled .blend file.
+    """A cloth-simulated flag (post and waving cloth) loaded from a bundled .blend file.
 
     The cloth is pinned at the top row of vertices to the post; cloth
     physics gives the wave. Use :meth:`set_text` to swap in dynamically
@@ -18,7 +18,7 @@ class Flag(BObject):
         """Load a flag asset and configure cloth physics.
 
         Args:
-            **kwargs: Forwarded to :class:`BObject`. Supported keys:
+            **kwargs: Forwarded to: class:`BObject`. Supported keys:
                 * ``location`` (list[float]): Defaults to ``[0, 0, 0]``.
                 * ``rotation_euler`` (list[float]): Defaults to ``[0, 0, 0]``.
                 * ``colors`` (list[str]): Per-sub-object colors.

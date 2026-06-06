@@ -67,7 +67,8 @@ class Scene(object):
             if hasattr(self, name):
                 getattr(self, name)()
         print("Scene finished in time range ",start," to ",start+duration)
-        print("The animation timer stopped at ",self.t0)
+        if hasattr(self,"t0"):
+            print("The animation timer stopped at ",self.t0)
 
     def create(self,name="",resolution=[1920,1080],start_at_zero=False):
         start = time.time()

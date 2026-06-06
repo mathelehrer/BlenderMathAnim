@@ -35,7 +35,7 @@ def zeros_of_f(f,fp,n,attempts = 100,radius=2):
 
     while attempt<attempts and len(zeros)<n:
         x0 = random_complex(radius=radius)
-        delta = np.Infinity
+        delta = np.inf
         count = 0
         while delta>tol and count<100:
             x=x0-f(x0)/fp(x0)

@@ -1,4 +1,4 @@
-from mathematics.groups.coxeter_group import CoxeterGroup3D
+from mathematics.groups.coxeter_group import CoxeterGroup3D, DEFAULT_DATA_PATH
 from mathematics.algebra.field_extensions import QR, FMatrix, FVector
 
 COXB3_SIGNATURES = {
@@ -39,7 +39,6 @@ COXB3_NAMES = {
     "TRUNC_CUBOCTA":"x3x4x"
 }
 
-_DEFAULT_PATH = "../mathematics/geometry/data/"
 
 
 class CoxB3(CoxeterGroup3D):
@@ -59,7 +58,7 @@ class CoxB3(CoxeterGroup3D):
         generators = [FMatrix((identity - (n * n) - (n * n)).components) for n in normals]
 
         super().__init__("coxB3", normals, generators,
-                         path=path or _DEFAULT_PATH,
+                         path=path or DEFAULT_DATA_PATH,
                          seeds=COXB3_SEEDS,
                          signatures=COXB3_SIGNATURES,
                          name_dict=COXB3_NAMES)

@@ -559,10 +559,10 @@ class CoordinateSystem(BObject):
         x_axis = self.axes[0]
         y_axis = self.axes[1]
 
-        x_min_tic = np.Infinity
-        x_max_tic = -np.Infinity
-        y_min_tic = np.Infinity
-        y_max_tic = -np.Infinity
+        x_min_tic = np.inf
+        x_max_tic = -np.inf
+        y_min_tic = np.inf
+        y_max_tic = -np.inf
         for x in x_axis.tic_values:
             if x < x_min_tic:
                 x_min_tic = x
@@ -661,10 +661,10 @@ class CoordinateSystem(BObject):
         x_axis = self.axes[0]
         y_axis = self.axes[1]
 
-        x_min_tic = np.Infinity
-        x_max_tic = -np.Infinity
-        y_min_tic = np.Infinity
-        y_max_tic = -np.Infinity
+        x_min_tic = np.inf
+        x_max_tic = -np.inf
+        y_min_tic = np.inf
+        y_max_tic = -np.inf
         for x in x_axis.tic_values:
             if x < x_min_tic:
                 x_min_tic = x
@@ -788,10 +788,10 @@ class CoordinateSystem(BObject):
         x_axis = self.axes[0]
         y_axis = self.axes[1]
 
-        x_min_tic = np.Infinity
-        x_max_tic = -np.Infinity
-        y_min_tic = np.Infinity
-        y_max_tic = -np.Infinity
+        x_min_tic = np.inf
+        x_max_tic = -np.inf
+        y_min_tic = np.inf
+        y_max_tic = -np.inf
         for x in x_axis.tic_values:
             if x < x_min_tic:
                 x_min_tic = x

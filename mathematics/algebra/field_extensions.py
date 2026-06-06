@@ -2,7 +2,7 @@ import itertools
 from fractions import Fraction
 
 import numpy as np
-from interface.ibpy import Vector
+from interface.ibpy import Vector, Matrix
 from sympy.combinatorics import Permutation
 
 
@@ -986,6 +986,9 @@ class FMatrix(FTensor):
         out = out[:-1] # remove last comma
         out += r"}"
         return out
+
+    def real(self):
+        return Matrix( [[component.real() for component in row] for row in self.components])
 
 
 class EpsilonTensor(FTensor):

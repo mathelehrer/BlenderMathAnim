@@ -1,4 +1,4 @@
-from mathematics.groups.coxeter_group import CoxeterGroup4D
+from mathematics.groups.coxeter_group import CoxeterGroup4D, DEFAULT_DATA_PATH
 from mathematics.algebra.field_extensions import QR, FMatrix, FVector, EpsilonTensor
 
 COXH4_SIGNATURES = {
@@ -37,7 +37,6 @@ COXH4_SEEDS ={
     "x3x3x5x": FVector.parse("[1,1,7+4*r5,-11-4*r5]"),
 }
 
-_DEFAULT_PATH = "../geometry/data/"
 
 class CoxH4(CoxeterGroup4D):
     def __init__(self, path=None):
@@ -62,4 +61,4 @@ class CoxH4(CoxeterGroup4D):
         epsilon = EpsilonTensor(4)
 
         super().__init__("coxH4", normals, generators, zero, epsilon, identity,
-                         path=path or _DEFAULT_PATH,seeds=COXH4_SEEDS,signatures=COXH4_SIGNATURES)
+                         path=path or DEFAULT_DATA_PATH,seeds=COXH4_SEEDS,signatures=COXH4_SIGNATURES)

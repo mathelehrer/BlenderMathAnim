@@ -758,7 +758,7 @@ class Polyhedron(BObject):
         #     print(v)
 
         # calculate edges
-        min_distance = np.Infinity
+        min_distance = np.inf
         for i in range(len(vertices)):
             for j in range(i + 1, len(vertices)):
                 distance = (vertices[i] - vertices[j]).length

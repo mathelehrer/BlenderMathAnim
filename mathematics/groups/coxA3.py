@@ -1,4 +1,4 @@
-from mathematics.groups.coxeter_group import CoxeterGroup3D
+from mathematics.groups.coxeter_group import CoxeterGroup3D, DEFAULT_DATA_PATH
 from mathematics.algebra.field_extensions import QR, FMatrix, FVector
 
 COXA3_SIGNATURES = {
@@ -38,7 +38,6 @@ COXA3_NAMES = {
     "SNUB_TETRA": "s3s3s",
 }
 
-_DEFAULT_PATH = "../mathematics/geometry/data/"
 
 
 class CoxA3(CoxeterGroup3D):
@@ -58,5 +57,5 @@ class CoxA3(CoxeterGroup3D):
         generators = [FMatrix((identity - (n * n) - (n * n)).components) for n in normals]
 
         super().__init__("coxA3", normals, generators,
-                         path=path or _DEFAULT_PATH,
+                         path=path or DEFAULT_DATA_PATH,
                          seeds=COXA3_SEEDS, signatures=COXA3_SIGNATURES,name_dict=COXA3_NAMES)
