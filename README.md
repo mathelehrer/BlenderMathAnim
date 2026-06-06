@@ -34,6 +34,26 @@ stack_b = StackOfSpheres(radius=0.5, number_of_spheres=100, color='important', s
 
 <h1> Installation </h1>
 
+<b> Standalone install (recommended, with <a href="https://docs.astral.sh/uv/">uv</a>) </b><br>
+The project is self-contained: a single <code>uv sync</code> creates a virtual environment, downloads
+the pinned <code>bpy</code> wheel and the other dependencies, and editable-installs the library packages
+so that <code>import objects</code>, <code>from interface import ibpy</code>, ... resolve from anywhere.<br>
+<br>
+<code>
+git clone https://github.com/mathelehrer/BlenderMathAnim<br>
+cd BlenderMathAnim<br>
+uv sync                                  # .venv + bpy/deps + editable install<br>
+uv run python video_penrose2/penrose2.py # run a scene<br>
+</code>
+<br>
+The pinned <code>.python-version</code> (3.13) and committed <code>uv.lock</code> make the install
+reproducible. <code>bpy</code> ships its own <code>mathutils</code>, so do not install the standalone
+<code>mathutils</code> wheel.<br>
+<br>
+This repository is also a member of a larger uv workspace, but nothing here depends on that workspace:
+the same checkout works on its own or as a workspace member with no changes.<br>
+<br>
+<b> Manual install (pip) </b><br>
 Once you cloned the repository, you need to install the bpy library.<br>
 This is what worked for me:<br>
 <b>Linux</b><br>

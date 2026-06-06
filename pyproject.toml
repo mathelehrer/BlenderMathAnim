@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Shared library for mathematical animations in Blender (appearance, objects, mathematics, geometry/shader nodes, ...)."
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
-authors = [{ name = "p6majo", email = "p6majo@gmx.de" }]
+authors = [{ name = "NumberCruncher", email = "physik.martin@gmail.com" }]
 # bpy wheels are Python-locked: bpy>=5.1 ships cp313 only and requires Python 3.13.
 # Pinned to 3.13 to match the installed Blender 5.1.2 (which bundles Python 3.13).
 requires-python = ">=3.13,<3.14"
@@ -15,6 +15,7 @@ dependencies = [
     "sympy",
     "anytree",
     "networkx",
+    "matplotlib>=3.10.9",
 ]
 
 [build-system]

@@ -5,7 +5,6 @@ from itertools import combinations
 import numpy as np
 from math import gcd
 
-from camb.model import transfer_names
 from mathutils import Vector
 
 from appearance.textures import billiards_cloth_material, billiards_ball_material, get_texture

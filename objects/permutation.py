@@ -1,7 +1,6 @@
 from math import pi
 import random
 
-from camb.model import transfer_names
 from mathutils import Vector, Quaternion, Euler
 from sympy.core.benchmarks.bench_arit import timeit_Add_x05
 
