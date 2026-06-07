@@ -10,7 +10,7 @@ from objects.billiards_objects import ScoreTable, f, BilliardsTable, BilliardsBa
     ReflectableBilliardPaper, BilliardBallReal
 
 from objects.quadrilateral import BQuadrilateral
-from objects.text2 import Text
+from objects.text import Text
 from objects.bobject import BObject
 from objects.cylinder import Cylinder
 from objects.empties import EmptyCube

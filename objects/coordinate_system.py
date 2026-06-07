@@ -13,6 +13,7 @@ from utils.constants import OBJECT_APPEARANCE_TIME, FRAME_RATE, DEFAULT_ANIMATIO
 from utils.kwargs import get_from_kwargs
 from utils.utils import to_vector
 
+
 class CoordinateSystem2(BObject):
     """Geometry-nodes-based coordinate system using :class:`NumberLine2` axes.
 
@@ -20,7 +21,7 @@ class CoordinateSystem2(BObject):
     zoom (linear / logarithmic) on each axis via modifier inputs.
     """
 
-    def __init__(self,**kwargs):
+    def __init__(self, **kwargs):
         """Create a 2D or 3D coordinate system with geometry-nodes axes.
 
         Args:
@@ -55,91 +56,102 @@ class CoordinateSystem2(BObject):
         """
 
         self.kwargs = kwargs
-        self.data_rows =[]
-        self.origin = self.get_from_kwargs('origin', [0, 0,0])
+        self.data_rows = []
+        self.origin = self.get_from_kwargs('origin', [0, 0, 0])
         self.dimension = self.get_from_kwargs('dimension', 2)
         self.location = self.get_from_kwargs('location', Vector([0, 0, 0]))
-        self.lengths = self.get_from_kwargs('lengths', [7]*3)
-        self.radii = self.get_from_kwargs('radii', [0.05]*3)
-        self.domains = self.get_from_kwargs("domains",[[0,10]]*3)
-        self.tic_labels=self.get_from_kwargs("tic_labels",["AUTO"]*3)
-        self.n_tics=self.get_from_kwargs("n_tics",[2]*3)
-        self.tic_label_digits =self.get_from_kwargs("tic_label_digits",[False]*3)
-        self.tic_label_shifts =self.get_from_kwargs("tic_label_shifts",[Vector()]*3)
-        self.colors = self.get_from_kwargs('colors',['drawing']*3)
-        self.axes_labels = self.get_from_kwargs('axes_labels',{'x':"AUTO",'y':"AUTO",'z':"AUTO"})
-        self.include_zeros = self.get_from_kwargs('include_zeros',[True]*3)
-        self.data = self.get_from_kwargs('data',None)
-        self.name = self.get_from_kwargs('name',str(self.dimension)+"D-CoordinateSystem")
+        self.lengths = self.get_from_kwargs('lengths', [7] * 3)
+        self.radii = self.get_from_kwargs('radii', [0.05] * 3)
+        self.domains = self.get_from_kwargs("domains", [[0, 10]] * 3)
+        self.tic_labels = self.get_from_kwargs("tic_labels", ["AUTO"] * 3)
+        self.n_tics = self.get_from_kwargs("n_tics", [2] * 3)
+        self.tic_label_digits = self.get_from_kwargs("tic_label_digits", [False] * 3)
+        self.tic_label_shifts = self.get_from_kwargs("tic_label_shifts", [Vector()] * 3)
+        self.colors = self.get_from_kwargs('colors', ['drawing'] * 3)
+        self.axes_labels = self.get_from_kwargs('axes_labels', {'x': "AUTO", 'y': "AUTO", 'z': "AUTO"})
+        self.include_zeros = self.get_from_kwargs('include_zeros', [True] * 3)
+        self.data = self.get_from_kwargs('data', None)
+        self.name = self.get_from_kwargs('name', str(self.dimension) + "D-CoordinateSystem")
+        self.directions = self.get_from_kwargs('directions', ["HORIZONTAL", "VERTICAL"])
+        self.label_rotations=self.get_from_kwargs('label_rotations',[np.pi/2,0,0]*3)
         self.axes = []
 
-        if self.dimension ==2:
+        if self.dimension == 2:
             # compute axes locations
             # the center of the coordinate system is the self.origin
-            if len(self.origin)==2:
-                self.origin+=[0]
-            e = [Vector([1, 0, 0]), Vector([0, 0, 1])]
-            axis_locations = [
-                 self.domains[i][0] * self.lengths[i] / (
-                            self.domains[i][1] - self.domains[i][0]) * (e[i]-to_vector(self.origin)) for i in range(2)]
+            if len(self.origin) == 2:
+                self.origin += [0]
 
-            names= ["xAxis","yAxis"]
-            directions = ["HORIZONTAL","VERTICAL"]
+            if self.directions[1] == "VERTICAL":
+                e = [Vector([1, 0, 0]), Vector([0, 0, 1])]
+            else:
+                e = [Vector([1, 0, 0]), Vector([0, 1, 0])]
+
+            axis_locations = [
+                self.domains[i][0] * self.lengths[i] / (
+                        self.domains[i][1] - self.domains[i][0]) * (e[i] - to_vector(self.origin)) for i in range(2)]
+
+            names = ["xAxis", "yAxis"]
+            directions = self.directions
             axis_label_keys = list(self.axes_labels.keys())
             for i in range(2):
-                self.axes.append(NumberLine2(name=names[i],direction=directions[i],domain=self.domains[i],
+                self.axes.append(NumberLine2(name=names[i], direction=directions[i], domain=self.domains[i],
                                              location=axis_locations[i],
                                              tic_labels=self.tic_labels[i],
-                                             n_tics = self.n_tics[i],
+                                             n_tics=self.n_tics[i],
                                              tic_label_digits=self.tic_label_digits[i],
-                                             tic_label_shift= self.tic_label_shifts[i],
+                                             tic_label_shift=self.tic_label_shifts[i],
                                              include_zero=self.include_zeros[i],
-                                        length=self.lengths[i],
-                                 color=self.colors[i],axis_label=axis_label_keys[i],
-                                             axis_label_location=self.axes_labels[axis_label_keys[i]],**kwargs))
-        elif self.dimension ==3:
+                                             label_rotation=self.label_rotations[i],
+                                             length=self.lengths[i],
+                                             color=self.colors[i], axis_label=axis_label_keys[i],
+                                             axis_label_location=self.axes_labels[axis_label_keys[i]], **kwargs))
+        elif self.dimension == 3:
             # compute axes locations
             # the center of the coordinate system is the point (0,0)
-            e = [Vector([1, 0, 0]),Vector([0,1,0]), Vector([0, 0, 1])]
+            e = [Vector([1, 0, 0]), Vector([0, 1, 0]), Vector([0, 0, 1])]
             axis_locations = [
                 to_vector(self.location) + self.domains[i][0] * self.lengths[i] / (
-                            self.domains[i][1] - self.domains[i][0]) * e[i] for i in range(3)]
+                        self.domains[i][1] - self.domains[i][0]) * e[i] for i in range(3)]
 
-            names = ["xAxis", "yAxis","zAxis"]
-            directions = ["HORIZONTAL", "DEEP","VERTICAL"]
+            names = ["xAxis", "yAxis", "zAxis"]
+            directions = ["HORIZONTAL", "DEEP", "VERTICAL"]
             axis_label_keys = list(self.axes_labels.keys())
             for i in range(3):
-                self.axes.append(NumberLine2(name=names[i],direction=directions[i],domain=self.domains[i],
+                self.axes.append(NumberLine2(name=names[i], direction=directions[i], domain=self.domains[i],
                                              location=axis_locations[i],
                                              tic_labels=self.tic_labels[i],
-                                             n_tics = self.n_tics[i],
+                                             n_tics=self.n_tics[i],
                                              tic_label_digits=self.tic_label_digits[i],
                                              tic_label_shift=self.tic_label_shifts[i],
                                              length=self.lengths[i],
                                              include_zero=self.include_zeros[i],
-                                                color=self.colors[i],axis_label=axis_label_keys[i],
-                                             axis_label_location=self.axes_labels[axis_label_keys[i]],**kwargs))
+                                             color=self.colors[i], axis_label=axis_label_keys[i],
+                                             axis_label_location=self.axes_labels[axis_label_keys[i]], **kwargs))
 
         if self.data:
-            children = self.axes+[self.data]
+            children = self.axes + [self.data]
         else:
             children = self.axes
-        super().__init__(children=children,name=self.name,location=self.location,**kwargs)
+        super().__init__(children=children, name=self.name, location=self.location, **kwargs)
 
-    def appear(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,alpha=1):
-        super().appear(scale=scale,begin_time=begin_time,transition_time=transition_time,alpha=alpha)
+    def appear(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, alpha=1):
+        super().appear(scale=scale, begin_time=begin_time, transition_time=transition_time, alpha=alpha)
         for axis in self.axes:
-            axis.grow(scale=scale,begin_time=begin_time,transition_time=transition_time,alpha=alpha)
-        return begin_time+transition_time
+            axis.grow(scale=scale, begin_time=begin_time, transition_time=transition_time, alpha=alpha)
+        return begin_time + transition_time
 
-    def zoom_x(self,from_domain=[0,1],to_domain=[0,2],begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
-        min_node=ibpy.get_geometry_node_from_modifier(self.axes[0].modifier,"Minimum")
-        max_node=ibpy.get_geometry_node_from_modifier(self.axes[0].modifier,"Maximum")
-        ibpy.change_default_value(min_node,from_value=from_domain[0],to_value=to_domain[0],begin_time=begin_time,transition_time=transition_time)
-        ibpy.change_default_value(max_node,from_value=from_domain[1],to_value=to_domain[1],begin_time=begin_time,transition_time=transition_time)
+    def zoom_x(self, from_domain=[0, 1], to_domain=[0, 2], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        min_node = ibpy.get_geometry_node_from_modifier(self.axes[0].modifier, "Minimum")
+        max_node = ibpy.get_geometry_node_from_modifier(self.axes[0].modifier, "Maximum")
+        ibpy.change_default_value(min_node, from_value=from_domain[0], to_value=to_domain[0], begin_time=begin_time,
+                                  transition_time=transition_time)
+        ibpy.change_default_value(max_node, from_value=from_domain[1], to_value=to_domain[1], begin_time=begin_time,
+                                  transition_time=transition_time)
         for row in self.data_rows:
-            row.zoom_x(from_domain=from_domain,to_domain=to_domain,begin_time=begin_time,transition_time=transition_time)
-        return begin_time+transition_time
+            row.zoom_x(from_domain=from_domain, to_domain=to_domain, begin_time=begin_time,
+                       transition_time=transition_time)
+        return begin_time + transition_time
 
     def zoom_y(self, from_domain=[0, 1], to_domain=[0, 2], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         min_node = ibpy.get_geometry_node_from_modifier(self.axes[1].modifier, "Minimum")
@@ -150,28 +162,26 @@ class CoordinateSystem2(BObject):
                                   transition_time=transition_time)
         for row in self.data_rows:
             row.zoom_y(from_domain=from_domain, to_domain=to_domain, begin_time=begin_time,
-                     transition_time=transition_time)
+                       transition_time=transition_time)
         return begin_time + transition_time
 
-    def log_x(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def log_x(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for data in self.data_rows:
-            data.to_log_x(begin_time=begin_time,transition_time=transition_time)
-        return self.axes[0].to_log(begin_time=begin_time,transition_time=transition_time)
+            data.to_log_x(begin_time=begin_time, transition_time=transition_time)
+        return self.axes[0].to_log(begin_time=begin_time, transition_time=transition_time)
 
-
-    def log_y(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def log_y(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for data in self.data_rows:
-            data.to_log_y(begin_time=begin_time,transition_time=transition_time)
-        return self.axes[1].to_log(begin_time=begin_time,transition_time=transition_time)
+            data.to_log_y(begin_time=begin_time, transition_time=transition_time)
+        return self.axes[1].to_log(begin_time=begin_time, transition_time=transition_time)
 
-    def log_z(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def log_z(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for data in self.data_rows:
-            data.to_log_z(begin_time=begin_time,transition_time=transition_time)
-        return self.axes[2].to_log(begin_time=begin_time,transition_time=transition_time)
+            data.to_log_z(begin_time=begin_time, transition_time=transition_time)
+        return self.axes[2].to_log(begin_time=begin_time, transition_time=transition_time)
 
-
-    def add_data(self,bob_data):
-        ibpy.set_parent(bob_data,self)
+    def add_data(self, bob_data):
+        ibpy.set_parent(bob_data, self)
         self.data_rows.append(bob_data)
 
 
@@ -276,7 +286,7 @@ class CoordinateSystem(BObject):
         self.location_of_origin = self.get_from_kwargs('location_of_origin', Vector([0, 0, 0]))
         self.lengths = self.get_from_kwargs('lengths', [2, 2, 2])
         self.radii = self.get_from_kwargs('radii', [0.05, 0.05, 0.05])
-        self.dynamic = self.get_from_kwargs('dynamic',False)
+        self.dynamic = self.get_from_kwargs('dynamic', False)
         rotation = self.get_from_kwargs('rotation_euler', [0, 0, 0])
         if 'rotation_euler' in kwargs:
             kwargs.pop('rotation_euler')
@@ -311,7 +321,7 @@ class CoordinateSystem(BObject):
         label_positions = self.get_from_kwargs('label_positions', ['left', 'left', 'left'])
         label_closenesses = self.get_from_kwargs('label_closenesses', [1, 1, 1])
         axis_label_closenesses = self.get_from_kwargs('axis_label_closenesses', [1, 1, 1])
-        label_sizes = self.get_from_kwargs('label_sizes',['normal']*self.dimensions)
+        label_sizes = self.get_from_kwargs('label_sizes', ['normal'] * self.dimensions)
 
         if not self.dynamic:
             for i in range(self.dimensions):
@@ -342,29 +352,29 @@ class CoordinateSystem(BObject):
                 if ranges is not None:
                     rng = ranges[i]
                 else:
-                    rng = list(range(0,10))
+                    rng = list(range(0, 10))
                 axis = DynamicNumberLine(length=self.lengths[i], radius=self.radii[i],
-                                  domain=self.domains[i],
-                                  n_tics=all_n_tics[i],
-                                  label=labels[i],
-                                  tic_labels=all_tic_labels[i],
-                                  direction=directions[i],
-                                  include_zero=include_zeros[i],
-                                  origin=self.origin[i],
-                                  color=colors[i],
-                                  shading=shadings[i],
-                                  label_digit=label_digits[i],
-                                  label_unit=label_units[i],
-                                  tip_length=tip_lengths[i],
-                                  label_color=label_colors[i],
-                                  label_position=label_positions[i],
-                                  label_closeness=label_closenesses[i],
-                                  axis_label_closeness=axis_label_closenesses[i],
-                                    range=rng,
-                                  **kwargs)
+                                         domain=self.domains[i],
+                                         n_tics=all_n_tics[i],
+                                         label=labels[i],
+                                         tic_labels=all_tic_labels[i],
+                                         direction=directions[i],
+                                         include_zero=include_zeros[i],
+                                         origin=self.origin[i],
+                                         color=colors[i],
+                                         shading=shadings[i],
+                                         label_digit=label_digits[i],
+                                         label_unit=label_units[i],
+                                         tip_length=tip_lengths[i],
+                                         label_color=label_colors[i],
+                                         label_position=label_positions[i],
+                                         label_closeness=label_closenesses[i],
+                                         axis_label_closeness=axis_label_closenesses[i],
+                                         range=rng,
+                                         **kwargs)
                 self.axes.append(axis)
 
-        self.name=self.get_from_kwargs('name','CoordinateSystem')
+        self.name = self.get_from_kwargs('name', 'CoordinateSystem')
         super().__init__(children=self.axes, name=self.name, rotation_euler=rotation, location=self.location_of_origin,
                          **kwargs)
 
@@ -421,7 +431,7 @@ class CoordinateSystem(BObject):
             X = Vector(X)  # + Vector(self.location_of_origin)
         return X
 
-    def coords2location_relative2coordinate_system(self, coordinates,apply_origin_shift=False):
+    def coords2location_relative2coordinate_system(self, coordinates, apply_origin_shift=False):
         if apply_origin_shift:
             return self.coords2location(coordinates) + to_vector(self.location_of_origin)
         else:
@@ -474,24 +484,25 @@ class CoordinateSystem(BObject):
         for i, axis in enumerate(self.axes):
             axis.appear(begin_time=begin_times[i], transition_time=transition_times[i])
 
-    def appear(self,alpha=1,
+    def appear(self, alpha=1,
                begin_time=0,
-               transition_time=OBJECT_APPEARANCE_TIME, empty=False,**kwargs
+               transition_time=OBJECT_APPEARANCE_TIME, empty=False, **kwargs
                ):
 
         t0 = begin_time
-        super().appear(alpha=alpha,begin_time=t0, transition_time=transition_time,children=False,**kwargs) # the appearance of the children is dealt with separately
+        super().appear(alpha=alpha, begin_time=t0, transition_time=transition_time, children=False,
+                       **kwargs)  # the appearance of the children is dealt with separately
         if not empty:
             for axis in self.axes:
-                axis.appear(alpha=alpha, begin_time=t0, transition_time=transition_time,**kwargs)
+                axis.appear(alpha=alpha, begin_time=t0, transition_time=transition_time, **kwargs)
 
-        return t0+transition_time
+        return t0 + transition_time
 
     def disappear_axes(self, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME
                        ):
         for axis in self.axes:
             axis.disappear(begin_time=begin_time, transition_time=transition_time)
-        return begin_time+transition_time
+        return begin_time + transition_time
 
     def disappear_grid(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         dt = transition_time / (len(self.x_lines) + len(self.y_lines))
@@ -536,8 +547,8 @@ class CoordinateSystem(BObject):
         super().rotate(begin_time=begin_time, transition_time=transition_time, pivot=pivot, interpolation=interpolation,
                        **kwargs)
 
-        if not isinstance(compensate,list):
-            compensate=[compensate]*3
+        if not isinstance(compensate, list):
+            compensate = [compensate] * 3
 
         if 'rotation_euler' in kwargs:
             rotation_euler = kwargs.pop('rotation_euler')
@@ -546,15 +557,15 @@ class CoordinateSystem(BObject):
             delta = mathutils.Euler(rotation_euler).to_matrix() @ mathutils.Euler(
                 old_rotation_euler).to_matrix().inverted()
 
-            for comp, axis in zip(compensate,self.axes):
+            for comp, axis in zip(compensate, self.axes):
                 if comp:
                     axis.compensate_rotation(begin_time=begin_time, transition_time=transition_time,
                                              delta_rotation=delta)
-        return begin_time+transition_time
+        return begin_time + transition_time
 
     def draw_grid_lines(self, colors=['drawing', 'drawing'], sub_grid=0, begin_time=0,
                         transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
-        self.grid_colors=colors
+        self.grid_colors = colors
 
         x_axis = self.axes[0]
         y_axis = self.axes[1]
@@ -627,20 +638,20 @@ class CoordinateSystem(BObject):
         offset = transition_time / 4 / len(self.y_lines)
         for i, line in enumerate(self.y_lines):
             line.grow(begin_time=begin_time + i * offset + transition_time / 2, transition_time=transition_time / 2)
-        return begin_time+transition_time
+        return begin_time + transition_time
 
     def grid_next_transform(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for xline in self.x_lines:
             xline.next(begin_time=begin_time, transition_time=transition_time)
         for yline in self.y_lines:
             yline.next(begin_time=begin_time, transition_time=transition_time)
-        return begin_time+transition_time
+        return begin_time + transition_time
 
-    def grid_change_color(self, new_color='text',begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def grid_change_color(self, new_color='text', begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for xline in self.x_lines:
-            xline.change_color(new_color=new_color,begin_time=begin_time, transition_time=transition_time)
+            xline.change_color(new_color=new_color, begin_time=begin_time, transition_time=transition_time)
         for yline in self.y_lines:
-            yline.change_color(new_color=new_color,begin_time=begin_time, transition_time=transition_time)
+            yline.change_color(new_color=new_color, begin_time=begin_time, transition_time=transition_time)
 
     def draw_transformable_grid(self, transformations=[], colors=['drawing', 'drawing'], sub_grid=0, begin_time=0,
                                 transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
@@ -695,10 +706,10 @@ class CoordinateSystem(BObject):
                                 lambda t: (end - start),
                                 lambda t: Vector(),
                                 transformations=transformations,
-                                         domain=[0, 1],
-                                         thickness=0.25 * thickness,
-                                         name='sub_grid_line_x_' + str(xi),
-                                         scale=self.get_scales(), **kwargs)
+                                domain=[0, 1],
+                                thickness=0.25 * thickness,
+                                name='sub_grid_line_x_' + str(xi),
+                                scale=self.get_scales(), **kwargs)
                         )
                     x_last = x
             start = Vector([x, 0, y_min_tic])
@@ -709,10 +720,10 @@ class CoordinateSystem(BObject):
                     lambda t: (end - start),
                     lambda t: Vector(),
                     transformations=transformations,
-                             domain=[0, 1],
-                             thickness=thickness,
-                             name='grid_line_x_' + str(x),
-                             scale=self.get_scales(), **kwargs)
+                    domain=[0, 1],
+                    thickness=thickness,
+                    name='grid_line_x_' + str(x),
+                    scale=self.get_scales(), **kwargs)
             )
 
         self.y_lines = []
@@ -734,10 +745,10 @@ class CoordinateSystem(BObject):
                                 lambda t: (end - start),
                                 lambda t: Vector(),
                                 transformations=transformations,
-                                         domain=[0, 1],
-                                         thickness=0.25*thickness,
-                                         name='sub_grid_line_y_' + str(yi),
-                                         scale=self.get_scales(), **kwargs)
+                                domain=[0, 1],
+                                thickness=0.25 * thickness,
+                                name='sub_grid_line_y_' + str(yi),
+                                scale=self.get_scales(), **kwargs)
                         )
                     y_last = y
             start = Vector([x_min_tic, 0, y])
@@ -748,10 +759,10 @@ class CoordinateSystem(BObject):
                     lambda t: (end - start),
                     lambda t: Vector(),
                     transformations=transformations,
-                             domain=[0, 1],
-                             thickness=thickness,
-                             name='grid_line_y_' + str(y),
-                             scale=self.get_scales(), **kwargs)
+                    domain=[0, 1],
+                    thickness=thickness,
+                    name='grid_line_y_' + str(y),
+                    scale=self.get_scales(), **kwargs)
             )
 
         offset = transition_time / 4 / len(self.x_lines)
@@ -764,10 +775,10 @@ class CoordinateSystem(BObject):
             self.add_object(line)
             line.grow(begin_time=begin_time + i * offset + transition_time / 2, transition_time=transition_time / 2,
                       modus='from_start')
-        return begin_time+transition_time
+        return begin_time + transition_time
 
     def draw_transformable_polar_grid(self, transformations, twists=[0], sub_grid=0,
-                                      begin_time=0,center=Vector(),
+                                      begin_time=0, center=Vector(),
                                       transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         '''
         draw gridlines that can be transformed
@@ -805,14 +816,14 @@ class CoordinateSystem(BObject):
 
         ext_x = x_max_tic - x_min_tic
         ext_y = y_max_tic - y_min_tic
-        r_max = int(np.round(np.minimum(ext_x/2,ext_y/2)))
+        r_max = int(np.round(np.minimum(ext_x / 2, ext_y / 2)))
 
         n = int(np.maximum(len(x_axis.tic_values), len(y_axis.tic_values)))
         dr = r_max / n
         self.r_lines = []
         for i in range(1, n + 1):
             r = dr * i
-            embedding = lambda t: Vector([r * np.cos(t), 0, r * np.sin(t)])+center
+            embedding = lambda t: Vector([r * np.cos(t), 0, r * np.sin(t)]) + center
             velocity = lambda t: Vector([-r * np.sin(t), 0, r * np.cos(t)])
             acceleration = lambda t: Vector([-r * np.cos(t), 0, -r * np.sin(t)])
             self.r_lines.append(
@@ -822,9 +833,9 @@ class CoordinateSystem(BObject):
                              scale=self.get_scales(),
                              **kwargs)
             )
-            for j in range(1,sub_grid):
+            for j in range(1, sub_grid):
                 rs = r - dr / sub_grid * j
-                embedding = lambda t: Vector([rs * np.cos(t), 0, rs * np.sin(t)])+center
+                embedding = lambda t: Vector([rs * np.cos(t), 0, rs * np.sin(t)]) + center
                 velocity = lambda t: Vector([-rs * np.sin(t), 0, rs * np.cos(t)])
                 acceleration = lambda t: Vector([-rs * np.cos(t), 0, -rs * np.sin(t)])
                 self.r_lines.append(
@@ -838,7 +849,7 @@ class CoordinateSystem(BObject):
         dphi = 1.999 * np.pi / n
         for i in range(0, n):
             phi = dphi * i
-            embedding = lambda t: t * Vector([r_max * np.cos(phi), 0, r_max * np.sin(phi)])+center
+            embedding = lambda t: t * Vector([r_max * np.cos(phi), 0, r_max * np.sin(phi)]) + center
             velocity = lambda t: Vector([r_max * np.cos(phi), 0, r_max * np.sin(phi)])
             acceleration = lambda t: Vector()
 
@@ -849,9 +860,9 @@ class CoordinateSystem(BObject):
                              **kwargs)
             )
 
-            for j in range(1,sub_grid):
+            for j in range(1, sub_grid):
                 phis = phi - j * dphi / sub_grid
-                embedding = lambda t: t * Vector([r_max * np.cos(phis), 0, r_max * np.sin(phis)])+center
+                embedding = lambda t: t * Vector([r_max * np.cos(phis), 0, r_max * np.sin(phis)]) + center
                 velocity = lambda t: Vector([r_max * np.cos(phis), 0, r_max * np.sin(phis)])
                 acceleration = lambda t: Vector()
 
@@ -865,12 +876,12 @@ class CoordinateSystem(BObject):
 
         offset = transition_time / 4 / len(self.r_lines)
         scaled_center = Vector([
-            center.x*self.get_scales()[0],
-            center.y*self.get_scales()[1],
-            center.z*self.get_scales()[2]])
+            center.x * self.get_scales()[0],
+            center.y * self.get_scales()[1],
+            center.z * self.get_scales()[2]])
         for i, line in enumerate(self.r_lines):
             self.add_object(line)
-            line.grow(begin_time=begin_time + i * offset, transition_time=transition_time / 2,pivot=scaled_center)
+            line.grow(begin_time=begin_time + i * offset, transition_time=transition_time / 2, pivot=scaled_center)
 
         offset = transition_time / 4 / len(self.phi_lines)
         for i, line in enumerate(self.phi_lines):
@@ -909,7 +920,8 @@ class DynamicCoordinateSystem(CoordinateSystem):
         Coordinate system, where the number label are digital ranges,
         otherwise it's a regular coordinate system
     """
-    def __init__(self,**kwargs):
+
+    def __init__(self, **kwargs):
         """Create a :class:`CoordinateSystem` whose tic labels are
         :class:`DigitalRange` objects.
 
@@ -923,20 +935,20 @@ class DynamicCoordinateSystem(CoordinateSystem):
                 tic label can morph between specific values.
         """
         self.kwargs = kwargs
-        self.name = self.get_from_kwargs('name','DynamicCoordinateSystem')
-        super().__init__(dynamic=True,name=self.name, **kwargs)
+        self.name = self.get_from_kwargs('name', 'DynamicCoordinateSystem')
+        super().__init__(dynamic=True, name=self.name, **kwargs)
 
-    def scale_labels(self,scale=1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def scale_labels(self, scale=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         for axis in self.axes:
-            axis.scale_labels(scale,begin_time=begin_time,transition_time=transition_time)
-        return begin_time+transition_time
+            axis.scale_labels(scale, begin_time=begin_time, transition_time=transition_time)
+        return begin_time + transition_time
 
-    def shift_labels(self,shift=[0,0],begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
-        for s,axis in zip(shift,self.axes):
-            axis.shift_labels(s,begin_time=begin_time,transition_time=transition_time)
-        return begin_time+transition_time
+    def shift_labels(self, shift=[0, 0], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        for s, axis in zip(shift, self.axes):
+            axis.shift_labels(s, begin_time=begin_time, transition_time=transition_time)
+        return begin_time + transition_time
 
-    def adjust_grid_for_shifting(self, scale=1, shift = [0,0], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+    def adjust_grid_for_shifting(self, scale=1, shift=[0, 0], begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         # grid lines that move out on one line have to move in on the other side
         x_vals = self.axes[0].tic_values
         y_vals = self.axes[1].tic_values
@@ -949,38 +961,42 @@ class DynamicCoordinateSystem(CoordinateSystem):
         max_y = max(y_vals)
         min_y = min(y_vals)
 
-        direction = -self.coords2location(Vector([shift_x/scale, 0, 0]))
-        self.axes[1].move(direction = direction,begin_time=begin_time,transition_time=transition_time)
+        direction = -self.coords2location(Vector([shift_x / scale, 0, 0]))
+        self.axes[1].move(direction=direction, begin_time=begin_time, transition_time=transition_time)
 
-        for val,xline  in zip(x_vals,self.x_lines):
-            if val-shift_x>max_x:
-                offset_t = transition_time*(val-max_x)/shift_x
-                fraction = offset_t/transition_time
-                xline.move(direction=fraction*direction, begin_time=begin_time, transition_time=fraction*transition_time)
-                xline.toggle_hide(begin_time=begin_time+offset_t-1/FRAME_RATE)
+        for val, xline in zip(x_vals, self.x_lines):
+            if val - shift_x > max_x:
+                offset_t = transition_time * (val - max_x) / shift_x
+                fraction = offset_t / transition_time
+                xline.move(direction=fraction * direction, begin_time=begin_time,
+                           transition_time=fraction * transition_time)
+                xline.toggle_hide(begin_time=begin_time + offset_t - 1 / FRAME_RATE)
                 # I'm sorry to give up to solve this in general. Since it is only needed for this particular task
                 # the y-coordinate is hard-coded, it should be the middle between y_max and y_min, however, due to scaling things might have changed
-                jump_position = self.coords2location([min_x/scale, (min_y + max_y) / 2 / scale, 0])
-                xline.move_to(target_location=jump_position, begin_time=begin_time + offset_t + 1 / FRAME_RATE, transition_time=0)
-                xline.toggle_hide(begin_time=begin_time+offset_t+2/FRAME_RATE)
+                jump_position = self.coords2location([min_x / scale, (min_y + max_y) / 2 / scale, 0])
+                xline.move_to(target_location=jump_position, begin_time=begin_time + offset_t + 1 / FRAME_RATE,
+                              transition_time=0)
+                xline.toggle_hide(begin_time=begin_time + offset_t + 2 / FRAME_RATE)
                 rest = (transition_time - offset_t) / transition_time
-                xline.move_to(target_location=jump_position+Vector(rest*direction),begin_time=begin_time+offset_t,transition_time=transition_time-offset_t)
+                xline.move_to(target_location=jump_position + Vector(rest * direction),
+                              begin_time=begin_time + offset_t, transition_time=transition_time - offset_t)
             else:
                 xline.move(direction=direction, begin_time=begin_time, transition_time=transition_time)
 
         # add last grid line
-        new_line = Cylinder.from_start_to_end(start=self.coords2location([min_x/scale, min_y/scale]),
-                                              end=self.coords2location([min_x/scale, max_y/scale]), color=self.grid_colors[0],
-                                              radius=self.radii[0] * 0.5, name='grid_line_x_' + str(min_x+shift_x))
+        new_line = Cylinder.from_start_to_end(start=self.coords2location([min_x / scale, min_y / scale]),
+                                              end=self.coords2location([min_x / scale, max_y / scale]),
+                                              color=self.grid_colors[0],
+                                              radius=self.radii[0] * 0.5, name='grid_line_x_' + str(min_x + shift_x))
         # appear new line at the appropriate moment
-        new_line.appear(begin_time=begin_time +transition_time, transition_time=0)
+        new_line.appear(begin_time=begin_time + transition_time, transition_time=0)
         self.x_lines.append(new_line)
         self.add_object(self.x_lines[-1])
 
-        direction = -self.coords2location(Vector([0, shift_y/scale]))
+        direction = -self.coords2location(Vector([0, shift_y / scale]))
         self.axes[0].move(direction=direction, begin_time=begin_time, transition_time=transition_time)
 
-        for val,yline in zip(y_vals,self.y_lines):
+        for val, yline in zip(y_vals, self.y_lines):
             if val - shift_y > max_y:
                 offset_t = transition_time * (val - max_y) / shift_y
                 fraction = offset_t / transition_time
@@ -989,7 +1005,7 @@ class DynamicCoordinateSystem(CoordinateSystem):
                 yline.toggle_hide(begin_time=begin_time + offset_t - 1 / FRAME_RATE)
                 # I'm sorry to give up to solve this in general. Since it is only needed for this particular task
                 # the y-coordinate is hard-coded, it should be the middle between y_max and y_min, however, due to scaling things might have changed
-                jump_position = self.coords2location([(min_x+max_x)/2/scale, min_y / scale, 0])
+                jump_position = self.coords2location([(min_x + max_x) / 2 / scale, min_y / scale, 0])
                 yline.move_to(target_location=jump_position, begin_time=begin_time + offset_t + 1 / FRAME_RATE,
                               transition_time=0)
                 yline.toggle_hide(begin_time=begin_time + offset_t + 2 / FRAME_RATE)
@@ -1000,56 +1016,57 @@ class DynamicCoordinateSystem(CoordinateSystem):
                 yline.move(direction=direction, begin_time=begin_time, transition_time=transition_time)
 
         # add last grid line
-        new_line = Cylinder.from_start_to_end(start=self.coords2location([min_x/scale, min_y / scale]),
-                                              end=self.coords2location([max_x/scale, min_y / scale]),
+        new_line = Cylinder.from_start_to_end(start=self.coords2location([min_x / scale, min_y / scale]),
+                                              end=self.coords2location([max_x / scale, min_y / scale]),
                                               color=self.grid_colors[0],
-                                              radius=self.radii[0] * 0.5, name='grid_line_y' + str(min_y+shift_y))
+                                              radius=self.radii[0] * 0.5, name='grid_line_y' + str(min_y + shift_y))
         # appear new line at the appropriate moment
         new_line.appear(begin_time=begin_time + transition_time, transition_time=0)
         self.y_lines.append(new_line)
         self.add_object(self.y_lines[-1])
 
-        return begin_time+transition_time
+        return begin_time + transition_time
 
-    def adjust_grid_for_scaling(self,scale=1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def adjust_grid_for_scaling(self, scale=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
 
         x_vals = self.axes[0].tic_values
-        for line,val in zip(self.x_lines, x_vals):
-            direction = self.coords2location(Vector([val,0,0])-Vector([val/scale,0,0]))
-            line.move(direction=-direction,begin_time=begin_time,transition_time=transition_time)
+        for line, val in zip(self.x_lines, x_vals):
+            direction = self.coords2location(Vector([val, 0, 0]) - Vector([val / scale, 0, 0]))
+            line.move(direction=-direction, begin_time=begin_time, transition_time=transition_time)
         y_vals = self.axes[1].tic_values
         for line, val in zip(self.y_lines, y_vals):
-            direction = self.coords2location(Vector([0,val,  0]) - Vector([0,val / scale, 0]))
+            direction = self.coords2location(Vector([0, val, 0]) - Vector([0, val / scale, 0]))
             line.move(direction=-direction, begin_time=begin_time, transition_time=transition_time)
 
         max_x = max(x_vals)
         min_x = min(x_vals)
         max_y = max(y_vals)
         min_y = min(y_vals)
-        delta_x = x_vals[1]-x_vals[0]
-        delta_y = y_vals[1]-y_vals[0]
+        delta_x = x_vals[1] - x_vals[0]
+        delta_y = y_vals[1] - y_vals[0]
 
-        new_x_lines = int((max_x*scale-max_x)/delta_x)
-        new_y_lines = int((max_y*scale-max_y)/delta_y)
+        new_x_lines = int((max_x * scale - max_x) / delta_x)
+        new_y_lines = int((max_y * scale - max_y) / delta_y)
 
         for i in range(new_x_lines):
-            x = max_x+(i+1)*delta_x
+            x = max_x + (i + 1) * delta_x
             self.axes[0].tic_values.append(x)  # add values to keep track of the pre-image of each line
             new_line = Cylinder.from_start_to_end(start=self.coords2location([max_x, min_y]),
-                                             end=self.coords2location([max_x, max_y]), color=self.grid_colors[0],
-                                             radius=self.radii[0] * 0.5, name='grid_line_x_' + str(x))
+                                                  end=self.coords2location([max_x, max_y]), color=self.grid_colors[0],
+                                                  radius=self.radii[0] * 0.5, name='grid_line_x_' + str(x))
             # appear new line at the appropriate moment
             offset_t = transition_time * (i + 1) / new_x_lines
             new_line.appear(begin_time=begin_time + offset_t, transition_time=1)
             # move new line to the appropriate position
-            direction =  self.coords2location(Vector([max_x,0,  0]) - Vector([x / scale,0, 0]))
-            new_line.move(direction=-direction,begin_time=begin_time+offset_t,transition_time=(transition_time-offset_t))
+            direction = self.coords2location(Vector([max_x, 0, 0]) - Vector([x / scale, 0, 0]))
+            new_line.move(direction=-direction, begin_time=begin_time + offset_t,
+                          transition_time=(transition_time - offset_t))
             self.x_lines.append(new_line)
             self.add_object(self.x_lines[-1])
 
         for i in range(new_y_lines):
             y = max_y + (i + 1) * delta_y
-            self.axes[1].tic_values.append(y) # add values to keep track of the pre-image of each line
+            self.axes[1].tic_values.append(y)  # add values to keep track of the pre-image of each line
             new_line = Cylinder.from_start_to_end(start=self.coords2location([min_x, max_y]),
                                                   end=self.coords2location([max_x, max_y]), color=self.grid_colors[1],
                                                   radius=self.radii[0] * 0.5, name='grid_line_y_' + str(x))
@@ -1063,4 +1080,4 @@ class DynamicCoordinateSystem(CoordinateSystem):
             self.y_lines.append(new_line)
             self.add_object(self.y_lines[-1])
 
-        return begin_time+transition_time
+        return begin_time + transition_time

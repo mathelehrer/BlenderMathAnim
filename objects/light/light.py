@@ -20,12 +20,12 @@ class LightProbe(BObject):
                 * ``name`` (str): Defaults to ``'Probe'``.
                 * ``rotation_euler`` (list[float]): Defaults to ``[0, 0, 0]``.
         """
-        self.kwargs=kwargs
-        name= self.get_from_kwargs('name',"Probe")
-        self.rotation_euler = self.get_from_kwargs('rotation_euler',[0,0,0])
+        self.kwargs = kwargs
+        name = self.get_from_kwargs('name', "Probe")
+        self.rotation_euler = self.get_from_kwargs('rotation_euler', [0, 0, 0])
         probe = ibpy.add_light_probe(**kwargs)
 
-        super().__init__(obj=probe, name=name,rotation_euler=self.rotation_euler, **self.kwargs)
+        super().__init__(obj=probe, name=name, rotation_euler=self.rotation_euler, **self.kwargs)
 
 
 class SpotLight(BObject):
@@ -34,6 +34,7 @@ class SpotLight(BObject):
     target to bob
     specify location, radius,scale,energy
     """
+
     def __init__(self, **kwargs):
         """Create a spotlight (optionally tracking a target).
 
@@ -48,36 +49,97 @@ class SpotLight(BObject):
                   ``radius``, ``scale``).
         """
         self.kwargs = kwargs
-        name=self.get_from_kwargs('name','SpotLight')
+        name = self.get_from_kwargs('name', 'SpotLight')
 
-        energy = get_from_kwargs(kwargs, "energy", 10)
-        light = ibpy.add_spot_light(energy,**kwargs)
+        self.energy = get_from_kwargs(kwargs, "energy", 10)
+        light = ibpy.add_spot_light(self.energy, **kwargs)
 
-
-        super().__init__(obj=light,name=name,**self.kwargs)
-        target = get_from_kwargs(kwargs,"target",None)
+        super().__init__(obj=light, name=name, **self.kwargs)
+        target = get_from_kwargs(kwargs, "target", None)
 
         if target:
-            ibpy.set_track(self,target)
+            ibpy.set_track(self, target)
 
     def appear(self,
                begin_time=0,
                transition_time=DEFAULT_ANIMATION_TIME,
                **kwargs):
-        self.on(begin_time=begin_time,transition_time=transition_time)
+        self.on(begin_time=begin_time, transition_time=transition_time)
+        return begin_time + transition_time
 
-    def disappear(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
-        self.off(begin_time=begin_time,transition_time=transition_time)
+    def disappear(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+        self.off(begin_time=begin_time, transition_time=transition_time)
+        return begin_time + transition_time
 
-    def on(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def on(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         ibpy.switch_on(self, begin_frame=begin_time * FRAME_RATE, frame_duration=transition_time * FRAME_RATE)
+        return begin_time + transition_time
 
-    def off(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
-        ibpy.switch_off(self,begin_frame = begin_time*FRAME_RATE,frame_duration=transition_time*FRAME_RATE)
+    def off(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.switch_off(self, begin_frame=begin_time * FRAME_RATE, frame_duration=transition_time * FRAME_RATE)
+        return begin_time + transition_time
 
-    def change_power(self,from_value=0,to_value=5000,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
-        ibpy.change_power(self,from_value=from_value,to_value=to_value,begin_frame=begin_time * FRAME_RATE,frame_duration=transition_time * FRAME_RATE)
-        return begin_time+transition_time
+    def change_power(self, from_value=0, to_value=5000, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.change_power(self, from_value=from_value, to_value=to_value, begin_frame=begin_time * FRAME_RATE,
+                          frame_duration=transition_time * FRAME_RATE)
+        return begin_time + transition_time
+
+
+class PointLight(BObject):
+    """
+    PointLight
+    target to bob
+    specify location, radius,scale,energy
+    """
+
+    def __init__(self, **kwargs):
+        """Create a spotlight (optionally tracking a target).
+
+        Args:
+            **kwargs: Forwarded to :func:`ibpy.add_spot_light` and
+                :class:`BObject`. Supported keys:
+                * ``name`` (str): Defaults to ``'SpotLight'``.
+                * ``energy`` (float): Light energy in W. Defaults to 10.
+                * ``target`` (:class:`BObject`): Object to point at
+                  using a TRACK_TO constraint.
+                * Standard transform kwargs (``location``, ``rotation_euler``,
+                  ``radius``, ``scale``).
+        """
+        self.kwargs = kwargs
+        name = self.get_from_kwargs('name', 'PointLight')
+        target = get_from_kwargs(kwargs, "target", None)
+        self.energy = get_from_kwargs(kwargs, "energy", 10)
+        light = ibpy.add_point_light(energy=self.energy,**kwargs)
+
+        super().__init__(obj=light, name=name, **self.kwargs)
+
+
+        if target:
+            ibpy.set_track(self, target)
+
+    def appear(self,
+               begin_time=0,
+               transition_time=DEFAULT_ANIMATION_TIME,
+               **kwargs):
+        self.on(begin_time=begin_time, transition_time=transition_time)
+        return begin_time + transition_time
+
+    def disappear(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+        self.off(begin_time=begin_time, transition_time=transition_time)
+        return begin_time + transition_time
+
+    def on(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.switch_on(self, begin_frame=begin_time * FRAME_RATE, frame_duration=transition_time * FRAME_RATE)
+        return begin_time + transition_time
+
+    def off(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.switch_off(self, begin_frame=begin_time * FRAME_RATE, frame_duration=transition_time * FRAME_RATE)
+        return begin_time + transition_time
+
+    def change_power(self, from_value=0, to_value=5000, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.change_power(self, from_value=from_value, to_value=to_value, begin_frame=begin_time * FRAME_RATE,
+                          frame_duration=transition_time * FRAME_RATE)
+        return begin_time + transition_time
 
 
 class AreaLight(BObject):
@@ -86,7 +148,8 @@ class AreaLight(BObject):
     target to bob
     specify location, radius,scale,energy
     """
-    def __init__(self,target = None, **kwargs):
+
+    def __init__(self, target=None, **kwargs):
         """Create an area light (optionally tracking a target).
 
         Args:
@@ -112,37 +175,36 @@ class AreaLight(BObject):
         # self.scale = self.get_from_kwargs('scale', [1] * 3)
         self.energy = self.get_from_kwargs('energy', 10)
         self.color = self.get_from_kwargs('color', 'text')
-        self.shape =self.get_from_kwargs('shape','SQUARE')
-        self.size=self.get_from_kwargs('size',1)
-        self.size_y=self.get_from_kwargs('size_y',1)
-        self.diffuse_factor=self.get_from_kwargs('diffuse_factor',1)
-        self.specular_factor=self.get_from_kwargs('specular_factor',1)
-        self.volume_factor=self.get_from_kwargs('volume_factor',1)
+        self.shape = self.get_from_kwargs('shape', 'SQUARE')
+        self.size = self.get_from_kwargs('size', 1)
+        self.size_y = self.get_from_kwargs('size_y', 1)
+        self.diffuse_factor = self.get_from_kwargs('diffuse_factor', 1)
+        self.specular_factor = self.get_from_kwargs('specular_factor', 1)
+        self.volume_factor = self.get_from_kwargs('volume_factor', 1)
 
-        name=self.get_from_kwargs('name','AreaLight')
-        light = ibpy.add_area_light(energy=self.energy,color=self.color,shape=self.shape,
-                                    size=self.size,size_y=self.size_y,diffuse_factor=self.diffuse_factor,
-                                    specular_factor=self.specular_factor,volume_factor=self.volume_factor)
+        name = self.get_from_kwargs('name', 'AreaLight')
+        light = ibpy.add_area_light(energy=self.energy, color=self.color, shape=self.shape,
+                                    size=self.size, size_y=self.size_y, diffuse_factor=self.diffuse_factor,
+                                    specular_factor=self.specular_factor, volume_factor=self.volume_factor)
 
-
-        super().__init__(obj=light,name=name,**self.kwargs)
+        super().__init__(obj=light, name=name, **self.kwargs)
 
         if target:
-            ibpy.set_track(self,target)
+            ibpy.set_track(self, target)
 
     def appear(self,
                begin_time=0,
                transition_time=DEFAULT_ANIMATION_TIME,
                **kwargs):
-        return self.on(begin_time=begin_time,transition_time=transition_time)
+        return self.on(begin_time=begin_time, transition_time=transition_time)
 
-    def disappear(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
-        return self.off(begin_time=begin_time,transition_time=transition_time)
+    def disappear(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+        return self.off(begin_time=begin_time, transition_time=transition_time)
 
-    def on(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+    def on(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         ibpy.switch_on(self, begin_frame=begin_time * FRAME_RATE, frame_duration=transition_time * FRAME_RATE)
-        return begin_time+transition_time
+        return begin_time + transition_time
 
-    def off(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
-        ibpy.switch_off(self,begin_frame = begin_time*FRAME_RATE,frame_duration=transition_time*FRAME_RATE)
+    def off(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.switch_off(self, begin_frame=begin_time * FRAME_RATE, frame_duration=transition_time * FRAME_RATE)
         return begin_time + transition_time

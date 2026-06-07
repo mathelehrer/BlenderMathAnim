@@ -23,7 +23,7 @@ from objects.display import CodeDisplay
 from objects.light.light import SpotLight
 from objects.logo import LogoFromInstances
 from objects.plane import Plane
-from objects.text2 import Text, MorphText, MorphText2, MorphText3
+from objects.text import Text, MorphText, MorphText2, MorphText3
 from objects.arc import Arc2
 from objects.bobject import BObject
 from objects.circle import Circle2

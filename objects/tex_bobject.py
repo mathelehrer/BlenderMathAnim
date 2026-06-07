@@ -1,19 +1,17 @@
-import collections
+import hashlib
 import hashlib
 import os
 import time
 from copy import deepcopy
-from functools import partial
 
 import bpy
 import numpy as np
-from mathutils import Vector, Matrix
-from numpy import sort
 
 from appearance.textures import apply_material
 from interface import ibpy
 from interface.ibpy import link, set_bevel_factor_and_keyframe, set_alpha_and_keyframe, fade_out, get_location, \
     get_world_location2
+from mathutils import Vector
 from objects.bobject import BObject
 from objects.empties import EmptyCube
 from objects.svg_bobject import SVGBObject, equalize_spline_count, new_null_curve
@@ -21,6 +19,7 @@ from utils.constants import FRAME_RATE, TEMPLATE_TEX_FILE, TEX_DIR, TEX_TEXT_TO_
     OBJECT_APPEARANCE_TIME, CONTROL_POINTS_PER_SPLINE, DEFAULT_ANIMATION_TIME, TEMPLATE_TEXT_FILE
 from utils.kwargs import get_from_kwargs
 from utils.utils import to_vector
+
 
 class TexBObject(BObject):
     """

@@ -6,7 +6,7 @@ import bpy
 from appearance import textures
 from appearance.textures import apply_material
 from interface import ibpy
-from interface.ibpy import change_emission, Vector, Quaternion
+from interface.ibpy import Quaternion
 from utils.constants import *
 from utils.kwargs import get_from_kwargs
 from utils.utils import to_vector

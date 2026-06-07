@@ -130,3 +130,12 @@ class Flag(BObject):
         self.text_count += 1
         image = ic.get_image_path()
         self.add_image_texture(image, begin_time*FRAME_RATE,frame_duration=transition_time*FRAME_RATE)
+
+    def rescale(self, rescale=[1, 1, 1], from_scale=None, begin_time=0,
+                transition_time=DEFAULT_ANIMATION_TIME,
+                **kwargs):
+        for child in self.children:
+            child.rescale(rescale=rescale, from_scale=from_scale, begin_time=begin_time,
+                          transition_time=transition_time)
+        self.children[1].move_to(target_location=0.5*self.children[1].ref_obj.location,begin_time=begin_time,transition_time=transition_time)
+        return begin_time + transition_time

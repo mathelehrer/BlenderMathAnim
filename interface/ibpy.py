@@ -1105,16 +1105,37 @@ def add_light_probe(**kwargs):
 
 def add_spot_light(energy, **kwargs):
     '''
-    :param kwargs: location,radius,scale,energy
+    :param energy:
+    :param kwargs:
     :return:
     '''
 
     bpy.ops.object.light_add(type='SPOT')
     spot_size = get_from_kwargs(kwargs, "spot_size", np.pi / 4)
     spot = bpy.context.object
+    color_str = get_from_kwargs(kwargs, "color", "text")
+    color = get_color_from_string(color_str)
     spot.data.energy = energy
+    spot.data.color = color[0:3]
     spot.data.spot_size = spot_size
     return spot
+
+def add_point_light(energy, **kwargs):
+    '''
+    :param energy:
+    :param kwargs:
+    :return:
+    '''
+
+    bpy.ops.object.light_add(type='POINT')
+
+    point = bpy.context.object
+    color_str = get_from_kwargs(kwargs, "color", "text")
+    color = get_color_from_string(color_str)
+    point.data.energy = energy
+    point.data.color = color[0:3]
+
+    return point
 
 
 def add_area_light(**kwargs):
@@ -1155,11 +1176,12 @@ def add_point_light(**kwargs):
     energy = get_from_kwargs(kwargs, 'energy', 10)
     color = get_from_kwargs(kwargs, 'color', [1] * 3)
     max_bounces = get_from_kwargs(kwargs, 'max_bounces', 1024)
-
+    exposure= get_from_kwargs(kwargs,'exposure',1)
     bpy.ops.object.light_add(type='POINT', **kwargs)
     point = bpy.context.object
     point.data.energy = energy
     point.data.color = color
+    point.data.exposure=exposure
     point.data.cycles.max_bounces = max_bounces
     return point
 
@@ -6044,7 +6066,7 @@ def change_volume_absorption(bob, final_value, begin_time=0, transition_time=DEF
 # ============================================================================
 
 def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, denoising=False, shadows=True,
-                      resolution_percentage=100, frame_start=0, taa_render_samples=1024, feature_set='SUPPORTED'):
+                      resolution_percentage=100, frame_start=0, taa_render_samples=1024, feature_set='SUPPORTED',exposure=1):
     """
     @type frame_start: int
     
@@ -6085,7 +6107,7 @@ def set_render_engine(engine="CYCLES", transparent=False, motion_blur=False, den
     else:
         if blender_version() < (5, 0):
             scene.cycles.feature_set = feature_set
-
+        scene.cycles.film_exposure = exposure
         # set view to Material view
 
         area = next(area for area in bpy.context.screen.areas if area.type == 'VIEW_3D')

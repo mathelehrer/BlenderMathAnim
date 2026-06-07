@@ -433,6 +433,8 @@ def get_texture(material, **kwargs):
             return mix_texture(**kwargs)
         if material == 'image' and 'src' in kwargs:
             return make_image_material(**kwargs).copy()
+        elif "marble" in material:
+            return make_marble_material(**kwargs)
         elif "glass" in material:
             return make_translucent_material(color_str=material[6:], **kwargs)
         elif "crystal" in material:
@@ -3928,7 +3930,8 @@ def make_scattering_material(**kwargs):
     return color
 
 
-def make_marble_material():
+def make_marble_material(**kwargs):
+    dark = get_from_kwargs(kwargs,"dark",1)
     color = bpy.data.materials.new(name='marble')
     color.use_nodes = True
     nodes = color.node_tree.nodes
@@ -3942,7 +3945,7 @@ def make_marble_material():
 
     ramp = nodes.new(type='ShaderNodeValToRGB')
     ramp.color_ramp.elements[0].position = 0.386
-    ramp.color_ramp.elements[0].color = [1, 1, 1, 1]
+    ramp.color_ramp.elements[0].color = [dark,dark,dark,1]
     ramp.color_ramp.elements[1].position = 0.745
     ramp.color_ramp.elements[1].color = [0.010, 0.034, 0.047, 1]
 
@@ -3950,7 +3953,7 @@ def make_marble_material():
     links.new(ramp.outputs['Color'], bump.inputs['Height'])
 
     noise = nodes.new(type='ShaderNodeTexNoise')
-    noise.inputs['Scale'].default_value = 5
+    noise.inputs['Scale'].default_value =4.55
     noise.inputs['Detail'].default_value = 16
     links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
 
@@ -3965,7 +3968,7 @@ def make_marble_material():
 
     coords = nodes.new(type='ShaderNodeTexCoord')
     links.new(coords.outputs['Generated'], noise2.inputs['Vector'])
-
+    return color
 
 def make_metal_materials():
     for i in range(1, 10):

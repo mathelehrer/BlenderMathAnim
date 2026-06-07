@@ -2155,6 +2155,8 @@ class NumberLineModifier(GeometryNodesModifier):
         direction = get_from_kwargs(kwargs, 'direction', 'HORIZONTAL')
         axis_label = get_from_kwargs(kwargs, 'axis_label', "x")
         axis_label_location = get_from_kwargs(kwargs, 'axis_label_location', 'AUTO')
+        label_rotation = get_from_kwargs(kwargs,"label_rotation",[pi/2,0,0])
+        include_zero = get_from_kwargs(kwargs,"include_zero",[True])
 
         if direction == "VERTICAL":
             global_rotation = Vector()
@@ -2172,7 +2174,7 @@ class NumberLineModifier(GeometryNodesModifier):
         in_rotation = InputRotation(tree, location=(left, 5), rotation=global_rotation, name="GlobalRotation")
         inv_rotation = InvertRotation(tree, location=(left + 1, 4.75), in_rotation=in_rotation.std_out)
 
-        label_rotation0 = InputRotation(tree, location=(left, 4.5), rotation=[pi / 2, 0, 0],
+        label_rotation0 = InputRotation(tree, location=(left, 4.5), rotation=label_rotation,
                                         name="InitialLabelRotation")
         label_rotation = RotateRotation(tree, location=(left + 2, 4), rotation=label_rotation0.std_out,
                                         rotate_by=inv_rotation.std_out)
@@ -2187,10 +2189,14 @@ class NumberLineModifier(GeometryNodesModifier):
             p = 10 ** tic_label_digits  # power for rounding
             for i in range(0, n_tics + 1):
                 if p == 1:
-                    rounded_val = str(int(round(x0 + dx * i)))
+                    rounded_val = int(round(x0 + dx * i))
                 else:
-                    rounded_val = str(round((x0 + dx * i) * p) / p)
-                tic_labels[rounded_val] = [x0 + dx * i]
+                    rounded_val = round((x0 + dx * i) * p) / p
+                if rounded_val == 0:
+                    if include_zero:
+                        tic_labels[str(rounded_val)] = [x0 + dx * i]
+                else:
+                    tic_labels[str(rounded_val)] = [x0 + dx * i]
 
         tic_labels, axis_label = generate_labels(tic_labels, axis_label, **kwargs)
         downshift = -5

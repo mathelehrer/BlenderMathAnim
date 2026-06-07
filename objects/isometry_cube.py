@@ -3,7 +3,7 @@ from math import pi
 from interface import ibpy
 from interface.ibpy import get_geometry_node_from_modifier, get_default_value_at_frame, Vector, Quaternion, Euler
 from new_stuff.geometry_nodes_modifier import TransformationModifier, TransformationSphereModifier
-from objects.text2 import MorphText2
+from objects.text import MorphText2
 from objects.bobject import BObject
 from objects.cube import Cube
 from objects.text import Text

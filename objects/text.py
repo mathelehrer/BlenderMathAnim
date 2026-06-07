@@ -3,11 +3,9 @@ import math
 import os
 from copy import deepcopy
 
-import numpy as np
-
 from geometry_nodes.geometry_nodes_modifier import  GeometryNodesModifier
 from geometry_nodes.nodes import InputVector, CollectionInfo, SetMaterial, create_geometry_line, TransformGeometry, \
-    create_from_xml, InputValue
+    create_from_xml
 from interface import ibpy
 from interface.ibpy import Vector, get_material, get_collection, get_geometry_node_from_modifier
 from objects.bobject import BObject
@@ -23,9 +21,8 @@ class Text(BObject):
     def __init__(self,expression,sample_points=101, **kwargs):
         """Create a text object driven by a geometry-nodes :class:`TextModifier`.
 
-        Each glyph is rendered into a curve, then instanced and animated via
-        the modifier. Suitable for fast write-on animations of plain text
-        (use :class:`SimpleTexBObject` for LaTeX with morphing).
+        Renders each glyph into a curve via a :class:`TextModifier` and
+        animates a write-on / outline reveal.
 
         Example:
             >>> text = Text("Hallo Welt", color="drawing",
@@ -35,26 +32,15 @@ class Text(BObject):
 
         Args:
             expression: Text string to render.
-            sample_points: Number of samples taken along each glyph curve
-                (higher = smoother outlines, slower). Defaults to 101.
-            **kwargs: Forwarded to :class:`TextModifier` and :class:`BObject`.
-                Supported keys:
-                * ``name`` (str): Defaults to ``'TextObject'``.
-                * ``rotation`` (Vector): Local glyph rotation.
-                  Defaults to ``(pi/2, 0, 0)`` (text faces +Y).
-                * ``location`` (Vector): Local glyph offset.
-                * ``color`` (str): Glyph fill color. Defaults to ``'text'``.
-                * ``outline_color`` (str): Outline color. Defaults to ``color``.
-                * ``emission`` (float): Glyph emission. Defaults to 0.
-                * ``emission_outline`` (float): Outline emission. Defaults to 1.
-                * ``outline_radius`` (float): Outline tube thickness.
-                  Defaults to 0.01.
-                * ``keep_outline`` (bool): If ``True``, the outline stays
-                  visible alongside the filled glyph. Defaults to ``False``.
-                * ``aligned`` (str): Horizontal alignment, e.g. ``'left'``,
-                  ``'center'``, ``'right'`` (parsed by the modifier).
-                * ``scale`` (float): Text scale. Defaults to 1.
-                * Standard BObject kwargs.
+            sample_points: Samples per glyph curve. Defaults to 101.
+            **kwargs: Forwarded to the modifier and :class:`BObject`.
+                Supported keys include ``name`` (default ``'TextObject'``),
+                ``rotation`` (default ``(pi/2, 0, 0)``), ``location``,
+                ``color`` (default ``'text'``), ``outline_color`` (default
+                ``color``), ``emission`` (default 0), ``emission_outline``
+                (default 1), ``aligned`` (``'left'`` | ``'center'`` |
+                ``'right'``), ``scale`` (default 1), plus standard BObject
+                kwargs.
         """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name',"TextObject")
@@ -65,50 +51,47 @@ class Text(BObject):
         cube = ibpy.add_cube()
         self.kwargs = kwargs
 
-        # this is all done in the modifier directly
-        # color = get_from_kwargs(kwargs,'color',"text")
-        # outline_color = get_from_kwargs(kwargs,'outline_color',color)
-        #
-        # mat = get_material(color,**kwargs)
-        # get_from_kwargs(kwargs,'emission',0) # just remove it from kwargs
-        # outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
-        # mat_outline = get_material(outline_color,emission=outline_emission,**kwargs)
-        # material_node = get_geometry_node_from_modifier(self.modifier,label="FontMaterial")
-        # outline_material_node = get_geometry_node_from_modifier(self.modifier,label="OutlineMaterial")
-        #
+        #apply colors
+        color = get_from_kwargs(kwargs,'color',"text")
+        outline_color = get_from_kwargs(kwargs,'outline_color',color)
+
+        mat = get_material(color,**kwargs)
+        get_from_kwargs(kwargs,'emission',0) # just remove it from kwargs
+        outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        mat_outline = get_material(outline_color,emission=outline_emission,**kwargs)
+        material_node = get_geometry_node_from_modifier(self.modifier,label="FontMaterial")
+        outline_material_node = get_geometry_node_from_modifier(self.modifier,label="OutlineMaterial")
+
         # material_node.inputs['Material'].default_value= mat
         # outline_material_node.inputs['Material'].default_value = mat_outline
 
-        outline_radius = get_from_kwargs(kwargs, 'outline_radius', 0.01)
+        # keep_outline control (outline_radius is handled inside TextModifier).
+        # The KeepOutline node comes from the shared geo_fonts node graph.
         keep_outline = get_from_kwargs(kwargs, 'keep_outline', False)
         keep_outline_node = get_geometry_node_from_modifier(self.modifier, "KeepOutline")
-        if keep_outline:
-            ibpy.change_default_boolean(keep_outline_node,False,True,begin_frame=0)
-        else:
-            ibpy.change_default_boolean(keep_outline_node,True,False,begin_frame=0)
-        outline_radius_node = get_geometry_node_from_modifier(self.modifier, "OutlineRadius")
-        if outline_radius!=0.01:
-            ibpy.change_default_value(outline_radius_node,from_value=0.01,to_value=outline_radius,begin_frame=0)
+        if keep_outline_node is not None:
+            if keep_outline:
+                ibpy.change_default_boolean(keep_outline_node, False, True, begin_frame=0)
+            else:
+                ibpy.change_default_boolean(keep_outline_node, True, False, begin_frame=0)
 
         super().__init__(obj=cube, name=self.name, no_material=True, **kwargs)
         super().add_mesh_modifier('NODES', node_modifier=self.modifier)
 
     def write(self,from_letter=0,to_letter=None,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
-        reverse=get_from_kwargs(kwargs,"reverse",False)
+        reverse = get_from_kwargs(kwargs, "reverse", False)
         if reverse:
-            reverse_control=get_geometry_node_from_modifier(self.modifier,"ReverseControl")
-            ibpy.change_default_boolean(reverse_control,from_value=False,to_value=True,begin_time=begin_time)
+            reverse_control = get_geometry_node_from_modifier(self.modifier, "ReverseControl")
+            ibpy.change_default_boolean(reverse_control, from_value=False, to_value=True, begin_time=begin_time)
         else:
-            reverse_control=get_geometry_node_from_modifier(self.modifier,"ReverseControl")
-            ibpy.change_default_boolean(reverse_control,from_value=False,to_value=False,begin_time=begin_time)
+            reverse_control = get_geometry_node_from_modifier(self.modifier, "ReverseControl")
+            ibpy.change_default_boolean(reverse_control, from_value=False, to_value=False, begin_time=begin_time)
+
         if to_letter is None:
             to_letter = self.modifier.number_of_letters
         write_control = get_geometry_node_from_modifier(self.modifier,"WriteControlNode")
         ibpy.change_default_value(write_control,from_value=from_letter,to_value=to_letter,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
-
-    def disappear(self, alpha=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
-        return self.unwrite(begin_time=begin_time, transition_time=transition_time, **kwargs)
 
     def unwrite(self,letters=None,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
 
@@ -119,70 +102,48 @@ class Text(BObject):
         ibpy.change_default_value(write_control,from_value=all_letters,to_value=all_letters-letters,begin_time=begin_time,transition_time=transition_time)
         return begin_time+transition_time
 
+    def disappear(self, alpha=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
+        return self.unwrite(begin_time=begin_time, transition_time=transition_time, **kwargs)
+
     def length(self):
         return self.modifier.number_of_letters
 
     def get_text_bounding_box(self):
-        '''
-        designated for SimpleTexBOjects
-        it works on the level of letters
-        :param texBObject:
-        :return:
-        '''
-        x_min = np.inf
-        x_max = -np.inf
-        y_min = np.inf
-        y_max = -np.inf
-        z_min = np.inf
-        z_max = -np.inf
+        """Axis-aligned bounding box ``[x_min, y_min, z_min, x_max, y_max, z_max]``
+        of the letter geometry in the object's local frame."""
+        x_min = y_min = z_min = math.inf
+        x_max = y_max = z_max = -math.inf
         obj = self.ref_obj
         loc = obj.location
-        bb = obj.bound_box  # eight corner coordinates of the surrounding box
-        for b in bb:
-            if (b[0] + loc[0]) < x_min:
-                x_min = b[0] + loc[0]
-            if (b[0] + loc[0]) > x_max:
-                x_max = b[0] + loc[0]
-            if (b[1] + loc[1]) < y_min:
-                y_min = b[1] + loc[1]
-            if (b[1] + loc[1]) > y_max:
-                y_max = b[1] + loc[1]
-            if (b[2] + loc[2]) < z_min:
-                z_min = b[2] + loc[2]
-            if (b[2] + loc[2]) > z_max:
-                z_max = b[2] + loc[2]
+        for b in obj.bound_box:  # eight corner coordinates of the surrounding box
+            x_min, x_max = min(x_min, b[0] + loc[0]), max(x_max, b[0] + loc[0])
+            y_min, y_max = min(y_min, b[1] + loc[1]), max(y_max, b[1] + loc[1])
+            z_min, z_max = min(z_min, b[2] + loc[2]), max(z_max, b[2] + loc[2])
         return [x_min, y_min, z_min, x_max, y_max, z_max]
 
+    def get_bounding_box(self):
+        return self.get_text_bounding_box()
 
 class MorphText(BObject):
     """
     A new class for a morphing text object based on geometry nodes
     """
     def __init__(self,expression1,expression2,morph_shift=Vector(),sample_points=101, **kwargs):
-        """Create a morphing-text object based on a :class:`MorphTextModifier`.
+        """Create a morphing-text object using :class:`MorphTextModifier`.
 
-        The modifier produces two synchronised glyph sets so the displayed
-        text can morph from ``expression1`` to ``expression2`` via
-        :meth:`morph` after being written with :meth:`write`.
-
-        Example:
-            >>> text = MorphText(r"\\text{Hallo Welt}", r"\\text{Welcome!}",
-            ...                  sample_points=1001, color="drawing",
-            ...                  outline_color="example", aligned="center",
-            ...                  emission=0.5, outline_emission=2)
-            >>> t0 = 0.5 + text.write(begin_time=1, transition_time=1)
-            >>> t0 = 0.5 + text.morph(begin_time=t0, transition_time=1)
+        Equal-length expression morph (each source letter maps to one
+        target letter). Use :class:`MorphText2` when the target text is
+        longer than the source.
 
         Args:
-            expression1: Initial text string.
-            expression2: Target text string.
-            morph_shift: Vector offset applied to the morph target's
-                position (controls the spatial direction of the morph).
+            expression1: Source text.
+            expression2: Target text (same letter count as ``expression1``).
+            morph_shift: World-space offset applied to the morph target
+                centroid -- controls the direction of the morph motion.
             sample_points: Samples per glyph curve. Defaults to 101.
-            **kwargs: Forwarded to the modifier and :class:`BObject`.
-                Same keys as :class:`Text`: ``name``, ``rotation``,
+            **kwargs: Same as :class:`Text` (``name``, ``rotation``,
                 ``location``, ``color``, ``outline_color``, ``emission``,
-                ``emission_outline``, ``aligned``, ``scale``, etc.
+                ``emission_outline``, ``aligned``, ``scale``, ...).
         """
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name',"TextObject")
@@ -237,52 +198,230 @@ class MorphText(BObject):
                                   transition_time=transition_time)
         return begin_time + transition_time
 
+class MorphText2(BObject):
+    """
+    A new class for a morphing text object based on geometry nodes
+    There is a customization that allows to have morphed text to be longer than the original text
+    Additional letters will be just added to the end of the text
+
+    """
+    def __init__(self,expression1,expression2,morph_shift=Vector(),sample_points=101, **kwargs):
+        """Create a morphing text where the target may be *longer* than the source.
+
+        Letters that have no source counterpart appear at the end of the
+        word during :meth:`morph`. Use :class:`MorphText3` for explicit
+        per-letter fixing.
+
+        Args:
+            expression1: Source text.
+            expression2: Target text (may be longer than ``expression1``).
+            morph_shift: Vector offset applied to the morph target.
+            sample_points: Samples per glyph curve. Defaults to 101.
+            **kwargs: Same set as :class:`Text`/:class:`MorphText`.
+        """
+        self.kwargs = kwargs
+        self.name = self.get_from_kwargs('name',"TextObject")
+        self.rotation = self.get_from_kwargs('rotation', Vector((math.pi / 2, 0, 0)))
+        self.location = self.get_from_kwargs('location', Vector((0, 0, 0)))
+
+        self.modifier = MorphTextModifier2(expression1,expression2,morph_shift=morph_shift,sample_points=sample_points,
+                                          rotation=self.rotation,location=self.location,**kwargs)
+        cube = ibpy.add_cube()
+        self.kwargs = kwargs
+
+        #apply colors
+        color = get_from_kwargs(kwargs,'color',"text")
+        outline_color = get_from_kwargs(kwargs,'outline_color',color)
+
+        mat = get_material(color,**kwargs)
+        get_from_kwargs(kwargs,'emission',0) # just remove it from kwargs
+        outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        mat_outline = get_material(outline_color,emission=outline_emission,**kwargs)
+        material_node = get_geometry_node_from_modifier(self.modifier,label="FontMaterial")
+        outline_material_node = get_geometry_node_from_modifier(self.modifier,label="OutlineMaterial")
+
+        # material_node.inputs['Material'].default_value= mat
+        # outline_material_node.inputs['Material'].default_value = mat_outline
+
+        super().__init__(obj=cube, name=self.name, no_material=True, **kwargs)
+        super().add_mesh_modifier('NODES', node_modifier=self.modifier)
+
+    def write(self,from_letter=0,to_letter=None,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
+        reverse = get_from_kwargs(kwargs,'reverse',False)
+        if reverse:
+            reverse_control=get_geometry_node_from_modifier(self.modifier,"ReverseControl")
+            ibpy.change_default_boolean(reverse_control,from_value=False,to_value=True,begin_time=begin_time)
+        if to_letter is None:
+            to_letter = self.modifier.number_of_letters
+        write_control = get_geometry_node_from_modifier(self.modifier,"WriteControlNode")
+        ibpy.change_default_value(write_control,from_value=from_letter,to_value=to_letter,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def unwrite(self,letters,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        all_letters = self.modifier.number_of_letters
+        write_control = get_geometry_node_from_modifier(self.modifier,"WriteControlNode")
+        ibpy.change_default_value(write_control,from_value=all_letters,to_value=all_letters-letters,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def morph(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        morph_control = get_geometry_node_from_modifier(self.modifier,"MorphControlNode")
+        ibpy.change_default_value(morph_control,from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def unmorph(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        morph_control = get_geometry_node_from_modifier(self.modifier,"MorphControlNode")
+        ibpy.change_default_value(morph_control,from_value=1,to_value=0,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def unwrite(self, letters=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        all_letters = self.modifier.number_of_letters
+        write_control = get_geometry_node_from_modifier(self.modifier, "WriteControlNode")
+        ibpy.change_default_value(write_control, from_value=all_letters, to_value=all_letters - letters,
+                                  begin_time=begin_time,
+                                  transition_time=transition_time)
+        return begin_time + transition_time
+
+class MorphText3(BObject):
+    """
+    A new class for a morphing text object based on geometry nodes
+    There is a customization that allows to have morphed text to be longer than the original text
+    Additional letters will be just added to the end of the text
+
+    Now one can mark letters that stay fixed during the morphing with indices.
+    You have to make sure that the letter indices are in order and one-to-one between source and target
+
+    """
+    def __init__(self,expression1,expression2,src_fix=[],target_fix=[],sample_points=101, **kwargs):
+        """Create a morphing text with selected letters held fixed in place.
+
+        ``src_fix`` indices in ``expression1`` map one-to-one to
+        ``target_fix`` indices in ``expression2``; those letters stay put
+        during the morph while all other letters interpolate.
+
+        Args:
+            expression1: Source text.
+            expression2: Target text. May be longer than the source.
+            src_fix: Indices (into ``expression1``) of letters that
+                should not move during the morph. Must be in ascending
+                order and the same length as ``target_fix``.
+            target_fix: Indices (into ``expression2``) that pair up
+                one-to-one with ``src_fix`` -- each fixed source letter
+                ends up at its paired target index.
+            sample_points: Samples per glyph curve. Defaults to 101.
+            **kwargs: Same set as :class:`Text`/:class:`MorphText`.
+        """
+        self.kwargs = kwargs
+        self.name = self.get_from_kwargs('name',"TextObject")
+        self.rotation = self.get_from_kwargs('rotation', Vector((math.pi / 2, 0, 0)))
+        self.location = self.get_from_kwargs('location', Vector((0, 0, 0)))
+
+        self.modifier = MorphTextModifier3(expression1,expression2,sample_points=sample_points,
+                                          rotation=self.rotation,location=self.location,**kwargs)
+
+        # add fixes to the modifier
+        src_fix_node = ibpy.get_geometry_node_from_modifier(self.modifier,"SrcFixSwitch")
+        target_fix_node= ibpy.get_geometry_node_from_modifier(self.modifier,"TargetFixSwitch")
+
+        for i in range(max(src_fix)+1):
+            ibpy.add_item_to_switch(src_fix_node,i, int(i in src_fix))
+
+        for i in range(max(target_fix)+1):
+            ibpy.add_item_to_switch(target_fix_node,i, int(i in target_fix))
+
+        cube = ibpy.add_cube()
+        self.kwargs = kwargs
+
+        #apply colors
+        color = get_from_kwargs(kwargs,'color',"text")
+        outline_color = get_from_kwargs(kwargs,'outline_color',color)
+
+        mat = get_material(color,**kwargs)
+        get_from_kwargs(kwargs,'emission',0) # just remove it from kwargs
+        outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        mat_outline = get_material(outline_color,emission=outline_emission,**kwargs)
+        material_node = get_geometry_node_from_modifier(self.modifier,label="FontMaterial")
+        outline_material_node = get_geometry_node_from_modifier(self.modifier,label="OutlineMaterial")
+
+        # material_node.inputs['Material'].default_value= mat
+        # outline_material_node.inputs['Material'].default_value = mat_outline
+
+        super().__init__(obj=cube, name=self.name, no_material=True, **kwargs)
+        super().add_mesh_modifier('NODES', node_modifier=self.modifier)
+
+    def write(self,from_letter=0,to_letter=None,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
+        if to_letter is None:
+            to_letter = self.modifier.number_of_letters
+        write_control = get_geometry_node_from_modifier(self.modifier,"WriteControlNode")
+        ibpy.change_default_value(write_control,from_value=from_letter,to_value=to_letter,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def unwrite(self,letters,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        all_letters = self.modifier.number_of_letters
+        write_control = get_geometry_node_from_modifier(self.modifier,"WriteControlNode")
+        ibpy.change_default_value(write_control,from_value=all_letters,to_value=all_letters-letters,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def morph(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        morph_control = get_geometry_node_from_modifier(self.modifier,"MorphControlNode")
+        ibpy.change_default_value(morph_control,from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def unmorph(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        morph_control = get_geometry_node_from_modifier(self.modifier,"MorphControlNode")
+        ibpy.change_default_value(morph_control,from_value=1,to_value=0,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
+
+    def unwrite(self, letters=0, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        all_letters = self.modifier.number_of_letters
+        write_control = get_geometry_node_from_modifier(self.modifier, "WriteControlNode")
+        ibpy.change_default_value(write_control, from_value=all_letters, to_value=all_letters - letters,
+                                  begin_time=begin_time,
+                                  transition_time=transition_time)
+        return begin_time + transition_time
+
+
 def below(out,buffer_y=200):
     return out.location-Vector((0,buffer_y))
 
 class TextModifier(GeometryNodesModifier):
-    """Geometry-nodes modifier that draws a single text expression with
-    a write-on animation and optional outline."""
+    """Geometry-nodes graph for the v2 single-expression text object.
+
+    Drives the write-on animation, outline rendering, and per-letter
+    material slots used by :class:`Text` and friends in this module.
+    """
 
     def __init__(self,expression,**kwargs):
-        """Build the geometry-nodes graph for a single text expression.
+        """Construct the modifier graph.
 
         Args:
-            expression: Text to render. A LaTeX-/geo-font collection is
-                generated on demand and referenced by hash inside the graph.
-            **kwargs: Forwarded to the base modifier and shader. Supported:
-                * ``name`` (str): Defaults to ``'GeoText'``.
+            expression: Text to render. The corresponding glyph collection
+                is generated on demand and referenced by hash in the graph.
+            **kwargs: Forwarded to the base modifier and materials.
+                Supported keys:
+                * ``name`` (str): Modifier name. Defaults to ``'GeoText'``.
                 * ``sample_points`` (int): Samples per glyph curve.
                   Defaults to 101.
-                * ``color``, ``outline_color`` (str): Fill / outline colors.
-                * ``emission`` (float), ``emission_outline`` (float):
-                  Emission strengths.
-                * ``location`` (Vector), ``rotation`` (Vector),
-                  ``scale`` (float): Per-modifier text transform.
+                * ``color``, ``outline_color``, ``emission``,
+                  ``emission_outline``, ``aligned``, ``location``,
+                  ``rotation``, ``scale``: As for :class:`Text`.
         """
         self.expression = expression
         self.number_of_letters =0
         self.sample_points = get_from_kwargs(kwargs,'sample_points',101)
-        self.group_outputs = None
+
         super().__init__(get_from_kwargs(kwargs,'name',"GeoText"),
                          group_input=False,group_output=False,automatic_layout=False,**kwargs)
-
 
     def create_node(self,tree,**kwargs):
 
         self.number_of_letters = generate_expression(self.expression, **kwargs)
         create_from_xml(tree,"geo_fonts",**kwargs)
 
-        self.group_outputs = tree.nodes.get("GroupOutput")
+        nodes = tree.nodes
 
         collection_info = tree.nodes.get("TextData")
         collection_info.inputs["Separate Children"].default_value = True
-        # blender cuts the collection names to a length of 63 letter
-        # in order to find the collection in the node setup, the name must be shortened appropriately
-        # TODO If a name only differs after the first 63 letters, the proper collection might not be found
-
         collection_name = hashed_tex(self.expression)
-        # print("abbreviated collection name: ",collection_name)
         collection_info.inputs["Collection"].default_value = get_collection(collection_name)
 
         # adjust parameter
@@ -304,6 +443,16 @@ class TextModifier(GeometryNodesModifier):
         material_node.inputs['Material'].default_value= material
 
         outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        outline_radius = get_from_kwargs(kwargs,'outline_radius',0.01)
+
+        radius_node = None
+        for n in nodes:
+            if n.label=="OutlineRadius":
+                radius_node=n
+                break
+        if radius_node:
+            radius_node.outputs[0].default_value=outline_radius
+
         kwargs['emission']=outline_emission
         outline_material = get_material(get_from_kwargs(kwargs,'outline_color',"text"),**kwargs)
         self.materials.append(outline_material)
@@ -313,38 +462,29 @@ class TextModifier(GeometryNodesModifier):
                                      value=get_from_kwargs(kwargs,'location',Vector()))
         expr_rotation = InputVector(tree, name="ExprRotation",value=get_from_kwargs(kwargs,'rotation',Vector()))
 
-        expr_scale = InputValue(tree, name="ExprScale",value=get_from_kwargs(kwargs,'scale',1))
-
-
         transform_geometry = TransformGeometry(tree,name="ExprTransform",translation=expr_location.std_out,
-                                               rotation=expr_rotation.std_out,scale=expr_scale.std_out)
+                                               rotation=expr_rotation.std_out)
 
         # override default location
         transform_geometry.node.location=below(out)
         expr_location.node.location=below(transform_geometry.node,buffer_y=400)
         expr_rotation.node.location=below(expr_location.node,buffer_y=200)
-        expr_scale.node.location=below(expr_rotation.node,buffer_y=200)
 
         tree.links.new(last_join_node.outputs["Geometry"],transform_geometry.geometry_in)
         tree.links.new(transform_geometry.geometry_out,out.inputs['Geometry'])
 
-
 class MorphTextModifier(GeometryNodesModifier):
-    """Geometry-nodes modifier that morphs between two text expressions."""
+    """Geometry-nodes graph that morphs between two equal-length expressions."""
 
     def __init__(self,expression1,expression2,**kwargs):
-        """Build the morph-text geometry-node graph.
+        """Build the equal-length morph-text modifier graph.
 
         Args:
             expression1: Source text.
-            expression2: Target text.
-            **kwargs: Forwarded to the base modifier. Supported:
-                * ``name`` (str): Defaults to ``'GeoText'``.
-                * ``sample_points`` (int): Per-glyph samples. Defaults to 101.
-                * ``morph_shift`` (Vector): Spatial offset for the morph
-                  target's centroid. Defaults to ``Vector()``.
-                * ``color``, ``outline_color``, ``emission``,
-                  ``emission_outline``: Shader settings.
+            expression2: Target text (same letter count as ``expression1``).
+            **kwargs: Same kwarg set as :class:`TextModifier`. Adds
+                ``morph_shift`` (Vector, default ``Vector()``) -- spatial
+                shift applied to the morph target collection.
         """
         self.expression1 = expression1
         self.expression2 = expression2
@@ -422,6 +562,180 @@ class MorphTextModifier(GeometryNodesModifier):
         tree.links.new(last_join_node.outputs["Geometry"],transform_geometry.geometry_in)
         tree.links.new(transform_geometry.geometry_out,out.inputs['Geometry'])
 
+class MorphTextModifier2(GeometryNodesModifier):
+    """Geometry-nodes graph that morphs to a (possibly longer) target text."""
+
+    def __init__(self,expression1,expression2,**kwargs):
+        """Build the variable-length morph-text modifier graph.
+
+        Args:
+            expression1: Source text.
+            expression2: Target text. May be longer than ``expression1``;
+                extra letters appear at the tail end during the morph.
+            **kwargs: Same kwarg set as :class:`MorphTextModifier`.
+        """
+        self.expression1 = expression1
+        self.expression2 = expression2
+        self.number_of_letters =0
+        self.morph_shift = get_from_kwargs(kwargs,'morph_shift',Vector())
+        self.sample_points = get_from_kwargs(kwargs,'sample_points',101)
+
+        super().__init__(get_from_kwargs(kwargs,'name',"GeoText"),
+                         group_input=False,group_output=False,automatic_layout=False,**kwargs)
+
+    def create_node(self,tree,**kwargs):
+
+        self.number_of_letters = generate_expression(self.expression1, **kwargs)
+        self.number_of_morph_letters = generate_expression(self.expression2, **kwargs)
+
+        create_from_xml(tree,"geo_morph_fonts2",**kwargs)
+
+        collection_info = tree.nodes.get("TextData")
+        collection_info.inputs["Separate Children"].default_value = True
+
+        collection_info2 = tree.nodes.get("MorphData")
+        collection_info2.inputs["Separate Children"].default_value = True
+
+        # blender cuts the collection names to a length of 63 letter
+        # in order to find the collection in the node setup, the name must be shortened appropriately
+        # TODO If a name only differs after the first 63 letters, the proper collection might not be found
+
+        collection_name1 = hashed_tex(self.expression1)
+        # print("abbreviated collection name: ",collection_name)
+        collection_info.inputs["Collection"].default_value = get_collection(collection_name1)
+
+        collection_name2 = hashed_tex(self.expression2)
+        collection_info2.inputs["Collection"].default_value = get_collection(collection_name2)
+
+        # adjust parameter
+        sample_points_nodes = tree.nodes.get("SamplePointsNode")
+        sample_points_nodes.integer=self.sample_points
+
+        morph_shift_nodes = tree.nodes.get("MorphShiftNode")
+        morph_shift_nodes.vector=self.morph_shift
+
+        for n in tree.nodes:
+            if n.label=='FontMaterial':
+                material_node=n
+            if n.label=='OutlineMaterial':
+                outline_material_node=n
+            if n.label=='LastJoin':
+                last_join_node=n
+            if n.label=="Out":
+                out=n
+
+        material = get_material(get_from_kwargs(kwargs,'color',"text"),**kwargs)
+        self.materials.append(material)
+        material_node.inputs['Material'].default_value= material
+
+        outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        kwargs['emission']=outline_emission
+        outline_material = get_material(get_from_kwargs(kwargs,'outline_color',"text"),**kwargs)
+        self.materials.append(outline_material)
+        outline_material_node.inputs['Material'].default_value = outline_material
+
+        expr_location = InputVector(tree, name="ExprLocation",
+                                     value=get_from_kwargs(kwargs,'location',Vector()))
+        expr_rotation = InputVector(tree, name="ExprRotation",value=get_from_kwargs(kwargs,'rotation',Vector()))
+
+
+        transform_geometry = TransformGeometry(tree,name="ExprTransform",translation=expr_location.std_out,
+                                               rotation=expr_rotation.std_out)
+
+        # override default location
+        transform_geometry.node.location=below(out)
+        expr_location.node.location=below(transform_geometry.node,buffer_y=400)
+        expr_rotation.node.location=below(expr_location.node,buffer_y=200)
+
+        tree.links.new(last_join_node.outputs["Geometry"],transform_geometry.geometry_in)
+        tree.links.new(transform_geometry.geometry_out,out.inputs['Geometry'])
+
+class MorphTextModifier3(GeometryNodesModifier):
+    """Geometry-nodes graph that morphs while respecting per-letter
+    fixed-position pins (see :class:`MorphText3`)."""
+
+    def __init__(self,expression1,expression2,**kwargs):
+        """Build the pin-aware morph-text modifier graph.
+
+        Args:
+            expression1: Source text.
+            expression2: Target text.
+            **kwargs: Same kwarg set as :class:`MorphTextModifier2`. The
+                actual fixed-letter wiring (``SrcFixSwitch`` /
+                ``TargetFixSwitch``) is performed by the wrapping
+                :class:`MorphText3` after construction.
+        """
+        self.expression1 = expression1
+        self.expression2 = expression2
+        self.number_of_letters =0
+        self.sample_points = get_from_kwargs(kwargs,'sample_points',101)
+
+        super().__init__(get_from_kwargs(kwargs,'name',"GeoText"),
+                         group_input=False,group_output=False,automatic_layout=False,**kwargs)
+
+    def create_node(self,tree,**kwargs):
+
+        self.number_of_letters = generate_expression(self.expression1, **kwargs)
+        self.number_of_morph_letters = generate_expression(self.expression2, **kwargs)
+
+        create_from_xml(tree,"geo_morph_fonts3",**kwargs)
+
+        collection_info = tree.nodes.get("TextData")
+        collection_info.inputs["Separate Children"].default_value = True
+
+        collection_info2 = tree.nodes.get("MorphData")
+        collection_info2.inputs["Separate Children"].default_value = True
+
+        # blender cuts the collection names to a length of 63 letter
+        # in order to find the collection in the node setup, the name must be shortened appropriately
+        # TODO If a name only differs after the first 63 letters, the proper collection might not be found
+
+        collection_name1 = hashed_tex(self.expression1)
+        # print("abbreviated collection name: ",collection_name)
+        collection_info.inputs["Collection"].default_value = get_collection(collection_name1)
+
+        collection_name2 = hashed_tex(self.expression2)
+        collection_info2.inputs["Collection"].default_value = get_collection(collection_name2)
+
+        # adjust parameter
+        sample_points_nodes = tree.nodes.get("SamplePointsNode")
+        sample_points_nodes.integer=self.sample_points
+
+        for n in tree.nodes:
+            if n.label=='FontMaterial':
+                material_node=n
+            if n.label=='OutlineMaterial':
+                outline_material_node=n
+            if n.label=='LastJoin':
+                last_join_node=n
+            if n.label=="Out":
+                out=n
+
+        material = get_material(get_from_kwargs(kwargs,'color',"text"),**kwargs)
+        self.materials.append(material)
+        material_node.inputs['Material'].default_value= material
+
+        outline_emission = get_from_kwargs(kwargs,'emission_outline',1)
+        kwargs['emission']=outline_emission
+        outline_material = get_material(get_from_kwargs(kwargs,'outline_color',"text"),**kwargs)
+        self.materials.append(outline_material)
+        outline_material_node.inputs['Material'].default_value = outline_material
+
+        expr_location = InputVector(tree, name="ExprLocation",
+                                     value=get_from_kwargs(kwargs,'location',Vector()))
+        expr_rotation = InputVector(tree, name="ExprRotation",value=get_from_kwargs(kwargs,'rotation',Vector()))
+
+
+        transform_geometry = TransformGeometry(tree,name="ExprTransform",translation=expr_location.std_out,
+                                               rotation=expr_rotation.std_out)
+
+        # override default location
+        transform_geometry.node.location=below(out)
+        expr_location.node.location=below(transform_geometry.node,buffer_y=400)
+        expr_rotation.node.location=below(expr_location.node,buffer_y=200)
+
+        tree.links.new(last_join_node.outputs["Geometry"],transform_geometry.geometry_in)
+        tree.links.new(transform_geometry.geometry_out,out.inputs['Geometry'])
 
 ##
 # recreate the essentials to convert a latex expression into a collection of curves
@@ -469,7 +783,7 @@ def import_svg_data(imported_svg_data,path,kwargs):
         new_curves = [x for x in ibpy.get_all_curves() if x not in previous_curves]
 
         # Arrange new curves relative to tex object's ref_obj
-        if text_size == 'normal' or text_size=="Normal":
+        if text_size == 'normal' or text_size == "Normal":
             scale_up = TEX_LOCAL_SCALE_UP
         elif text_size == 'medium':
             scale_up = TEX_LOCAL_SCALE_UP * 1.25
@@ -489,7 +803,7 @@ def import_svg_data(imported_svg_data,path,kwargs):
             scale_up = 3 * TEX_LOCAL_SCALE_UP
         elif text_size == 'Huge':
             scale_up = 5 * TEX_LOCAL_SCALE_UP
-        elif isinstance(text_size,(int,float)):  # a number
+        else:  # a number
             scale_up = text_size * TEX_LOCAL_SCALE_UP
 
         # in the following lines the location of the curve is determined from the geometry and the
