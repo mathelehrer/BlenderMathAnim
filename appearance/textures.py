@@ -3528,8 +3528,8 @@ def make_checker_material(**kwargs):
     color.use_nodes = True
     nodes = color.node_tree.nodes
     if coords is None:
-        input = nodes.new('ShaderNodeNewGeometry')
-        input_out = input.outputs('UV')
+        input = nodes.new('ShaderNodeTexCoord')
+        input_out = input.outputs['UV'] # small bug fix
     else:
         input = nodes.new('ShaderNodeTexCoord')
         input_out = input.outputs[coords]
