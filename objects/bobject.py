@@ -1047,8 +1047,7 @@ class BObject(object):
         """
         return ibpy.get_materials(self)
 
-    def change_brightness(self, percent=10):
-        factor = 1 + percent / 100
+    def change_hue(self, dh):
         for mat in ibpy.get_materials(self):
             if mat is None:
                 continue
@@ -1058,32 +1057,13 @@ class BObject(object):
             bsdf = nodes['Principled BSDF']
             r, g, b, a = bsdf.inputs['Base Color'].default_value
             h, s, v = colorsys.rgb_to_hsv(r, g, b)
-            v = max(0.0, min(1.0, v * factor))
+            h += dh
             r2, g2, b2 = colorsys.hsv_to_rgb(h, s, v)
             bsdf.inputs['Base Color'].default_value = (r2, g2, b2, a)
 
-
         for child in self.b_children:
-            child.change_brightness(percent)
+            child.change_hue(dh)
 
-    def change_hue(self, percent=10):
-        factor = 1 + percent / 100
-        for mat in ibpy.get_materials(self):
-            if mat is None:
-                continue
-            nodes = mat.node_tree.nodes
-            if 'Principled BSDF' not in nodes:
-                continue
-            bsdf = nodes['Principled BSDF']
-            r, g, b, a = bsdf.inputs['Base Color'].default_value
-            h, s, v = colorsys.rgb_to_hsv(r, g, b)
-            h =  (h * factor)
-            r2, g2, b2 = colorsys.hsv_to_rgb(h, s, v)
-            bsdf.inputs['Base Color'].default_value = (r2, g2, b2, a)
-
-
-        for child in self.b_children:
-            child.change_brightness(percent)
 
 class AnimBObject(BObject):
     """
