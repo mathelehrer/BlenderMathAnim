@@ -38,6 +38,7 @@ class BObject(object):
         # register bpy object from sub class or create default object
 
         self.old_sk = None
+        self.old_hue=None
         self.appeared = False
         self.transformation_state = 0
         self.kwargs = kwargs
@@ -1047,22 +1048,43 @@ class BObject(object):
         """
         return ibpy.get_materials(self)
 
-    def change_hue(self, dh):
+    def change_hue(self, dh, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        begin_frame = begin_time * FRAME_RATE
+        end_frame = (begin_time + transition_time) * FRAME_RATE
+
         for mat in ibpy.get_materials(self):
             if mat is None:
                 continue
             nodes = mat.node_tree.nodes
             if 'Principled BSDF' not in nodes:
                 continue
+
             bsdf = nodes['Principled BSDF']
-            r, g, b, a = bsdf.inputs['Base Color'].default_value
-            h, s, v = colorsys.rgb_to_hsv(r, g, b)
-            h += dh
-            r2, g2, b2 = colorsys.hsv_to_rgb(h, s, v)
+            if not self.old_hue:
+                # initialize self.old_hue for the first time
+
+                r, g, b, a = bsdf.inputs['Base Color'].default_value
+                h, s, v = colorsys.rgb_to_hsv(r, g, b)
+                self.old_hue=h
+                ibpy.insert_keyframe(bsdf.inputs['Base Color'], 'default_value', int(begin_frame))
+                print("Hue changed to ",self.old_hue,"at",begin_frame)
+            else:
+                r,g,b,a = bsdf.inputs['Base Color'].default_value
+                h, s, v = colorsys.rgb_to_hsv(r, g, b)
+                r, g, b = colorsys.hsv_to_rgb(self.old_hue, s, v)
+                bsdf.inputs['Base Color'].default_value = (r, g, b, a)
+                ibpy.insert_keyframe(bsdf.inputs['Base Color'], 'default_value', int(begin_frame))
+
+            self.old_hue+=dh
+            r2, g2, b2 = colorsys.hsv_to_rgb(self.old_hue, s, v)
             bsdf.inputs['Base Color'].default_value = (r2, g2, b2, a)
+            ibpy.insert_keyframe(bsdf.inputs['Base Color'], 'default_value', int(end_frame))
+            print("Hue changed to ", self.old_hue, "at", end_frame)
 
         for child in self.b_children:
-            child.change_hue(dh)
+            child.change_hue(dh, begin_time=begin_time, transition_time=transition_time)
+
+        return begin_time + transition_time
 
 
 class AnimBObject(BObject):
