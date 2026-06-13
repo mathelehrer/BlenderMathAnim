@@ -622,6 +622,37 @@ class MixRGB(ShaderNode):
             self.tree.links.new(color2, self.node.inputs[2])
 
 
+class Mix(ShaderNode):
+    """
+    Extension of the old mix node, that allows for float mixing (ie. alpha)
+    """
+    def __init__(self, tree, location=(0, 0), data_type="COLOR",
+                 factor=0, color1=[0, 0, 0, 1], color2=[1, 1, 1, 1], **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeMix")
+        super().__init__(tree, location, **kwargs)
+
+        self.factor = self.node.inputs[0]
+        self.color1 = self.node.inputs[1]
+        self.color2 = self.node.inputs[2]
+        self.std_out = self.node.outputs[0]
+        self.node.data_type=data_type
+
+        if isinstance(factor, (int, float)):
+            self.node.inputs[0].default_value = factor
+        else:
+            self.tree.links.new(factor, self.node.inputs[0])
+
+        if isinstance(color1, (Vector, list,int)):
+            self.node.inputs["A"].default_value = color1
+        else:
+            self.tree.links.new(color1, self.node.inputs["A"])
+
+        if isinstance(color2, (Vector, list,int)):
+            self.node.inputs["B"].default_value = color2
+        else:
+            self.tree.links.new(color2, self.node.inputs["B"])
+
+
 class OutputMaterial(ShaderNode):
     def __init__(self, tree, location=(0, 0), **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeOutputMaterial")

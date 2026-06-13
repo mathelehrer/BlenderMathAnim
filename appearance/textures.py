@@ -24,7 +24,7 @@ from shader_nodes.shader_nodes import (Mapping, AttributeNode, HueSaturationValu
                                        Displacement, ShaderNode, MixShader,
                                        TextureCoordinate, ColorRamp, ShaderFrame,
                                        ShaderRepeatZone, BrightContrast, RGB, PrincipledBSDF, OnRightNode, CombineXYZ,
-                                       IfNode)
+                                       IfNode, Mix)
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
@@ -5213,9 +5213,11 @@ def _make_colors(tree, inFractal, out, location):
                      interpolation="LINEAR",
                      location=(x + 2, y), hide=False)
 
+    alpha_factor = Mix(tree,location=(x+5,y),name="AlphaFactor",data_type="FLOAT",color2=ramp.outputs["Alpha"],color1=0)
+
     bsdf = PrincipledBSDF(tree,
                           base_color=ramp.std_out,
-                          alpha=ramp.outputs["Alpha"],
+                          alpha=alpha_factor.std_out,
                           location=(x + 4, y), hide=True)
     links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
 
@@ -5227,6 +5229,8 @@ def hat_tile_fractal(**kwargs):
     """
 
     """
+
+    depth_value = get_from_kwargs(kwargs,"depth",10)
 
     phi = (1 + math.sqrt(5)) / 2
     phi2 = phi + 1
@@ -5298,9 +5302,8 @@ def hat_tile_fractal(**kwargs):
     links.new(base.outputs['base'], rz.node.inputs['base'])
 
     # second repeatzone: IFS bisection for fractal membership
-    depth = InputValue(tree, name="Depth", location=(-12, 7.0), value=0,hide=True)
-    floor_depth = MathNode(tree,operation="FLOOR",inputs0=depth.std_out,hide=True,location=(-11,6.5))
-    rz2 = ShaderRepeatZone(tree, location=(-10, 6), node_width=6, iterations=floor_depth.std_out)
+    depth = InputValue(tree, name="Depth", location=(-12, 7.0), value=depth_value,hide=True)
+    rz2 = ShaderRepeatZone(tree, location=(-10, 6), node_width=6, iterations=depth.std_out)
     rz2.add_socket('VECTOR', 'uv')
     rz2.add_socket('INT', 'isTrap')
     rz2.add_socket('INT', 'result')

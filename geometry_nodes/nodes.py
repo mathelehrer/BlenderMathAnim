@@ -3670,6 +3670,8 @@ class Switch(BlueNode):
         super().__init__(tree, location=location, **kwargs)
 
         self.std_out = self.node.outputs["Output"]
+        if input_type=="GEOMETRY":
+            self.geometry_out=self.node.outputs["Output"]
         self.switch = self.node.inputs["Switch"]
         self.true = self.node.inputs["True"]
         self.false = self.node.inputs["False"]
@@ -3678,7 +3680,7 @@ class Switch(BlueNode):
             tree.links.new(switch, self.switch)
 
         if true:
-            if isinstance(true, (bpy.types.NodeSocket)):
+            if isinstance(true, bpy.types.NodeSocket):
                 tree.links.new(true, self.true)
             else:
                 self.true.default_value = true

@@ -2348,6 +2348,44 @@ class NumberLineModifier(GeometryNodesModifier):
         create_geometry_line(tree, main_line, out=out.inputs[0])
 
 
+class MakeFrameModifier(GeometryNodesModifier):
+    """Outline the incoming geometry with a tubular frame along its edges.
+
+    The original geometry is kept (with its own material) and a wire-frame is
+    built from the edges -- ``MeshToCurve`` followed by a circular profile of
+    radius ``thickness`` (via :class:`WireFrame`) -- coloured with ``color``.
+    Both are joined so a filled polygon ends up with a clearly visible border,
+    which makes neighbouring tiles easy to distinguish.
+
+    The tube radius is exposed as the animatable modifier input ``Thickness``.
+
+    Args:
+        color: Material name for the frame (default ``'important'``).
+        thickness: Tube radius of the frame edges (default ``0.05``).
+    """
+
+    def __init__(self, name='MakeFrameModifier', color='important', thickness=0.05, **kwargs):
+        self.frame_color = color
+        self.thickness = thickness
+        super().__init__(name, automatic_layout=True, group_input=True, group_output=True, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_output
+        in_geometry = self.group_inputs.outputs["Geometry"]
+
+        thickness = InputValue(tree, location=(-6, -2), value=self.thickness, name="Thickness")
+
+        # tubular wire-frame along the edges of the incoming geometry
+        wireframe = WireFrame(tree, location=(-4, -1), radius=thickness.std_out, geometry=in_geometry)
+        frame = SetMaterial(tree, location=(-2, -1), material=self.frame_color,
+                            geometry=wireframe.geometry_out)
+        self.materials.append(frame.material)
+
+        # keep the original (filled) geometry and add the frame on top
+        join = JoinGeometry(tree, location=(0, 0), geometry=[frame.geometry_out, in_geometry])
+        tree.links.new(join.geometry_out, out.inputs["Geometry"])
+
+
 class DataModifier(GeometryNodesModifier):
     def __init__(self, name='DataModifier', **kwargs):
         """

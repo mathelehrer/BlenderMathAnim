@@ -73,7 +73,7 @@ class CoordinateSystem2(BObject):
         self.data = self.get_from_kwargs('data', None)
         self.name = self.get_from_kwargs('name', str(self.dimension) + "D-CoordinateSystem")
         self.directions = self.get_from_kwargs('directions', ["HORIZONTAL", "VERTICAL"])
-        self.label_rotations=self.get_from_kwargs('label_rotations',[np.pi/2,0,0]*3)
+        self.label_rotations=self.get_from_kwargs('label_rotations',[[np.pi/2,0,0]]*3)
         self.axes = []
 
         if self.dimension == 2:
@@ -98,6 +98,7 @@ class CoordinateSystem2(BObject):
                 self.axes.append(NumberLine2(name=names[i], direction=directions[i], domain=self.domains[i],
                                              location=axis_locations[i],
                                              tic_labels=self.tic_labels[i],
+                                             radius=self.radii[i],
                                              n_tics=self.n_tics[i],
                                              tic_label_digits=self.tic_label_digits[i],
                                              tic_label_shift=self.tic_label_shifts[i],
@@ -120,6 +121,7 @@ class CoordinateSystem2(BObject):
             for i in range(3):
                 self.axes.append(NumberLine2(name=names[i], direction=directions[i], domain=self.domains[i],
                                              location=axis_locations[i],
+                                             radius=self.radii[i],
                                              tic_labels=self.tic_labels[i],
                                              n_tics=self.n_tics[i],
                                              tic_label_digits=self.tic_label_digits[i],
