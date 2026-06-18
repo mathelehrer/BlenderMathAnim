@@ -1711,7 +1711,8 @@ def move(b_obj, direction, begin_frame, frame_duration):
 
     obj.location += direction
     insert_keyframe(obj, "location", int(begin_frame + np.maximum(1, frame_duration)))
-    # print("for " + obj.name + " location " + str(obj.location) + " keyframed at frame " + str(int(begin_frame+frame_duration)))
+    # print("for " + obj.name + " location " + str(obj.location) + " keyframed at frame " + str(int(
+    # begin_frame+frame_duration)))
 
 
 def move_fast_from_to(b_obj, start=Vector(), end=Vector(), begin_frame=0,
