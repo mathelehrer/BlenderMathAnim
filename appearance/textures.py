@@ -5101,8 +5101,17 @@ def _prepare_coordinates(tree, location):
     # similarity transformation
     B00, B01 = 0.3454915028125263, -0.0892055224432725
     B10, B11 = -0.09549150281252629, 0.34380717944894684
-    tex = TextureCoordinate(tree, std_out='Object', location=(x, y), hide=False)
-
+    tex = TextureCoordinate(tree, std_out='Object', location=(x-1, y), hide=False)
+    scale = InputValue(tree,location=(x-1,y-2),hide=True,value=1,name="Scale")
+    shift_x = InputValue(tree,location=(x-1,y-2.5),hide=True,value=0,name="ShiftX")
+    shift_y = InputValue(tree,location=(x-1,y-3),hide=True,value=0,name="ShiftY")
+    combine = CombineXYZ(tree,location=(x,-2.5),hide=True,x=shift_x.std_out,y=shift_y.std_out,z=0,name="CombinedShift")
+    scaling = make_function(tree,functions={"coords":"coords,1,scl,/,scale,shift,add"},inputs=["scl","coords","shift"],
+                            outputs=["coords"],scalars=["scl"],location=(x,y),
+                            vectors=["coords","shift"],node_group_type="Shader",hide=True)
+    tree.links.new(scale.std_out,scaling.inputs["scl"])
+    tree.links.new(tex.std_out,scaling.inputs["coords"])
+    tree.links.new(combine.std_out,scaling.inputs["shift"])
     # transform to UV basis
 
     g_basis = make_function(tree, functions={
@@ -5110,7 +5119,7 @@ def _prepare_coordinates(tree, location):
     }, inputs=["p"], outputs=["puv"],
                             vectors=["p", "puv"],
                             node_group_type='Shader', name="WorldToUV", location=(x + 2, y))
-    links.new(tex.std_out, g_basis.inputs["p"])
+    links.new(scaling.outputs["coords"], g_basis.inputs["p"])
 
     # triangular selector
 
@@ -5227,9 +5236,7 @@ def _make_colors(tree, inFractal, out, location):
 
 def hat_tile_fractal(**kwargs):
     """
-
     """
-
     depth_value = get_from_kwargs(kwargs,"depth",10)
 
     phi = (1 + math.sqrt(5)) / 2

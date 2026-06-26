@@ -862,10 +862,11 @@ class BObject(object):
             obj_copy.change_color(new_color=color, begin_time=begin_time, transition_time=transition_time)
         return obj_copy
 
-    def rotate(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, pivot=None, interpolation='BEZIER',
+    def rotate(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, rotation_mode="XYZ", pivot=None, interpolation='BEZIER',
                **kwargs):
         """
         rotate an object
+        :param rotation_mode: "XYZ" or permutations of it
         :param interpolation: CONSTANT for linear interpolation
         :param rotation_euler:
         :param rotation_quaternion:
@@ -875,7 +876,7 @@ class BObject(object):
         :return:
         """
 
-        ibpy.rotate_to(self, begin_time * FRAME_RATE, transition_time * FRAME_RATE, pivot, interpolation, **kwargs)
+        ibpy.rotate_to(self, begin_time * FRAME_RATE, transition_time * FRAME_RATE, pivot, interpolation, rotation_mode=rotation_mode,**kwargs)
         return begin_time + transition_time
 
     def scale(self, initial_scale=0, final_scale=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):

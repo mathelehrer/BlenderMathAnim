@@ -1750,7 +1750,7 @@ def rotate_by(b_obj, rotation_euler):
     obj.rotation_euler = new_euler
 
 
-def rotate_to(b_obj, begin_frame, frame_duration, pivot, interpolation, **kwargs):
+def rotate_to(b_obj, begin_frame, frame_duration, pivot, interpolation,rotation_mode="XYZ", **kwargs):
     obj = get_obj(b_obj)
     frame_duration = np.maximum(1, frame_duration)
     if pivot is not None:
@@ -1760,7 +1760,7 @@ def rotate_to(b_obj, begin_frame, frame_duration, pivot, interpolation, **kwargs
         obj.rotation_euler = rotation_euler
         insert_keyframe(obj, "rotation_euler", begin_frame)
         rotation_euler = kwargs['rotation_euler']
-        obj.rotation_mode = 'XYZ'
+        obj.rotation_mode = rotation_mode
         obj.rotation_euler = rotation_euler
         insert_keyframe(obj, "rotation_euler", begin_frame + frame_duration)
     elif 'rotation_quaternion' in kwargs:
