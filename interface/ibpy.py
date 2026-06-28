@@ -887,6 +887,9 @@ def set_hide(bob, hide, frame):
     obj.hide_viewport = hide
     insert_keyframe(obj, 'hide_viewport', frame)
 
+    for child in bob.b_children:
+        set_hide(child,hide,frame)
+
 
 def unhide_rec(obj, begin_time=0):
     """
@@ -7158,6 +7161,8 @@ def add_mesh_modifier(bob, **kwargs):
             # transfer possible color to the material slot of the blender object
             append_materials(obj, node_modifier.materials)
         elif 'node_group' in kwargs:
+            print("Warning: This keyword is deprecated. Alpha faded appearance not possible this way. "
+                  "Use 'node_modifier' keyword instead")
             node_group = kwargs.pop('node_group')
             modifiers.node_group = node_group
             if 'attribute_names' in kwargs:

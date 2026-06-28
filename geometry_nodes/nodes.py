@@ -1829,7 +1829,7 @@ class ScaleInstances(GreenNode):
                 self.tree.links.new(center, self.node.inputs["Center"])
 
         if geometry:
-            self.tree.links.new(geometry, self.node.inputs["Geometry"])
+            self.tree.links.new(geometry, self.node.inputs["Instances"])
         if selection:
             self.tree.links.new(selection, self.node.inputs["Selection"])
 

@@ -18,7 +18,8 @@ class Polygon(BObject):
     The normal by default points away from the origin:
     """
 
-    def __init__(self, vertices, obj=None, initial_function=None, edges=None, index=0, reordering=True,**kwargs):
+    def __init__(self, vertices, obj=None, initial_function=None,
+                 edges=None, index=0, reordering=True,**kwargs):
         """Create a single planar polygon (one face) from a list of vertices.
 
         Args:
@@ -47,30 +48,30 @@ class Polygon(BObject):
         self.kwargs = kwargs
         self.name = self.get_from_kwargs('name', str(len(vertices)) + "gon_" + str(index))
 
+        vertices = [to_vector(v) for v in vertices]
+
         # reorder vertices to make a convex face
         if reordering:
-            vertices = [to_vector(v) for v in vertices]
+            center = Vector()
+            for v in vertices:
+                center+=v
+            center =1/len(vertices) *center
 
-        center = Vector()
-        for v in vertices:
-            center+=v
-        center =1/len(vertices) *center
+            # create a base
+            a  =vertices[0]-center
+            a.normalize()
+            i = 1
+            while i<len(vertices) and to_vector(chop(a.cross(vertices[i]-center))).length==0: # find the first non-parallel
+                i+=1
 
-        # create a base
-        a  =vertices[0]-center
-        a.normalize()
-        i = 1
-        while i<len(vertices) and to_vector(chop(a.cross(vertices[i]-center))).length==0: # find the first non-parallel
-            i+=1
+            if i<len(vertices):
+                b = vertices[i]-center
+                n = a.cross(b)
+                n.normalize()
+                b = a.cross(n)
+                b.normalize()
 
-        if i<len(vertices):
-            b = vertices[i]-center
-            n = a.cross(b)
-            n.normalize()
-            b = a.cross(n)
-            b.normalize()
-           
-            vertices=sorted(vertices, key=lambda x: np.arctan2(a.dot(x-center),b.dot(x-center)))
+                vertices=sorted(vertices, key=lambda x: np.arctan2(a.dot(x-center),b.dot(x-center)))
 
         self.vertices0 = vertices  # store initial positions to have later access for it
         if initial_function is None:

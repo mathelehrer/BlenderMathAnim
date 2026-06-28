@@ -43,8 +43,10 @@ class Pin(BObject):
         super().appear(begin_time=begin_time,transition_time=transition_time,**kwargs)
         self.head.appear(begin_time=begin_time, transition_time=transition_time,**kwargs)
         self.needle.appear(begin_time=begin_time, transition_time=transition_time,**kwargs)
+        return begin_time+transition_time
 
     def disappear(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
         super().disappear(begin_time=begin_time,transition_time=transition_time,**kwargs)
         self.head.disappear(begin_time=begin_time, transition_time=transition_time,**kwargs)
         self.needle.disappear(begin_time=begin_time, transition_time=transition_time,**kwargs)
+        return begin_time+transition_time
