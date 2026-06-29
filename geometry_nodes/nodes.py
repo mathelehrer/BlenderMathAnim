@@ -373,6 +373,10 @@ class Node:
             operation = attributes["operation"]
             return VectorMath(tree, location=location, name=name, label=label, hide=hide, operation=operation,
                               mute=mute, node_height=200)
+        if type == "VECTOR_ROTATE":
+            rotation_type = attributes.get("rotation_type", "AXIS_ANGLE")
+            return VectorRotate(tree, location=location, name=name, label=label, hide=hide, mute=mute,
+                                node_height=200, rotation_type=rotation_type)
         if type == "SEPXYZ":
             return SeparateXYZ(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type == "COMBXYZ":
@@ -3638,15 +3642,17 @@ class VectorRotate(BlueNode):
 
         self.node.rotation_type = rotation_type
 
-        if isinstance(vector, (Vector, list)):
-            self.node.inputs["Vector"].default_value = vector
-        else:
-            tree.links.new(vector, self.node.inputs["Vector"])
+        if vector is not None:
+            if isinstance(vector, (Vector, list)):
+                self.node.inputs["Vector"].default_value = vector
+            else:
+                tree.links.new(vector, self.node.inputs["Vector"])
 
-        if isinstance(center, (Vector, list)):
-            self.node.inputs["Center"].default_value = center
-        else:
-            tree.links.new(center, self.node.inputs["Center"])
+        if center is not None:
+            if isinstance(center, (Vector, list)):
+                self.node.inputs["Center"].default_value = center
+            else:
+                tree.links.new(center, self.node.inputs["Center"])
 
         if angle:
             if isinstance(angle, (float, int)):
