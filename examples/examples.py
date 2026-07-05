@@ -4,7 +4,7 @@ import numpy as np
 
 from compositions.compositions import create_glow_composition
 from geometry_nodes.geometry_nodes_modifier import LegendrePolynomials, AssociatedLegendreP, \
-    PlmSurface, YlmSurface, YlmSurfaceReference, YlmSurface_200, UnfoldModifier
+    PlmSurface, YlmSurface, YlmSurfaceReference, YlmSurface_200, UnfoldModifier, CustomOpDemoModifier
 from interface import ibpy
 from interface.ibpy import Vector, Quaternion
 from interface.interface_constants import BLENDER_EEVEE
@@ -17,6 +17,7 @@ from objects.display import Display
 from objects.empties import EmptyCube
 from objects.logo import GeometryLogo
 from objects.number_line import NumberLine2
+from objects.plane import Plane
 from objects.platonic_solids import SubdividedPentagon, Icosahedron, Dodecahedron
 from objects.polyhedron import Polyhedron
 from objects.slider import BSlider
@@ -49,7 +50,8 @@ class Examples(Scene):
             ('legendreP', {'duration': 50}),
             ('numberline', {'duration': 5}),
             ('book', {'duration': 15}),
-            ('move_letters_and_move_copies_of_letters',{'duration': 15})
+            ('move_letters_and_move_copies_of_letters',{'duration': 15}),
+            ('custom_op_demo',{'duration':15}),
         ])
         super().__init__(light_energy=2, transparent=False)
 
@@ -117,8 +119,8 @@ class Examples(Scene):
                                    lengths=[15, 15, 7.5], colors=["text", "text", "text"],
                                    domains=[[-pi, pi], [0, pi], [-1, 1]], tic_label_digits=[1, 2, 1],
                                    tic_labels=[
-                                       {"-\pi": -pi, "\pi": pi},
-                                       {r"\,\tfrac{1}{2}\pi": 0.5*pi, "\pi": pi},
+                                       {r"-\pi": -pi, r"\pi": pi},
+                                       {r"\,\tfrac{1}{2}\pi": 0.5*pi, r"\pi": pi},
                                        {"-1": -1, r"-\tfrac{1}{2}": -0.5, r"\,\tfrac{1}{2}": 0.5, "1": 1},
                                    ],
                                    axes_labels={r"\phi": [-0.5, 0, 15.5], r"\theta": [0.25, 0, 7.5], "Y_l^m": [0.25, 0, 7.75]})
@@ -159,8 +161,8 @@ class Examples(Scene):
                                    lengths=[15, 15, 7.5], colors=["text", "text", "text"],
                                    domains=[[-pi, pi], [0, pi], [-1, 1]], tic_label_digits=[1, 2, 1],
                                    tic_labels=[
-                                       {"-\pi": -pi, "\pi": pi},
-                                       {r"\,\tfrac{1}{2}\pi": 0.5 * pi, "\pi": pi},
+                                       {r"-\pi": -pi, r"\pi": pi},
+                                       {r"\,\tfrac{1}{2}\pi": 0.5 * pi, r"\pi": pi},
                                        {"-1": -1, r"-\tfrac{1}{2}": -0.5, r"\,\tfrac{1}{2}": 0.5, "1": 1},
                                    ],
                                    axes_labels={r"\phi": [-0.5, 0, 15.5], r"\theta": [0.25, 0, 7.5],
@@ -399,6 +401,34 @@ class Examples(Scene):
 
         self.t0 =t0
 
+    def custom_op_demo(self):
+        """
+        Blended wave surfaces via a custom MixNode RPN op.
+        The make_function factory of the geometry nodes is extended to include custom operators and auxiliary
+        expressions. The left grid uses the binary "mix05" operator with a fixed factor of 0.5:
+        z = mix(sin(x), cos(y), 0.5). The right grid is a radial ripple built with the ternary
+        "mix" operator and two auxiliary functions that are each used more than once:
+        r = sqrt(x^2+y^2) feeds both wave operands, and damp = 1/(1+r) serves as both the
+        mix factor and the amplitude: z = damp * mix(sin(2r), cos(2r), damp).
+        """
+        ibpy.set_hdri_background(filename="kloofendal_misty_morning_puresky_4k",
+                                 rotation_euler=[pi / 3 * 2, 0, 0], simple=True,
+                                 transparent=True)
+        ibpy.set_render_engine(
+            denoising=False, transparent=True,
+            resolution_percentage=100,
+            engine='BLENDER_EEVEE', taa_render_samples=128, frame_start=1, exposure=1)
+        ibpy.set_camera_location(location=[0, 0, 14])
+        empty = EmptyCube(location=Vector((0, 0, 0)))
+        ibpy.set_camera_view_to(empty)
+
+        carrier = Plane(name='WaveCarrier')
+        carrier.appear(begin_time=0, transition_time=0)
+
+        mod = CustomOpDemoModifier()
+        carrier.add_mesh_modifier(type='NODES', node_modifier=mod)
+
+        self.t0 = 0
 
 if __name__ == '__main__':
     try:

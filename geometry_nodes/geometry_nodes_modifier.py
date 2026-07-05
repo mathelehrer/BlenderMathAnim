@@ -142,9 +142,143 @@ class GeometryNodesModifier:
     def get_node_tree(self):
         return self.tree
 
+## Tools
+
+class CustomOpDemoModifier(GeometryNodesModifier):
+    """
+    Two wave grids demonstrating binary and ternary custom MixNode operators.
+
+    Left grid — **binary** ``mix05`` (factor fixed in spec, 2 stack pops)::
+
+        RPN: "pos_x,sin,pos_y,cos,mix05"
+        z   = mix(A=sin(x), B=cos(y), Factor=0.5)
+
+    Right grid — **ternary** ``mix`` (factor from the stack, 3 stack pops),
+    a radial ripple whose auxiliary functions are each used more than once::
+
+        aux: r    = "pos_x,pos_x,*,pos_y,pos_y,*,+,sqrt"   (radial distance)
+             damp = "1,1,r,+,/"                            (falloff, reuses r)
+        RPN: "damp,2,r,*,sin,2,r,*,cos,mix,damp,*"
+        z   = damp * mix(A=sin(2r), B=cos(2r), Factor=damp)
+
+    ``r`` feeds both wave operands and the falloff; ``damp`` serves as both
+    the mix factor and the overall amplitude.  Near the centre (damp→1) the
+    surface follows cos(2r), towards the rim (damp→0) it fades out through
+    sin(2r).  The pop order for ternary is: right=cos(2r) first, left=sin(2r)
+    second, extra=damp third — matching the postfix sequence ``f,a,b,mix``.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__('CustomOpDemoModifier', automatic_layout=False, **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+        links = tree.links
+
+        # ── custom operators ───────────────────────────────────────────────
+        # "mix05" — binary  (2 pops): A and B come from the stack;
+        #           Factor is fixed at 0.5 via "defaults".
+        # "mix"   — ternary (3 pops): A, B, and Factor all come from the
+        #           stack; inputs order (left, right, extra) = (A, B, Factor).
+        custom_ops = {
+            "mix05": {
+                "type": "ShaderNodeMix",
+                "settings": {"data_type": "FLOAT", "factor_mode": "UNIFORM",
+                             "clamp_factor": False},
+                "defaults": {"Factor": 0.5},
+                "inputs": ("A", "B"),
+                "output": "Result",
+                "label": "mix½",
+            },
+            "mix": {
+                "type": "ShaderNodeMix",
+                "settings": {"data_type": "FLOAT", "factor_mode": "UNIFORM",
+                             "clamp_factor": False},
+                "inputs": ("A", "B", "Factor"),  # ternary: Factor is the 3rd pop
+                "output": "Result",
+                "label": "mix",
+            },
+        }
+
+        # ── left grid (binary mix05, factor = 0.5) ─────────────────────────
+        grid_l = Grid(tree, location=(-5, 1),
+                      vertices_x=21, vertices_y=21,
+                      size_x=7.5, size_y=7.5, name='GridLeft', hide=True)
+        pos_l = Position(tree, location=(-3, 1), hide=True)
+
+        wave_bin = make_function(
+            tree,
+            functions={"p": ["pos_x", "pos_y", "pos_x,sin,pos_y,cos,mix05"]},
+            inputs=["pos"], outputs=["p"],
+            vectors=["pos", "p"],
+            custom_ops=custom_ops,
+            name="BinaryMixWave",
+            location=(-1, 1), hide=True,
+        )
+        links.new(pos_l.std_out, wave_bin.inputs["pos"])
+
+        set_l = SetPosition(tree, location=(1, 1),
+                            geometry=grid_l.geometry_out,
+                            position=wave_bin.outputs["p"])
+
+        # shift left grid to x = -4.5
+        shift_l = TransformGeometry(tree, location=(2, 1),
+                                    geometry=set_l.geometry_out,
+                                    translation=Vector((-4.5, 0, 0)),
+                                    hide=True)
+
+        # ── right grid (ternary mix, radial ripple) ────────────────────────
+        # Each aux is computed once and referenced several times:
+        #   r    → both wave operands sin(2r), cos(2r) and the falloff damp
+        #   damp → the mix Factor and the overall amplitude
+        # RPN "damp,2,r,*,sin,2,r,*,cos,mix,damp,*":
+        #   stack builds as: damp | sin(2r) | cos(2r) | → mix pops cos(2r)→B,
+        #   sin(2r)→A, damp→Factor; the result is then scaled by damp.
+        grid_r = Grid(tree, location=(-5, -1),
+                      vertices_x=21, vertices_y=21,
+                      size_x=7.5, size_y=7.5, name='GridRight', hide=True)
+        pos_r = Position(tree, location=(-3, -1), hide=True)
+
+        wave_ter = make_function(
+            tree,
+            aux_functions={
+                "r": "pos_x,pos_x,*,pos_y,pos_y,*,+,sqrt",
+                "damp": "1,1,r,+,/",
+            },
+            functions={"p": ["pos_x", "pos_y",
+                             "damp,2,r,*,sin,2,r,*,cos,mix,damp,*"]},
+            inputs=["pos"], outputs=["p"],
+            vectors=["pos", "p"],
+            scalars=["r", "damp"],
+            custom_ops=custom_ops,
+            name="RadialRippleWave",
+            location=(-1, -1), hide=True,
+        )
+        links.new(pos_r.std_out, wave_ter.inputs["pos"])
+
+        set_r = SetPosition(tree, location=(1, -1),
+                            geometry=grid_r.geometry_out,
+                            position=wave_ter.outputs["p"])
+
+        # shift right grid to x = +4.5
+        shift_r = TransformGeometry(tree, location=(2, -1),
+                                    geometry=set_r.geometry_out,
+                                    translation=Vector((4.5, 0, 0)),
+                                    hide=True)
+
+        # ── combine and display ────────────────────────────────────────────
+        joined = JoinGeometry(tree, location=(4, 0),
+                              geometry=[shift_l.geometry_out,
+                                        shift_r.geometry_out])
+        wire = WireFrame(tree, location=(5, 0),
+                         geometry=joined.geometry_out,
+                         radius=0.015, hide=True)
+
+        links.new(wire.geometry_out, out.inputs[0])
 
 
 ## Applications
+
 class SpherePreImage(GeometryNodesModifier):
     """
     theta-phi-domain that gets mapped into a sphere
