@@ -485,6 +485,57 @@ class SimpleTexBObject(SVGBObject):
     def get_letters(self):
         return self.letters
 
+    def find_letters(self, substring, occurrence=None):
+        """Letter indices of a LaTeX ``substring`` of this expression.
+
+        Replaces hand-counted glyph indices: instead of
+        ``move_copy_to(..., src_letter_indices=[14, 19], ...)`` write
+        ``src_letter_indices=self.find_letters(r"b\\,i@0")``.
+
+        The mapping is computed by re-rendering the expression with the
+        substring wrapped in metric-free dvi color specials and reading the
+        colored glyphs from the SVG (see objects/token_mapping.py); results
+        are memoized per object.
+
+        :param substring: LaTeX fragment, whitespace-insensitive.  May carry
+            an occurrence suffix ``"y@1"`` (0-based) or ``"y@all"``.
+        :param occurrence: alternative to the suffix: int, ``'all'`` or None.
+            With None an ambiguous substring raises listing the occurrences.
+        :return: sorted list of letter indices into ``self.letters``
+        """
+        from objects.token_mapping import (letters_for_substrings, parse_target,
+                                           bezier_glyph_center)
+
+        if occurrence is None:
+            substring, occurrence = parse_target(substring)
+        key = (substring, occurrence)
+        if not hasattr(self, '_find_letters_cache'):
+            self._find_letters_cache = {}
+        if key in self._find_letters_cache:
+            return list(self._find_letters_cache[key])
+
+        if not hasattr(self, '_letter_centers'):
+            centers = []
+            for letter in self.letters:
+                ref = letter.ref_obj
+                splines, cyclic = [], []
+                for spline in ref.data.splines:
+                    if len(spline.bezier_points) == 0:
+                        continue
+                    splines.append(np.array(
+                        [[list(p.co), list(p.handle_left), list(p.handle_right)]
+                         for p in spline.bezier_points]))
+                    cyclic.append(bool(spline.use_cyclic_u))
+                cx, cy = bezier_glyph_center(splines, cyclic)
+                centers.append([cx + ref.location[0], cy + ref.location[1]])
+            self._letter_centers = np.array(centers)
+
+        result = letters_for_substrings(self.expression_copy, [(substring, occurrence)],
+                                        self.path, self._letter_centers,
+                                        typeface=self.typeface, text_only=self.text_only)[0]
+        self._find_letters_cache[key] = result
+        return list(result)
+
     def get_copy_of_letters(self, letter_list=None):
         if letter_list is None:
             letter_list = []
@@ -1220,6 +1271,7 @@ class SimpleTexBObject(SVGBObject):
             [simple_tex_obj, src_letter_range, img_letter_range,
              rescale, shift, src_colors, img_colors, begin_time,
              transition_time, keep_color, in_place])
+        return begin_time+transition_time
 
     def perform_morphing(self):
 
@@ -2051,112 +2103,11 @@ class Row:
 # static functions    #
 #######################
 
-
-def tex_to_svg_file(expression, template_tex_file, typeface, text_only, recreate=False):
-    path = os.path.join(
-        SVG_DIR,
-        # tex_title(expression, typeface)
-        hashed_tex(expression, typeface)
-    ) + ".svg"
-    if not recreate and os.path.exists(path):
-        return path
-
-    tex_file = generate_tex_file(expression, template_tex_file, typeface, text_only, recreate)
-    dvi_file = tex_to_dvi(tex_file, recreate)
-    return dvi_to_svg(dvi_file, recreate)
-
-
-def get_null():
-    if os.name == "nt":
-        return "NUL"
-    return "/dev/null"
-
-
-def dvi_to_svg(dvi_file, recreate):
-    """
-    Converts a dvi, which potentially has multiple slides, into a
-    directory full of enumerated svgs corresponding with these slides.
-    Returns a list of PIL Image objects for these images sorted as they
-    where in the dvi
-    """
-
-    result = dvi_file.replace(".dvi", ".svg")
-    result = result.replace("tex", "svg")  # change directory for the svg file
-    print('svg: ', result)
-    if recreate or not os.path.exists(result):
-        commands = [
-            "dvisvgm",
-            dvi_file,
-            "-n",
-            "-v",
-            "3",
-            "-o",
-            result
-            # Not sure what these are for, and it seems to work without them
-            # so commenting out for now
-            # ,
-            # ">",
-            # get_null()
-        ]
-        os.system(" ".join(commands))
-    return result
-
-def hashed_tex(expression, typeface):
-    string = expression + typeface
-    hasher = hashlib.sha256(string.encode())
-    return hasher.hexdigest()[:16]
-
-def generate_tex_file(expression, template_tex_file, typeface, text_only, recreate):
-    result = os.path.join(
-        TEX_DIR,
-        # tex_title(expression, typeface)
-        hashed_tex(expression, typeface)
-    ) + ".tex"
-
-    if recreate or not os.path.exists(result):
-        print("Writing \"%s\" to %s" % (
-            "".join(expression), result
-        ))
-        with open(template_tex_file, "r") as infile:
-            body = infile.read()
-            # I add an H to every expression to give a common reference point
-            # for all expressions, then hide the H character. This is necessary
-            # for consistent alignment of tex curves in blender, because
-            # blender's import svg bobject sets the object's origin depending
-            # on the expression itself, not according to a typesetting reference
-            # frame.
-            if text_only:
-                expression = 'H ' + expression
-            else:
-                expression = '\\text{H} ' + expression
-            body = body.replace(TEX_TEXT_TO_REPLACE, expression)
-        with open(result, "w") as outfile:
-            outfile.write(body)
-    return result
-
-def tex_to_dvi(tex_file, recreate):
-    result = tex_file.replace(".tex", ".dvi")
-    if recreate or not os.path.exists(result):
-        commands = [
-            "latex",
-            "-interaction=batchmode",
-            "-halt-on-error",
-            "-output-directory=" + TEX_DIR,
-            tex_file  # ,
-            # ">",
-            # get_null()
-        ]
-        exit_code = os.system(" ".join(commands))
-        if exit_code != 0:
-            latex_output = ''
-            log_file = tex_file.replace(".tex", ".log")
-            if os.path.exists(log_file):
-                with open(log_file, 'r') as f:
-                    latex_output = f.read()
-            raise Exception(
-                "Latex error converting to dvi. "
-                "See log output above or the log file: %s" % log_file)
-    return result
+# The latex->dvi->svg pipeline lives in utils/tex_compile.py now (it is pure
+# os/hashlib and is shared with objects/token_mapping.py); the names are
+# re-imported here so existing callers of this module keep working.
+from utils.tex_compile import (tex_to_svg_file, get_null, dvi_to_svg, hashed_tex,
+                               generate_tex_file, tex_to_dvi)
 
 
 ###########################

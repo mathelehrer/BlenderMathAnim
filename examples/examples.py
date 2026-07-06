@@ -9,6 +9,7 @@ from interface import ibpy
 from interface.ibpy import Vector, Quaternion
 from interface.interface_constants import BLENDER_EEVEE
 
+from objects.bderivation import BDerivation
 from objects.book import Book
 from objects.coordinate_system import CoordinateSystem2
 from objects.cube import Cube
@@ -52,6 +53,8 @@ class Examples(Scene):
             ('book', {'duration': 15}),
             ('move_letters_and_move_copies_of_letters',{'duration': 15}),
             ('custom_op_demo',{'duration':15}),
+            ('bderivation_complete_square', {'duration': 25}),
+            ('bderivation_geometric_sum', {'duration': 35}),
         ])
         super().__init__(light_energy=2, transparent=False)
 
@@ -400,6 +403,124 @@ class Examples(Scene):
         t0 = 0.5 + scale_box.rescale(rescale=0.7, begin_time=t0, transition_time=1)
 
         self.t0 =t0
+
+    def bderivation_complete_square(self):
+        """
+        Solve x^2+6x-7=0 by completing the square -- a BDerivation feature tour:
+
+        * a term flies across the equals sign and flips its sign
+          (``map={"-7": "7"}`` merges the two glyphs into one),
+        * ``+9`` is inserted on BOTH sides as fresh material
+          (``map={None: "+9@all"}`` -- forced appearance, ``@all`` selects
+          every occurrence),
+        * arithmetic is evaluated IN PLACE (``mode='replace'`` morphs
+          ``7+9`` into ``16`` without leaving the line),
+        * the square is completed in place as a group morph,
+        * highlights flash the term that is about to move.
+        """
+        t0 = 0
+        ibpy.set_camera_location(location=[0, -16, 0])
+        empty = EmptyCube(location=Vector((0, 0, -0.4)))
+        ibpy.set_camera_view_to(empty)
+
+        title = SimpleTexBObject(r"\text{Completing the square}", aligned='center',
+                                 color='example', text_size='large', location=[0, 0, 3.6])
+        t0 = 0.5 + title.write(begin_time=t0, transition_time=1)
+
+        d = BDerivation(r"x^2+6\cdot x-7 = 0", location=[-2.5, 0, 2],
+                        line_spacing=Vector((0, 0, -1)), name="CompleteSquare")
+        t0 = 0.5 + d.write(begin_time=t0, transition_time=1)
+
+        # -7 flies over the equals sign and becomes +7 (the 0 vanishes)
+        t0 = 0.5 + d.step(r"x^2+6\cdot x = 7", map={"-7": "7"}, highlight="-7",
+                          begin_time=t0, transition_time=1.5)
+
+        # add 9 to both sides: two fresh terms appear simultaneously
+        t0 = 0.5 + d.step(r"x^2+6\cdot x+9 = 7+9", map={None: "+9@all"},
+                          begin_time=t0, transition_time=1.5)
+
+        # evaluate the right side in place
+        t0 = 0.5 + d.step(r"x^2+6\cdot x+9 = 16", mode='replace',
+                          map={"7+9": "16"}, highlight="7+9",
+                          begin_time=t0, transition_time=1)
+
+        # complete the square in place: the whole left side morphs as a group
+        t0 = 0.5 + d.step(r"(x+3)^2 = 16", mode='replace',
+                          map={r"x^2+6\cdot x+9": "(x+3)^2"},
+                          begin_time=t0, transition_time=1.5)
+
+        # take the square root onto a new line
+        t0 = 0.5 + d.step(r"x+3 = \pm 4",
+                          map={"(x+3)^2": "x+3", "16": r"\pm 4"},
+                          begin_time=t0, transition_time=1.5)
+
+        # move the 3 across: it arcs over the equals sign and flips its sign
+        t0 = 0.5 + d.step(r"x = -3\pm 4", map={"+3": "-3"}, highlight="+3",
+                          begin_time=t0, transition_time=1.5)
+
+        self.t0 = t0
+
+    def bderivation_geometric_sum(self):
+        """
+        Derive the closed form of the geometric sum on a Display -- the
+        showcase for pinned flights and CANCELLATION:
+
+        * multiplying by q: ``map={"1": "q@1"}`` pins one flight, the
+          identical powers travel automatically,
+        * subtracting the two lines: occurrence selectors (``"q@1"``) steer
+          every power of q into its NEGATIVE counterpart,
+        * the telescoping step uses ``cancel=[...]``: three +/- pairs fly to
+          their joint midpoints and annihilate while 1 and -q^4 carry over,
+        * factoring out S happens in place, and the final division produces
+          a FRACTION (the bar is handled like any other glyph).
+        """
+        t0 = 0
+        display = Display(flat=True, scales=[7, 4], location=[0, 0, -0.5],
+                          number_of_lines=14)
+        t0 = 0.5 + display.appear(begin_time=t0, transition_time=1, nice_alpha=True)
+
+        title = SimpleTexBObject(r"\text{The geometric sum}", aligned='center',
+                                 color='example', text_size='large', location=[0, 0, 3])
+        t0 = 0.5 + title.write(begin_time=t0, transition_time=1)
+
+        d = BDerivation(r"S = 1+q+q^2+q^3", display=display, line=2, line_step=2,
+                        indent=2.5, scale=0.7, name="GeometricSum")
+        t0 = 0.5 + d.write(begin_time=t0, transition_time=1)
+
+        # multiply by q: the 1 becomes the new lone q, the powers slide on
+        t0 = 0.5 + d.step(r"q\cdot S = q+q^2+q^3+q^4",
+                          map={"1": "q@1"},
+                          begin_time=t0, transition_time=1.5)
+
+        # subtract from the first line: pin every power onto its negative twin
+        # note: "-q@0" would be the -q inside "S-q\cdot S"; the bare negative
+        # term is occurrence 1
+        t0 = 0.5 + d.step(r"S-q\cdot S = 1+q+q^2+q^3-q-q^2-q^3-q^4",
+                          map={"q@1": "-q@1",
+                               "+q^2": "-q^2",
+                               "+q^3": "-q^3",
+                               "+q^4": "-q^4"},
+                          begin_time=t0, transition_time=2)
+
+        # telescope: the three +/- pairs meet mid-air and annihilate
+        t0 = 0.5 + d.step(r"S-q\cdot S = 1-q^4",
+                          cancel=[("+q@0", "-q@1"),
+                                  ("+q^2", "-q^2"),
+                                  ("+q^3", "-q^3")],
+                          begin_time=t0, transition_time=2)
+
+        # factor out S in place
+        t0 = 0.5 + d.step(r"S\cdot (1-q) = 1-q^4", mode='replace',
+                          map={r"S-q\cdot S": r"S\cdot (1-q)"},
+                          begin_time=t0, transition_time=1.5)
+
+        # divide: the (1-q) dives under the fraction bar
+        t0 = 0.5 + d.step(r"S = {1-q^4\over 1-q}",
+                          map={"1-q^4": "1-q^4", "1-q@0": "1-q@1"},
+                          highlight="(1-q)",
+                          begin_time=t0, transition_time=2)
+
+        self.t0 = t0
 
     def custom_op_demo(self):
         """

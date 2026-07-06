@@ -102,6 +102,10 @@ for node in geo_nodes:
     if hasattr(node,'integer'):
         filedata+=append(' integer="'+str(node.integer),end='"')
         
+    if hasattr(node,'vector'):
+        filedata+=append(' vector="'+get_default_value(node.vector),end='"')
+        
+        
     if hasattr(node,'boolean'):
         filedata+=append(' boolean="'+str(node.boolean),end='"')
         
@@ -157,6 +161,6 @@ filedata+=append('</NODE_XML>')
 
 # store data to file
 
-with open("/home/jmartin/PycharmProjects/BlenderMathAnimWorkspace/files2/xml/geo_morph_fonts2.xml", 'w') as f:
+with open("/home/jmartin/PycharmProjects/BlenderMathAnimWorkspace/BlenderMathAnim/files/xml/geo_morph_fonts2.xml", 'w') as f:
     print("success")
     f.write(filedata)
