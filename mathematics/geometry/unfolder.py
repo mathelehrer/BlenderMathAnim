@@ -2894,7 +2894,7 @@ class Unfolder:
             self._recalculate_vertices_and_normals(child, local_rotations)
 
     def _apply_rotation(self, rotation, unfolded_vertex):
-        """
+        r"""
         the application of the rotation is not a simple matrix multiplication
         since the center of the rotation is not the origin
 
@@ -3904,7 +3904,7 @@ class Unfolder4D:
         return Vector(n)
 
     def _apply_rotation(self, rotation, vertex):
-        """
+        r"""
         the application of the rotation is not a simple matrix multiplication,
          since the center of the rotation is not (0,0,0,0)
 

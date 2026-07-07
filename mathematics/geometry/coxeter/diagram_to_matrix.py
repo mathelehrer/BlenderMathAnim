@@ -798,7 +798,7 @@ class IncidenceMatrix:
             lines.append(row_string[:-1] + r"\\")
 
         lines.append(r"\hline")
-        lines.append("\end{tabular}")
+        lines.append(r"\end{tabular}")
         for line in lines:
             print(line)
 
