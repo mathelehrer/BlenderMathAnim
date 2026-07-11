@@ -137,7 +137,7 @@ Advances the derivation to `expression`.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `mode` | `'new_line'` | `'new_line'`: the step appears on the next line, matched letters fly down as copies. `'replace'`: the current line transforms in place |
+| `mode` | `'new_line'` | `'new_line'`: the step appears on the next line, matched letters fly down as copies. `'replace'`: the current line transforms in place. `'add_subtract'`: right-hand terms of `map` fly across the `=`, flip sign and merge into their left-hand partners (in place) |
 | `map` | `None` | manual matching, see below |
 | `auto` | `True` | auto-match the letters not covered by `map`; with `False` they vanish/appear |
 | `auto_threshold` | `None` | similarity cutoff for the automatic matcher; `None` pairs every leftover it can |
@@ -145,6 +145,7 @@ Advances the derivation to `expression`.
 | `fade_old` | `None` | previous line in `'new_line'` mode: `None` keep, `'dim'` (alpha 0.25), `'hide'` |
 | `arc` | `0.3` | flight arc as fraction of travel distance (0 = straight, negative = bend down) |
 | `stagger` | `0.5` | fraction of the transition spent fanning out the letter starts (0 = all at once) |
+| `lift` | `1.0` | `'add_subtract'` only: how far (in line units) a travelling term rises above the baseline as it crosses the `=`; pass a list (one value per moving term, ordered left-to-right on the source line) to lift them to different heights |
 | `highlight` | `None` | substring(s) of the current line flashed before they move |
 | `highlight_color` | `'important'` | flash color |
 | `new_color` | `None` | color the flown copies fade to mid-flight |
@@ -191,6 +192,44 @@ target line takes over (hot swap — the geometry is identical at that moment).
 Vanishing letters shrink in place, appearing ones are written in. After the
 step, `d.current` is the *new*, clean SimpleTexBObject — steps can be chained
 indefinitely and mixed freely with `new_line`.
+
+#### `mode='add_subtract'`
+
+An in-place step that animates *moving a term to the other side of the `=`*.
+Each **merge** in `map` (two source terms sharing one target term) is read as a
+move: the term on the **right** of the `=` (the *mover*) and the term it joins
+on the **left** (the *partner*, which morphs into the combined result) are told
+apart automatically by their position relative to the `=`. Every mover then
+
+1. lifts straight up above the equation (by `lift` line units — or its own
+   entry when `lift` is a per-term list),
+2. travels left and, as it crosses the `=`, turns into a leading `-` (`+9`
+   becomes `-9`); a term that already carries a leading operator flies with it
+   and cross-fades it into the `-`, otherwise a fresh `-` grows in,
+3. arrives above its partner — both flash `highlight_color` —,
+4. sinks into the partner and shrinks away while the partner morphs in place
+   into the result (`3025` → `3016`), which hot-swaps back to white.
+
+The `=` partitions the line: the emptied right-hand side (leftover operators)
+clears out and the target's right-hand side (a fresh `0`, say) is written in;
+the left-hand side and the unchanged `x^2`/`=` are matched automatically, so
+nothing is ever dragged across the `=` by the auto-matcher. The line keeps its
+slot (no new row).
+
+```python
+# ... = 9 + 495x  ->  collect both right-hand terms onto the left
+t0 = d.step(r"x^2-385\cdot x+3016 = 0", mode='add_subtract',
+            map={r"110\cdot x": r"-385\cdot x",   # partner (left)  \  merge
+                 r"495\cdot x": r"-385\cdot x",   # mover  (right)  /  -> -385x
+                 "3025": "3016",                   # partner (left)  \  merge
+                 "9@0": "3016"},                   # mover  (right)  /  -> 3016
+            begin_time=t0, transition_time=3)
+```
+
+This is the working last step of `intro_algebra_overlay` in
+`video_hat_tile/scene_hat_tile.py`. A move whose target has **no** left-hand
+partner is supported too: the mover simply flies to where the target term is
+written and shrinks in as it appears.
 
 ### `highlight(substring, occurrence=None, color='important', emission=3, begin_time=0, transition_time=..., restore=True) -> float`
 

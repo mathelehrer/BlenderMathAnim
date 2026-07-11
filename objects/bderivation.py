@@ -26,6 +26,10 @@ Modes
   copies along arcs with staggered timing, the rest is written in.
 * ``mode='replace'``: the line transforms in place (shape-key morph of
   letter copies, then a hot swap to the pristine new line).
+* ``mode='add_subtract'``: an in-place step in which the right-hand terms
+  of the ``map`` fly across the ``=`` sign, flip their sign and merge into
+  the matching left-hand terms (e.g. ``... = 9 + 495x`` collected onto the
+  left).  See :meth:`BDerivation._step_add_subtract`.
 """
 
 import numpy as np
@@ -185,15 +189,22 @@ class BDerivation:
                                  restore=restore)
 
     def step(self, expression, mode='new_line', map=None, auto=True, auto_threshold=None,
-             align=True, fade_old=None, arc=0.3, stagger=0.5,
+             align=True, fade_old=None, arc=0.3, stagger=0.5, lift=1.0,
              highlight=None, highlight_color='important', new_color=None,
              cancel=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
              **tex_overrides):
         """Advance the derivation to the next expression.
 
         :param expression: LaTeX of the next line
-        :param mode: 'new_line' (letters fly to the next line) or 'replace'
-            (the line morphs in place)
+        :param mode: 'new_line' (letters fly to the next line), 'replace'
+            (the line morphs in place) or 'add_subtract' (right-hand terms of
+            the ``map`` fly across the ``=`` sign, flip sign and merge into
+            their left-hand partners; see :meth:`_step_add_subtract`)
+        :param lift: for ``mode='add_subtract'``, how far (in line units) a
+            travelling term rises above the baseline as it crosses over; a
+            single value applies to every term, or pass a list with one value
+            per moving term (ordered left-to-right on the source line) to lift
+            them to different heights
         :param map: manual matching, e.g.
             ``{"(x+y)^2": "x^2+2xy+y^2", "9@0": None, None: "42"}``
             (``None`` value = vanish, ``None`` key = fresh appearance);
@@ -213,9 +224,15 @@ class BDerivation:
         """
         source = self.current
         tex = self._make_line(expression, index=len(self.lines), **tex_overrides)
-        self._place_line(tex, same_slot=(mode == 'replace'))
+        self._place_line(tex, same_slot=(mode in ('replace', 'add_subtract')))
         if align:
             self._align(tex)
+
+        if mode == 'add_subtract':
+            self._step_add_subtract(source, tex, map, begin_time, transition_time,
+                                    lift=lift, highlight_color=highlight_color)
+            self.lines.append(tex)
+            return begin_time + transition_time
 
         # cancelling letters are taken out of the matching entirely
         cancel_groups = []
@@ -259,7 +276,8 @@ class BDerivation:
         elif mode == 'replace':
             self._step_replace(source, tex, plan, flight_begin, flight_time)
         else:
-            raise ValueError("unknown mode %r (use 'new_line' or 'replace')" % mode)
+            raise ValueError("unknown mode %r (use 'new_line', 'replace' or "
+                             "'add_subtract')" % mode)
 
         for group_a, group_b in cancel_groups:
             self._animate_cancel(source, group_a, group_b, arc,
@@ -337,3 +355,265 @@ class BDerivation:
     def _step_replace(self, source, tex, plan, flight_begin, flight_time):
         morph = PairMorph(source, tex, plan)
         morph.animate(begin_time=flight_begin, transition_time=flight_time)
+
+    # ------------------------------------------------------------------
+    # add / subtract: move a term across the '=' sign
+    # ------------------------------------------------------------------
+
+    def _step_add_subtract(self, source, tex, user_map, begin_time, transition_time,
+                           lift=1.0, highlight_color='important'):
+        """Move terms across the ``=`` sign (an add/subtract manipulation).
+
+        Each merge in ``user_map`` (two source terms sharing one target term)
+        is read as a move.  The term on the **right** of the ``=`` (the mover)
+
+        1. lifts straight up above the equation (each term by its own ``lift``
+           if a per-term list is given),
+        2. travels left and, as it crosses the ``=``, turns into a leading
+           ``-`` (``+9`` becomes ``-9``): a term that already carries a leading
+           operator flies with it and cross-fades it into the ``-``, otherwise
+           a fresh ``-`` grows in,
+        3. arrives above the term it joins on the left -- both flash
+           ``highlight_color`` --,
+        4. sinks into that term and shrinks away while the term morphs in
+           place into the combined result (``3025`` becomes ``3016``), which
+           then hot-swaps back to its normal (white) colour.
+
+        Terms on the left keep their slot; everything not mentioned (the
+        emptied right-hand side, a fresh ``0``, unchanged glyphs) is carried
+        by an in-place :class:`PairMorph` timed to the sink phase.  The line
+        stays in the same slot, so the derivation does not grow a new row.
+        """
+        T, b, FR = float(transition_time), float(begin_time), FRAME_RATE
+        # phase boundaries as fractions of the transition
+        f_lift, f_land, f_hold, f_sink = 0.22, 0.55, 0.66, 0.9
+
+        eq = source.find_letters(self.align_char or '=')
+        eq_x = source.letters[eq[0]].ref_obj.location[0]
+
+        # operator glyphs (+/-) sitting on the right of '=' -- candidates to be
+        # attached to the mover immediately on their right (its leading sign)
+        right_ops = []
+        for spec in ('+', '-'):
+            try:
+                right_ops.extend(source.find_letters(spec + '@all'))
+            except Exception:
+                pass
+        right_ops = [o for o in right_ops
+                     if source.letters[o].ref_obj.location[0] > eq_x]
+
+        # --- read the map into moves (mover right of '=', partner left) -----
+        items = user_map.items() if isinstance(user_map, dict) else list(user_map)
+        by_target = {}
+        for src_spec, tgt_spec in items:
+            if src_spec is None or tgt_spec is None:
+                raise ValueError("add_subtract map entries need a source and a target")
+            src_idx = source.find_letters(src_spec)
+            centre = np.mean([source.letters[i].ref_obj.location[0] for i in src_idx])
+            side = 'mover' if centre > eq_x else 'stationary'
+            by_target.setdefault(tgt_spec, {'mover': [], 'stationary': []})[side].append(src_idx)
+
+        # --- refine the stationary (joined) terms into per-glyph morph pins --
+        src_sigs, tgt_sigs = self._signatures(source), self._signatures(tex)
+        stationary_pins, mover_glyphs, moves = [], set(), []
+        for tgt_spec, sides in by_target.items():
+            tgt_idx = tex.find_letters(tgt_spec)
+            stationary = [i for group in sides['stationary'] for i in group]
+            for group in sides['stationary']:
+                # signatures carry their global letter index, so plan.pairs are
+                # already (source_index, target_index) -- as in _resolve_map
+                local = plan_transition([src_sigs[i] for i in group],
+                                        [tgt_sigs[j] for j in tgt_idx])
+                stationary_pins.extend(local.pairs)
+            if stationary:
+                land = (float(np.mean([source.letters[i].ref_obj.location[0] for i in stationary])),
+                        float(np.mean([source.letters[i].ref_obj.location[1] for i in stationary])))
+            else:
+                land = (float(np.mean([tex.letters[j].ref_obj.location[0] for j in tgt_idx])),
+                        float(np.mean([tex.letters[j].ref_obj.location[1] for j in tgt_idx])))
+            for group in sides['mover']:
+                mover_glyphs.update(group)
+                # the leading operator is the +/- adjacent on the term's left
+                min_x = min(source.letters[i].ref_obj.location[0] for i in group)
+                cand = [o for o in right_ops
+                        if 0 < min_x - source.letters[o].ref_obj.location[0] < 1.0]
+                op = max(cand, key=lambda o: source.letters[o].ref_obj.location[0]) \
+                    if cand else None
+                moves.append({'glyphs': group, 'stationary': stationary,
+                              'land': land, 'op': op})
+
+        attached_ops = {mv['op'] for mv in moves if mv['op'] is not None}
+
+        # --- in-place morph plan -------------------------------------------
+        # The '=' partitions the line: everything on the right that is not a
+        # mover is emptied out (forced vanish) and the target's right-hand side
+        # (typically a fresh '0') is written in (forced appear).  This keeps the
+        # greedy auto-matcher from dragging a leftover glyph across the '=' --
+        # only the left-hand side (plus the unchanged '=' and 'x^2') is matched
+        # automatically.  The movers themselves are pinned out and fly instead.
+        tex_eq_x = tex.letters[tex.find_letters(self.align_char or '=')[0]].ref_obj.location[0]
+        pinned_src = {i for i, _ in stationary_pins} | mover_glyphs
+        pinned_tgt = {j for _, j in stationary_pins}
+        right_src = [i for i, letter in enumerate(source.letters)
+                     if i not in pinned_src and letter.ref_obj.location[0] > eq_x]
+        right_tgt = [j for j, letter in enumerate(tex.letters)
+                     if j not in pinned_tgt and letter.ref_obj.location[0] > tex_eq_x]
+        mapping = (stationary_pins
+                   + [(i, None) for i in sorted(mover_glyphs | set(right_src))]
+                   + [(None, j) for j in right_tgt])
+        plan = plan_transition(src_sigs, tgt_sigs, mapping=mapping, auto=True)
+        # movers and attached operators fly as copies instead of vanishing
+        plan.vanish = [i for i in plan.vanish
+                       if i not in mover_glyphs and i not in attached_ops]
+        self.plans.append(plan)
+
+        # right-of-'=' leftovers (e.g. the spare '+' between the two movers)
+        # clear out early, as the terms they joined lift off
+        early = [i for i in plan.vanish
+                 if source.letters[i].ref_obj.location[0] > eq_x]
+        plan.vanish = [i for i in plan.vanish if i not in early]
+        for i in early:
+            obj = source.letters[i].ref_obj
+            ibpy.insert_keyframe(obj, "scale", frame=b * FR)
+            obj.scale = (0, 0, 0)
+            ibpy.insert_keyframe(obj, "scale", frame=(b + f_lift * T) * FR)
+
+        # --- morph the joined terms in place, timed to the sink phase -------
+        morph = PairMorph(source, tex, plan)
+        morph.animate(begin_time=b + f_hold * T, transition_time=(f_sink - f_hold) * T)
+
+        # keep the joined terms coloured while they morph; they hot-swap back
+        # to white at the end of the morph
+        joined = {i for move in moves for i in move['stationary']}
+        for copy, src_letter, _ in morph.morphers:
+            if source.letters.index(src_letter) in joined:
+                ibpy.change_color(copy, highlight_color,
+                                  begin_frame=(b + f_hold * T) * FR - 1,
+                                  final_frame=(b + f_hold * T) * FR)
+
+        # --- fly each mover across the '=' ----------------------------------
+        # order the terms left-to-right so a per-term 'lift' list lines up with
+        # the way they read on the source line
+        moves.sort(key=lambda mv: np.mean(
+            [source.letters[i].ref_obj.location[0] for i in mv['glyphs']]))
+        if isinstance(lift, (list, tuple)):
+            if len(lift) != len(moves):
+                raise ValueError("lift has %d entries but there are %d moving terms"
+                                 % (len(lift), len(moves)))
+            lifts = list(lift)
+        else:
+            lifts = [lift] * len(moves)
+
+        minus = self._minus_letter(tex, source)
+        for move, mv_lift in zip(moves, lifts):
+            self._fly_mover(source, move, minus, eq_x, b, T,
+                            f_lift, f_land, f_hold, f_sink, mv_lift, highlight_color)
+            if move['stationary']:
+                source.change_color_of_letters(
+                    move['stationary'], highlight_color,
+                    begin_time=b + f_land * T, transition_time=0.06 * T)
+
+        return b + T
+
+    def _minus_letter(self, tex, source):
+        """A ``-`` glyph (a live letter) to clone as the sign movers acquire.
+
+        Borrowed from the target line (or the source), so it matches the font;
+        only if neither line contains one is a throwaway rendered.
+        """
+        for text in (tex, source):
+            found = text.find_letters('-')
+            if found:
+                return text.letters[found[0]]
+        stub = SimpleTexBObject(r"-", **self.tex_kwargs)
+        return stub.letters[0]
+
+    def _fly_mover(self, source, move, minus_letter, eq_x, b, T,
+                   f_lift, f_land, f_hold, f_sink, lift, highlight_color):
+        """Choreograph one term's flight across the ``=`` (see :meth:`_step_add_subtract`)."""
+        FR = FRAME_RATE
+        glyphs = sorted(move['glyphs'],
+                        key=lambda i: source.letters[i].ref_obj.location[0])
+        starts = [Vector(source.letters[i].ref_obj.location) for i in glyphs]
+        group_x = float(np.mean([s.x for s in starts]))
+        land_x, land_y = move['land']
+        dx = land_x - group_x
+
+        def F(frac):
+            return (b + frac * T) * FR
+
+        # fraction of the traverse at which the term centre crosses the '='
+        s_cross = 0.5 if abs(dx) < 1e-6 else (eq_x - group_x) / dx
+        s_cross = min(max(s_cross, 0.0), 1.0)
+        f_cross = f_lift + s_cross * (f_land - f_lift)
+
+        def fly_location(obj, start):
+            for frame, loc in ((F(0), start),
+                               (F(f_lift), Vector((start.x, start.y + lift, start.z))),
+                               (F(f_land), Vector((start.x + dx, start.y + lift, start.z))),
+                               (F(f_hold), Vector((start.x + dx, start.y + lift, start.z))),
+                               (F(f_sink), Vector((start.x + dx, land_y, start.z)))):
+                obj.location = loc
+                ibpy.insert_keyframe(obj, "location", frame=frame)
+
+        def fly_scale(obj, base, keys):
+            for frame, factor in keys:
+                obj.scale = [factor * s for s in base]
+                ibpy.insert_keyframe(obj, "scale", frame=frame)
+
+        # the number/term itself: hide the original, fly a copy, shrink at the end
+        copies = []
+        for i, start in zip(glyphs, starts):
+            orig = source.letters[i].ref_obj
+            ibpy.insert_keyframe(orig, "scale", frame=F(0) - 1)
+            orig.scale = (0, 0, 0)
+            ibpy.insert_keyframe(orig, "scale", frame=F(0))
+
+            copy = source.letters[i].copy(clear_animation_data=True)
+            source.copies_of_letters.append(copy)
+            copy.appear(begin_time=b, transition_time=0, clear_data=True)
+            base = list(copy.ref_obj.scale)
+            fly_location(copy.ref_obj, start)
+            fly_scale(copy.ref_obj, base, ((F(0), 1), (F(f_hold), 1), (F(f_sink), 0)))
+            copies.append(copy)
+
+        # an attached leading operator (e.g. the '+' of a second term) flies
+        # along with the group and shrinks out at the crossing, cross-fading
+        # into the '-' that grows in there
+        op = move.get('op')
+        if op is not None:
+            op_start = Vector(source.letters[op].ref_obj.location)
+            orig = source.letters[op].ref_obj
+            ibpy.insert_keyframe(orig, "scale", frame=F(0) - 1)
+            orig.scale = (0, 0, 0)
+            ibpy.insert_keyframe(orig, "scale", frame=F(0))
+            op_copy = source.letters[op].copy(clear_animation_data=True)
+            source.copies_of_letters.append(op_copy)
+            op_copy.appear(begin_time=b, transition_time=0, clear_data=True)
+            op_base = list(op_copy.ref_obj.scale)
+            fly_location(op_copy.ref_obj, op_start)
+            fly_scale(op_copy.ref_obj, op_base,
+                      ((F(0), 1), (F(f_cross) - 2, 1), (F(f_cross) + 2, 0)))
+
+        # the leading '-' that grows in as the term crosses the '='
+        xs = sorted(s.x for s in starts)
+        gap = float(np.median(np.diff(xs))) if len(xs) > 1 else 0.35
+        sign_start = Vector((xs[0] - gap, starts[0].y, starts[0].z))
+        sign = minus_letter.copy(clear_animation_data=True)
+        source.copies_of_letters.append(sign)
+        sign.appear(begin_time=b, transition_time=0, clear_data=True)
+        # move it into the flying term's frame (the borrowed glyph may live in
+        # the target line, whose origin differs after '=' alignment)
+        sign.ref_obj.parent = source.ref_obj
+        sign.ref_obj.matrix_parent_inverse = \
+            source.letters[glyphs[0]].ref_obj.matrix_parent_inverse.copy()
+        sign_base = list(sign.ref_obj.scale)
+        fly_location(sign.ref_obj, sign_start)
+        fly_scale(sign.ref_obj, sign_base,
+                  ((F(0), 0), (F(f_cross) - 1, 0), (F(f_cross) + 3, 1),
+                   (F(f_hold), 1), (F(f_sink), 0)))
+
+        # both terms flash on arrival; the movers keep the colour as they sink
+        for copy in copies + [sign]:
+            copy.change_color(highlight_color, begin_time=b + f_land * T,
+                              transition_time=0.06 * T)

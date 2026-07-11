@@ -1149,7 +1149,7 @@ def make_image_material(src=None, **kwargs):
     rotation = get_from_kwargs(kwargs, 'rotation', [0, 0, 0])
     extension = get_from_kwargs(kwargs, 'extension', 'EXTEND')
     coordinates = get_from_kwargs(kwargs, 'coordinates', 'Generated')
-    projection = get_from_kwargs(kwargs, 'projection', "LINEAR")
+    projection = get_from_kwargs(kwargs, 'projection', "FLAT")
     projection_blend = get_from_kwargs(kwargs, 'projection_blend', 0)
     map.inputs[1].default_value = location
     map.inputs[2].default_value = rotation
@@ -4501,7 +4501,7 @@ def penrose_material(base_color, contrast=1, **kwargs):
     # for eevee
     material.use_screen_refraction = True
     # for cycles
-    material.cycles.displacement_method = 'DISPLACEMENT'  # for real displacement
+    # material.cycles.displacement_method = 'DISPLACEMENT'  # for real displacement
     material.use_nodes = True
 
     nodes = material.node_tree.nodes
@@ -4582,7 +4582,7 @@ def penrose_material(base_color, contrast=1, **kwargs):
     links.new(img.outputs['Color'], mixer.inputs[2])
     # settings for eevee
     material.blend_method = 'HASHED'
-    material.shadow_method = 'HASHED'
+    # material.shadow_method = 'HASHED'
 
     return material
 
