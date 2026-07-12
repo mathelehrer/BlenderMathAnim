@@ -2485,6 +2485,88 @@ def change_color(bob, new_color, begin_frame, final_frame, slot=0):
             change_color(child, new_color, begin_frame, final_frame)
 
 
+def change_color_in_all_slots_to(bob, new_color, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, slot=None):
+    """
+    Fade the material(s) of an object into a completely different material.
+
+    For every material slot of the object a ``MixShader`` is inserted right in
+    front of the ``Material Output``.  The shader that currently drives the
+    surface is routed into the first input of the mixer, while the *complete*
+    node setup of ``new_color`` is copied into the material (via
+    :func:`appearance.textures.copy_nodes_and_links_from_material`) and routed
+    into the second input.  Animating the mixer factor from 0 to 1 then
+    performs the transition from the old to the new material.
+
+    :param bob: b_object (or bpy object) whose materials are recolored
+    :param new_color: the material to transition to
+    :param begin_time: start of the transition (in seconds)
+    :param transition_time: duration of the transition (in seconds)
+    :param slot: if given, only this slot is changed, otherwise all slots
+    :return: the time at which the transition is finished
+    """
+    # imported locally to avoid a circular import (appearance.textures imports ibpy)
+    from appearance.textures import copy_nodes_and_links_from_material
+
+    obj = get_obj(bob)
+
+    if not (obj.data and obj.data.materials):
+        # the object itself carries no material, recurse into its children
+        for child in obj.children:
+            change_color_in_all_slots_to(child, new_color, begin_time=begin_time,
+                                         transition_time=transition_time, slot=slot)
+        return begin_time + transition_time
+
+    if slot is None:
+        slots = range(len(obj.material_slots))
+    else:
+        slots = [slot]
+
+    for i in slots:
+        material = obj.material_slots[i].material
+        if material is None:
+            continue
+
+        material.use_nodes = True
+        tree = material.node_tree
+        nodes = tree.nodes
+        links = tree.links
+
+        out = nodes.get("Material Output")
+
+        # remember the shader output that currently feeds the material output
+        old_surface_out = None
+        for link in out.inputs["Surface"].links:
+            old_surface_out = link.from_socket
+            break
+
+        # copy the complete node setup of the new material into this material.
+        # the material output of the new material is excluded, the function
+        # returns the surface output of the copied shader instead
+        suffix = "_new_color_" + str(i)
+        new_surface_out = copy_nodes_and_links_from_material(
+            tree, new_color, exclude=["ShaderNodeOutputMaterial"],
+            shift=(0, -600), suffix=suffix)
+
+        # insert a MixShader in front of the material output and wire both
+        # shaders into it: old material -> input 1, new material -> input 2
+        mix_shader = nodes.new(type="ShaderNodeMixShader")
+        mix_shader.name = "ColorTransitionMixer" + suffix
+        mix_shader.label = "ColorTransitionMixer" + suffix
+        mix_shader.location = (out.location[0], out.location[1] - 300)
+
+        if old_surface_out is not None:
+            links.new(old_surface_out, mix_shader.inputs[1])
+        if new_surface_out is not None:
+            links.new(new_surface_out, mix_shader.inputs[2])
+        links.new(mix_shader.outputs["Shader"], out.inputs["Surface"])
+
+        # animate the mixer factor to fade from the old material (0) to the new one (1)
+        change_default_value(mix_shader.inputs[0], from_value=0, to_value=1,
+                             begin_time=begin_time, transition_time=transition_time)
+
+    return begin_time + transition_time
+
+
 def create_color_map_for_mesh(bob, colors, name, **kwargs):
     obj = get_obj(bob)
     color_map_collection = obj.data.vertex_colors

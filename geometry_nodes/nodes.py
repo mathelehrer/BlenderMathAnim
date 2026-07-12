@@ -3478,7 +3478,8 @@ class CompareNode(BlueNode):
                  data_type="FLOAT",
                  inputs0=0,
                  inputs1=0,
-                 inputs2=0, **kwargs):
+                 inputs2=0,
+                 **kwargs):
         """
 
         """

@@ -4491,7 +4491,6 @@ def monte_carlo_mandel(bob, **kwargs):
     material.cycles.displacement_method = 'DISPLACEMENT'  # for real displacement
     material.use_nodes = True
 
-
 def penrose_material(base_color, contrast=1, **kwargs):
     material = bpy.data.materials.new(name='Penrose')
     if 'emission' in kwargs:
@@ -4586,7 +4585,72 @@ def penrose_material(base_color, contrast=1, **kwargs):
 
     return material
 
+def make_logo_material(**kwargs):
+    material = bpy.data.materials.new(name='Logo')
+    if 'emission' in kwargs:
+        emission = kwargs.pop('emission')
+    else:
+        emission = 0
+    # for eevee
+    material.use_screen_refraction = True
+    # for cycles
+    # material.cycles.displacement_method = 'DISPLACEMENT'  # for real displacement
+    material.use_nodes = True
 
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    bsdf = nodes['Principled BSDF']
+    out = nodes.get('Material Output')
+
+    # link area attribute
+    length = -10
+    width = 200
+    attribute = nodes.new(type='ShaderNodeAttribute')
+    attribute.location = (length * width, -300)
+    attribute.attribute_name = 'Center'
+    attribute.attribute_type = 'GEOMETRY'
+    length += 1
+
+    sep_xyz = nodes.new(type='ShaderNodeSeparateXYZ')
+    sep_xyz.location = (length*width,-300)
+    length +=1
+
+    combine_xyz = nodes.new(type="ShaderNodeCombineXYZ")
+    combine_xyz.location = (length*width,-300)
+    links.new(attribute.outputs["Vector"],sep_xyz.inputs["Vector"])
+
+    links.new(sep_xyz.outputs["X"],combine_xyz.inputs["Y"])
+    links.new(sep_xyz.outputs["Y"],combine_xyz.inputs["X"])
+
+    div = nodes.new(type='ShaderNodeVectorMath')
+    div.operation = 'DIVIDE'
+    div.location = (length * width, -300)
+    if 'scaling' in kwargs:
+        scaling = kwargs.pop('scaling')
+    else:
+        scaling = [107]*3
+    div.inputs[1].default_value = scaling
+    links.new(combine_xyz.outputs['Vector'], div.inputs[0])
+    length += 1
+
+    shift = nodes.new(type='ShaderNodeVectorMath')
+    shift.operation = 'ADD'
+    shift.location = (length * width, -300)
+    shift.inputs[1].default_value = [0.51,0.5,0]
+    links.new(div.outputs['Vector'], shift.inputs[0])
+    length += 1
+
+    img = nodes.new(type='ShaderNodeTexImage')
+    img.location = (length * width, -300)
+    img.image = bpy.data.images.load(os.path.join(IMG_DIR, "logo.png"))
+    img.extension = 'EXTEND'
+    links.new(shift.outputs[0], img.inputs['Vector'])
+    links.new(img.outputs['Color'], bsdf.inputs["Base Color"])
+    # settings for eevee
+    material.blend_method = 'HASHED'
+    # material.shadow_method = 'HASHED'
+
+    return material
 def material_clean_up():
     # Function for removing some duplicate materials from repeated imports
     for mat in bpy.data.materials:
