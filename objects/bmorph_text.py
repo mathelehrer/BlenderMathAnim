@@ -68,15 +68,35 @@ def extract_glyph(letter):
     return splines, cyclic
 
 
+def _own_material(material):
+    """Copy a material and detach its animation.
+
+    ``material.copy()`` still SHARES the animation actions (material and
+    node tree) with the donor -- keyframes inserted on the donor later
+    (e.g. a ``disappear`` fade of the original text) would leak into the
+    copy.  Duplicating the actions makes the copy truly independent.
+    """
+    mat = material.copy()
+    for holder in (mat, mat.node_tree):
+        anim = getattr(holder, 'animation_data', None)
+        if anim is not None and anim.action is not None:
+            anim.action = anim.action.copy()
+    return mat
+
+
 def make_curve_copy(donor):
     """Independent copy of a letter curve (own data, own materials)."""
     curve = donor.copy()
     curve.data = donor.data.copy()
     curve.animation_data_clear()
     curve.name = donor.name + "_morph_copy"
+    # the donor may be render-hidden at build time (write() animates letter
+    # visibility); the copy manages its own visibility via scale keyframes
+    curve.hide_render = False
+    curve.hide_viewport = False
     for slot in curve.material_slots:
         if slot.material is not None:
-            slot.material = slot.material.copy()
+            slot.material = _own_material(slot.material)
     return curve
 
 
@@ -482,8 +502,12 @@ class PairMorph:
         self.target = target
         self.plan = plan
 
+        # slot shift in the source LOCAL frame (where the letters live): the
+        # line objects are rotated into the text plane, so the parent-frame
+        # delta must be rotated back (identity for same-slot transitions)
         scale = source.ref_obj.scale
-        self.shift = ibpy.get_location(target) - ibpy.get_location(source)
+        delta = ibpy.get_location(target) - ibpy.get_location(source)
+        self.shift = source.ref_obj.rotation_euler.to_matrix().inverted() @ delta
         for i in range(3):
             self.shift[i] /= scale[i]
 

@@ -24,20 +24,30 @@ Modes
 * ``mode='new_line'``: the new step appears on the next line (of the
   optional :class:`~objects.display.Display`), matched letters fly down as
   copies along arcs with staggered timing, the rest is written in.
+* ``mode='new_line_copy'``: 'new_line' for a step that carries its letters
+  over unchanged -- the flown copies dance directly into their final slots
+  and rest there; the pristine target letters take over in one invisible
+  hot swap on the end frame (no per-letter fade/rewrite on arrival).
 * ``mode='replace'``: the line transforms in place (shape-key morph of
   letter copies, then a hot swap to the pristine new line).
 * ``mode='add_subtract'``: an in-place step in which the right-hand terms
   of the ``map`` fly across the ``=`` sign, flip their sign and merge into
   the matching left-hand terms (e.g. ``... = 9 + 495x`` collected onto the
   left).  See :meth:`BDerivation._step_add_subtract`.
+* ``mode='swap'``: an in-place step in which every ``map`` term that sits
+  on opposite sides of the ``=`` in source and target flies across while
+  its leading sign **morphs** into the opposite sign; the term does not
+  merge with anything -- it lands intact in its own slot on the other
+  side.  See :meth:`BDerivation._step_swap`.
 """
 
 import numpy as np
 from interface import ibpy
 from interface.ibpy import Vector
-from objects.bmorph_text import BMorphText, PairMorph
+from objects.bmorph_text import (BMorphText, PairMorph, extract_glyph,
+                                 make_curve_copy, rebuild_curve)
 from objects.choreography import fly_letter, highlight_letters, stagger_schedule
-from objects.morph_planning import glyph_signature, plan_transition
+from objects.morph_planning import compile_chain, glyph_signature, plan_transition
 from objects.tex_bobject import SimpleTexBObject
 from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
 
@@ -85,6 +95,10 @@ class BDerivation:
         first = self._make_line(first_expression, index=0)
         self.lines = [first]
         self.plans = []  # one MorphPlan per step, for introspection
+        # deferred stand-in -> pristine-letter handoffs (see _fly_foreign):
+        # (tex, letter indices, stand-in copies), resolved when the next
+        # step begins
+        self._handoffs = []
         self._place_line(first)
 
     # ------------------------------------------------------------------
@@ -191,20 +205,28 @@ class BDerivation:
     def step(self, expression, mode='new_line', map=None, auto=True, auto_threshold=None,
              align=True, fade_old=None, arc=0.3, stagger=0.5, lift=1.0,
              highlight=None, highlight_color='important', new_color=None,
-             cancel=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+             cancel=None, sources=None,
+             begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
              **tex_overrides):
         """Advance the derivation to the next expression.
 
         :param expression: LaTeX of the next line
-        :param mode: 'new_line' (letters fly to the next line), 'replace'
-            (the line morphs in place) or 'add_subtract' (right-hand terms of
+        :param mode: 'new_line' (letters fly to the next line),
+            'new_line_copy' (like 'new_line' for an unchanged line: the flown
+            copies stay in their slots and hot-swap invisibly at the end
+            instead of fading into a rewritten letter on arrival), 'replace'
+            (the line morphs in place), 'add_subtract' (right-hand terms of
             the ``map`` fly across the ``=`` sign, flip sign and merge into
-            their left-hand partners; see :meth:`_step_add_subtract`)
-        :param lift: for ``mode='add_subtract'``, how far (in line units) a
-            travelling term rises above the baseline as it crosses over; a
-            single value applies to every term, or pass a list with one value
-            per moving term (ordered left-to-right on the source line) to lift
-            them to different heights
+            their left-hand partners; see :meth:`_step_add_subtract`) or
+            'swap' (``map`` terms that change sides fly across the ``=``
+            with their sign morphing into its opposite, without merging;
+            see :meth:`_step_swap`)
+        :param lift: for ``mode='add_subtract'`` and ``mode='swap'``, how far
+            (in line units) a travelling term rises above the baseline as it
+            crosses over; a single value applies to every term, or pass a
+            list with one value per moving term (ordered left-to-right on
+            the source line) to lift them to different heights -- useful
+            when two terms cross in opposite directions
         :param map: manual matching, e.g.
             ``{"(x+y)^2": "x^2+2xy+y^2", "9@0": None, None: "42"}``
             (``None`` value = vanish, ``None`` key = fresh appearance);
@@ -220,17 +242,34 @@ class BDerivation:
         :param cancel: pairs of substrings that annihilate instead of
             carrying over, e.g. ``[("+5", "-5")]`` -- copies of both terms
             fly to their joint midpoint and shrink to nothing
+        :param sources: ('new_line' modes only) list of
+            ``(text, src_spec, tgt_spec)``: the new line's ``tgt_spec``
+            letters are brought in by flying the ``src_spec`` letters of the
+            foreign ``text`` (e.g. a brace label) instead of being written or
+            matched from the current line; the foreign originals hide at
+            take-off and the arrived copies BUILD the new line -- they stay
+            put, and the pristine target letters only take over (invisibly,
+            on identical geometry) at the moment the next step begins.
+            Combine with ``map`` pins so these targets stay unmatched (a
+            clash raises).
         :return: begin_time + transition_time
         """
+        if self._handoffs:
+            self._resolve_handoffs(begin_time)
         source = self.current
         tex = self._make_line(expression, index=len(self.lines), **tex_overrides)
-        self._place_line(tex, same_slot=(mode in ('replace', 'add_subtract')))
+        self._place_line(tex, same_slot=(mode in ('replace', 'add_subtract', 'swap')))
         if align:
             self._align(tex)
 
         if mode == 'add_subtract':
             self._step_add_subtract(source, tex, map, begin_time, transition_time,
                                     lift=lift, highlight_color=highlight_color)
+            self.lines.append(tex)
+            return begin_time + transition_time
+
+        if mode == 'swap':
+            self._step_swap(source, tex, map, begin_time, transition_time, lift=lift)
             self.lines.append(tex)
             return begin_time + transition_time
 
@@ -256,6 +295,30 @@ class BDerivation:
         plan.vanish = [i for i in plan.vanish if i not in cancelled]
         self.plans.append(plan)
 
+        # letters flown in from foreign text objects (e.g. brace labels)
+        foreign = []
+        if sources:
+            if mode not in ('new_line', 'new_line_copy'):
+                raise ValueError("sources are only supported in the new_line modes")
+            for src_text, src_spec, tgt_spec in sources:
+                src_idx = src_text.find_letters(src_spec)
+                tgt_idx = tex.find_letters(tgt_spec)
+                fsigs = self._signatures(src_text)
+                local = plan_transition([fsigs[i] for i in src_idx],
+                                        [tgt_sigs[j] for j in tgt_idx])
+                if not local.pairs:
+                    raise ValueError("source %r does not match target %r"
+                                     % (src_spec, tgt_spec))
+                foreign.append((src_text, local.pairs))
+            foreign_targets = {j for _, fpairs in foreign for _, j in fpairs}
+            clash = foreign_targets & {j for _, j in plan.pairs}
+            if clash:
+                raise ValueError("targets %r are both matched from the current "
+                                 "line and supplied by sources; pin them to "
+                                 "None in the map" % sorted(clash))
+            # they are neither written in nor matched -- they fly in
+            plan.appear = [j for j in plan.appear if j not in foreign_targets]
+
         # optional pre-flight highlight of the moving material
         flight_begin, flight_time = begin_time, transition_time
         if highlight is not None:
@@ -268,16 +331,22 @@ class BDerivation:
             flight_begin = begin_time + 0.25 * transition_time
             flight_time = 0.75 * transition_time
 
-        if mode == 'new_line':
+        if mode in ('new_line', 'new_line_copy'):
             self._step_new_line(source, tex, plan, flight_begin, flight_time,
                                 arc=arc, stagger=stagger, new_color=new_color,
                                 fade_old=fade_old,
-                                begin_time=begin_time, transition_time=transition_time)
+                                begin_time=begin_time, transition_time=transition_time,
+                                hot_swap_at_end=(mode == 'new_line_copy'))
+            for src_text, fpairs in foreign:
+                self._fly_foreign(src_text, tex, fpairs, flight_begin, flight_time,
+                                  arc=arc, stagger=stagger,
+                                  begin_time=begin_time,
+                                  transition_time=transition_time)
         elif mode == 'replace':
             self._step_replace(source, tex, plan, flight_begin, flight_time)
         else:
-            raise ValueError("unknown mode %r (use 'new_line', 'replace' or "
-                             "'add_subtract')" % mode)
+            raise ValueError("unknown mode %r (use 'new_line', 'new_line_copy', "
+                             "'replace', 'add_subtract' or 'swap')" % mode)
 
         for group_a, group_b in cancel_groups:
             self._animate_cancel(source, group_a, group_b, arc,
@@ -311,15 +380,20 @@ class BDerivation:
                        arc=max(abs(arc), 0.1))
 
     def _step_new_line(self, source, tex, plan, flight_begin, flight_time,
-                       arc, stagger, new_color, fade_old, begin_time, transition_time):
-        # inter-line shift in the source container frame (both lines share
-        # the same parent and orientation; cf. move_letters_to)
+                       arc, stagger, new_color, fade_old, begin_time, transition_time,
+                       hot_swap_at_end=False):
+        # inter-line shift in the source LOCAL frame (where the letters and
+        # their copies live): the line objects are rotated into the text
+        # plane, so the parent-frame delta between the lines must be rotated
+        # back before it can be added to letter locations
         scale = source.ref_obj.scale
-        shift = ibpy.get_location(tex) - ibpy.get_location(source)
+        delta = ibpy.get_location(tex) - ibpy.get_location(source)
+        shift = source.ref_obj.rotation_euler.to_matrix().inverted() @ delta
         for i in range(3):
             shift[i] /= scale[i]
         depth_offset = Vector((0, 0, -0.001))  # behind the written target letter
 
+        swap_frame = (begin_time + transition_time) * FRAME_RATE
         pairs = sorted(plan.pairs, key=lambda p: source.letters[p[0]].ref_obj.location[0])
         schedule = stagger_schedule(len(pairs), flight_begin, flight_time, stagger=stagger)
         written = set()
@@ -334,11 +408,26 @@ class BDerivation:
             if new_color:
                 copy.change_color(new_color=new_color, begin_time=t0 + duration / 2,
                                   transition_time=duration / 2)
+            if hot_swap_at_end:
+                # the copy IS the letter until the very end: it rests in its
+                # slot and pops off on the swap frame, where the pristine
+                # target letter (0.001 in front) takes over seamlessly
+                obj = copy.ref_obj
+                base = list(obj.scale)
+                ibpy.insert_keyframe(obj, "scale", frame=swap_frame)
+                obj.scale = (0, 0, 0)
+                ibpy.insert_keyframe(obj, "scale", frame=swap_frame + 0.5)
+                obj.scale = base
+                continue
             arrival = t0 + duration
             if j not in written:  # merges write the target letter only once
                 tex.write(letter_set=[j], begin_time=arrival, transition_time=0)
                 written.add(j)
             copy.disappear(begin_time=arrival, transition_time=0.1)
+
+        if hot_swap_at_end and pairs:
+            tex.write(letter_set=sorted({j for _, j in pairs}),
+                      begin_time=begin_time + transition_time, transition_time=0)
 
         if plan.appear:
             tex.write(letter_set=list(plan.appear),
@@ -351,6 +440,106 @@ class BDerivation:
         elif fade_old == 'dim':
             source.disappear(alpha=0.25, begin_time=begin_time + transition_time,
                              transition_time=0.5 * transition_time)
+
+    def _fly_foreign(self, src_text, tex, pairs, flight_begin, flight_time,
+                     arc, stagger, begin_time, transition_time):
+        """Fly letters of a foreign text object into their new-line slots.
+
+        Used for ``step(sources=...)``: e.g. the ``Q_n`` under an underbrace
+        travels up and becomes the new line's ``Q_n``.  Each copy is a
+        shape-key morph from the foreign glyph to the pristine target glyph
+        (an underbrace label is script-size, so it grows to text size in
+        flight and lands as exact pristine geometry).  The copies are
+        parented into the new line's frame (so the foreign object may
+        disappear while they fly), the originals hide at take-off, and the
+        arrived copies stay put as the visible line.  The pristine target
+        letters take over only when the next step begins (registered in
+        ``self._handoffs``), so nothing is visibly replaced.  Assumes both
+        objects share their orientation (as SimpleTexBObjects do).
+        """
+        FR = FRAME_RATE
+        # foreign start positions expressed in the new line's local frame
+        scale = tex.ref_obj.scale
+        fscale = src_text.ref_obj.scale
+        delta = ibpy.get_location(src_text) - ibpy.get_location(tex)
+        shift = tex.ref_obj.rotation_euler.to_matrix().inverted() @ delta
+        ratio = [fscale[k] / scale[k] for k in range(3)]
+        for k in range(3):
+            shift[k] /= scale[k]
+        depth_offset = Vector((0, 0, -0.001))
+
+        pairs = sorted(pairs, key=lambda p: src_text.letters[p[0]].ref_obj.location[0])
+        schedule = stagger_schedule(len(pairs), flight_begin, flight_time,
+                                    stagger=stagger)
+        arrived = []
+        for (i, j), (t0, duration) in zip(pairs, schedule):
+            letter = src_text.letters[i]
+            tgt_letter = tex.letters[j]
+            # the original label letter hides as its copy takes off
+            obj = letter.ref_obj
+            src_scale = list(obj.scale)
+            ibpy.insert_keyframe(obj, "scale", frame=t0 * FR - 1)
+            obj.scale = (0, 0, 0)
+            ibpy.insert_keyframe(obj, "scale", frame=t0 * FR)
+
+            # morph copy: foreign glyph -> pristine target glyph
+            splines_src, cyc_src = extract_glyph(letter)
+            splines_tgt, cyc_tgt = extract_glyph(tgt_letter)
+            snapshots, cyclic = compile_chain([splines_src, splines_tgt],
+                                              cyclic_flags=[cyc_src, cyc_tgt])
+            copy = make_curve_copy(letter.ref_obj)
+            rebuild_curve(copy, snapshots, cyclic)
+            copy.parent = tex.ref_obj
+            copy.matrix_parent_inverse = \
+                tgt_letter.ref_obj.matrix_parent_inverse.copy()
+            copy.rotation_euler = tgt_letter.ref_obj.rotation_euler
+            ibpy.link(copy)
+
+            # pop on at take-off, morphing from the label's letter scale to
+            # the pristine letter's over the flight
+            copy.scale = (0, 0, 0)
+            ibpy.insert_keyframe(copy, "scale", frame=t0 * FR - 1)
+            copy.scale = src_scale
+            ibpy.insert_keyframe(copy, "scale", frame=t0 * FR)
+            copy.scale = list(tgt_letter.ref_obj.scale)
+            ibpy.insert_keyframe(copy, "scale", frame=(t0 + duration) * FR)
+
+            p = Vector(letter.ref_obj.location)
+            start = shift + Vector([ratio[k] * p[k] for k in range(3)])
+            end = Vector(tgt_letter.ref_obj.location) + depth_offset
+            fly_letter(copy, start, end, begin_time=t0, transition_time=duration,
+                       arc=arc)
+            shape_keys = copy.data.shape_keys
+            blocks = shape_keys.key_blocks
+            shape_keys.eval_time = blocks[0].frame
+            shape_keys.keyframe_insert(data_path='eval_time', frame=t0 * FR)
+            shape_keys.eval_time = blocks[-1].frame
+            shape_keys.keyframe_insert(data_path='eval_time',
+                                       frame=(t0 + duration) * FR)
+            shape_keys.eval_time = 0
+            arrived.append(copy)
+        # the arrived copies ARE the new letters; the pristine ones take
+        # over invisibly when the next step begins
+        self._handoffs.append((tex, {j for _, j in pairs}, arrived))
+
+    def _resolve_handoffs(self, begin_time):
+        """Swap resting stand-in copies for the pristine letters they built.
+
+        Runs on the first frame of the following step: the pristine letters
+        are written and the stand-ins pop off on that same frame, on
+        identical geometry, so the crossover is invisible -- and the new
+        step's animation immediately takes over the pristine letters.
+        """
+        frame = begin_time * FRAME_RATE
+        for tex, letter_set, copies in self._handoffs:
+            tex.write(letter_set=sorted(letter_set), begin_time=begin_time,
+                      transition_time=0)
+            for copy in copies:
+                obj = copy.ref_obj if hasattr(copy, 'ref_obj') else copy
+                ibpy.insert_keyframe(obj, "scale", frame=frame - 1)
+                obj.scale = (0, 0, 0)
+                ibpy.insert_keyframe(obj, "scale", frame=frame)
+        self._handoffs = []
 
     def _step_replace(self, source, tex, plan, flight_begin, flight_time):
         morph = PairMorph(source, tex, plan)
@@ -661,3 +850,274 @@ class BDerivation:
         for copy in copies + [sign]:
             copy.change_color(highlight_color, begin_time=b + f_land * T,
                               transition_time=0.06 * T)
+
+    # ------------------------------------------------------------------
+    # swap: carry a term to the other side of the '=' sign
+    # ------------------------------------------------------------------
+
+    def _step_swap(self, source, tex, user_map, begin_time, transition_time,
+                   lift=1.0):
+        """Carry terms across the ``=`` sign without merging them.
+
+        Every ``map`` entry whose source term and target term sit on opposite
+        sides of the ``=`` is a *mover*: the term
+
+        1. lifts above the equation,
+        2. travels across the ``=`` while its leading sign **morphs** into the
+           opposite sign (the ``-`` of ``-a_{n-1}`` reshapes into the ``+`` of
+           ``+a_{n-1}``) -- the sign is a matched shape-key pair, not a
+           cross-fade,
+        3. sinks into its own slot on the other side, where it hot-swaps to
+           the pristine target letters.
+
+        Unlike ``add_subtract`` nothing merges or shrinks away: the term
+        survives the crossing intact.  Map entries that stay on their side
+        (and every unmentioned glyph) morph in place over the full transition,
+        so the line reflows around the travelling term.  The line keeps its
+        slot; the derivation does not grow a new row.
+
+        A term whose sign has no partner glyph on the other side keeps it
+        attached: the sign flies along with the term and reshapes into its
+        opposite during the traverse, then is absorbed as the term sinks
+        (``-a_{n-1}^2`` leaves as an implicit ``+a_{n-1}^2``).  A term that
+        acquires a sign it never had grows the fresh sign as it crosses the
+        ``=`` (as in ``add_subtract``).  ``lift`` may be a list with one
+        height per moving term (ordered left-to-right on the source line),
+        so terms crossing in opposite directions pass at different heights.
+        """
+        T, b, FR = float(transition_time), float(begin_time), FRAME_RATE
+        f_lift, f_land = 0.25, 0.8  # rise until f_lift, traverse, then sink
+
+        eq = self.align_char or '='
+        eq_x = source.letters[source.find_letters(eq)[0]].ref_obj.location[0]
+        tex_eq_x = tex.letters[tex.find_letters(eq)[0]].ref_obj.location[0]
+
+        src_sigs, tgt_sigs = self._signatures(source), self._signatures(tex)
+
+        # --- per-glyph pins for every mapped term ------------------------
+        items = user_map.items() if isinstance(user_map, dict) else list(user_map or [])
+        pins, entries = [], []
+        term_src, term_tgt = set(), set()
+        for src_spec, tgt_spec in items:
+            if src_spec is None or tgt_spec is None:
+                raise ValueError("swap map entries need a source and a target")
+            src_idx = source.find_letters(src_spec)
+            tgt_idx = tex.find_letters(tgt_spec)
+            local = plan_transition([src_sigs[i] for i in src_idx],
+                                    [tgt_sigs[j] for j in tgt_idx])
+            pins.extend(local.pairs)
+            term_src.update(src_idx)
+            term_tgt.update(tgt_idx)
+            entries.append((src_idx, tgt_idx, local.pairs))
+
+        claimed_src, claimed_tgt = set(), set()
+
+        def leading_op(text, term_idx, term_glyphs, eq_pos, claimed):
+            """The +/- operator glyph adjacent on the term's left, if any.
+
+            Glyphs inside a mapped term are never operators (the subscript
+            '+' of ``a_{n+1}`` must not be picked up), an operator across
+            the ``=`` is never a term's sign (on a narrow line the glyph
+            just left of a term may belong to the other side), and an
+            operator already claimed by another mover is taken.
+            """
+            ops = []
+            for spec in ('+', '-'):
+                try:
+                    ops.extend(text.find_letters(spec + '@all'))
+                except Exception:
+                    pass
+            min_x = min(text.letters[i].ref_obj.location[0] for i in term_idx)
+            right_side = min_x > eq_pos
+            cand = [o for o in ops if o not in term_glyphs and o not in claimed
+                    and (text.letters[o].ref_obj.location[0] > eq_pos) == right_side
+                    and 0 < min_x - text.letters[o].ref_obj.location[0] < 1.0]
+            return (max(cand, key=lambda o: text.letters[o].ref_obj.location[0])
+                    if cand else None)
+
+        # --- movers: map entries that change sides; pair their signs -----
+        movers = []  # per mover: the glyph pairs that fly + its odd signs
+        for src_idx, tgt_idx, term_pairs in entries:
+            src_centre = float(np.mean(
+                [source.letters[i].ref_obj.location[0] for i in src_idx]))
+            tgt_centre = float(np.mean(
+                [tex.letters[j].ref_obj.location[0] for j in tgt_idx]))
+            if (src_centre > eq_x) == (tgt_centre > tex_eq_x):
+                continue  # stays on its side -- plain in-place morph
+            move = {'pairs': list(term_pairs), 'shed': None, 'grown': None}
+            src_op = leading_op(source, src_idx, term_src, eq_x, claimed_src)
+            tgt_op = leading_op(tex, tgt_idx, term_tgt, tex_eq_x, claimed_tgt)
+            if src_op is not None:
+                claimed_src.add(src_op)
+            if tgt_op is not None:
+                claimed_tgt.add(tgt_op)
+            if src_op is not None and tgt_op is not None:
+                pins.append((src_op, tgt_op))  # '-' reshapes into '+'
+                move['pairs'].append((src_op, tgt_op))
+            elif src_op is not None:
+                # the sign sticks to the term and flips while crossing, then
+                # is absorbed (the term leads its new side, written bare)
+                pins.append((src_op, None))
+                move['shed'] = src_op
+            elif tgt_op is not None:
+                # the term acquires a sign: a fresh one grows at the crossing
+                pins.append((None, tgt_op))
+                move['grown'] = tgt_op
+            movers.append(move)
+
+        plan = plan_transition(src_sigs, tgt_sigs, mapping=pins or None, auto=True)
+        # shed signs fly as morph copies and grown signs grow in mid-flight
+        # (see _fly_swap_signs) -- take them out of the default treatment
+        shed = {mv['shed'] for mv in movers if mv['shed'] is not None}
+        grown = {mv['grown'] for mv in movers if mv['grown'] is not None}
+        plan.vanish = [i for i in plan.vanish if i not in shed]
+        plan.appear = [j for j in plan.appear if j not in grown]
+        self.plans.append(plan)
+
+        # in-place morph of the whole line: unmoved glyphs reflow, the
+        # movers get their straight travel bent into a flight below
+        morph = PairMorph(source, tex, plan)
+        morph.animate(begin_time=b, transition_time=T)
+
+        # --- bend the movers' travel into lift / traverse / sink ---------
+        # order the terms left-to-right so a per-term 'lift' list lines up
+        # with the way they read on the source line (as in add_subtract)
+        movers.sort(key=lambda mv: np.mean(
+            [source.letters[i].ref_obj.location[0] for i, _ in mv['pairs']]))
+        if isinstance(lift, (list, tuple)):
+            if len(lift) != len(movers):
+                raise ValueError("lift has %d entries but there are %d moving terms"
+                                 % (len(lift), len(movers)))
+            lifts = list(lift)
+        else:
+            lifts = [lift] * len(movers)
+
+        by_source = {source.letters.index(src_letter): copy
+                     for copy, src_letter, _ in morph.morphers}
+        depth_offset = Vector((0, 0, -0.001))  # as in PairMorph.animate
+        for move, mv_lift in zip(movers, lifts):
+            starts, ends = {}, {}
+            for i, j in move['pairs']:
+                starts[i] = Vector(source.letters[i].ref_obj.location)
+                ends[i] = (morph.shift + Vector(tex.letters[j].ref_obj.location)
+                           + depth_offset)
+                copy = by_source.get(i)
+                if copy is None:
+                    continue
+                for frac, loc in ((f_lift, Vector((starts[i].x, starts[i].y + mv_lift,
+                                                   starts[i].z))),
+                                  (f_land, Vector((ends[i].x, ends[i].y + mv_lift,
+                                                   ends[i].z)))):
+                    copy.location = loc
+                    ibpy.insert_keyframe(copy, "location", frame=(b + frac * T) * FR)
+            if move['shed'] is not None or move['grown'] is not None:
+                self._fly_swap_signs(source, tex, move, starts, ends, morph.shift,
+                                     eq_x, b, T, f_lift, f_land, mv_lift)
+
+        return b + T
+
+    def _fly_swap_signs(self, source, tex, move, starts, ends, shift,
+                        eq_x, b, T, f_lift, f_land, lift):
+        """Fly the signs of a swapping term that have no partner glyph.
+
+        * ``move['shed']``: the term's leading sign does not exist on the
+          other side (the term lands leading its new side, written bare).
+          The sign sticks to the term: a shape-key morph copy flies along,
+          reshapes into the opposite sign during the traverse and shrinks
+          away as the term sinks into its slot.
+        * ``move['grown']``: the term acquires a sign it never had.  A clone
+          of the pristine target sign grows in as the term crosses the ``=``,
+          flies the rest of the way and hot-swaps into the real letter on
+          the end frame.
+
+        ``starts``/``ends`` are the term glyphs' flight endpoints (in the
+        source frame) computed by the mover loop.
+        """
+        FR = FRAME_RATE
+
+        def F(frac):
+            return (b + frac * T) * FR
+
+        # the leftmost term glyph defines the sign slot and travel
+        lead = min(starts, key=lambda i: starts[i].x)
+        delta = ends[lead] - starts[lead]
+        xs = sorted(s.x for s in starts.values())
+        gap = float(np.median(np.diff(xs))) if len(xs) > 1 else 0.35
+        # fraction of the traverse at which the term centre crosses the '='
+        group_x = float(np.mean([s.x for s in starts.values()]))
+        dx = float(np.mean([e.x for e in ends.values()])) - group_x
+        s_cross = 0.5 if abs(dx) < 1e-6 else (eq_x - group_x) / dx
+        s_cross = min(max(s_cross, 0.0), 1.0)
+        f_cross = f_lift + s_cross * (f_land - f_lift)
+
+        def fly(obj, start, end):
+            for frame, loc in ((F(0), start),
+                               (F(f_lift), Vector((start.x, start.y + lift, start.z))),
+                               (F(f_land), Vector((end.x, end.y + lift, end.z))),
+                               (F(1.0), end)):
+                obj.location = loc
+                ibpy.insert_keyframe(obj, "location", frame=frame)
+
+        if move['shed'] is not None:
+            src_letter = source.letters[move['shed']]
+            # hide the original; a morph copy flies in its place
+            orig = src_letter.ref_obj
+            base = list(orig.scale)
+            ibpy.insert_keyframe(orig, "scale", frame=F(0) - 1)
+            orig.scale = (0, 0, 0)
+            ibpy.insert_keyframe(orig, "scale", frame=F(0))
+
+            try:
+                is_minus = move['shed'] in source.find_letters('-@all')
+            except Exception:
+                is_minus = True
+            donor = (self._plus_letter(tex, source) if is_minus
+                     else self._minus_letter(tex, source))
+            splines_src, cyc_src = extract_glyph(src_letter)
+            splines_tgt, cyc_tgt = extract_glyph(donor)
+            snapshots, cyclic = compile_chain([splines_src, splines_tgt],
+                                              cyclic_flags=[cyc_src, cyc_tgt])
+            sign = make_curve_copy(src_letter.ref_obj)
+            rebuild_curve(sign, snapshots, cyclic)
+            sign.parent = src_letter.ref_obj.parent
+            sign.rotation_euler = src_letter.ref_obj.rotation_euler
+            ibpy.link(sign)
+
+            start = Vector(src_letter.ref_obj.location)
+            fly(sign, start, start + delta)
+            for frame, factor in ((F(0) - 1, 0), (F(0), 1),
+                                  (F(f_land), 1), (F(1.0), 0)):
+                sign.scale = [factor * s for s in base]
+                ibpy.insert_keyframe(sign, "scale", frame=frame)
+            # reshape into the opposite sign while crossing the '='
+            shape_keys = sign.data.shape_keys
+            blocks = shape_keys.key_blocks
+            shape_keys.eval_time = blocks[0].frame
+            shape_keys.keyframe_insert(data_path='eval_time', frame=F(f_lift))
+            shape_keys.eval_time = blocks[-1].frame
+            shape_keys.keyframe_insert(data_path='eval_time', frame=F(f_land))
+            shape_keys.eval_time = 0
+
+        if move['grown'] is not None:
+            tgt_letter = tex.letters[move['grown']]
+            sign = tgt_letter.copy(clear_animation_data=True)
+            source.copies_of_letters.append(sign)
+            sign.appear(begin_time=b, transition_time=0, clear_data=True)
+            # move it into the flying term's frame (the pristine glyph lives
+            # in the target line, whose origin differs after '=' alignment)
+            sign.ref_obj.parent = source.ref_obj
+            sign.ref_obj.matrix_parent_inverse = \
+                source.letters[lead].ref_obj.matrix_parent_inverse.copy()
+            start = Vector((xs[0] - gap, starts[lead].y, starts[lead].z))
+            end = (shift + Vector(tgt_letter.ref_obj.location)
+                   + Vector((0, 0, -0.001)))
+            fly(sign.ref_obj, start, end)
+            base = list(sign.ref_obj.scale)
+            for frame, factor in ((F(0), 0), (F(f_cross) - 1, 0),
+                                  (F(f_cross) + 3, 1), (F(1.0), 1),
+                                  (F(1.0) + 0.5, 0)):
+                sign.ref_obj.scale = [factor * s for s in base]
+                ibpy.insert_keyframe(sign.ref_obj, "scale", frame=frame)
+            # the pristine target sign takes over on the end frame
+            tex.write(letter_set=[move['grown']], begin_time=b + T,
+                      transition_time=0)
