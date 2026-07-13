@@ -392,13 +392,18 @@ class BDerivation:
         eq_x = source.letters[eq[0]].ref_obj.location[0]
 
         # operator glyphs (+/-) sitting on the right of '=' -- candidates to be
-        # attached to the mover immediately on their right (its leading sign)
-        right_ops = []
+        # attached to the mover immediately on their right (its leading sign).
+        # ``minus_ops`` remembers which of them are '-' so a mover that starts
+        # negative can flip to a '+' as it crosses (rather than always to '-').
+        right_ops, minus_ops = [], set()
         for spec in ('+', '-'):
             try:
-                right_ops.extend(source.find_letters(spec + '@all'))
+                found = source.find_letters(spec + '@all')
             except Exception:
-                pass
+                found = []
+            right_ops.extend(found)
+            if spec == '-':
+                minus_ops.update(found)
         right_ops = [o for o in right_ops
                      if source.letters[o].ref_obj.location[0] > eq_x]
 
@@ -458,6 +463,21 @@ class BDerivation:
                      if i not in pinned_src and letter.ref_obj.location[0] > eq_x]
         right_tgt = [j for j, letter in enumerate(tex.letters)
                      if j not in pinned_tgt and letter.ref_obj.location[0] > tex_eq_x]
+        # right-of-'=' terms that survive unchanged (e.g. a '7a_n' that never
+        # moves) are matched source->target and morphed in place rather than
+        # emptied and rewritten; only the genuine remainder vanishes/appears.
+        # auto_threshold=0 keeps just the identical glyphs (LCS matches), so a
+        # right side that collapses to a fresh '0' still pairs nothing and the
+        # classic vanish-all / appear-'0' behaviour is preserved.
+        right_keep = (plan_transition([src_sigs[i] for i in right_src],
+                                      [tgt_sigs[j] for j in right_tgt],
+                                      auto_threshold=0.0).pairs
+                      if right_src and right_tgt else [])
+        stationary_pins.extend(right_keep)
+        kept_src = {i for i, _ in right_keep}
+        kept_tgt = {j for _, j in right_keep}
+        right_src = [i for i in right_src if i not in kept_src]
+        right_tgt = [j for j in right_tgt if j not in kept_tgt]
         mapping = (stationary_pins
                    + [(i, None) for i in sorted(mover_glyphs | set(right_src))]
                    + [(None, j) for j in right_tgt])
@@ -505,8 +525,12 @@ class BDerivation:
             lifts = [lift] * len(moves)
 
         minus = self._minus_letter(tex, source)
+        plus = self._plus_letter(tex, source)
         for move, mv_lift in zip(moves, lifts):
-            self._fly_mover(source, move, minus, eq_x, b, T,
+            # a term that started with a leading '-' flips to '+' on crossing;
+            # everything else (a '+' or bare term) flips to '-'
+            sign = plus if move['op'] in minus_ops else minus
+            self._fly_mover(source, move, sign, eq_x, b, T,
                             f_lift, f_land, f_hold, f_sink, mv_lift, highlight_color)
             if move['stationary']:
                 source.change_color_of_letters(
@@ -522,13 +546,32 @@ class BDerivation:
         only if neither line contains one is a throwaway rendered.
         """
         for text in (tex, source):
-            found = text.find_letters('-')
+            try:
+                found = text.find_letters('-@all')
+            except Exception:
+                found = []
             if found:
                 return text.letters[found[0]]
         stub = SimpleTexBObject(r"-", **self.tex_kwargs)
         return stub.letters[0]
 
-    def _fly_mover(self, source, move, minus_letter, eq_x, b, T,
+    def _plus_letter(self, tex, source):
+        """A ``+`` glyph to clone as the sign a negative mover flips into.
+
+        Mirror of :meth:`_minus_letter`; a mover that started with a leading
+        ``-`` grows this ``+`` as it crosses the ``=``.
+        """
+        for text in (tex, source):
+            try:
+                found = text.find_letters('+@all')
+            except Exception:
+                found = []
+            if found:
+                return text.letters[found[0]]
+        stub = SimpleTexBObject(r"+", **self.tex_kwargs)
+        return stub.letters[0]
+
+    def _fly_mover(self, source, move, sign_letter, eq_x, b, T,
                    f_lift, f_land, f_hold, f_sink, lift, highlight_color):
         """Choreograph one term's flight across the ``=`` (see :meth:`_step_add_subtract`)."""
         FR = FRAME_RATE
@@ -595,11 +638,12 @@ class BDerivation:
             fly_scale(op_copy.ref_obj, op_base,
                       ((F(0), 1), (F(f_cross) - 2, 1), (F(f_cross) + 2, 0)))
 
-        # the leading '-' that grows in as the term crosses the '='
+        # the leading sign ('-' or, for a mover that started negative, '+')
+        # that grows in as the term crosses the '='
         xs = sorted(s.x for s in starts)
         gap = float(np.median(np.diff(xs))) if len(xs) > 1 else 0.35
         sign_start = Vector((xs[0] - gap, starts[0].y, starts[0].z))
-        sign = minus_letter.copy(clear_animation_data=True)
+        sign = sign_letter.copy(clear_animation_data=True)
         source.copies_of_letters.append(sign)
         sign.appear(begin_time=b, transition_time=0, clear_data=True)
         # move it into the flying term's frame (the borrowed glyph may live in
