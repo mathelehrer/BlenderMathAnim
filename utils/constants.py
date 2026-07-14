@@ -477,10 +477,10 @@ Manim like constants
 '''
 
 UP = Vector([0, 0, 1])
-DOWN = -UP
+DOWN = Vector([0, 0, -1])
 RIGHT = Vector([1, 0, 0])
-LEFT = -RIGHT
+LEFT = Vector([-1, 0, 0])
 BACK = Vector([0, 1, 0])
-FRONT = -BACK
+FRONT = Vector([0, -1, 0])
 
 SMALL_BUFF = 0.25

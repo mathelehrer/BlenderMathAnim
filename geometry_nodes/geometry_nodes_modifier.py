@@ -22,7 +22,8 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     SubdivisionSurface, FilletCurve, FaceArea, SortElements, InputBoolean, BeveledCubeNode, CompareNode, \
     GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode, CornersOfFace, BoundingBox, CurveLine, \
     ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode, PolyhedronViewNode, \
-    ShowNormalsNode, Rotation, LinearMap, MergeByDistance, DistributePointsOnFaces, MeshBoolean
+    ShowNormalsNode, Rotation, LinearMap, MergeByDistance, DistributePointsOnFaces, MeshBoolean, \
+    CombineMatrix, TransformPoint
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material, get_geometry_node_from_modifier, \
     get_material_of
@@ -1121,6 +1122,406 @@ class LorentzAttractorNode(GeometryNodesModifier):
 
     def get_iteration_socket(self):
         return self.repeat.repeat_input.inputs[0]
+
+
+class BarnsleyFernModifier(GeometryNodesModifier):
+    """The Barnsley fern, grown by a *parallel* chaos game in geometry nodes.
+
+    ``point_count`` seed points all start at the origin; a repeat zone applies
+    one of the fern's four affine maps to every point on every iteration, the
+    map chosen by a per-point / per-iteration random draw weighted by the fern
+    probabilities (0.01, 0.85, 0.07, 0.07).  After ``iterations`` rounds each
+    point has settled onto the attractor, so the cloud *is* the fern and its
+    density follows the invariant measure.
+
+    Two node values are exposed for animation (fetch by label with
+    :func:`ibpy.get_geometry_node_from_modifier`):
+
+    * ``PointCount`` -- number of points (density), an int
+      (:func:`ibpy.change_default_integer`)
+    * ``PointSize``  -- world radius of each rendered point
+      (:func:`ibpy.change_default_value`)
+
+    The four maps w1..w4 are (x' = a x + b y + e, y' = c x + d y + f):
+        w1  a,b,c,d,e,f = 0, 0, 0, 0.16, 0, 0            p=0.01  (stem)
+        w2              = 0.85, 0.04, -0.04, 0.85, 0, 1.6 p=0.85 (main frond)
+        w3              = 0.20, -0.26, 0.23, 0.22, 0, 1.6 p=0.07 (left leaflet)
+        w4              = -0.15, 0.28, 0.26, 0.24, 0, 0.44 p=0.07 (right leaflet)
+    The fern's natural x is carried in world x, its natural y in world z (the
+    plane the videos draw on), and world y (depth) is pinned to 0.
+    """
+
+    def __init__(self, name='BarnsleyFern', point_count=30000, point_size=0.03,
+                 iterations=50, scale=0.45, colors=None,
+                 wind_amplitude=0.011, wind_frequency=0.15):
+        self.point_count = point_count
+        self.point_size = point_size
+        self.iterations = iterations
+        self.fern_scale = scale
+        # wind: omega_2's off-diagonal (nominal 0.04) oscillates in time
+        self.wind_amplitude = wind_amplitude
+        self.wind_frequency = wind_frequency
+        # one colour per map omega_1..omega_4 (stem, main frond, left, right);
+        # a point is painted by the last map that moved it (its 'map_index')
+        self.colors = colors or [
+            [0.83, 0.37, 0.04, 1],   # omega_1 stem      (vermillion / important)
+            [0.04, 0.62, 0.45, 1],   # omega_2 main      (green / joker)
+            [0.34, 0.71, 0.91, 1],   # omega_3 left leaf (blue / drawing)
+            [0.94, 0.89, 0.26, 1],   # omega_4 right leaf(yellow / example)
+        ]
+        super().__init__(name)
+
+    def create_node(self, tree):
+        # ---- exposed, animatable parameters ------------------------------
+        count = InputInteger(tree, integer=self.point_count)
+        count.node.label = "PointCount"
+        size = InputValue(tree, value=self.point_size)
+        size.node.label = "PointSize"
+
+        # ---- seed cloud: point_count points at the origin, radius = size --
+        points = Points(tree, count=count.std_out, radius=size.std_out)
+
+        # ---- wind: sway omega_2's off-diagonal in time -------------------
+        # omega_2 fires ~85% of the time, so it compounds deep into the fronds
+        # and a tiny oscillation of its rotation makes the tips sway far more
+        # than the base -- exactly how a fern moves in a breeze.  A slow sway
+        # plus a smaller, faster flutter reads as natural wind.
+        scene_time = SceneTime(tree)
+        a1, w1 = self.wind_amplitude, 2 * pi * self.wind_frequency
+        a2, w2 = 0.35 * self.wind_amplitude, 2 * pi * self.wind_frequency * 2.9
+        osc = "%.6f,%.6f,t,*,sin,*,%.6f,%.6f,t,*,sin,*,+" % (a1, w1, a2, w2)
+        wind = make_function(tree.nodes, functions={
+            "b": "0.04," + osc + ",+",        # b(t) = 0.04 + oscillation
+            "nb": "0,0.04," + osc + ",+,-",   # -b(t), for the anti-diagonal
+        }, inputs=["t"], outputs=["b", "nb"], scalars=["t", "b", "nb"],
+            name="Wind")
+        tree.links.new(scene_time.std_out, wind.inputs["t"])
+
+        # ---- the four maps as 4x4 transform matrices ---------------------
+        # each affine map (x' = a x + b z + e, z' = c x + d z + f, y' = 0 on
+        # the drawing plane) is an AFFINE transform in projective space (w = 1),
+        # so the shift (e,f) lives in the matrix's last column and one
+        # TransformPoint applies the whole map.  CombineMatrix takes COLUMNS
+        # (column-major): col1 = (a,0,c,0), col3 = (b,0,d,0), col4 = (e,0,f,1),
+        # and the bottom row (0,0,0,1) keeps the point homogeneous.
+        # omega_2's off-diagonal +-b is the wind-driven, time-varying value.
+        mats = [
+            CombineMatrix(tree, col1=[0, 0, 0, 0],
+                          col3=[0, 0, 0.16, 0], col4=[0, 0, 0, 1]),        # omega_1 stem
+            CombineMatrix(tree, col1=[0.85, 0, wind.outputs["nb"], 0],
+                          col3=[wind.outputs["b"], 0, 0.85, 0],
+                          col4=[0, 0, 1.6, 1]),                            # omega_2 main
+            CombineMatrix(tree, col1=[0.2, 0, 0.23, 0],
+                          col3=[-0.26, 0, 0.22, 0], col4=[0, 0, 1.6, 1]),  # omega_3 left
+            CombineMatrix(tree, col1=[-0.15, 0, 0.26, 0],
+                          col3=[0.28, 0, 0.24, 0], col4=[0, 0, 0.44, 1]),  # omega_4 right
+        ]
+        # label the matrices to match the slide (omega_1 .. omega_4)
+        for i, m in enumerate(mats):
+            m.node.label = "ω_%d" % (i + 1)
+
+        # ---- chaos game --------------------------------------------------
+        repeat = RepeatZone(tree, iterations=self.iterations)
+
+        # r in [0,1): different per point (ID = index) and per round (Seed =
+        # iteration), so every point runs its own random walk over the maps
+        index = Index(tree)
+        rnd = RandomValue(tree, data_type="FLOAT", min=0.0, max=1.0)
+        tree.links.new(index.std_out, rnd.node.inputs["ID"])
+        tree.links.new(repeat.iteration, rnd.node.inputs["Seed"])
+
+        # r -> map index 0..3 by the cumulative fern probabilities
+        # (0.01, 0.86, 0.93); '>' returns 1.0/0.0, so the sum is the index.
+        map_index = make_function(tree.nodes, functions={
+            "idx": "r,0.01,>,r,0.86,>,+,r,0.93,>,+"
+        }, inputs=["r"], outputs=["idx"], scalars=["r"], integers=["idx"],
+            name="MapIndex")
+        tree.links.new(rnd.std_out, map_index.inputs["r"])
+
+        # pick the chosen matrix and apply it to the point (a vector op)
+        switch = IndexSwitch(tree, data_type="MATRIX",
+                             index=map_index.outputs["idx"])
+        switch.new_item()
+        switch.new_item()  # two default slots + two more -> four maps
+        for i, m in enumerate(mats):
+            tree.links.new(m.std_out, switch.node.inputs[i + 1])
+
+        position = Position(tree)
+        transform_point = TransformPoint(tree, vector=position.std_out,
+                                         transform=switch.std_out)
+        set_position = SetPosition(tree, position=transform_point.std_out)
+        # remember which map moved the point this round; after the last round
+        # the attribute holds the map that produced the point's final position
+        store_index = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
+                                           name="map_index",
+                                           value=map_index.outputs["idx"])
+        repeat.create_geometry_line([set_position, store_index])
+
+        # ---- fit the natural fern (x in [-2.2,2.7], y in [0,10]) on the plane
+        s = self.fern_scale
+        transform = TransformGeometry(tree, scale=Vector([s, s, s]),
+                                      translation=Vector([-0.24 * s, 0, -4.99 * s]))
+        # ---- colour every point by its map_index (omega_1..omega_4) ---------
+        # a color ramp reads the stored attribute; map_index/3 lands exactly on
+        # the four ramp stops, one colour per map
+        color_mat = gradient_from_attribute(
+            name="FernMapColor", attr_name="map_index", function="fac,3,/",
+            gradient={i / 3: self.colors[i] for i in range(4)})
+        # let the points glow so the colours read on any background
+        _bsdf = color_mat.node_tree.nodes.get("Principled BSDF")
+        if _bsdf is not None and "Emission Strength" in _bsdf.inputs:
+            _bsdf.inputs["Emission Strength"].default_value = 2.0
+        material = SetMaterial(tree, material=color_mat)
+
+        create_geometry_line(tree, [points, repeat, transform, material],
+                             out=self.group_outputs.inputs['Geometry'])
+
+
+class SierpinskiTriangleModifier(GeometryNodesModifier):
+    """The Sierpinski triangle chaos game, entirely inside geometry nodes.
+
+    The three corners are exposed as **input vectors** ``Corner1/2/3`` -- they
+    are the single source of truth.  Everything else is derived from them, so
+    dragging (or animating) a corner reshapes the whole picture at once:
+
+    * the three affine maps ``w_i(p) = 1/2 (p + C_i)`` -- built as 4x4
+      matrices whose *linear* part is a fixed half-scale and whose *translation*
+      column is ``1/2 C_i``, pulled live from the corner vector;
+    * the **parallel cloud** -- ``point_count`` points that each run their own
+      random chaos game through a repeat zone (each corner with probability
+      1/3), so after ``iterations`` rounds the cloud *is* the gasket;
+    * a **single hand-played trajectory** -- one point starting at the centroid
+      and hopping half-way to a random corner ``trajectory_length`` times.  It
+      is a poly-line whose vertex ``k`` sits at ``sum_j w_{k,j} C_j`` for fixed
+      convex weights ``w_{k,j}`` (baked from one random walk), so it too follows
+      the corners.  Colour = the corner each hop aimed at;
+    * three fat **corner markers** at ``C_i``.
+
+    Points (cloud, trajectory dots, markers) are coloured by a ``map_index``
+    attribute through one shared ramp, so all three colours agree.
+
+    Nodes exposed for animation (fetch by label with
+    :func:`ibpy.get_geometry_node_from_modifier`):
+
+    * ``Corner1`` / ``Corner2`` / ``Corner3`` -- corner positions, vectors
+      (:func:`ibpy.change_default_vector`)
+    * ``PointCount`` -- cloud density, int (:func:`ibpy.change_default_integer`)
+    * ``PointSize``  -- cloud dot radius (:func:`ibpy.change_default_value`)
+    * ``TrajectorySteps`` -- how many hops of the single walk are shown, int
+      (grow 0 -> ``trajectory_length`` to play the construction)
+    * ``TrajectoryDotSize`` / ``MarkerSize`` -- radii, floats
+
+    Corners live in the modifier's local space; defaults form an equilateral
+    triangle centred on the object origin (base 5, sitting the same way the old
+    fitted version did when the carrier plane is at ``[2.5, 0, -0.1]``).
+    """
+
+    def __init__(self, name='SierpinskiTriangle', point_count=40000,
+                 point_size=0.0, iterations=50, corners=None, colors=None,
+                 trajectory_length=14, trajectory_steps=0, dot_size=0.07,
+                 path_radius=0.02, marker_size=0.0, seed=7):
+        self.point_count = point_count
+        self.point_size = point_size
+        self.iterations = iterations
+        self.trajectory_length = trajectory_length
+        self.trajectory_steps = trajectory_steps
+        self.dot_size = dot_size
+        self.path_radius = path_radius
+        self.marker_size = marker_size
+        self.seed = seed
+        # three corners in local coordinates (x, y=depth, z), equilateral and
+        # centred on the origin: base 5 along x, height 5*sqrt(3)/2
+        h = 2.5 / math.sqrt(3.0)          # centroid-to-base distance
+        self.corners = corners or [
+            Vector([-2.5, 0.0, -h]),      # C1 bottom-left
+            Vector([2.5, 0.0, -h]),       # C2 bottom-right
+            Vector([0.0, 0.0, 2.0 * h + h]),  # C3 top  (2.5*sqrt(3) above base)
+        ]
+        # one colour per corner (the corner a point was last pulled toward)
+        self.colors = colors or [
+            [0.83, 0.37, 0.04, 1],   # corner 0 (vermillion / important)
+            [0.04, 0.62, 0.45, 1],   # corner 1 (green / joker)
+            [0.34, 0.71, 0.91, 1],   # corner 2 (blue / drawing)
+        ]
+        super().__init__(name)
+
+    def create_node(self, tree):
+        # ---- corners as exposed input vectors (the single source of truth)
+        corner_nodes = []
+        for i, c in enumerate(self.corners):
+            cv = InputVector(tree, value=c)
+            cv.node.label = "Corner%d" % (i + 1)
+            corner_nodes.append(cv)
+        C = [cn.std_out for cn in corner_nodes]
+
+        # ---- the three midpoint maps, built live from the corner vectors --
+        # w_i(p) = 1/2 p + 1/2 C_i : linear part is 1/2 I (cols 1-3), the
+        # translation column 4 is 1/2 C_i taken straight from the input vector
+        # (CombineMatrix is column-major; the 4th row keeps points homogeneous).
+        mats = []
+        for i, Ci in enumerate(C):
+            half = VectorMath(tree, operation="SCALE", inputs0=Ci,
+                              float_input=0.5)
+            sep = SeparateXYZ(tree, vector=half.std_out)
+            mat = CombineMatrix(tree, col1=[0.5, 0, 0, 0], col2=[0, 0.5, 0, 0],
+                                col3=[0, 0, 0.5, 0],
+                                col4=[sep.x, sep.y, sep.z, 1])
+            mat.node.label = "w_%d" % (i + 1)
+            mats.append(mat)
+
+        # ---- one shared colour material (map_index -> corner colour) ------
+        color_mat = gradient_from_attribute(
+            name="SierpinskiMapColor", attr_name="map_index",
+            function="fac,2,/",
+            gradient={i / 2: self.colors[i] for i in range(3)})
+        _bsdf = color_mat.node_tree.nodes.get("Principled BSDF")
+        if _bsdf is not None and "Emission Strength" in _bsdf.inputs:
+            _bsdf.inputs["Emission Strength"].default_value = 2.0
+
+        join = JoinGeometry(tree)
+
+        # ================================================================
+        #  1) the parallel cloud: every point runs its own chaos game
+        # ================================================================
+        count = InputInteger(tree, integer=self.point_count)
+        count.node.label = "PointCount"
+        size = InputValue(tree, value=self.point_size)
+        size.node.label = "PointSize"
+        points = Points(tree, count=count.std_out, radius=size.std_out)
+
+        repeat = RepeatZone(tree, iterations=self.iterations)
+        index = Index(tree)
+        rnd = RandomValue(tree, data_type="FLOAT", min=0.0, max=1.0)
+        tree.links.new(index.std_out, rnd.node.inputs["ID"])
+        tree.links.new(repeat.iteration, rnd.node.inputs["Seed"])
+        # r -> corner index 0..2 in equal thirds ('>' returns 1.0/0.0)
+        cloud_idx = make_function(tree.nodes, functions={
+            "idx": "r,0.33333,>,r,0.66667,>,+"
+        }, inputs=["r"], outputs=["idx"], scalars=["r"], integers=["idx"],
+            name="CloudMapIndex")
+        tree.links.new(rnd.std_out, cloud_idx.inputs["r"])
+        switch = IndexSwitch(tree, data_type="MATRIX",
+                             index=cloud_idx.outputs["idx"])
+        switch.new_item()  # two default slots + one more -> three maps
+        for i, m in enumerate(mats):
+            tree.links.new(m.std_out, switch.node.inputs[i + 1])
+        position = Position(tree)
+        transform_point = TransformPoint(tree, vector=position.std_out,
+                                         transform=switch.std_out)
+        set_position = SetPosition(tree, position=transform_point.std_out)
+        store_index = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
+                                           name="map_index",
+                                           value=cloud_idx.outputs["idx"])
+        repeat.create_geometry_line([set_position, store_index])
+        cloud_mat = SetMaterial(tree, material=color_mat)
+        create_geometry_line(tree, [points, repeat, cloud_mat],
+                             out=join.geometry_in)
+
+        # ================================================================
+        #  2) the single trajectory, as a poly-line driven by the corners
+        # ================================================================
+        # Bake ONE random walk's convex weights: vertex k is
+        #   p_k = wA_k C1 + wB_k C2 + wC_k C3      (weights sum to 1)
+        # from p_0 = centroid and p_{k+1} = 1/2 p_k + 1/2 C_{choice}.  The
+        # weights are constants (independent of where the corners are), so the
+        # position node re-evaluates against the live corner vectors.
+        rng = np.random.default_rng(self.seed)
+        choices = [int(rng.integers(0, 3))
+                   for _ in range(self.trajectory_length)]
+        weights = [[1 / 3, 1 / 3, 1 / 3]]
+        for s in choices:
+            prev = weights[-1]
+            weights.append([0.5 * prev[j] + (0.5 if j == s else 0.0)
+                            for j in range(3)])
+        choice_per_vertex = [0] + choices          # colour of each vertex
+        n_vertices = self.trajectory_length + 1
+
+        traj_index = Index(tree)
+
+        def const_switch(values, data_type, label):
+            sw = IndexSwitch(tree, data_type=data_type, index=traj_index.std_out)
+            for _ in range(len(values) - 2):       # 2 default slots
+                sw.new_item()
+            for i, v in enumerate(values):
+                sw.node.inputs[i + 1].default_value = v
+            sw.node.label = label
+            return sw
+
+        wA = const_switch([w[0] for w in weights], "FLOAT", "wA")
+        wB = const_switch([w[1] for w in weights], "FLOAT", "wB")
+        wC = const_switch([w[2] for w in weights], "FLOAT", "wC")
+        ch = const_switch(choice_per_vertex, "INT", "choice")
+
+        # p_k = wA C1 + wB C2 + wC C3
+        sa = VectorMath(tree, operation="SCALE", inputs0=C[0],
+                        float_input=wA.std_out)
+        sb = VectorMath(tree, operation="SCALE", inputs0=C[1],
+                        float_input=wB.std_out)
+        sc = VectorMath(tree, operation="SCALE", inputs0=C[2],
+                        float_input=wC.std_out)
+        ab = VectorMath(tree, operation="ADD", inputs0=sa.std_out,
+                        inputs1=sb.std_out)
+        traj_pos = VectorMath(tree, operation="ADD", inputs0=ab.std_out,
+                              inputs1=sc.std_out)
+
+        steps = InputInteger(tree, integer=self.trajectory_steps)
+        steps.node.label = "TrajectorySteps"
+        dot_size = InputValue(tree, value=self.dot_size)
+        dot_size.node.label = "TrajectoryDotSize"
+
+        line = MeshLine(tree, count=n_vertices)      # n edges, index 0..n
+        line_pos = SetPosition(tree, geometry=line.geometry_out,
+                               position=traj_pos.std_out)
+        line_store = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
+                                          name="map_index", value=ch.std_out)
+        tree.links.new(line_pos.geometry_out, line_store.geometry_in)
+        # reveal only the first `steps` hops: drop vertices with index > steps
+        clip_sel = make_function(tree.nodes, functions={"sel": "i,s,>"},
+                                 inputs=["i", "s"], outputs=["sel"],
+                                 scalars=["i", "s", "sel"], name="TrajClip")
+        tree.links.new(traj_index.std_out, clip_sel.inputs["i"])
+        tree.links.new(steps.std_out, clip_sel.inputs["s"])
+        clip = DeleteGeometry(tree, domain="POINT",
+                              geometry=line_store.geometry_out,
+                              selection=clip_sel.outputs["sel"])
+
+        # landing dots: the visited vertices as a coloured point cloud
+        traj_dots = MeshToPoints(tree, mesh=clip.geometry_out)
+        tree.links.new(dot_size.std_out, traj_dots.node.inputs["Radius"])
+        traj_dots_mat = SetMaterial(tree, material=color_mat)
+        tree.links.new(traj_dots.geometry_out, traj_dots_mat.geometry_in)
+        tree.links.new(traj_dots_mat.geometry_out, join.geometry_in)
+
+        # the hops themselves: a thin tube along the surviving edges
+        tube = InstanceOnEdges(tree, radius=self.path_radius, name="TrajPath")
+        tree.links.new(clip.geometry_out, tube.geometry_in)
+        tube_mat = SetMaterial(tree, material="text")
+        tree.links.new(tube.geometry_out, tube_mat.geometry_in)
+        tree.links.new(tube_mat.geometry_out, join.geometry_in)
+
+        # ================================================================
+        #  3) the three corner markers (fat dots at C_i)
+        # ================================================================
+        marker_size = InputValue(tree, value=self.marker_size)
+        marker_size.node.label = "MarkerSize"
+        mk_points = Points(tree, count=3, radius=marker_size.std_out)
+        mk_index = Index(tree)
+        corner_switch = IndexSwitch(tree, data_type="VECTOR",
+                                    index=mk_index.std_out)
+        corner_switch.new_item()  # 2 default slots + one more -> three corners
+        for i, ci in enumerate(C):
+            tree.links.new(ci, corner_switch.node.inputs[i + 1])
+        mk_pos = SetPosition(tree, geometry=mk_points.geometry_out,
+                             position=corner_switch.std_out)
+        mk_store = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
+                                        name="map_index", value=mk_index.std_out)
+        tree.links.new(mk_pos.geometry_out, mk_store.geometry_in)
+        mk_mat = SetMaterial(tree, material=color_mat)
+        tree.links.new(mk_store.geometry_out, mk_mat.geometry_in)
+        tree.links.new(mk_mat.geometry_out, join.geometry_in)
+
+        # ---- everything into one output ----------------------------------
+        tree.links.new(join.geometry_out, self.group_outputs.inputs['Geometry'])
 
 
 # Penrose videos

@@ -1438,7 +1438,11 @@ def gradient_from_attribute(name="AngleDisplacement", **kwargs):
                           inputs=["fac"], outputs=["factor"], scalars=["fac", "factor"])
     ramp = ColorRamp(tree, location=(-2, 0), factor=trafo.outputs["factor"], hide=False)
     links.new(attr.fac_out, trafo.inputs["fac"])
-    ramp.node.color_ramp.elements.new(len(gradient) - 2)
+    # a fresh ramp already has two stops; add one per extra gradient entry
+    # (elements.new() takes a POSITION, so it must be called once per element,
+    # not with a count -- the positions are overwritten in the loop below)
+    for _ in range(max(0, len(gradient) - 2)):
+        ramp.node.color_ramp.elements.new(0.5)
 
     i = 0
     for key, val in gradient.items():

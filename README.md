@@ -53,6 +53,23 @@ reproducible. <code>bpy</code> ships its own <code>mathutils</code>, so do not i
 This repository is also a member of a larger uv workspace, but nothing here depends on that workspace:
 the same checkout works on its own or as a workspace member with no changes.<br>
 <br>
+<h1> Documentation </h1>
+
+The API documentation is generated with Sphinx from the sources in <code>docs/sphinx/</code>.<br>
+<br>
+To build it on a fresh clone:<br>
+<code>
+git clone https://github.com/mathelehrer/BlenderMathAnim<br>
+cd BlenderMathAnim<br>
+uv sync<br>
+uv run python -m pip install sphinx<br>
+uv run sphinx-build -b html docs/sphinx docs/sphinx/_build/html<br>
+</code>
+<br>
+The generated HTML is written to <code>docs/sphinx/_build/html/</code> and is not version controlled.<br>
+<br>
+If <code>sphinx-build</code> is already available in your environment, the last two commands are sufficient.<br>
+<br>
 <b> Manual install (pip) </b><br>
 Once you cloned the repository, you need to install the bpy library.<br>
 This is what worked for me:<br>

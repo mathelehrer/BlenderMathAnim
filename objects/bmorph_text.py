@@ -54,8 +54,23 @@ from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
 def extract_glyph(letter):
     """Read the bezier splines of a letter into numpy arrays.
 
-    :return: (splines, cyclic_flags) with splines in the letter's local
-        frame, each an array (n,3,3) of (co, handle_left, handle_right)
+    Parameters
+    ----------
+    letter
+        A rendered text letter object whose curve data is stored in
+        ``letter.ref_obj.data``.
+
+    Returns
+    -------
+    tuple[list[np.ndarray], list[bool]]
+        A pair ``(splines, cyclic)`` where each spline is an array of shape
+        ``(n, 3, 3)`` containing ``co``, ``handle_left``, and
+        ``handle_right``.
+
+    See Also
+    --------
+    :mod:`tests.integration.test_extract_glyph_visual`
+        Visual smoke test that plots the extracted spline data.
     """
     splines, cyclic = [], []
     for spline in letter.ref_obj.data.splines:

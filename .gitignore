@@ -4,6 +4,7 @@ data
 __pycache__/
 *.pyc
 *.egg-info/
+docs/sphinx/_build/
 
 # old per-project virtualenv is gone; the workspace uses the shared .venv at the workspace root
 venv/

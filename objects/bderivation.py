@@ -51,7 +51,7 @@ from objects.morph_planning import compile_chain, glyph_signature, plan_transiti
 from objects.tex_bobject import SimpleTexBObject
 from utils.constants import DEFAULT_ANIMATION_TIME, FRAME_RATE
 
-__all__ = ["BDerivation"]
+__all__ = ["BDerivation"] # only BDerivation will be imported when called by "from bderivation import *"
 
 
 class BDerivation:
@@ -140,9 +140,7 @@ class BDerivation:
             return  # no alignment character in one of the lines
         tex.align(self.current, char_index=tgt[0], other_char_index=src[0])
 
-    # ------------------------------------------------------------------
     # planning
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _signatures(tex):
@@ -186,9 +184,7 @@ class BDerivation:
             pins.extend((None, j) for j in local_plan.appear)
         return pins
 
-    # ------------------------------------------------------------------
     # animation
-    # ------------------------------------------------------------------
 
     def write(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         """Write the current (first) line."""
@@ -458,10 +454,17 @@ class BDerivation:
         objects share their orientation (as SimpleTexBObjects do).
         """
         FR = FRAME_RATE
-        # foreign start positions expressed in the new line's local frame
+        # foreign start positions expressed in the new line's local frame.
+        # Sample the source's position at take-off: a brace label may still be
+        # sliding up while the derivation is built, and get_location() returns
+        # the value at whatever frame the scene was last evaluated at -- reading
+        # it here can catch the label mid-slide (or before it has moved), so the
+        # copies would start from the wrong height and jump to their slot. At
+        # flight_begin the label has come to rest under its brace.
         scale = tex.ref_obj.scale
         fscale = src_text.ref_obj.scale
-        delta = ibpy.get_location(src_text) - ibpy.get_location(tex)
+        delta = (ibpy.get_location_at_frame(src_text, flight_begin * FR)
+                 - ibpy.get_location(tex))
         shift = tex.ref_obj.rotation_euler.to_matrix().inverted() @ delta
         ratio = [fscale[k] / scale[k] for k in range(3)]
         for k in range(3):
@@ -469,8 +472,11 @@ class BDerivation:
         depth_offset = Vector((0, 0, -0.001))
 
         pairs = sorted(pairs, key=lambda p: src_text.letters[p[0]].ref_obj.location[0])
-        schedule = stagger_schedule(len(pairs), flight_begin, flight_time,
-                                    stagger=stagger)
+        # a foreign source is one label (e.g. Q_n): its glyphs must travel as
+        # one unit -- the Q and its subscript stay together and morph in sync
+        # -- so every glyph shares one schedule instead of fanning out (a
+        # per-glyph stagger tears the index off its base mid-flight)
+        schedule = [(flight_begin, flight_time)] * len(pairs)
         arrived = []
         for (i, j), (t0, duration) in zip(pairs, schedule):
             letter = src_text.letters[i]
@@ -517,7 +523,10 @@ class BDerivation:
             shape_keys.keyframe_insert(data_path='eval_time',
                                        frame=(t0 + duration) * FR)
             shape_keys.eval_time = 0
-            arrived.append(copy)
+            # remember the size the copy comes to rest at (the pristine
+            # letter's scale): the handoff must hold exactly this until it
+            # pops off, otherwise it slowly shrinks to nothing in between
+            arrived.append((copy, list(tgt_letter.ref_obj.scale)))
         # the arrived copies ARE the new letters; the pristine ones take
         # over invisibly when the next step begins
         self._handoffs.append((tex, {j for _, j in pairs}, arrived))
@@ -534,8 +543,15 @@ class BDerivation:
         for tex, letter_set, copies in self._handoffs:
             tex.write(letter_set=sorted(letter_set), begin_time=begin_time,
                       transition_time=0)
-            for copy in copies:
+            for copy, rest_scale in copies:
                 obj = copy.ref_obj if hasattr(copy, 'ref_obj') else copy
+                # pin the resting size right up to the swap, then pop it off in
+                # one frame.  The hold value must be set explicitly: at build
+                # time obj.scale evaluates to 0 (the scene frame is before the
+                # copy's first keyframe), so keyframing the bare property here
+                # would record 0 and make the copy shrink away over the whole
+                # rest instead of staying put until the handoff.
+                obj.scale = rest_scale
                 ibpy.insert_keyframe(obj, "scale", frame=frame - 1)
                 obj.scale = (0, 0, 0)
                 ibpy.insert_keyframe(obj, "scale", frame=frame)
