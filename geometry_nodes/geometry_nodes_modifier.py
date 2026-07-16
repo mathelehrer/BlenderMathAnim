@@ -1335,7 +1335,7 @@ class SierpinskiTriangleModifier(GeometryNodesModifier):
         self.corners = corners or [
             Vector([-2.5, 0.0, -h]),      # C1 bottom-left
             Vector([2.5, 0.0, -h]),       # C2 bottom-right
-            Vector([0.0, 0.0, 2.0 * h + h]),  # C3 top  (2.5*sqrt(3) above base)
+            Vector([0.0, 0.0, 2.0 * h]),  # C3 top (base + 2.5*sqrt(3)); centroid = origin
         ]
         # one colour per corner (the corner a point was last pulled toward)
         self.colors = colors or [
@@ -1492,10 +1492,11 @@ class SierpinskiTriangleModifier(GeometryNodesModifier):
         tree.links.new(traj_dots.geometry_out, traj_dots_mat.geometry_in)
         tree.links.new(traj_dots_mat.geometry_out, join.geometry_in)
 
-        # the hops themselves: a thin tube along the surviving edges
+        # the hops themselves: a thin tube along the surviving edges, carrying
+        # map_index through to the same ramp so each hop wears its corner colour
         tube = InstanceOnEdges(tree, radius=self.path_radius, name="TrajPath")
         tree.links.new(clip.geometry_out, tube.geometry_in)
-        tube_mat = SetMaterial(tree, material="text")
+        tube_mat = SetMaterial(tree, material=color_mat)
         tree.links.new(tube.geometry_out, tube_mat.geometry_in)
         tree.links.new(tube_mat.geometry_out, join.geometry_in)
 
