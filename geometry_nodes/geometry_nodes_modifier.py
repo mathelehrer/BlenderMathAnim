@@ -1221,7 +1221,8 @@ class BarnsleyFernModifier(GeometryNodesModifier):
             m.node.label = "ω_%d" % (i + 1)
 
         # ---- chaos game --------------------------------------------------
-        repeat = RepeatZone(tree, iterations=self.iterations)
+        iterations_node = InputInteger(tree,integer=self.iterations,label="IterationCount")
+        repeat = RepeatZone(tree, iterations=iterations_node.std_out)
 
         # r in [0,1): different per point (ID = index) and per round (Seed =
         # iteration), so every point runs its own random walk over the maps
