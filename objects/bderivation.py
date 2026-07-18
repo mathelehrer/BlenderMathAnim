@@ -198,6 +198,22 @@ class BDerivation:
                                  begin_time=begin_time, transition_time=transition_time,
                                  restore=restore)
 
+    def move(self, direction, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
+        """Move the whole derivation (every line) by ``direction``.
+
+        A step's morph copies are parented under their source line, so a
+        move that overlaps a running ``step`` carries the transition along.
+        Without a display, the base location is shifted too, so lines added
+        by later steps appear at the moved position; on a display the rows
+        stay where the display puts them.
+        """
+        for line in self.lines:
+            line.move(direction, begin_time=begin_time, transition_time=transition_time)
+        if self.display is None:
+            base = Vector(self.location) if self.location is not None else Vector()
+            self.location = base + Vector(direction)
+        return begin_time + transition_time
+
     def step(self, expression, mode='new_line', map=None, auto=True, auto_threshold=None,
              align=True, fade_old=None, arc=0.3, stagger=0.5, lift=1.0,
              highlight=None, highlight_color='important', new_color=None,
