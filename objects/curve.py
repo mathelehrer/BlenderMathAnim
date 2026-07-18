@@ -1037,7 +1037,7 @@ class GeoCurve(BObject):
         carrier.appear(begin_time=0, transition_time=0)
 
         self.mod = CurveModifier(points=points,**kwargs)
-        carrier.add_mesh_modifier(type='NODES', node_group=self.mod.get_node_tree())
+        carrier.add_mesh_modifier(type='NODES', node_modifier=self.mod)
         super().__init__(obj=carrier, **kwargs)
 
     def grow(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, modus='from_center', pivot=None,

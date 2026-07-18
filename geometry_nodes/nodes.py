@@ -2962,13 +2962,16 @@ class InputBoolean(RedNode):
 
 
 class InputVector(RedNode):
-    def __init__(self, tree, location=(0, 0), value=Vector()
+    def __init__(self, tree, location=(0, 0),vector=Vector(), value=None
                  , **kwargs):
         self.node = tree.nodes.new(type="FunctionNodeInputVector")
         super().__init__(tree, location=location, **kwargs)
 
         self.std_out = self.node.outputs[0]
-        self.node.vector = value
+        if value: # for compatability
+            self.node.vector = value
+        else:
+            self.node.vector = vector
 
 
 class InputRotation(RedNode):
@@ -3492,22 +3495,22 @@ class CompareNode(BlueNode):
 
         if data_type == "FLOAT":
             if isinstance(inputs0, (bool, int, float)):
-                self.node.inputs[0].default_value = inputs0
+                self.node.inputs["A"].default_value = inputs0
             else:
-                tree.links.new(inputs0, self.node.inputs[0])
+                tree.links.new(inputs0, self.node.inputs["A"])
             if isinstance(inputs1, (bool, int, float)):
-                self.node.inputs[1].default_value = inputs1
+                self.node.inputs["B"].default_value = inputs1
             else:
-                tree.links.new(inputs1, self.node.inputs[1])
+                tree.links.new(inputs1, self.node.inputs["B"])
             # needed for float comparison
             if inputs2:
                 if isinstance(inputs2, (bool, int, float)):
-                    self.node.inputs[2].default_value = inputs2
+                    self.node.inputs["Epsilon"].default_value = inputs2
                 else:
-                    tree.links.new(inputs2, self.node.inputs[2])
+                    tree.links.new(inputs2, self.node.inputs["psilon"])
         elif data_type == "INT":
             if isinstance(inputs0, (bool, int, float)):
-                self.node.inputs[2].default_value = inputs0
+                self.node.inputs[0].default_value = inputs0
             else:
                 tree.links.new(inputs0, self.node.inputs[2])
             if isinstance(inputs1, (bool, int, float)):
