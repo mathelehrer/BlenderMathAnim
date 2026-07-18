@@ -23,6 +23,8 @@ __all__ = [
     "highlight_letters",
 ]
 
+from utils.kwargs import get_from_kwargs
+
 
 # ---------------------------------------------------------------------------
 # pure math
@@ -169,31 +171,34 @@ def cancel_letters(groups, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
 
 def highlight_letters(text, indices, color='important', emission=3,
                       begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
-                      restore=True):
+                      restore=True,**kwargs):
     """Flash a group of letters: tint + emission pulse, then settle back.
 
+    :param begin_time:
+    :param transition_time:
     :param text: SimpleTexBObject
     :param indices: letter indices to highlight
     :param color: flash color ('important', 'joker', ...)
     :param emission: peak emission strength of the pulse (0 to skip)
     :param restore: return the letters to their original colors during the
         last third of the transition
-    :return: begin_time + transition_time
+    :return: begin_time + 2*transition_time/3 + flash_time
     """
-    flash_time = transition_time / 3
+    flash_time = get_from_kwargs(kwargs,"flash_time",transition_time / 3)
+
     text.change_color_of_letters(indices, color, begin_time=begin_time,
                                  transition_time=flash_time)
     if emission:
         for index in indices:
             letter = text.letters[index]
             ibpy.change_emission_to(letter, emission, begin_time=begin_time,
-                                    transition_time=flash_time)
-            ibpy.change_emission_to(letter, 0, begin_time=begin_time + transition_time - flash_time,
-                                    transition_time=flash_time)
+                                    transition_time=transition_time/3)
+            ibpy.change_emission_to(letter, 0, begin_time=begin_time + transition_time/3 + flash_time,
+                                    transition_time=transition_time/3)
     if restore:
         for index in indices:
             original = text.color_map.get(text.letters[index], 'text')
             text.change_color_of_letters([index], original,
-                                         begin_time=begin_time + transition_time - flash_time,
-                                         transition_time=flash_time)
-    return begin_time + transition_time
+                                         begin_time=begin_time + transition_time/3 + flash_time,
+                                         transition_time=transition_time/3)
+    return begin_time + 2*transition_time/3+flash_time

@@ -191,12 +191,12 @@ class BDerivation:
         return self.current.write(begin_time=begin_time, transition_time=transition_time, **kwargs)
 
     def highlight(self, substring, occurrence=None, color='important', emission=3,
-                  begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, restore=True):
+                  begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, restore=True,**kwargs):
         """Flash a substring of the current line (tint + emission pulse)."""
         indices = self.current.find_letters(substring, occurrence=occurrence)
         return highlight_letters(self.current, indices, color=color, emission=emission,
                                  begin_time=begin_time, transition_time=transition_time,
-                                 restore=restore)
+                                 restore=restore,**kwargs)
 
     def move(self, direction, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
         """Move the whole derivation (every line) by ``direction``.

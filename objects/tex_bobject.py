@@ -827,6 +827,15 @@ class SimpleTexBObject(SVGBObject):
          self.letters]
         return begin_time + transition_time
 
+    def change_emission(self, from_value=0, to_value=1, slot=0, slots=None, begin_time=0,
+                        transition_time=DEFAULT_ANIMATION_TIME):
+        for letter in self.letters:
+            ibpy.change_emission(letter, from_value=from_value, to_value=to_value, slot=slot, slots=slots,
+                                 begin_frame=begin_time * FRAME_RATE,
+                                 frame_duration=transition_time * FRAME_RATE)
+        return begin_time + transition_time
+
+
     def align(self, other, char_index=0, other_char_index=0):
         # align with other
         diff = other.ref_obj.location[0] - self.ref_obj.location[0]
