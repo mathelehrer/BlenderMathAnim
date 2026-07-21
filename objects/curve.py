@@ -963,14 +963,16 @@ class CurveModifier(GeometryNodesModifier):
         function = get_from_kwargs(kwargs, "function", ["t", "t", "t"])
         pnts = get_from_kwargs(kwargs, "points", 100)
         material_string = get_from_kwargs(kwargs,"color", "drawing")
+        resolution = get_from_kwargs(kwargs,"resolution",4)
+        thickness = get_from_kwargs(kwargs,"thickness",0.01)
         if isinstance(material_string, str):
             material = get_texture(material_string,**kwargs)
         else:
             material = material_string
 
-        # --- input value nodes (left column) ---
+        # --- input value nodes (left column) ---   
         points = InputInteger(tree, location=(-2, 0), integer=pnts, name='Integer', label='points')
-        thickness = InputValue(tree, location=(-2, -0.5), value=0.01, name='Value.002', label='thickness')
+        thickness = InputValue(tree, location=(-2, -0.5), value=thickness, name='Thickness', label='thickness')
         minimum = InputValue(tree, location=(-2, -1), value=0, name='Value.003', label='min')
         maximum = InputValue(tree, location=(-2, -1.5), value=math.tau, name='Value.004', label='max')
         index = Index(tree, location=(-2, 0.5), value=0, name='Index')
@@ -1016,7 +1018,7 @@ class CurveModifier(GeometryNodesModifier):
         set_position = SetPosition(tree, location=(2, 1), position=position.outputs["pos"], hide=True)
 
         # --- profile circle swept along the curve to build the tube ---
-        circle = CurveCircle(tree, location=(2, 0), radius=thickness.std_out, mode='RADIUS')
+        circle = CurveCircle(tree, location=(2, 0), radius=thickness.std_out, resolution=resolution, mode='RADIUS')
         curve_to_mesh = CurveToMesh(tree, location=(3, 1), fill_caps=False,
                                     profile_curve=circle.geometry_out, hide=True)
 

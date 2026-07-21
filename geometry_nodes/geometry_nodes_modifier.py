@@ -1291,11 +1291,13 @@ class SierpinskiTriangleModifier(GeometryNodesModifier):
     * the **parallel cloud** -- ``point_count`` points that each run their own
       random chaos game through a repeat zone (each corner with probability
       1/3), so after ``iterations`` rounds the cloud *is* the gasket;
-    * a **single hand-played trajectory** -- one point starting at the centroid
-      and hopping half-way to a random corner ``trajectory_length`` times.  It
-      is a poly-line whose vertex ``k`` sits at ``sum_j w_{k,j} C_j`` for fixed
-      convex weights ``w_{k,j}`` (baked from one random walk), so it too follows
-      the corners.  Colour = the corner each hop aimed at;
+    * a **single hand-played trajectory** -- one point starting at corner
+      ``start_corner`` (a fixed vertex, not the centroid) and hopping half-way
+      to a random corner ``trajectory_length`` times.  It is a poly-line whose
+      vertex ``k`` sits at ``sum_j w_{k,j} C_j`` for fixed convex weights
+      ``w_{k,j}`` (baked from one random walk), so it too follows the corners.
+      Colour = the corner each hop aimed at (vertex 0 takes ``start_corner``'s
+      colour);
     * three fat **corner markers** at ``C_i``.
 
     Points (cloud, trajectory dots, markers) are coloured by a ``map_index``
@@ -1320,7 +1322,7 @@ class SierpinskiTriangleModifier(GeometryNodesModifier):
     def __init__(self, name='SierpinskiTriangle', point_count=40000,
                  point_size=0.0, iterations=50, corners=None, colors=None,
                  trajectory_length=14, trajectory_steps=0, dot_size=0.07,
-                 path_radius=0.02, marker_size=0.0, seed=7):
+                 path_radius=0.02, marker_size=0.0, seed=7, start_corner=0):
         self.point_count = point_count
         self.point_size = point_size
         self.iterations = iterations
@@ -1330,13 +1332,16 @@ class SierpinskiTriangleModifier(GeometryNodesModifier):
         self.path_radius = path_radius
         self.marker_size = marker_size
         self.seed = seed
+        # which corner (index 0..2) the hand-played trajectory starts from;
+        # None falls back to the old centroid start (equal 1/3 weights)
+        self.start_corner = start_corner
         # three corners in local coordinates (x, y=depth, z), equilateral and
         # centred on the origin: base 5 along x, height 5*sqrt(3)/2
         h = 2.5 / math.sqrt(3.0)          # centroid-to-base distance
         self.corners = corners or [
             Vector([-2.5, 0.0, -h]),      # C1 bottom-left
             Vector([2.5, 0.0, -h]),       # C2 bottom-right
-            Vector([0.0, 0.0, 2.0 * h]),  # C3 top (base + 2.5*sqrt(3)); centroid = origin
+            Vector([2.5, 0.0, 2.0 * h]),  # C3 top (base + 2.5*sqrt(3)); centroid = origin
         ]
         # one colour per corner (the corner a point was last pulled toward)
         self.colors = colors or [
@@ -1423,18 +1428,26 @@ class SierpinskiTriangleModifier(GeometryNodesModifier):
         # ================================================================
         # Bake ONE random walk's convex weights: vertex k is
         #   p_k = wA_k C1 + wB_k C2 + wC_k C3      (weights sum to 1)
-        # from p_0 = centroid and p_{k+1} = 1/2 p_k + 1/2 C_{choice}.  The
-        # weights are constants (independent of where the corners are), so the
-        # position node re-evaluates against the live corner vectors.
+        # from p_0 = start_corner (or the centroid if start_corner is None)
+        # and p_{k+1} = 1/2 p_k + 1/2 C_{choice}.  The weights are constants
+        # (independent of where the corners are), so the position node
+        # re-evaluates against the live corner vectors.
         rng = np.random.default_rng(self.seed)
         choices = [int(rng.integers(0, 3))
                    for _ in range(self.trajectory_length)]
-        weights = [[1 / 3, 1 / 3, 1 / 3]]
+        if self.start_corner is None:
+            start_weights = [1 / 3, 1 / 3, 1 / 3]
+        else:
+            start_weights = [1.0 if j == self.start_corner else 0.0
+                             for j in range(3)]
+        weights = [start_weights]
         for s in choices:
             prev = weights[-1]
             weights.append([0.5 * prev[j] + (0.5 if j == s else 0.0)
                             for j in range(3)])
-        choice_per_vertex = [0] + choices          # colour of each vertex
+        # colour of each vertex: vertex 0 takes start_corner's colour (0 when
+        # starting at the centroid, matching the old behaviour)
+        choice_per_vertex = [self.start_corner or 0] + choices
         n_vertices = self.trajectory_length + 1
 
         traj_index = Index(tree)
@@ -1495,7 +1508,8 @@ class SierpinskiTriangleModifier(GeometryNodesModifier):
 
         # the hops themselves: a thin tube along the surviving edges, carrying
         # map_index through to the same ramp so each hop wears its corner colour
-        tube = InstanceOnEdges(tree, radius=self.path_radius, name="TrajPath")
+        radius = InputValue(tree,value=self.path_radius,label="PathRadius",hide=True)
+        tube = InstanceOnEdges(tree, radius=radius.std_out, name="TrajPath")
         tree.links.new(clip.geometry_out, tube.geometry_in)
         tube_mat = SetMaterial(tree, material=color_mat)
         tree.links.new(tube.geometry_out, tube_mat.geometry_in)
