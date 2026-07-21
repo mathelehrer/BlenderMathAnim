@@ -1280,6 +1280,8 @@ class SimpleTexBObject(SVGBObject):
             [simple_tex_obj, src_letter_range, img_letter_range,
              rescale, shift, src_colors, img_colors, begin_time,
              transition_time, keep_color, in_place])
+        if begin_time is None:
+            return None
         return begin_time+transition_time
 
     def perform_morphing(self):
