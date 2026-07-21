@@ -2071,6 +2071,36 @@ class DeleteGeometry(GreenNode):
             self.tree.links.new(geometry, self.node.inputs["Geometry"])
 
 
+class DuplicateElements(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 domain="POINT",
+                 geometry=None,
+                 selection=None,
+                 amount=1,
+                 **kwargs
+                 ):
+        """
+            copies every element `amount` times (a per-element int field);
+            the "Duplicate Index" output field numbers the copies 0..amount-1
+        """
+        self.node = tree.nodes.new(type="GeometryNodeDuplicateElements")
+        self.node.domain = domain
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_in = self.node.inputs["Geometry"]
+        self.geometry_out = self.node.outputs["Geometry"]
+        self.duplicate_index = self.node.outputs["Duplicate Index"]
+
+        if selection:
+            self.tree.links.new(selection, self.node.inputs["Selection"])
+        if geometry:
+            self.tree.links.new(geometry, self.node.inputs["Geometry"])
+        if isinstance(amount, int):
+            self.node.inputs["Amount"].default_value = amount
+        else:
+            self.tree.links.new(amount, self.node.inputs["Amount"])
+
+
 class SortElements(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  domain="FACE",
@@ -3376,6 +3406,41 @@ class TransformPoint(BlueNode):
 
         if transform is not None:
             tree.links.new(transform, self.node.inputs["Transform"])
+
+
+class MultiplyMatrices(BlueNode):
+    def __init__(self, tree, location=(0, 0), matrix1=None, matrix2=None, **kwargs):
+        """
+            multiplies two 4x4 matrices in mathematical order:
+            the output is matrix1 @ matrix2 (matrix2 is applied first)
+        """
+        self.node = tree.nodes.new(type="FunctionNodeMatrixMultiply")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Matrix"]
+
+        if matrix1 is not None:
+            tree.links.new(matrix1, self.node.inputs[0])
+        if matrix2 is not None:
+            tree.links.new(matrix2, self.node.inputs[1])
+
+
+class SeparateMatrix(BlueNode):
+    def __init__(self, tree, location=(0, 0), matrix=None, **kwargs):
+        """
+            splits a 4x4 matrix into its 16 entries;
+            access entry sockets with self.entry(column, row) (1-indexed)
+        """
+        self.node = tree.nodes.new(type="FunctionNodeSeparateMatrix")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs[0]
+
+        if matrix is not None:
+            tree.links.new(matrix, self.node.inputs["Matrix"])
+
+    def entry(self, column, row):
+        return self.node.outputs["Column " + str(column) + " Row " + str(row)]
 
 
 class MapRange(BlueNode):

@@ -23,7 +23,7 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode, CornersOfFace, BoundingBox, CurveLine, \
     ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode, PolyhedronViewNode, \
     ShowNormalsNode, Rotation, LinearMap, MergeByDistance, DistributePointsOnFaces, MeshBoolean, \
-    CombineMatrix, TransformPoint
+    CombineMatrix, TransformPoint, MultiplyMatrices, SeparateMatrix, DuplicateElements
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material, get_geometry_node_from_modifier, \
     get_material_of
@@ -1538,6 +1538,498 @@ class SierpinskiTriangleModifier(GeometryNodesModifier):
 
         # ---- everything into one output ----------------------------------
         tree.links.new(join.geometry_out, self.group_outputs.inputs['Geometry'])
+
+
+class ApollonianGasketModifier(GeometryNodesModifier):
+    """The Apollonian gasket, generated live inside geometry nodes as the
+    limit set of a Kleinian group (Indra's Pearls, ch. 7; see
+    ``video_apollonian/indras_utils/indra_generating_algorithms.py``).
+
+    **The algorithm** is the depth-first search over reduced words in the four
+    Moebius generators ``a, b, A, B`` of the gasket group
+    (:class:`ApollonianModel`), with the classic disc-radius termination of
+    ``DepthFirstSearchOriginal.branch_termination_1``: a branch stops as soon
+    as the image of its letter's Schottky circle has radius ``< epsilon``, and
+    plots the image of the letter's (parabolic) fixed point.  Since every
+    plotted point sits inside its terminal disc and neighbouring terminal
+    discs are tangent, ``epsilon`` directly dials the maximum distance between
+    neighbouring points of the curve.
+
+    **Parallelisation.**  The recursion is unrolled level by level in a repeat
+    zone: every point *is* one node of the DFS tree, and per iteration each
+    unfinished point spawns its three children (``DuplicateElements`` with
+    amount ``done ? 1 : 3``; the duplicate index is the child digit ``d``, and
+    the child's letter is ``(letter + d - 1) mod 4``, which excludes the
+    inverse letter exactly like the serial code).  Finished points ride along
+    frozen, so the geometry grows exactly like the adaptive DFS tree --
+    ``epsilon`` prunes it live.
+
+    **Complex arithmetic.**  A word is a complex 2x2 matrix with det 1.  It is
+    stored per point as a ``FLOAT4X4`` attribute via the block embedding
+    ``z = x + iy  ->  [[x, -y], [y, x]]``, so complex matrix products become
+    real 4x4 products (one *Multiply Matrices* node -- the node computes the
+    standard product, right factor applied first, matching ``word @ gen``).
+    ``Separate Matrix`` recovers ``a = (C1R1, C1R2), b = (C3R1, C3R2),
+    c = (C1R3, C1R4), d = (C3R3, C3R4)`` and two labelled function groups do
+    the textbook formulas:
+
+    * branch termination: ``u = c q + d``,
+      ``denom = |u|^2 - |c|^2 r^2``; stop iff ``denom > 0`` (image disc does
+      not contain infinity) and ``r < epsilon * denom``;
+    * point placement: ``p = (a z + b) / (c z + d)`` with ``z`` the fixed
+      point of the current letter, plotted in the x-z plane.
+
+    **Conjugation.**  The raw :class:`ApollonianModel` contains a circle of
+    radius 10000 (a stand-in for the real line), which is fatal for the
+    float32 arithmetic of geometry nodes.  The whole model is therefore
+    conjugated once, in Python, by ``T = S . (-1/(z - pole))`` with the pole
+    in a large hole of the limit set (default ``2i``) and ``S`` a real affine
+    map framing the gasket in a ``2*size`` box centred on the origin.  This
+    turns the strip-shaped gasket into the classic bounded gasket-in-a-circle
+    and keeps every baked constant of order one.  The group is the same up to
+    a change of coordinates.
+
+    Per-point attributes: ``word`` (FLOAT4X4 state), ``letter`` (current
+    letter 0..3), ``first_letter`` (branch colour, like the tree colouring of
+    the videos), ``digit``/``stop`` (per-level helpers), ``done`` (frozen).
+
+    Nodes exposed for animation (fetch by label with
+    :func:`ibpy.get_geometry_node_from_modifier`):
+
+    * ``Epsilon`` -- termination radius (:func:`ibpy.change_default_value`);
+      smaller values refine the gasket live, point count grows ~ 1/epsilon
+    * ``MaxLevel`` -- depth cap of the tree, int
+      (:func:`ibpy.change_default_integer`)
+    * ``PointRadius`` -- point-cloud dot radius
+    """
+
+    def __init__(self, name='ApollonianGasket', epsilon=0.1, max_level=25,
+                 point_radius=0.02, pole=2j, size=2.5, colors=None):
+        self.epsilon = epsilon
+        self.max_level = max_level
+        self.point_radius = point_radius
+        self.pole = pole
+        self.size = size
+        # one colour per first letter a, b, A, B -- the colour of the level-1
+        # subtree a point belongs to (matches the tree colouring used in
+        # video_apollonian: gray_2, joker, important, custom1)
+        self.colors = colors or [
+            [0.55, 0.55, 0.55, 1],   # a  (gray)
+            [0.04, 0.62, 0.45, 1],   # b  (green / joker)
+            [0.83, 0.37, 0.04, 1],   # A  (orange / important)
+            [0.20, 0.45, 0.85, 1],   # B  (blue)
+        ]
+        self._prepare_model()
+        super().__init__(name, automatic_layout=False)
+
+    # ------------------------------------------------------------------
+    #  model preparation (python-side, baked into the node constants)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _moebius(m, z):
+        return (m[0][0] * z + m[0][1]) / (m[1][0] * z + m[1][1])
+
+    @staticmethod
+    def _circle_image(m, q, r):
+        """image of the circle (q, r) under the Moebius matrix m (det 1)"""
+        cw, dw = m[1][0], m[1][1]
+        z0 = q - r ** 2 / np.conj(dw / cw + q) if cw != 0 else q
+        cen = ApollonianGasketModifier._moebius(m, z0)
+        rad = abs(cen - ApollonianGasketModifier._moebius(m, q + r))
+        return cen, rad
+
+    def _prepare_model(self):
+        # the gasket group of video_apollonian (ApollonianModel): all four
+        # generators are parabolic with det 1
+        a = np.array([[1, 0], [-2j, 1]])
+        b = np.array([[1 - 1j, 1], [1, 1 + 1j]])
+        A = np.array([[1, 0], [2j, 1]])
+        B = np.array([[1 + 1j, -1], [-1, 1 - 1j]])
+        gens0 = [a, b, A, B]
+        fps0 = [0j, -1j, 0j, -1j]
+        circ0 = [(10000j, 10000.0), (1 - 1j, 1.0), (-0.25j, 0.25),
+                 (-1 - 1j, 1.0)]
+
+        # a coarse serial DFS (float64) gives the limit set's bounding box
+        # after the inversion, so S can frame the gasket deterministically
+        T1 = np.array([[0, -1], [1, -self.pole]])
+        pts = []
+
+        def rec(word, t, level):
+            for d in range(3):
+                t2 = (t + d + 3) % 4
+                q, r = circ0[t2]
+                cw, dw = word[1][0], word[1][1]
+                denom = abs(cw * q + dw) ** 2 - abs(cw) ** 2 * r ** 2
+                w2 = word @ gens0[t2]
+                p = self._moebius(w2, fps0[t2])
+                if (denom > 0 and r / denom < 0.05) or level >= 20:
+                    pts.append(self._moebius(T1, p))
+                else:
+                    rec(w2, t2, level + 1)
+
+        for t0 in range(4):
+            pts.append(self._moebius(T1, self._moebius(gens0[t0], fps0[t0])))
+            rec(gens0[t0], t0, 2)
+        pts = np.array(pts)
+
+        cx = (pts.real.min() + pts.real.max()) / 2
+        cy = (pts.imag.min() + pts.imag.max()) / 2
+        half = max(pts.real.max() - pts.real.min(),
+                   pts.imag.max() - pts.imag.min()) / 2
+        alpha = self.size / half
+        beta = -alpha * (cx + 1j * cy)
+        S = np.array([[np.sqrt(alpha), beta / np.sqrt(alpha)],
+                      [0, 1 / np.sqrt(alpha)]])
+        T = S @ T1                                     # det 1
+
+        Ti = np.linalg.inv(T)
+        self.gens = [T @ g @ Ti for g in gens0]        # still det 1
+        self.fixed_points = [self._moebius(T, z) for z in fps0]
+        self.circles = [self._circle_image(T, q, r) for (q, r) in circ0]
+
+    @staticmethod
+    def _embed(m):
+        """complex 2x2 -> columns of the real 4x4 block embedding
+        z -> [[Re, -Im], [Im, Re]] (complex product = real 4x4 product)"""
+        am, bm, cm, dm = m[0][0], m[0][1], m[1][0], m[1][1]
+        return ([am.real, am.imag, cm.real, cm.imag],
+                [-am.imag, am.real, -cm.imag, cm.real],
+                [bm.real, bm.imag, dm.real, dm.imag],
+                [-bm.imag, bm.real, -dm.imag, dm.real])
+
+    # ------------------------------------------------------------------
+    #  the node graph
+    # ------------------------------------------------------------------
+    def create_node(self, tree):
+        links = tree.links
+
+        # ================================================================
+        #  dials
+        # ================================================================
+        dial_frame = Frame(tree, label="dials", name="DialFrame",
+                           location=(-27, 9))
+        eps_in = InputValue(tree, location=(0, 0), value=self.epsilon,
+                            label="Epsilon", parent=dial_frame)
+        level_in = InputInteger(tree, location=(0, -1.5),
+                                integer=self.max_level, label="MaxLevel",
+                                parent=dial_frame)
+        radius_in = InputValue(tree, location=(0, -3),
+                               value=self.point_radius, label="PointRadius",
+                               parent=dial_frame)
+        # the repeat zone runs the levels 2..MaxLevel
+        iterations = MathNode(tree, location=(1.5, -1.5),
+                              operation="SUBTRACT",
+                              inputs0=level_in.std_out, inputs1=1,
+                              label="MaxLevel-1", parent=dial_frame, hide=True)
+
+        # ================================================================
+        #  the four generators, baked as real 4x4 block matrices
+        # ================================================================
+        gen_frame = Frame(
+            tree, label="generators a, b, A, B (complex 2x2 as real 4x4 blocks)",
+            name="GeneratorFrame", location=(-27, 5))
+        gen_mats = []
+        for i, (lbl, g) in enumerate(zip(["a", "b", "A", "B"], self.gens)):
+            c1, c2, c3, c4 = self._embed(g)
+            mat = CombineMatrix(tree, location=(i * 1.2, 0), col1=c1, col2=c2,
+                                col3=c3, col4=c4, label=lbl,
+                                parent=gen_frame, hide=True)
+            gen_mats.append(mat)
+
+        # ================================================================
+        #  letter -> generator / fixed point / Schottky circle
+        #  (the letter attribute is read AFTER its store, i.e. these switches
+        #   always see the letter of the current level)
+        # ================================================================
+        letter_frame = Frame(
+            tree, label="letter -> generator / fixed point / Schottky circle",
+            name="LetterFrame", location=(-27, 0))
+        letter_read = NamedAttribute(tree, location=(0, -1.5), data_type="INT",
+                                     name="letter", label="letter",
+                                     parent=letter_frame, hide=True)
+        gen_switch = IndexSwitch(tree, location=(1.5, 0), data_type="MATRIX",
+                                 index=letter_read.std_out,
+                                 label="g[letter]", parent=letter_frame)
+        gen_switch.new_item()
+        gen_switch.new_item()
+        for i, mat in enumerate(gen_mats):
+            links.new(mat.std_out, gen_switch.node.inputs[i + 1])
+        fp_switch = IndexSwitch(tree, location=(1.5, -2), data_type="VECTOR",
+                                index=letter_read.std_out,
+                                label="fixed point of letter (re, im, 0)",
+                                parent=letter_frame)
+        fp_switch.new_item()
+        fp_switch.new_item()
+        for i, z in enumerate(self.fixed_points):
+            fp_switch.node.inputs[i + 1].default_value = (z.real, z.imag, 0)
+        circle_switch = IndexSwitch(
+            tree, location=(1.5, -4), data_type="VECTOR",
+            index=letter_read.std_out,
+            label="Schottky circle of letter (center re, im, radius)",
+            parent=letter_frame)
+        circle_switch.new_item()
+        circle_switch.new_item()
+        for i, (q, r) in enumerate(self.circles):
+            circle_switch.node.inputs[i + 1].default_value = (q.real, q.imag, r)
+        fp_sep = SeparateXYZ(tree, location=(3, -2), vector=fp_switch.std_out,
+                             parent=letter_frame, hide=True)
+        circle_sep = SeparateXYZ(tree, location=(3, -4),
+                                 vector=circle_switch.std_out,
+                                 parent=letter_frame, hide=True)
+
+        # ================================================================
+        #  level 1: the four one-letter words
+        # ================================================================
+        seed_frame = Frame(tree, label="level 1: the four one-letter words",
+                           name="SeedFrame", location=(-19, 3))
+        seed_index = Index(tree, location=(0, -1.5), parent=seed_frame,
+                           hide=True)
+        seed_points = Points(tree, location=(0, 0), count=4,
+                             radius=radius_in.std_out, parent=seed_frame)
+        store_first = StoredNamedAttribute(
+            tree, location=(1, 0), data_type="INT", name="first_letter",
+            value=seed_index.std_out, label="first letter = branch colour",
+            parent=seed_frame, hide=True)
+        seed_letter = StoredNamedAttribute(
+            tree, location=(2, 0), data_type="INT", name="letter",
+            value=seed_index.std_out, label="letter <- index",
+            parent=seed_frame, hide=True)
+        seed_word = StoredNamedAttribute(
+            tree, location=(3, 0), data_type="FLOAT4X4", name="word",
+            value=gen_switch.std_out, label="word <- g[letter]",
+            parent=seed_frame, hide=True)
+        seed_done = StoredNamedAttribute(
+            tree, location=(4, 0), data_type="BOOLEAN", name="done",
+            value=False, label="done <- false", parent=seed_frame, hide=True)
+        # g fixes its own fixed point, so the level-1 point is the fixed
+        # point itself, drawn in the x-z plane
+        fp_world = CombineXYZ(tree, location=(4, -1.5), x=fp_sep.x, y=0,
+                              z=fp_sep.y, label="fixed point in x-z plane",
+                              parent=seed_frame, hide=True)
+        seed_pos = SetPosition(tree, location=(5, 0),
+                               position=fp_world.std_out, parent=seed_frame,
+                               hide=True)
+
+        # ================================================================
+        #  levels 2..MaxLevel: one tree level per iteration
+        # ================================================================
+        loop_frame = Frame(
+            tree, label="levels 2..MaxLevel: grow the DFS tree, one level per iteration",
+            name="LoopFrame", location=(-11.5, 4))
+        repeat = RepeatZone(tree, location=(-11.5, 2), node_width=15,
+                            iterations=iterations.std_out)
+        loop_frame.add(repeat)
+
+        # -- spawn: 3 children per open branch, 1 copy per finished one ----
+        spawn_frame = Frame(
+            tree, label="spawn: 3 children per open branch",
+            name="SpawnFrame", location=(-10.8, -0.5))
+        done_read = NamedAttribute(tree, location=(0, 0), data_type="BOOLEAN",
+                                   name="done", label="done",
+                                   parent=spawn_frame, hide=True)
+        child_count = make_function(
+            tree, functions={"amount": "3,done,2,*,-"}, inputs=["done"],
+            outputs=["amount"], booleans=["done"], integers=["amount"],
+            name="ChildCount", location=(1, 0), parent=spawn_frame)
+        child_count.label = "3 - 2 done"
+        links.new(done_read.std_out, child_count.inputs["done"])
+        dup = DuplicateElements(tree, location=(0.3, 2.5), domain="POINT",
+                                amount=child_count.outputs["amount"],
+                                parent=spawn_frame, hide=True)
+        store_digit = StoredNamedAttribute(
+            tree, location=(1.6, 2.5), data_type="INT", name="digit",
+            value=dup.duplicate_index, label="digit <- duplicate index",
+            parent=spawn_frame, hide=True)
+
+        # -- the child's letter: (letter + digit - 1) mod 4 ----------------
+        advance_frame = Frame(
+            tree, label="child letter: (letter + digit - 1) mod 4 -- skips the inverse",
+            name="AdvanceFrame", location=(-8.6, -1.5))
+        parent_letter = NamedAttribute(tree, location=(0, 0), data_type="INT",
+                                       name="letter", label="parent letter",
+                                       parent=advance_frame, hide=True)
+        digit_read = NamedAttribute(tree, location=(0, -1), data_type="INT",
+                                    name="digit", label="digit",
+                                    parent=advance_frame, hide=True)
+        next_letter = make_function(
+            tree, functions={"t2": "t,d,+,3,+,4,%"}, inputs=["t", "d"],
+            outputs=["t2"], integers=["t", "d", "t2"], name="NextLetter",
+            location=(1, -0.5), parent=advance_frame)
+        next_letter.label = "(t + d + 3) mod 4"
+        links.new(parent_letter.std_out, next_letter.inputs["t"])
+        links.new(digit_read.std_out, next_letter.inputs["d"])
+        letter_switch = Switch(tree, location=(2, -0.5), input_type="INT",
+                               switch=done_read.std_out,
+                               false=next_letter.outputs["t2"],
+                               true=parent_letter.std_out,
+                               label="frozen: keep letter",
+                               parent=advance_frame, hide=True)
+        store_letter = StoredNamedAttribute(
+            tree, location=(0.7, 3.5), data_type="INT", name="letter",
+            value=letter_switch.std_out, label="letter <- child letter",
+            parent=advance_frame, hide=True)
+
+        # -- termination: parent-word image of the child's circle ----------
+        term_frame = Frame(
+            tree,
+            label="branch termination: image disc of child circle under the PARENT word, radius < epsilon",
+            name="TerminationFrame", location=(-7.0, -3.5))
+        parent_word = NamedAttribute(tree, location=(0, 0),
+                                     data_type="FLOAT4X4", name="word",
+                                     label="parent word",
+                                     parent=term_frame, hide=True)
+        parent_sep = SeparateMatrix(tree, location=(1, 0),
+                                    matrix=parent_word.std_out,
+                                    label="c, d of parent word",
+                                    parent=term_frame, hide=True)
+        # u = c q + d ; denom = |u|^2 - |c|^2 r^2 ; the image disc keeps
+        # infinity outside iff denom > 0, and its radius is r / denom
+        termination = make_function(
+            tree, functions={"stop": "dn,0,>,r,eps,dn,*,<,*"},
+            aux_functions={
+                "ur": "cr,qx,*,ci,qy,*,-,dr,+",
+                "ui": "cr,qy,*,ci,qx,*,+,di,+",
+                "dn": "ur,ur,*,ui,ui,*,+,cr,cr,*,ci,ci,*,+,r,r,*,*,-",
+            },
+            inputs=["cr", "ci", "dr", "di", "qx", "qy", "r", "eps"],
+            outputs=["stop"],
+            scalars=["cr", "ci", "dr", "di", "qx", "qy", "r", "eps",
+                     "ur", "ui", "dn", "stop"],
+            name="BranchTermination", location=(2.2, 0), parent=term_frame)
+        termination.label = "r/denom < epsilon ?"
+        links.new(parent_sep.entry(1, 3), termination.inputs["cr"])
+        links.new(parent_sep.entry(1, 4), termination.inputs["ci"])
+        links.new(parent_sep.entry(3, 3), termination.inputs["dr"])
+        links.new(parent_sep.entry(3, 4), termination.inputs["di"])
+        links.new(circle_sep.x, termination.inputs["qx"])
+        links.new(circle_sep.y, termination.inputs["qy"])
+        links.new(circle_sep.z, termination.inputs["r"])
+        links.new(eps_in.std_out, termination.inputs["eps"])
+        store_stop = StoredNamedAttribute(
+            tree, location=(0.4, 5.5), data_type="BOOLEAN", name="stop",
+            value=termination.outputs["stop"],
+            label="stop <- disc small enough", parent=term_frame, hide=True)
+
+        # -- extend the word: word <- word . g[letter] ---------------------
+        word_frame = Frame(tree, label="extend the word: word . g[letter]",
+                           name="WordFrame", location=(-5.8, -2.2))
+        extend = MultiplyMatrices(tree, location=(0, 0),
+                                  matrix1=parent_word.std_out,
+                                  matrix2=gen_switch.std_out,
+                                  label="word . g", parent=word_frame,
+                                  hide=True)
+        word_switch = Switch(tree, location=(1, 0), input_type="MATRIX",
+                             switch=done_read.std_out, false=extend.std_out,
+                             true=parent_word.std_out,
+                             label="frozen: keep word", parent=word_frame,
+                             hide=True)
+        store_word = StoredNamedAttribute(
+            tree, location=(0.5, 4.2), data_type="FLOAT4X4", name="word",
+            value=word_switch.std_out, label="word <- extended word",
+            parent=word_frame, hide=True)
+
+        # -- place the point: p = word(fixed point of letter) --------------
+        place_frame = Frame(
+            tree,
+            label="place the point: p = (a z + b)/(c z + d), z the fixed point of the letter",
+            name="PlaceFrame", location=(-4.6, -1.2))
+        # NOTE: read the word attribute anew -- downstream of its store this
+        # yields the extended word (re-using the switch field here would
+        # multiply a second time)
+        new_word = NamedAttribute(tree, location=(0, 0), data_type="FLOAT4X4",
+                                  name="word", label="extended word",
+                                  parent=place_frame, hide=True)
+        new_sep = SeparateMatrix(tree, location=(0.8, 0),
+                                 matrix=new_word.std_out,
+                                 label="a, b, c, d of the word",
+                                 parent=place_frame, hide=True)
+        moebius = make_function(
+            tree,
+            functions={"p": ["nr,er,*,ni,ei,*,+,dn,/",
+                             "0",
+                             "ni,er,*,nr,ei,*,-,dn,/"]},
+            aux_functions={
+                "nr": "ar,zr,*,ai,zi,*,-,br,+",
+                "ni": "ar,zi,*,ai,zr,*,+,bi,+",
+                "er": "cr,zr,*,ci,zi,*,-,dr,+",
+                "ei": "cr,zi,*,ci,zr,*,+,di,+",
+                "dn": "er,er,*,ei,ei,*,+",
+            },
+            inputs=["ar", "ai", "br", "bi", "cr", "ci", "dr", "di",
+                    "zr", "zi"],
+            outputs=["p"],
+            scalars=["ar", "ai", "br", "bi", "cr", "ci", "dr", "di",
+                     "zr", "zi", "nr", "ni", "er", "ei", "dn"],
+            vectors=["p"],
+            name="MoebiusOnFixedPoint", location=(1.8, -0.5),
+            parent=place_frame)
+        moebius.label = "p = (a z + b)/(c z + d) in x-z plane"
+        links.new(new_sep.entry(1, 1), moebius.inputs["ar"])
+        links.new(new_sep.entry(1, 2), moebius.inputs["ai"])
+        links.new(new_sep.entry(3, 1), moebius.inputs["br"])
+        links.new(new_sep.entry(3, 2), moebius.inputs["bi"])
+        links.new(new_sep.entry(1, 3), moebius.inputs["cr"])
+        links.new(new_sep.entry(1, 4), moebius.inputs["ci"])
+        links.new(new_sep.entry(3, 3), moebius.inputs["dr"])
+        links.new(new_sep.entry(3, 4), moebius.inputs["di"])
+        links.new(fp_sep.x, moebius.inputs["zr"])
+        links.new(fp_sep.y, moebius.inputs["zi"])
+        current_pos = Position(tree, location=(1.8, 0.7), parent=place_frame,
+                               hide=True)
+        pos_switch = Switch(tree, location=(2.8, 0), input_type="VECTOR",
+                            switch=done_read.std_out,
+                            false=moebius.outputs["p"],
+                            true=current_pos.std_out,
+                            label="frozen: keep position",
+                            parent=place_frame, hide=True)
+        set_pos = SetPosition(tree, location=(0.6, 3.2),
+                              position=pos_switch.std_out,
+                              parent=place_frame, hide=True)
+
+        # -- freeze finished branches --------------------------------------
+        freeze_frame = Frame(tree, label="freeze: done <- done or stop",
+                             name="FreezeFrame", location=(-3.0, -0.3))
+        stop_read = NamedAttribute(tree, location=(0, 0), data_type="BOOLEAN",
+                                   name="stop", label="stop",
+                                   parent=freeze_frame, hide=True)
+        done_or_stop = BooleanMath(tree, location=(1, 0), operation="OR",
+                                   inputs0=done_read.std_out,
+                                   inputs1=stop_read.std_out,
+                                   label="done or stop", parent=freeze_frame,
+                                   hide=True)
+        store_done = StoredNamedAttribute(
+            tree, location=(0.3, 2.3), data_type="BOOLEAN", name="done",
+            value=done_or_stop.std_out, label="done <- done or stop",
+            parent=freeze_frame, hide=True)
+
+        repeat.create_geometry_line([dup, store_digit, store_letter,
+                                     store_stop, store_word, set_pos,
+                                     store_done])
+
+        # ================================================================
+        #  colour by first letter & output
+        # ================================================================
+        color_mat = gradient_from_attribute(
+            name="ApollonianLetterColor", attr_name="first_letter",
+            function="fac,3,/",
+            gradient={i / 3: self.colors[i] for i in range(4)})
+        _bsdf = color_mat.node_tree.nodes.get("Principled BSDF")
+        if _bsdf is not None and "Emission Strength" in _bsdf.inputs:
+            _bsdf.inputs["Emission Strength"].default_value = 2.0
+
+        out_frame = Frame(tree, label="colour by first letter",
+                          name="OutFrame", location=(5, 2))
+        set_material = SetMaterial(tree, location=(0, 0), material=color_mat,
+                                   parent=out_frame)
+
+        create_geometry_line(tree, [seed_points, store_first, seed_letter,
+                                    seed_word, seed_done, seed_pos])
+        links.new(seed_pos.geometry_out, repeat.geometry_in)
+        links.new(repeat.geometry_out, set_material.geometry_in)
+        links.new(set_material.geometry_out,
+                  self.group_outputs.inputs['Geometry'])
+        self.group_outputs.location = (7 * 200, 2 * 100)
 
 
 # Penrose videos
