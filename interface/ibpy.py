@@ -7359,6 +7359,15 @@ def insert_keyframe(bob, data_path, frame):
     obj.keyframe_insert(data_path=data_path, frame=frame)
 
 
+def default_smooth(x):
+    """Smoothstep ease-in/ease-out on x in [0,1], matching the zero-velocity
+    endpoints of Blender's default two-keyframe Bezier interpolation. Use to
+    re-time a uniform sample fraction (e.g. i/steps) before feeding it into a
+    from-scratch value/position function, so manually-sampled keyframes move
+    like a native Blender-interpolated animation instead of at constant speed."""
+    return 3 * x ** 2 - 2 * x ** 3
+
+
 def set_bevel_factor_and_keyframe(data, value, frame):
     """
     default case
