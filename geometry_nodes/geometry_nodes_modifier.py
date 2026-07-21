@@ -1589,9 +1589,12 @@ class ApollonianGasketModifier(GeometryNodesModifier):
     and keeps every baked constant of order one.  The group is the same up to
     a change of coordinates.
 
-    Per-point attributes: ``word`` (FLOAT4X4 state), ``letter`` (current
-    letter 0..3), ``first_letter`` (branch colour, like the tree colouring of
-    the videos), ``digit``/``stop`` (per-level helpers), ``done`` (frozen).
+    Per-point attributes: ``word`` (FLOAT4X4 state), ``letter`` (current =
+    last letter 0..3), ``first_letter`` (branch colour, like the tree
+    colouring of the videos), ``digit``/``stop`` (per-level helpers),
+    ``done`` (frozen).  ``color_by`` picks the colouring attribute:
+    ``'first_letter'`` (default, four solid subtree regions) or
+    ``'last_letter'`` (the letter whose fixed-point image the point is).
 
     Nodes exposed for animation (fetch by label with
     :func:`ibpy.get_geometry_node_from_modifier`):
@@ -1604,12 +1607,18 @@ class ApollonianGasketModifier(GeometryNodesModifier):
     """
 
     def __init__(self, name='ApollonianGasket', epsilon=0.1, max_level=25,
-                 point_radius=0.02, pole=2j, size=2.5, colors=None):
+                 point_radius=0.02, pole=2j, size=2.5, colors=None,
+                 color_by='first_letter'):
         self.epsilon = epsilon
         self.max_level = max_level
         self.point_radius = point_radius
         self.pole = pole
         self.size = size
+        # 'first_letter': colour of the level-1 subtree (four solid regions);
+        # 'last_letter': colour of the terminal letter -- the plotted point is
+        # the image of that letter's fixed point, so a/A and b/B interleave
+        # along the curve
+        self.color_by = color_by
         # one colour per first letter a, b, A, B -- the colour of the level-1
         # subtree a point belongs to (matches the tree colouring used in
         # video_apollonian: gray_2, joker, important, custom1)
@@ -1617,7 +1626,7 @@ class ApollonianGasketModifier(GeometryNodesModifier):
             [0.55, 0.55, 0.55, 1],   # a  (gray)
             [0.04, 0.62, 0.45, 1],   # b  (green / joker)
             [0.83, 0.37, 0.04, 1],   # A  (orange / important)
-            [0.20, 0.45, 0.85, 1],   # B  (blue)
+            [230/255, 10/255, 52/255, 1],   # B  (custom1)
         ]
         self._prepare_model()
         super().__init__(name, automatic_layout=False)
@@ -2008,17 +2017,21 @@ class ApollonianGasketModifier(GeometryNodesModifier):
                                      store_done])
 
         # ================================================================
-        #  colour by first letter & output
+        #  colour by first/last letter & output
         # ================================================================
+        # 'letter' always holds the LAST letter of the word: it is advanced
+        # per level while the branch is open and frozen once done
+        color_attr = ('letter' if self.color_by in ('letter', 'last_letter')
+                      else 'first_letter')
         color_mat = gradient_from_attribute(
-            name="ApollonianLetterColor", attr_name="first_letter",
+            name="ApollonianLetterColor", attr_name=color_attr,
             function="fac,3,/",
             gradient={i / 3: self.colors[i] for i in range(4)})
         _bsdf = color_mat.node_tree.nodes.get("Principled BSDF")
         if _bsdf is not None and "Emission Strength" in _bsdf.inputs:
             _bsdf.inputs["Emission Strength"].default_value = 2.0
 
-        out_frame = Frame(tree, label="colour by first letter",
+        out_frame = Frame(tree, label="colour by " + color_attr,
                           name="OutFrame", location=(5, 2))
         set_material = SetMaterial(tree, location=(0, 0), material=color_mat,
                                    parent=out_frame)
