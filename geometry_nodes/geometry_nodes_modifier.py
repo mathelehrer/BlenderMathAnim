@@ -23,7 +23,8 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     GeometryToInstance, InputMaterial, RotateInstances, SimpleRubiksCubeNode, CornersOfFace, BoundingBox, CurveLine, \
     ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode, PolyhedronViewNode, \
     ShowNormalsNode, Rotation, LinearMap, MergeByDistance, DistributePointsOnFaces, MeshBoolean, \
-    CombineMatrix, TransformPoint, MultiplyMatrices, SeparateMatrix, DuplicateElements
+    CombineMatrix, TransformPoint, MultiplyMatrices, SeparateMatrix, DuplicateElements, Reroute, SampleNearest, \
+    TranslateInstances, InsidePolygon, ComplexMathNode, GeometryProximity, MeshCircle
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material, get_geometry_node_from_modifier, \
     get_material_of
@@ -142,6 +143,7 @@ class GeometryNodesModifier:
 
     def get_node_tree(self):
         return self.tree
+
 
 ## Tools
 
@@ -289,7 +291,7 @@ class SpherePreImage(GeometryNodesModifier):
     def __init__(self):
         super().__init__(name="SpherePreImage", automatic_layout=False)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         out = tree.nodes.get("Group Output")
         links = tree.links
 
@@ -446,7 +448,7 @@ class MathematicalSurface(GeometryNodesModifier):
         self.kwargs = kwargs
         super().__init__(name=name, automatic_layout=automatic_layout)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         out = tree.nodes.get("Group Output")
         links = tree.links
 
@@ -509,7 +511,7 @@ class PendulumModifierSmall(GeometryNodesModifier):
         self.max_frame = max_frame
         super().__init__(name=name, automatic_layout=automatic_layout)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         out = tree.nodes.get("Group Output")
         links = tree.links
 
@@ -728,7 +730,7 @@ class PendulumModifierLarge(GeometryNodesModifier):
         self.max_frame = max_frame
         super().__init__(name=name, automatic_layout=automatic_layout)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         out = tree.nodes.get("Group Output")
         links = tree.links
 
@@ -963,7 +965,7 @@ class VectorLogo(GeometryNodesModifier):
         self.colors = colors
         super().__init__(name)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         # arrow object with origin at the tip
         arrow = PArrow(name="ArrowObject")
         ibpy.set_pivot(arrow, Vector([0, 0, 1]))
@@ -1080,7 +1082,7 @@ class LorentzAttractorNode(GeometryNodesModifier):
         self.a = a
         super().__init__(name)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         random_value = RandomValue(tree, data_type='FLOAT_VECTOR', min=-0.5 * Vector([1, 1, 1]),
                                    max=0.5 * Vector([1, 1, 1]))
         position = Position(tree)
@@ -1124,933 +1126,12 @@ class LorentzAttractorNode(GeometryNodesModifier):
         return self.repeat.repeat_input.inputs[0]
 
 
-class BarnsleyFernModifier(GeometryNodesModifier):
-    """The Barnsley fern, grown by a *parallel* chaos game in geometry nodes.
-
-    ``point_count`` seed points all start at the origin; a repeat zone applies
-    one of the fern's four affine maps to every point on every iteration, the
-    map chosen by a per-point / per-iteration random draw weighted by the fern
-    probabilities (0.01, 0.85, 0.07, 0.07).  After ``iterations`` rounds each
-    point has settled onto the attractor, so the cloud *is* the fern and its
-    density follows the invariant measure.
-
-    Two node values are exposed for animation (fetch by label with
-    :func:`ibpy.get_geometry_node_from_modifier`):
-
-    * ``PointCount`` -- number of points (density), an int
-      (:func:`ibpy.change_default_integer`)
-    * ``PointSize``  -- world radius of each rendered point
-      (:func:`ibpy.change_default_value`)
-
-    The four maps w1..w4 are (x' = a x + b y + e, y' = c x + d y + f):
-        w1  a,b,c,d,e,f = 0, 0, 0, 0.16, 0, 0            p=0.01  (stem)
-        w2              = 0.85, 0.04, -0.04, 0.85, 0, 1.6 p=0.85 (main frond)
-        w3              = 0.20, -0.26, 0.23, 0.22, 0, 1.6 p=0.07 (left leaflet)
-        w4              = -0.15, 0.28, 0.26, 0.24, 0, 0.44 p=0.07 (right leaflet)
-    The fern's natural x is carried in world x, its natural y in world z (the
-    plane the videos draw on), and world y (depth) is pinned to 0.
-    """
-
-    def __init__(self, name='BarnsleyFern', point_count=30000, point_size=0.03,
-                 iterations=50, scale=0.45, colors=None,
-                 wind_amplitude=0.011, wind_frequency=0.15):
-        self.point_count = point_count
-        self.point_size = point_size
-        self.iterations = iterations
-        self.fern_scale = scale
-        # wind: omega_2's off-diagonal (nominal 0.04) oscillates in time
-        self.wind_amplitude = wind_amplitude
-        self.wind_frequency = wind_frequency
-        # one colour per map omega_1..omega_4 (stem, main frond, left, right);
-        # a point is painted by the last map that moved it (its 'map_index')
-        self.colors = colors or [
-            [0.83, 0.37, 0.04, 1],   # omega_1 stem      (vermillion / important)
-            [0.04, 0.62, 0.45, 1],   # omega_2 main      (green / joker)
-            [0.34, 0.71, 0.91, 1],   # omega_3 left leaf (blue / drawing)
-            [0.94, 0.89, 0.26, 1],   # omega_4 right leaf(yellow / example)
-        ]
-        super().__init__(name)
-
-    def create_node(self, tree):
-        # ---- exposed, animatable parameters ------------------------------
-        count = InputInteger(tree, integer=self.point_count)
-        count.node.label = "PointCount"
-        size = InputValue(tree, value=self.point_size)
-        size.node.label = "PointSize"
-
-        # ---- seed cloud: point_count points at the origin, radius = size --
-        points = Points(tree, count=count.std_out, radius=size.std_out)
-
-        # ---- wind: sway omega_2's off-diagonal in time -------------------
-        # omega_2 fires ~85% of the time, so it compounds deep into the fronds
-        # and a tiny oscillation of its rotation makes the tips sway far more
-        # than the base -- exactly how a fern moves in a breeze.  A slow sway
-        # plus a smaller, faster flutter reads as natural wind.
-        scene_time = SceneTime(tree)
-        a1, w1 = self.wind_amplitude, 2 * pi * self.wind_frequency
-        a2, w2 = 0.35 * self.wind_amplitude, 2 * pi * self.wind_frequency * 2.9
-        osc = "%.6f,%.6f,t,*,sin,*,%.6f,%.6f,t,*,sin,*,+" % (a1, w1, a2, w2)
-        wind = make_function(tree.nodes, functions={
-            "b": "0.04," + osc + ",+",        # b(t) = 0.04 + oscillation
-            "nb": "0,0.04," + osc + ",+,-",   # -b(t), for the anti-diagonal
-        }, inputs=["t"], outputs=["b", "nb"], scalars=["t", "b", "nb"],
-            name="Wind")
-        tree.links.new(scene_time.std_out, wind.inputs["t"])
-
-        # ---- the four maps as 4x4 transform matrices ---------------------
-        # each affine map (x' = a x + b z + e, z' = c x + d z + f, y' = 0 on
-        # the drawing plane) is an AFFINE transform in projective space (w = 1),
-        # so the shift (e,f) lives in the matrix's last column and one
-        # TransformPoint applies the whole map.  CombineMatrix takes COLUMNS
-        # (column-major): col1 = (a,0,c,0), col3 = (b,0,d,0), col4 = (e,0,f,1),
-        # and the bottom row (0,0,0,1) keeps the point homogeneous.
-        # omega_2's off-diagonal +-b is the wind-driven, time-varying value.
-        mats = [
-            CombineMatrix(tree, col1=[0, 0, 0, 0],
-                          col3=[0, 0, 0.16, 0], col4=[0, 0, 0, 1]),        # omega_1 stem
-            CombineMatrix(tree, col1=[0.85, 0, wind.outputs["nb"], 0],
-                          col3=[wind.outputs["b"], 0, 0.85, 0],
-                          col4=[0, 0, 1.6, 1]),                            # omega_2 main
-            CombineMatrix(tree, col1=[0.2, 0, 0.23, 0],
-                          col3=[-0.26, 0, 0.22, 0], col4=[0, 0, 1.6, 1]),  # omega_3 left
-            CombineMatrix(tree, col1=[-0.15, 0, 0.26, 0],
-                          col3=[0.28, 0, 0.24, 0], col4=[0, 0, 0.44, 1]),  # omega_4 right
-        ]
-        # label the matrices to match the slide (omega_1 .. omega_4)
-        for i, m in enumerate(mats):
-            m.node.label = "ω_%d" % (i + 1)
-
-        # ---- chaos game --------------------------------------------------
-        iterations_node = InputInteger(tree,integer=self.iterations,label="IterationCount")
-        repeat = RepeatZone(tree, iterations=iterations_node.std_out)
-
-        # r in [0,1): different per point (ID = index) and per round (Seed =
-        # iteration), so every point runs its own random walk over the maps
-        index = Index(tree)
-        rnd = RandomValue(tree, data_type="FLOAT", min=0.0, max=1.0)
-        tree.links.new(index.std_out, rnd.node.inputs["ID"])
-        tree.links.new(repeat.iteration, rnd.node.inputs["Seed"])
-
-        # r -> map index 0..3 by the cumulative fern probabilities
-        # (0.01, 0.86, 0.93); '>' returns 1.0/0.0, so the sum is the index.
-        map_index = make_function(tree.nodes, functions={
-            "idx": "r,0.01,>,r,0.86,>,+,r,0.93,>,+"
-        }, inputs=["r"], outputs=["idx"], scalars=["r"], integers=["idx"],
-            name="MapIndex")
-        tree.links.new(rnd.std_out, map_index.inputs["r"])
-
-        # pick the chosen matrix and apply it to the point (a vector op)
-        switch = IndexSwitch(tree, data_type="MATRIX",
-                             index=map_index.outputs["idx"])
-        switch.new_item()
-        switch.new_item()  # two default slots + two more -> four maps
-        for i, m in enumerate(mats):
-            tree.links.new(m.std_out, switch.node.inputs[i + 1])
-
-        position = Position(tree)
-        transform_point = TransformPoint(tree, vector=position.std_out,
-                                         transform=switch.std_out)
-        set_position = SetPosition(tree, position=transform_point.std_out)
-        # remember which map moved the point this round; after the last round
-        # the attribute holds the map that produced the point's final position
-        store_index = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
-                                           name="map_index",
-                                           value=map_index.outputs["idx"])
-        repeat.create_geometry_line([set_position, store_index])
-
-        # ---- fit the natural fern (x in [-2.2,2.7], y in [0,10]) on the plane
-        s = self.fern_scale
-        transform = TransformGeometry(tree, scale=Vector([s, s, s]),
-                                      translation=Vector([-0.24 * s, 0, -4.99 * s]))
-        # ---- colour every point by its map_index (omega_1..omega_4) ---------
-        # a color ramp reads the stored attribute; map_index/3 lands exactly on
-        # the four ramp stops, one colour per map
-        color_mat = gradient_from_attribute(
-            name="FernMapColor", attr_name="map_index", function="fac,3,/",
-            gradient={i / 3: self.colors[i] for i in range(4)})
-        # let the points glow so the colours read on any background
-        _bsdf = color_mat.node_tree.nodes.get("Principled BSDF")
-        if _bsdf is not None and "Emission Strength" in _bsdf.inputs:
-            _bsdf.inputs["Emission Strength"].default_value = 2.0
-        material = SetMaterial(tree, material=color_mat)
-
-        create_geometry_line(tree, [points, repeat, transform, material],
-                             out=self.group_outputs.inputs['Geometry'])
-
-
-class SierpinskiTriangleModifier(GeometryNodesModifier):
-    """The Sierpinski triangle chaos game, entirely inside geometry nodes.
-
-    The three corners are exposed as **input vectors** ``Corner1/2/3`` -- they
-    are the single source of truth.  Everything else is derived from them, so
-    dragging (or animating) a corner reshapes the whole picture at once:
-
-    * the three affine maps ``w_i(p) = 1/2 (p + C_i)`` -- built as 4x4
-      matrices whose *linear* part is a fixed half-scale and whose *translation*
-      column is ``1/2 C_i``, pulled live from the corner vector;
-    * the **parallel cloud** -- ``point_count`` points that each run their own
-      random chaos game through a repeat zone (each corner with probability
-      1/3), so after ``iterations`` rounds the cloud *is* the gasket;
-    * a **single hand-played trajectory** -- one point starting at corner
-      ``start_corner`` (a fixed vertex, not the centroid) and hopping half-way
-      to a random corner ``trajectory_length`` times.  It is a poly-line whose
-      vertex ``k`` sits at ``sum_j w_{k,j} C_j`` for fixed convex weights
-      ``w_{k,j}`` (baked from one random walk), so it too follows the corners.
-      Colour = the corner each hop aimed at (vertex 0 takes ``start_corner``'s
-      colour);
-    * three fat **corner markers** at ``C_i``.
-
-    Points (cloud, trajectory dots, markers) are coloured by a ``map_index``
-    attribute through one shared ramp, so all three colours agree.
-
-    Nodes exposed for animation (fetch by label with
-    :func:`ibpy.get_geometry_node_from_modifier`):
-
-    * ``Corner1`` / ``Corner2`` / ``Corner3`` -- corner positions, vectors
-      (:func:`ibpy.change_default_vector`)
-    * ``PointCount`` -- cloud density, int (:func:`ibpy.change_default_integer`)
-    * ``PointSize``  -- cloud dot radius (:func:`ibpy.change_default_value`)
-    * ``TrajectorySteps`` -- how many hops of the single walk are shown, int
-      (grow 0 -> ``trajectory_length`` to play the construction)
-    * ``TrajectoryDotSize`` / ``MarkerSize`` -- radii, floats
-
-    Corners live in the modifier's local space; defaults form an equilateral
-    triangle centred on the object origin (base 5, sitting the same way the old
-    fitted version did when the carrier plane is at ``[2.5, 0, -0.1]``).
-    """
-
-    def __init__(self, name='SierpinskiTriangle', point_count=40000,
-                 point_size=0.0, iterations=50, corners=None, colors=None,
-                 trajectory_length=14, trajectory_steps=0, dot_size=0.07,
-                 path_radius=0.02, marker_size=0.0, seed=7, start_corner=0):
-        self.point_count = point_count
-        self.point_size = point_size
-        self.iterations = iterations
-        self.trajectory_length = trajectory_length
-        self.trajectory_steps = trajectory_steps
-        self.dot_size = dot_size
-        self.path_radius = path_radius
-        self.marker_size = marker_size
-        self.seed = seed
-        # which corner (index 0..2) the hand-played trajectory starts from;
-        # None falls back to the old centroid start (equal 1/3 weights)
-        self.start_corner = start_corner
-        # three corners in local coordinates (x, y=depth, z), equilateral and
-        # centred on the origin: base 5 along x, height 5*sqrt(3)/2
-        h = 2.5 / math.sqrt(3.0)          # centroid-to-base distance
-        self.corners = corners or [
-            Vector([-2.5, 0.0, -h]),      # C1 bottom-left
-            Vector([2.5, 0.0, -h]),       # C2 bottom-right
-            Vector([2.5, 0.0, 2.0 * h]),  # C3 top (base + 2.5*sqrt(3)); centroid = origin
-        ]
-        # one colour per corner (the corner a point was last pulled toward)
-        self.colors = colors or [
-            [0.83, 0.37, 0.04, 1],   # corner 0 (vermillion / important)
-            [0.04, 0.62, 0.45, 1],   # corner 1 (green / joker)
-            [0.34, 0.71, 0.91, 1],   # corner 2 (blue / drawing)
-        ]
-        super().__init__(name)
-
-    def create_node(self, tree):
-        # ---- corners as exposed input vectors (the single source of truth)
-        corner_nodes = []
-        for i, c in enumerate(self.corners):
-            cv = InputVector(tree, value=c)
-            cv.node.label = "Corner%d" % (i + 1)
-            corner_nodes.append(cv)
-        C = [cn.std_out for cn in corner_nodes]
-
-        # ---- the three midpoint maps, built live from the corner vectors --
-        # w_i(p) = 1/2 p + 1/2 C_i : linear part is 1/2 I (cols 1-3), the
-        # translation column 4 is 1/2 C_i taken straight from the input vector
-        # (CombineMatrix is column-major; the 4th row keeps points homogeneous).
-        mats = []
-        for i, Ci in enumerate(C):
-            half = VectorMath(tree, operation="SCALE", inputs0=Ci,
-                              float_input=0.5)
-            sep = SeparateXYZ(tree, vector=half.std_out)
-            mat = CombineMatrix(tree, col1=[0.5, 0, 0, 0], col2=[0, 0.5, 0, 0],
-                                col3=[0, 0, 0.5, 0],
-                                col4=[sep.x, sep.y, sep.z, 1])
-            mat.node.label = "w_%d" % (i + 1)
-            mats.append(mat)
-
-        # ---- one shared colour material (map_index -> corner colour) ------
-        color_mat = gradient_from_attribute(
-            name="SierpinskiMapColor", attr_name="map_index",
-            function="fac,2,/",
-            gradient={i / 2: self.colors[i] for i in range(3)})
-        _bsdf = color_mat.node_tree.nodes.get("Principled BSDF")
-        if _bsdf is not None and "Emission Strength" in _bsdf.inputs:
-            _bsdf.inputs["Emission Strength"].default_value = 2.0
-
-        join = JoinGeometry(tree)
-
-        # ================================================================
-        #  1) the parallel cloud: every point runs its own chaos game
-        # ================================================================
-        count = InputInteger(tree, integer=self.point_count)
-        count.node.label = "PointCount"
-        size = InputValue(tree, value=self.point_size)
-        size.node.label = "PointSize"
-        points = Points(tree, count=count.std_out, radius=size.std_out)
-
-        repeat = RepeatZone(tree, iterations=self.iterations)
-        index = Index(tree)
-        rnd = RandomValue(tree, data_type="FLOAT", min=0.0, max=1.0)
-        tree.links.new(index.std_out, rnd.node.inputs["ID"])
-        tree.links.new(repeat.iteration, rnd.node.inputs["Seed"])
-        # r -> corner index 0..2 in equal thirds ('>' returns 1.0/0.0)
-        cloud_idx = make_function(tree.nodes, functions={
-            "idx": "r,0.33333,>,r,0.66667,>,+"
-        }, inputs=["r"], outputs=["idx"], scalars=["r"], integers=["idx"],
-            name="CloudMapIndex")
-        tree.links.new(rnd.std_out, cloud_idx.inputs["r"])
-        switch = IndexSwitch(tree, data_type="MATRIX",
-                             index=cloud_idx.outputs["idx"])
-        switch.new_item()  # two default slots + one more -> three maps
-        for i, m in enumerate(mats):
-            tree.links.new(m.std_out, switch.node.inputs[i + 1])
-        position = Position(tree)
-        transform_point = TransformPoint(tree, vector=position.std_out,
-                                         transform=switch.std_out)
-        set_position = SetPosition(tree, position=transform_point.std_out)
-        store_index = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
-                                           name="map_index",
-                                           value=cloud_idx.outputs["idx"])
-        repeat.create_geometry_line([set_position, store_index])
-        cloud_mat = SetMaterial(tree, material=color_mat)
-        create_geometry_line(tree, [points, repeat, cloud_mat],
-                             out=join.geometry_in)
-
-        # ================================================================
-        #  2) the single trajectory, as a poly-line driven by the corners
-        # ================================================================
-        # Bake ONE random walk's convex weights: vertex k is
-        #   p_k = wA_k C1 + wB_k C2 + wC_k C3      (weights sum to 1)
-        # from p_0 = start_corner (or the centroid if start_corner is None)
-        # and p_{k+1} = 1/2 p_k + 1/2 C_{choice}.  The weights are constants
-        # (independent of where the corners are), so the position node
-        # re-evaluates against the live corner vectors.
-        rng = np.random.default_rng(self.seed)
-        choices = [int(rng.integers(0, 3))
-                   for _ in range(self.trajectory_length)]
-        if self.start_corner is None:
-            start_weights = [1 / 3, 1 / 3, 1 / 3]
-        else:
-            start_weights = [1.0 if j == self.start_corner else 0.0
-                             for j in range(3)]
-        weights = [start_weights]
-        for s in choices:
-            prev = weights[-1]
-            weights.append([0.5 * prev[j] + (0.5 if j == s else 0.0)
-                            for j in range(3)])
-        # colour of each vertex: vertex 0 takes start_corner's colour (0 when
-        # starting at the centroid, matching the old behaviour)
-        choice_per_vertex = [self.start_corner or 0] + choices
-        n_vertices = self.trajectory_length + 1
-
-        traj_index = Index(tree)
-
-        def const_switch(values, data_type, label):
-            sw = IndexSwitch(tree, data_type=data_type, index=traj_index.std_out)
-            for _ in range(len(values) - 2):       # 2 default slots
-                sw.new_item()
-            for i, v in enumerate(values):
-                sw.node.inputs[i + 1].default_value = v
-            sw.node.label = label
-            return sw
-
-        wA = const_switch([w[0] for w in weights], "FLOAT", "wA")
-        wB = const_switch([w[1] for w in weights], "FLOAT", "wB")
-        wC = const_switch([w[2] for w in weights], "FLOAT", "wC")
-        ch = const_switch(choice_per_vertex, "INT", "choice")
-
-        # p_k = wA C1 + wB C2 + wC C3
-        sa = VectorMath(tree, operation="SCALE", inputs0=C[0],
-                        float_input=wA.std_out)
-        sb = VectorMath(tree, operation="SCALE", inputs0=C[1],
-                        float_input=wB.std_out)
-        sc = VectorMath(tree, operation="SCALE", inputs0=C[2],
-                        float_input=wC.std_out)
-        ab = VectorMath(tree, operation="ADD", inputs0=sa.std_out,
-                        inputs1=sb.std_out)
-        traj_pos = VectorMath(tree, operation="ADD", inputs0=ab.std_out,
-                              inputs1=sc.std_out)
-
-        steps = InputInteger(tree, integer=self.trajectory_steps)
-        steps.node.label = "TrajectorySteps"
-        dot_size = InputValue(tree, value=self.dot_size)
-        dot_size.node.label = "TrajectoryDotSize"
-
-        line = MeshLine(tree, count=n_vertices)      # n edges, index 0..n
-        line_pos = SetPosition(tree, geometry=line.geometry_out,
-                               position=traj_pos.std_out)
-        line_store = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
-                                          name="map_index", value=ch.std_out)
-        tree.links.new(line_pos.geometry_out, line_store.geometry_in)
-        # reveal only the first `steps` hops: drop vertices with index > steps
-        clip_sel = make_function(tree.nodes, functions={"sel": "i,s,>"},
-                                 inputs=["i", "s"], outputs=["sel"],
-                                 scalars=["i", "s", "sel"], name="TrajClip")
-        tree.links.new(traj_index.std_out, clip_sel.inputs["i"])
-        tree.links.new(steps.std_out, clip_sel.inputs["s"])
-        clip = DeleteGeometry(tree, domain="POINT",
-                              geometry=line_store.geometry_out,
-                              selection=clip_sel.outputs["sel"])
-
-        # landing dots: the visited vertices as a coloured point cloud
-        traj_dots = MeshToPoints(tree, mesh=clip.geometry_out)
-        tree.links.new(dot_size.std_out, traj_dots.node.inputs["Radius"])
-        traj_dots_mat = SetMaterial(tree, material=color_mat)
-        tree.links.new(traj_dots.geometry_out, traj_dots_mat.geometry_in)
-        tree.links.new(traj_dots_mat.geometry_out, join.geometry_in)
-
-        # the hops themselves: a thin tube along the surviving edges, carrying
-        # map_index through to the same ramp so each hop wears its corner colour
-        radius = InputValue(tree,value=self.path_radius,label="PathRadius",hide=True)
-        tube = InstanceOnEdges(tree, radius=radius.std_out, name="TrajPath")
-        tree.links.new(clip.geometry_out, tube.geometry_in)
-        tube_mat = SetMaterial(tree, material=color_mat)
-        tree.links.new(tube.geometry_out, tube_mat.geometry_in)
-        tree.links.new(tube_mat.geometry_out, join.geometry_in)
-
-        # ================================================================
-        #  3) the three corner markers (fat dots at C_i)
-        # ================================================================
-        marker_size = InputValue(tree, value=self.marker_size)
-        marker_size.node.label = "MarkerSize"
-        mk_points = Points(tree, count=3, radius=marker_size.std_out)
-        mk_index = Index(tree)
-        corner_switch = IndexSwitch(tree, data_type="VECTOR",
-                                    index=mk_index.std_out)
-        corner_switch.new_item()  # 2 default slots + one more -> three corners
-        for i, ci in enumerate(C):
-            tree.links.new(ci, corner_switch.node.inputs[i + 1])
-        mk_pos = SetPosition(tree, geometry=mk_points.geometry_out,
-                             position=corner_switch.std_out)
-        mk_store = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
-                                        name="map_index", value=mk_index.std_out)
-        tree.links.new(mk_pos.geometry_out, mk_store.geometry_in)
-        mk_mat = SetMaterial(tree, material=color_mat)
-        tree.links.new(mk_store.geometry_out, mk_mat.geometry_in)
-        tree.links.new(mk_mat.geometry_out, join.geometry_in)
-
-        # ---- everything into one output ----------------------------------
-        tree.links.new(join.geometry_out, self.group_outputs.inputs['Geometry'])
-
-
-class ApollonianGasketModifier(GeometryNodesModifier):
-    """The Apollonian gasket, generated live inside geometry nodes as the
-    limit set of a Kleinian group (Indra's Pearls, ch. 7; see
-    ``video_apollonian/indras_utils/indra_generating_algorithms.py``).
-
-    **The algorithm** is the depth-first search over reduced words in the four
-    Moebius generators ``a, b, A, B`` of the gasket group
-    (:class:`ApollonianModel`), with the classic disc-radius termination of
-    ``DepthFirstSearchOriginal.branch_termination_1``: a branch stops as soon
-    as the image of its letter's Schottky circle has radius ``< epsilon``, and
-    plots the image of the letter's (parabolic) fixed point.  Since every
-    plotted point sits inside its terminal disc and neighbouring terminal
-    discs are tangent, ``epsilon`` directly dials the maximum distance between
-    neighbouring points of the curve.
-
-    **Parallelisation.**  The recursion is unrolled level by level in a repeat
-    zone: every point *is* one node of the DFS tree, and per iteration each
-    unfinished point spawns its three children (``DuplicateElements`` with
-    amount ``done ? 1 : 3``; the duplicate index is the child digit ``d``, and
-    the child's letter is ``(letter + d - 1) mod 4``, which excludes the
-    inverse letter exactly like the serial code).  Finished points ride along
-    frozen, so the geometry grows exactly like the adaptive DFS tree --
-    ``epsilon`` prunes it live.
-
-    **Complex arithmetic.**  A word is a complex 2x2 matrix with det 1.  It is
-    stored per point as a ``FLOAT4X4`` attribute via the block embedding
-    ``z = x + iy  ->  [[x, -y], [y, x]]``, so complex matrix products become
-    real 4x4 products (one *Multiply Matrices* node -- the node computes the
-    standard product, right factor applied first, matching ``word @ gen``).
-    ``Separate Matrix`` recovers ``a = (C1R1, C1R2), b = (C3R1, C3R2),
-    c = (C1R3, C1R4), d = (C3R3, C3R4)`` and two labelled function groups do
-    the textbook formulas:
-
-    * branch termination: ``u = c q + d``,
-      ``denom = |u|^2 - |c|^2 r^2``; stop iff ``denom > 0`` (image disc does
-      not contain infinity) and ``r < epsilon * denom``;
-    * point placement: ``p = (a z + b) / (c z + d)`` with ``z`` the fixed
-      point of the current letter, plotted in the x-z plane.
-
-    **Conjugation.**  The raw :class:`ApollonianModel` contains a circle of
-    radius 10000 (a stand-in for the real line), which is fatal for the
-    float32 arithmetic of geometry nodes.  The whole model is therefore
-    conjugated once, in Python, by ``T = S . (-1/(z - pole))`` with the pole
-    in a large hole of the limit set (default ``2i``) and ``S`` a real affine
-    map framing the gasket in a ``2*size`` box centred on the origin.  This
-    turns the strip-shaped gasket into the classic bounded gasket-in-a-circle
-    and keeps every baked constant of order one.  The group is the same up to
-    a change of coordinates.
-
-    Per-point attributes: ``word`` (FLOAT4X4 state), ``letter`` (current =
-    last letter 0..3), ``first_letter`` (branch colour, like the tree
-    colouring of the videos), ``digit``/``stop`` (per-level helpers),
-    ``done`` (frozen).  ``color_by`` picks the colouring attribute:
-    ``'first_letter'`` (default, four solid subtree regions) or
-    ``'last_letter'`` (the letter whose fixed-point image the point is).
-
-    Nodes exposed for animation (fetch by label with
-    :func:`ibpy.get_geometry_node_from_modifier`):
-
-    * ``Epsilon`` -- termination radius (:func:`ibpy.change_default_value`);
-      smaller values refine the gasket live, point count grows ~ 1/epsilon
-    * ``MaxLevel`` -- depth cap of the tree, int
-      (:func:`ibpy.change_default_integer`)
-    * ``PointRadius`` -- point-cloud dot radius
-    """
-
-    def __init__(self, name='ApollonianGasket', epsilon=0.1, max_level=25,
-                 point_radius=0.02, pole=2j, size=2.5, colors=None,
-                 color_by='first_letter'):
-        self.epsilon = epsilon
-        self.max_level = max_level
-        self.point_radius = point_radius
-        self.pole = pole
-        self.size = size
-        # 'first_letter': colour of the level-1 subtree (four solid regions);
-        # 'last_letter': colour of the terminal letter -- the plotted point is
-        # the image of that letter's fixed point, so a/A and b/B interleave
-        # along the curve
-        self.color_by = color_by
-        # one colour per first letter a, b, A, B -- the colour of the level-1
-        # subtree a point belongs to (matches the tree colouring used in
-        # video_apollonian: gray_2, joker, important, custom1)
-        self.colors = colors or [
-            [0.55, 0.55, 0.55, 1],   # a  (gray)
-            [0.04, 0.62, 0.45, 1],   # b  (green / joker)
-            [0.83, 0.37, 0.04, 1],   # A  (orange / important)
-            [230/255, 10/255, 52/255, 1],   # B  (custom1)
-        ]
-        self._prepare_model()
-        super().__init__(name, automatic_layout=False)
-
-    # ------------------------------------------------------------------
-    #  model preparation (python-side, baked into the node constants)
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _moebius(m, z):
-        return (m[0][0] * z + m[0][1]) / (m[1][0] * z + m[1][1])
-
-    @staticmethod
-    def _circle_image(m, q, r):
-        """image of the circle (q, r) under the Moebius matrix m (det 1)"""
-        cw, dw = m[1][0], m[1][1]
-        z0 = q - r ** 2 / np.conj(dw / cw + q) if cw != 0 else q
-        cen = ApollonianGasketModifier._moebius(m, z0)
-        rad = abs(cen - ApollonianGasketModifier._moebius(m, q + r))
-        return cen, rad
-
-    def _prepare_model(self):
-        # the gasket group of video_apollonian (ApollonianModel): all four
-        # generators are parabolic with det 1
-        a = np.array([[1, 0], [-2j, 1]])
-        b = np.array([[1 - 1j, 1], [1, 1 + 1j]])
-        A = np.array([[1, 0], [2j, 1]])
-        B = np.array([[1 + 1j, -1], [-1, 1 - 1j]])
-        gens0 = [a, b, A, B]
-        fps0 = [0j, -1j, 0j, -1j]
-        circ0 = [(10000j, 10000.0), (1 - 1j, 1.0), (-0.25j, 0.25),
-                 (-1 - 1j, 1.0)]
-
-        # a coarse serial DFS (float64) gives the limit set's bounding box
-        # after the inversion, so S can frame the gasket deterministically
-        T1 = np.array([[0, -1], [1, -self.pole]])
-        pts = []
-
-        def rec(word, t, level):
-            for d in range(3):
-                t2 = (t + d + 3) % 4
-                q, r = circ0[t2]
-                cw, dw = word[1][0], word[1][1]
-                denom = abs(cw * q + dw) ** 2 - abs(cw) ** 2 * r ** 2
-                w2 = word @ gens0[t2]
-                p = self._moebius(w2, fps0[t2])
-                if (denom > 0 and r / denom < 0.05) or level >= 20:
-                    pts.append(self._moebius(T1, p))
-                else:
-                    rec(w2, t2, level + 1)
-
-        for t0 in range(4):
-            pts.append(self._moebius(T1, self._moebius(gens0[t0], fps0[t0])))
-            rec(gens0[t0], t0, 2)
-        pts = np.array(pts)
-
-        cx = (pts.real.min() + pts.real.max()) / 2
-        cy = (pts.imag.min() + pts.imag.max()) / 2
-        half = max(pts.real.max() - pts.real.min(),
-                   pts.imag.max() - pts.imag.min()) / 2
-        alpha = self.size / half
-        beta = -alpha * (cx + 1j * cy)
-        S = np.array([[np.sqrt(alpha), beta / np.sqrt(alpha)],
-                      [0, 1 / np.sqrt(alpha)]])
-        T = S @ T1                                     # det 1
-
-        Ti = np.linalg.inv(T)
-        self.gens = [T @ g @ Ti for g in gens0]        # still det 1
-        self.fixed_points = [self._moebius(T, z) for z in fps0]
-        self.circles = [self._circle_image(T, q, r) for (q, r) in circ0]
-
-    @staticmethod
-    def _embed(m):
-        """complex 2x2 -> columns of the real 4x4 block embedding
-        z -> [[Re, -Im], [Im, Re]] (complex product = real 4x4 product)"""
-        am, bm, cm, dm = m[0][0], m[0][1], m[1][0], m[1][1]
-        return ([am.real, am.imag, cm.real, cm.imag],
-                [-am.imag, am.real, -cm.imag, cm.real],
-                [bm.real, bm.imag, dm.real, dm.imag],
-                [-bm.imag, bm.real, -dm.imag, dm.real])
-
-    # ------------------------------------------------------------------
-    #  the node graph
-    # ------------------------------------------------------------------
-    def create_node(self, tree):
-        links = tree.links
-
-        # ================================================================
-        #  dials
-        # ================================================================
-        dial_frame = Frame(tree, label="dials", name="DialFrame",
-                           location=(-27, 9))
-        eps_in = InputValue(tree, location=(0, 0), value=self.epsilon,
-                            label="Epsilon", parent=dial_frame)
-        level_in = InputInteger(tree, location=(0, -1.5),
-                                integer=self.max_level, label="MaxLevel",
-                                parent=dial_frame)
-        radius_in = InputValue(tree, location=(0, -3),
-                               value=self.point_radius, label="PointRadius",
-                               parent=dial_frame)
-        # the repeat zone runs the levels 2..MaxLevel
-        iterations = MathNode(tree, location=(1.5, -1.5),
-                              operation="SUBTRACT",
-                              inputs0=level_in.std_out, inputs1=1,
-                              label="MaxLevel-1", parent=dial_frame, hide=True)
-
-        # ================================================================
-        #  the four generators, baked as real 4x4 block matrices
-        # ================================================================
-        gen_frame = Frame(
-            tree, label="generators a, b, A, B (complex 2x2 as real 4x4 blocks)",
-            name="GeneratorFrame", location=(-27, 5))
-        gen_mats = []
-        for i, (lbl, g) in enumerate(zip(["a", "b", "A", "B"], self.gens)):
-            c1, c2, c3, c4 = self._embed(g)
-            mat = CombineMatrix(tree, location=(i * 1.2, 0), col1=c1, col2=c2,
-                                col3=c3, col4=c4, label=lbl,
-                                parent=gen_frame, hide=True)
-            gen_mats.append(mat)
-
-        # ================================================================
-        #  letter -> generator / fixed point / Schottky circle
-        #  (the letter attribute is read AFTER its store, i.e. these switches
-        #   always see the letter of the current level)
-        # ================================================================
-        letter_frame = Frame(
-            tree, label="letter -> generator / fixed point / Schottky circle",
-            name="LetterFrame", location=(-27, 0))
-        letter_read = NamedAttribute(tree, location=(0, -1.5), data_type="INT",
-                                     name="letter", label="letter",
-                                     parent=letter_frame, hide=True)
-        gen_switch = IndexSwitch(tree, location=(1.5, 0), data_type="MATRIX",
-                                 index=letter_read.std_out,
-                                 label="g[letter]", parent=letter_frame)
-        gen_switch.new_item()
-        gen_switch.new_item()
-        for i, mat in enumerate(gen_mats):
-            links.new(mat.std_out, gen_switch.node.inputs[i + 1])
-        fp_switch = IndexSwitch(tree, location=(1.5, -2), data_type="VECTOR",
-                                index=letter_read.std_out,
-                                label="fixed point of letter (re, im, 0)",
-                                parent=letter_frame)
-        fp_switch.new_item()
-        fp_switch.new_item()
-        for i, z in enumerate(self.fixed_points):
-            fp_switch.node.inputs[i + 1].default_value = (z.real, z.imag, 0)
-        circle_switch = IndexSwitch(
-            tree, location=(1.5, -4), data_type="VECTOR",
-            index=letter_read.std_out,
-            label="Schottky circle of letter (center re, im, radius)",
-            parent=letter_frame)
-        circle_switch.new_item()
-        circle_switch.new_item()
-        for i, (q, r) in enumerate(self.circles):
-            circle_switch.node.inputs[i + 1].default_value = (q.real, q.imag, r)
-        fp_sep = SeparateXYZ(tree, location=(3, -2), vector=fp_switch.std_out,
-                             parent=letter_frame, hide=True)
-        circle_sep = SeparateXYZ(tree, location=(3, -4),
-                                 vector=circle_switch.std_out,
-                                 parent=letter_frame, hide=True)
-
-        # ================================================================
-        #  level 1: the four one-letter words
-        # ================================================================
-        seed_frame = Frame(tree, label="level 1: the four one-letter words",
-                           name="SeedFrame", location=(-19, 3))
-        seed_index = Index(tree, location=(0, -1.5), parent=seed_frame,
-                           hide=True)
-        seed_points = Points(tree, location=(0, 0), count=4,
-                             radius=radius_in.std_out, parent=seed_frame)
-        store_first = StoredNamedAttribute(
-            tree, location=(1, 0), data_type="INT", name="first_letter",
-            value=seed_index.std_out, label="first letter = branch colour",
-            parent=seed_frame, hide=True)
-        seed_letter = StoredNamedAttribute(
-            tree, location=(2, 0), data_type="INT", name="letter",
-            value=seed_index.std_out, label="letter <- index",
-            parent=seed_frame, hide=True)
-        seed_word = StoredNamedAttribute(
-            tree, location=(3, 0), data_type="FLOAT4X4", name="word",
-            value=gen_switch.std_out, label="word <- g[letter]",
-            parent=seed_frame, hide=True)
-        seed_done = StoredNamedAttribute(
-            tree, location=(4, 0), data_type="BOOLEAN", name="done",
-            value=False, label="done <- false", parent=seed_frame, hide=True)
-        # g fixes its own fixed point, so the level-1 point is the fixed
-        # point itself, drawn in the x-z plane
-        fp_world = CombineXYZ(tree, location=(4, -1.5), x=fp_sep.x, y=0,
-                              z=fp_sep.y, label="fixed point in x-z plane",
-                              parent=seed_frame, hide=True)
-        seed_pos = SetPosition(tree, location=(5, 0),
-                               position=fp_world.std_out, parent=seed_frame,
-                               hide=True)
-
-        # ================================================================
-        #  levels 2..MaxLevel: one tree level per iteration
-        # ================================================================
-        loop_frame = Frame(
-            tree, label="levels 2..MaxLevel: grow the DFS tree, one level per iteration",
-            name="LoopFrame", location=(-11.5, 4))
-        repeat = RepeatZone(tree, location=(-11.5, 2), node_width=15,
-                            iterations=iterations.std_out)
-        loop_frame.add(repeat)
-
-        # -- spawn: 3 children per open branch, 1 copy per finished one ----
-        spawn_frame = Frame(
-            tree, label="spawn: 3 children per open branch",
-            name="SpawnFrame", location=(-10.8, -0.5))
-        done_read = NamedAttribute(tree, location=(0, 0), data_type="BOOLEAN",
-                                   name="done", label="done",
-                                   parent=spawn_frame, hide=True)
-        child_count = make_function(
-            tree, functions={"amount": "3,done,2,*,-"}, inputs=["done"],
-            outputs=["amount"], booleans=["done"], integers=["amount"],
-            name="ChildCount", location=(1, 0), parent=spawn_frame)
-        child_count.label = "3 - 2 done"
-        links.new(done_read.std_out, child_count.inputs["done"])
-        dup = DuplicateElements(tree, location=(0.3, 2.5), domain="POINT",
-                                amount=child_count.outputs["amount"],
-                                parent=spawn_frame, hide=True)
-        store_digit = StoredNamedAttribute(
-            tree, location=(1.6, 2.5), data_type="INT", name="digit",
-            value=dup.duplicate_index, label="digit <- duplicate index",
-            parent=spawn_frame, hide=True)
-
-        # -- the child's letter: (letter + digit - 1) mod 4 ----------------
-        advance_frame = Frame(
-            tree, label="child letter: (letter + digit - 1) mod 4 -- skips the inverse",
-            name="AdvanceFrame", location=(-8.6, -1.5))
-        parent_letter = NamedAttribute(tree, location=(0, 0), data_type="INT",
-                                       name="letter", label="parent letter",
-                                       parent=advance_frame, hide=True)
-        digit_read = NamedAttribute(tree, location=(0, -1), data_type="INT",
-                                    name="digit", label="digit",
-                                    parent=advance_frame, hide=True)
-        next_letter = make_function(
-            tree, functions={"t2": "t,d,+,3,+,4,%"}, inputs=["t", "d"],
-            outputs=["t2"], integers=["t", "d", "t2"], name="NextLetter",
-            location=(1, -0.5), parent=advance_frame)
-        next_letter.label = "(t + d + 3) mod 4"
-        links.new(parent_letter.std_out, next_letter.inputs["t"])
-        links.new(digit_read.std_out, next_letter.inputs["d"])
-        letter_switch = Switch(tree, location=(2, -0.5), input_type="INT",
-                               switch=done_read.std_out,
-                               false=next_letter.outputs["t2"],
-                               true=parent_letter.std_out,
-                               label="frozen: keep letter",
-                               parent=advance_frame, hide=True)
-        store_letter = StoredNamedAttribute(
-            tree, location=(0.7, 3.5), data_type="INT", name="letter",
-            value=letter_switch.std_out, label="letter <- child letter",
-            parent=advance_frame, hide=True)
-
-        # -- termination: parent-word image of the child's circle ----------
-        term_frame = Frame(
-            tree,
-            label="branch termination: image disc of child circle under the PARENT word, radius < epsilon",
-            name="TerminationFrame", location=(-7.0, -3.5))
-        parent_word = NamedAttribute(tree, location=(0, 0),
-                                     data_type="FLOAT4X4", name="word",
-                                     label="parent word",
-                                     parent=term_frame, hide=True)
-        parent_sep = SeparateMatrix(tree, location=(1, 0),
-                                    matrix=parent_word.std_out,
-                                    label="c, d of parent word",
-                                    parent=term_frame, hide=True)
-        # u = c q + d ; denom = |u|^2 - |c|^2 r^2 ; the image disc keeps
-        # infinity outside iff denom > 0, and its radius is r / denom
-        termination = make_function(
-            tree, functions={"stop": "dn,0,>,r,eps,dn,*,<,*"},
-            aux_functions={
-                "ur": "cr,qx,*,ci,qy,*,-,dr,+",
-                "ui": "cr,qy,*,ci,qx,*,+,di,+",
-                "dn": "ur,ur,*,ui,ui,*,+,cr,cr,*,ci,ci,*,+,r,r,*,*,-",
-            },
-            inputs=["cr", "ci", "dr", "di", "qx", "qy", "r", "eps"],
-            outputs=["stop"],
-            scalars=["cr", "ci", "dr", "di", "qx", "qy", "r", "eps",
-                     "ur", "ui", "dn", "stop"],
-            name="BranchTermination", location=(2.2, 0), parent=term_frame)
-        termination.label = "r/denom < epsilon ?"
-        links.new(parent_sep.entry(1, 3), termination.inputs["cr"])
-        links.new(parent_sep.entry(1, 4), termination.inputs["ci"])
-        links.new(parent_sep.entry(3, 3), termination.inputs["dr"])
-        links.new(parent_sep.entry(3, 4), termination.inputs["di"])
-        links.new(circle_sep.x, termination.inputs["qx"])
-        links.new(circle_sep.y, termination.inputs["qy"])
-        links.new(circle_sep.z, termination.inputs["r"])
-        links.new(eps_in.std_out, termination.inputs["eps"])
-        store_stop = StoredNamedAttribute(
-            tree, location=(0.4, 5.5), data_type="BOOLEAN", name="stop",
-            value=termination.outputs["stop"],
-            label="stop <- disc small enough", parent=term_frame, hide=True)
-
-        # -- extend the word: word <- word . g[letter] ---------------------
-        word_frame = Frame(tree, label="extend the word: word . g[letter]",
-                           name="WordFrame", location=(-5.8, -2.2))
-        extend = MultiplyMatrices(tree, location=(0, 0),
-                                  matrix1=parent_word.std_out,
-                                  matrix2=gen_switch.std_out,
-                                  label="word . g", parent=word_frame,
-                                  hide=True)
-        word_switch = Switch(tree, location=(1, 0), input_type="MATRIX",
-                             switch=done_read.std_out, false=extend.std_out,
-                             true=parent_word.std_out,
-                             label="frozen: keep word", parent=word_frame,
-                             hide=True)
-        store_word = StoredNamedAttribute(
-            tree, location=(0.5, 4.2), data_type="FLOAT4X4", name="word",
-            value=word_switch.std_out, label="word <- extended word",
-            parent=word_frame, hide=True)
-
-        # -- place the point: p = word(fixed point of letter) --------------
-        place_frame = Frame(
-            tree,
-            label="place the point: p = (a z + b)/(c z + d), z the fixed point of the letter",
-            name="PlaceFrame", location=(-4.6, -1.2))
-        # NOTE: read the word attribute anew -- downstream of its store this
-        # yields the extended word (re-using the switch field here would
-        # multiply a second time)
-        new_word = NamedAttribute(tree, location=(0, 0), data_type="FLOAT4X4",
-                                  name="word", label="extended word",
-                                  parent=place_frame, hide=True)
-        new_sep = SeparateMatrix(tree, location=(0.8, 0),
-                                 matrix=new_word.std_out,
-                                 label="a, b, c, d of the word",
-                                 parent=place_frame, hide=True)
-        moebius = make_function(
-            tree,
-            functions={"p": ["nr,er,*,ni,ei,*,+,dn,/",
-                             "0",
-                             "ni,er,*,nr,ei,*,-,dn,/"]},
-            aux_functions={
-                "nr": "ar,zr,*,ai,zi,*,-,br,+",
-                "ni": "ar,zi,*,ai,zr,*,+,bi,+",
-                "er": "cr,zr,*,ci,zi,*,-,dr,+",
-                "ei": "cr,zi,*,ci,zr,*,+,di,+",
-                "dn": "er,er,*,ei,ei,*,+",
-            },
-            inputs=["ar", "ai", "br", "bi", "cr", "ci", "dr", "di",
-                    "zr", "zi"],
-            outputs=["p"],
-            scalars=["ar", "ai", "br", "bi", "cr", "ci", "dr", "di",
-                     "zr", "zi", "nr", "ni", "er", "ei", "dn"],
-            vectors=["p"],
-            name="MoebiusOnFixedPoint", location=(1.8, -0.5),
-            parent=place_frame)
-        moebius.label = "p = (a z + b)/(c z + d) in x-z plane"
-        links.new(new_sep.entry(1, 1), moebius.inputs["ar"])
-        links.new(new_sep.entry(1, 2), moebius.inputs["ai"])
-        links.new(new_sep.entry(3, 1), moebius.inputs["br"])
-        links.new(new_sep.entry(3, 2), moebius.inputs["bi"])
-        links.new(new_sep.entry(1, 3), moebius.inputs["cr"])
-        links.new(new_sep.entry(1, 4), moebius.inputs["ci"])
-        links.new(new_sep.entry(3, 3), moebius.inputs["dr"])
-        links.new(new_sep.entry(3, 4), moebius.inputs["di"])
-        links.new(fp_sep.x, moebius.inputs["zr"])
-        links.new(fp_sep.y, moebius.inputs["zi"])
-        current_pos = Position(tree, location=(1.8, 0.7), parent=place_frame,
-                               hide=True)
-        pos_switch = Switch(tree, location=(2.8, 0), input_type="VECTOR",
-                            switch=done_read.std_out,
-                            false=moebius.outputs["p"],
-                            true=current_pos.std_out,
-                            label="frozen: keep position",
-                            parent=place_frame, hide=True)
-        set_pos = SetPosition(tree, location=(0.6, 3.2),
-                              position=pos_switch.std_out,
-                              parent=place_frame, hide=True)
-
-        # -- freeze finished branches --------------------------------------
-        freeze_frame = Frame(tree, label="freeze: done <- done or stop",
-                             name="FreezeFrame", location=(-3.0, -0.3))
-        stop_read = NamedAttribute(tree, location=(0, 0), data_type="BOOLEAN",
-                                   name="stop", label="stop",
-                                   parent=freeze_frame, hide=True)
-        done_or_stop = BooleanMath(tree, location=(1, 0), operation="OR",
-                                   inputs0=done_read.std_out,
-                                   inputs1=stop_read.std_out,
-                                   label="done or stop", parent=freeze_frame,
-                                   hide=True)
-        store_done = StoredNamedAttribute(
-            tree, location=(0.3, 2.3), data_type="BOOLEAN", name="done",
-            value=done_or_stop.std_out, label="done <- done or stop",
-            parent=freeze_frame, hide=True)
-
-        repeat.create_geometry_line([dup, store_digit, store_letter,
-                                     store_stop, store_word, set_pos,
-                                     store_done])
-
-        # ================================================================
-        #  colour by first/last letter & output
-        # ================================================================
-        # 'letter' always holds the LAST letter of the word: it is advanced
-        # per level while the branch is open and frozen once done
-        color_attr = ('letter' if self.color_by in ('letter', 'last_letter')
-                      else 'first_letter')
-        color_mat = gradient_from_attribute(
-            name="ApollonianLetterColor", attr_name=color_attr,
-            function="fac,3,/",
-            gradient={i / 3: self.colors[i] for i in range(4)})
-        _bsdf = color_mat.node_tree.nodes.get("Principled BSDF")
-        if _bsdf is not None and "Emission Strength" in _bsdf.inputs:
-            _bsdf.inputs["Emission Strength"].default_value = 2.0
-
-        out_frame = Frame(tree, label="colour by " + color_attr,
-                          name="OutFrame", location=(5, 2))
-        set_material = SetMaterial(tree, location=(0, 0), material=color_mat,
-                                   parent=out_frame)
-
-        create_geometry_line(tree, [seed_points, store_first, seed_letter,
-                                    seed_word, seed_done, seed_pos])
-        links.new(seed_pos.geometry_out, repeat.geometry_in)
-        links.new(repeat.geometry_out, set_material.geometry_in)
-        links.new(set_material.geometry_out,
-                  self.group_outputs.inputs['Geometry'])
-        self.group_outputs.location = (7 * 200, 2 * 100)
-
-
 # Penrose videos
 class Penrose2DIntro(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
         super().__init__(name)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         # parameters
         angle = InputValue(tree, value=pi / 2, name="Angle")
         lattice_thickness = InputValue(tree, value=0.1, name="Thickness")
@@ -2129,7 +1210,7 @@ class Penrose2DVoronoi(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
         super().__init__(name)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         # parameters
         angle = InputValue(tree, value=pi / 2, name="Angle")
         lattice_thickness = InputValue(tree, value=0, name="Thickness")
@@ -2357,7 +1438,7 @@ class Penrose2D(GeometryNodesModifier):
     def __init__(self, name='Penrose2D'):
         super().__init__(name)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         # parameters
         angle = InputValue(tree, value=0, name="angle")
         offset = InputVector(tree, value=Vector([0.2, 0.2, 0]), name='Offset')
@@ -2526,7 +1607,7 @@ class ConvexHull2D(GeometryNodesModifier):
         self.size = size
         super().__init__(name)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         # parameters
         size = self.size
 
@@ -2732,7 +1813,7 @@ class SphericalHarmonicsNode(GeometryNodesModifier):
         self.kwargs = kwargs
         super().__init__(name)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         # recalculate position of vertices
         position = Position(tree, location=(-6, 0))
         lmbda = InputValue(tree, name='lambda', location=(-6, 1))
@@ -2825,7 +1906,7 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         self.kwargs = kwargs
         super().__init__(name, automatic_layout=False)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
 
         # create colorful wireframe of sphere
         left = -20
@@ -3049,7 +2130,7 @@ class NodeFromCollection(GeometryNodesModifier):
 
         super().__init__(name, automatic_layout=True)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         out = tree.nodes.get("Group Output")
         links = tree.links
 
@@ -3074,7 +2155,7 @@ class SliderModifier(GeometryNodesModifier):
         self.label_position = Vector()
         super().__init__(name, group_input=False, automatic_layout=False)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         out = self.group_outputs
         links = tree.links
 
@@ -3211,8 +2292,8 @@ class NumberLineModifier(GeometryNodesModifier):
         direction = get_from_kwargs(kwargs, 'direction', 'HORIZONTAL')
         axis_label = get_from_kwargs(kwargs, 'axis_label', "x")
         axis_label_location = get_from_kwargs(kwargs, 'axis_label_location', 'AUTO')
-        label_rotation = get_from_kwargs(kwargs,"label_rotation",[pi/2,0,0])
-        include_zero = get_from_kwargs(kwargs,"include_zero",[True])
+        label_rotation = get_from_kwargs(kwargs, "label_rotation", [pi / 2, 0, 0])
+        include_zero = get_from_kwargs(kwargs, "include_zero", [True])
 
         if direction == "VERTICAL":
             global_rotation = Vector()
@@ -7218,7 +6299,6 @@ class SimpleFunctionModifier(GeometryNodesModifier):
                              ins=input.outputs[0])
 
 
-
 # Polytope videos
 
 class CustomUnfoldModifier(GeometryNodesModifier):
@@ -8537,6 +7617,7 @@ def _ensure_sub_group(name, xml_filename):
     create_from_xml(tree, xml_filename, unpublished=True)
     return tree
 
+
 # this is an example where node groups are contained inside node setups
 # the node groups are created first from xml and then they can be used inside higher level node-groups
 
@@ -8579,6 +7660,4271 @@ class Show120MatricesModifier(GeometryNodesModifier):
 ###################################################################
 
 
+# Hat tiling stuff
+r3 = math.sqrt(3)
+
+custom_ops = {
+    "ifv": {
+        "type": Switch,
+        "class_kwargs": {"input_type": "VECTOR"},
+        "inputs": ("True", "False", "Switch"),
+        "output": "Output",
+        "label": "ifv",
+    },
+    "iff": {
+        "type": Switch,
+        "class_kwargs": {"input_type": "FLOAT"},
+        "inputs": ("True", "False", "Switch"),
+        "output": "Output",
+        "label": "iff",
+    },
+    "ifi": {
+        "type": Switch,
+        "class_kwargs": {"input_type": "INT"},
+        "inputs": ("True", "False", "Switch"),
+        "output": "Output",
+        "label": "ifi",
+    },
+}
+
+
+class HexagonalTilingModifier(GeometryNodesModifier):
+    """
+    Hexagonal point lattice generator.
+
+    Mirrors the explicit node layout in
+    ``video_spacegroups/hexagonal_tiling.xml``: a stochastic IFS that
+    starts from a single seed point and, on each of ``iterations``
+    repeats, picks a random transformation (one of the three matrices
+    A, B, C or the reflection A') for every existing point and adds the
+    transformed copy to the geometry.  After the repeat zone, points are
+    merged by distance to fold coincident copies into a clean hexagonal
+    point lattice.
+
+    When ``with_edges=True`` an additional subgraph is appended that
+    extrudes mesh edges between every pair of neighbouring lattice
+    vertices (see :meth:`_build_edge_subgraph` for the algorithm).
+
+    Node positions are taken straight from the XML file (no automatic
+    layout, no ``create_from_xml``).
+    """
+
+    NH = 200  # node-height multiplier matching the XML coordinate convention
+
+    def __init__(self, name="HexagonalTiling", iterations=40,
+                 merge_distance=0.201,
+                 with_edges=False,
+                 edge_length=0.5,
+                 edge_tolerance=0.05,
+                 with_faces=False,
+                 face_height=0.0,
+                 **kwargs):
+        self.iterations = iterations
+        self.merge_distance = merge_distance
+        self.with_edges = with_edges
+        self.edge_length = edge_length
+        self.edge_tolerance = edge_tolerance
+        self.with_faces = with_faces
+        self.face_height = face_height
+        super().__init__(name=name, automatic_layout=False, **kwargs)
+
+    def _place(self, node, x, y):
+        node.location = (x * 200, y * self.NH)
+
+    def create_node(self, tree, **kwargs):
+        nh = self.NH
+        out = self.group_outputs
+        out.location = (20.2 * 200, 6.3 * nh)
+        links = tree.links
+
+        colors = get_from_kwargs(kwargs, "colors", ["joker", "custom1"])
+        dot_size = get_from_kwargs(kwargs, "dot_size", 0.1)
+        # ----- scalar pre-computations -----
+        sqrt3 = MathNode(tree, location=(-6.8, 0.7), operation="SQRT",
+                         inputs0=3.0, node_height=nh)
+        half_sqrt3 = MathNode(tree, location=(-5.8, 1.1), operation="MULTIPLY",
+                              inputs0=sqrt3.std_out, inputs1=0.5,
+                              node_height=nh)
+        neg_half_sqrt3 = MathNode(tree, location=(-5.0, 1.2), operation="MULTIPLY",
+                                  inputs0=half_sqrt3.std_out, inputs1=-1.0,
+                                  node_height=nh)
+
+        # ----- transformation matrices -----
+        mat_A = CombineMatrix(tree, location=(-2.4, -0.4), label="A", hide=True,
+                              col1=[1.0, 0.0, 0.0, 0.0],
+                              col2=[0.0, -1.0, 0.0, 0.0],
+                              col3=[0.0, 0.0, 1.0, 0.0],
+                              col4=[0.0, 0.0, 0.0, 1.0],
+                              node_height=nh)
+        mat_Ap = CombineMatrix(tree, location=(-2.3, -1.4), label="A'", hide=True,
+                               col1=[-1.0, 0.0, 0.0, 0.0],
+                               col2=[0.0, 1.0, 0.0, 0.0],
+                               col3=[0.0, 0.0, 1.0, 0.0],
+                               col4=[0.0, 0.0, 0.0, 1.0],
+                               node_height=nh)
+        mat_B = CombineMatrix(tree, location=(-2.4, 0.4), label="B", hide=True,
+                              col1=[0.5, neg_half_sqrt3.std_out, 0.0, 0.0],
+                              col2=[neg_half_sqrt3.std_out, -0.5, 0.0, 0.0],
+                              col3=[0.0, 0.0, 1.0, 0.0],
+                              col4=[0.0, 0.0, 0.0, 1.0],
+                              node_height=nh)
+        mat_C = CombineMatrix(tree, location=(-2.3, -2.3), label="C", hide=True,
+                              col1=[1.0, 0.0, 0.0, 0.0],
+                              col2=[0.0, 1.0, 0.0, 0.0],
+                              col3=[half_sqrt3.std_out, 0.0, 1.0, 0.0],
+                              col4=[0.0, 0.0, 0.0, 1.0],
+                              node_height=nh)
+
+        # ----- seed point -----
+        seed_xyz = CombineXYZ(tree, location=(-3.4, 5.8),
+                              x=half_sqrt3.std_out, y=-0.5, z=1.0,
+                              label="Seed", node_height=nh)
+        # Scene Time present in the XML for parity (drives nothing, but we keep it).
+        SceneTime(tree, location=(-3.4, 4.5), node_height=nh)
+        seed_points = Points(tree, location=(-1.7, 3.8),
+                             count=1, position=seed_xyz.std_out, radius=0.1,
+                             node_height=nh)
+
+        # ----- repeat zone -----
+        repeat = RepeatZone(tree, location=(-0.1, 7.1),
+                            iterations=self.iterations,
+                            geometry=seed_points.geometry_out,
+                            node_height=nh)
+        # RepeatZone's constructor places the output node based on a hard-coded
+        # multiplier; reposition both ends to match the XML coordinates exactly.
+        self._place(repeat.repeat_input, -0.1, 7.1)
+        self._place(repeat.repeat_output, 14.6, 6.9)
+
+        # ----- for-each zone (iterates every existing point) -----
+        foreach = ForEachZone(tree, location=(1.8, 7.2), domain="POINT",
+                              geometry=repeat.repeat_input.outputs["Geometry"],
+                              node_height=nh)
+        self._place(foreach.foreach_input, 1.8, 7.2)
+        self._place(foreach.foreach_output, 10.7, 7.0)
+
+        # Random index 0..3 selects one of the four matrices.
+        seed_sum = MathNode(tree, location=(3.2, 5.8), operation="ADD",
+                            inputs0=foreach.index,
+                            inputs1=repeat.iteration,
+                            node_height=nh)
+        rnd = RandomValue(tree, location=(4.1, 5.9), data_type="INT",
+                          probability=None,
+                          seed=seed_sum.std_out,
+                          node_height=nh)
+        # min / max for INT random.
+        rnd.node.inputs[4].default_value = 0
+        rnd.node.inputs[5].default_value = 3
+
+        # Sample the position of the current foreach element (it has exactly one point).
+        pos_inside = Position(tree, location=(3.9, 6.5), node_height=nh)
+        sample_pos = SampleIndex(tree, location=(5.4, 6.5),
+                                 data_type="FLOAT_VECTOR", domain="POINT",
+                                 geometry=foreach.element,
+                                 value=pos_inside.std_out,
+                                 index=0,
+                                 node_height=nh)
+
+        # Index switch over the four matrices, selected by the random integer.
+        switch = IndexSwitch(tree, location=(5.8, 5.5), data_type="MATRIX",
+                             index=rnd.std_out, node_height=nh)
+        # IndexSwitch starts with two slots; add two more so we have 4 total.
+        switch.new_item()
+        switch.new_item()
+        # Slots are inputs[1..4]; slot index in XML is 0..3.
+        links.new(mat_A.std_out, switch.node.inputs[1])
+        links.new(mat_B.std_out, switch.node.inputs[2])
+        links.new(mat_C.std_out, switch.node.inputs[3])
+        links.new(mat_Ap.std_out, switch.node.inputs[4])
+
+        transform = TransformPoint(tree, location=(7.0, 6.1),
+                                   vector=sample_pos.std_out,
+                                   transform=switch.std_out,
+                                   node_height=nh)
+
+        new_point = Points(tree, location=(8.3, 6.5),
+                           count=1, position=transform.std_out, radius=0.1,
+                           node_height=nh)
+
+        join = JoinGeometry(tree, location=(9.8, 6.7),
+                            geometry=[new_point.geometry_out, foreach.element],
+                            node_height=nh)
+        links.new(join.geometry_out, foreach.foreach_output.inputs["Geometry"])
+
+        # Foreach generated geometry → repeat output Geometry (closes the inner loop)
+        # via the cleanup chain below.
+        p2v_inside = PointsToVertices(tree, location=(11.8, 6.9),
+                                      points=foreach.geometry_out,
+                                      node_height=nh)
+        merge = MergeByDistance(tree, location=(12.7, 6.9),
+                                geometry=p2v_inside.geometry_out,
+                                distance=self.merge_distance,
+                                node_height=nh)
+        m2p = MeshToPoints(tree, location=(13.7, 6.9),
+                           mesh=merge.geometry_out, node_height=nh)
+        links.new(m2p.geometry_out, repeat.repeat_output.inputs["Geometry"])
+
+        # ----- final conversion to vertices -----
+        p2v_out = PointsToVertices(tree, location=(15.6, 6.8),
+                                   points=repeat.geometry_out,
+                                   node_height=nh)
+
+        last_geometry = p2v_out.geometry_out
+
+        # ----- optional edge-extrusion subgraph -----
+        if self.with_edges:
+            last_geometry, last_geometry_node = self._build_edge_subgraph(
+                tree, points_geometry=last_geometry,
+                edge_length=self.edge_length, tolerance=self.edge_tolerance)
+
+        # ----- optional face-extrude subgraph -----
+        if self.with_faces:
+            last_geometry, last_geometry_node = self._build_face_subgraph(
+                tree, points_geometry=p2v_out.geometry_out,
+                edges_geometry=last_geometry if self.with_edges else None,
+                edge_length=self.edge_length,
+                face_height=self.face_height)
+
+        # --- Dot instances at vertices ---
+        dot_radius = InputValue(tree, value=dot_size, name='DotRadius')
+        sphere = IcoSphere(
+            tree,
+            radius=dot_radius.std_out,
+            subdivisions=1,
+            name='Ico Sphere',
+            hide=True
+        )
+        iop = InstanceOnPoints(
+            tree,
+            instance=sphere.geometry_out,
+            name='Instance on Points',
+            hide=True
+        )
+
+        # Wireframe all edges (diagonal_edges already contains the full sheared grid),
+        # then join with dot instances and apply joker material.
+        thickness = InputValue(tree, value=0.018, name='EdgeThickness')
+        edge_tubes = WireFrame(
+            tree,
+            radius=thickness.std_out,
+            resolution=4,
+            name='WireframeNode', hide=True
+        )
+        mat = get_texture(colors[0])
+        self.materials.append(mat)
+        mat_dot = SetMaterial(
+            tree,
+            material=mat,
+            name='MaterialVertices'
+        )
+
+        mat2 = get_texture(colors[1])
+        self.materials.append(mat2)
+        mat_edges = SetMaterial(
+            tree,
+            material=mat2,
+            name='MaterialEdges'
+        )
+
+        joined_wire_dot = JoinGeometry(
+            tree,
+            name='Join Geometry'
+        )
+
+        create_geometry_line(tree, [last_geometry_node, iop, mat_dot, joined_wire_dot])
+        create_geometry_line(tree, [last_geometry_node, edge_tubes, mat_edges, joined_wire_dot],
+                             out=out.inputs["Geometry"])
+
+    def _build_edge_subgraph(self, tree, points_geometry,
+                             edge_length, tolerance):
+        """
+        Append a subgraph that adds mesh edges between every pair of
+        neighbouring vertices in ``points_geometry``.
+
+        Algorithm
+        ---------
+        For each vertex ``P_i`` (iterated by a ``ForEachZone`` over the
+        POINT domain) and each of the six hexagonal-lattice unit vectors
+        ``e_k`` (k=0..5, angles 30°,90°,...,330°):
+
+          candidate = P_i + edge_length * e_k
+          P_j, gap  = GeometryProximity(target=points,
+                                         sample_position=candidate)
+          matched   = (gap < tolerance)
+
+        If ``matched``, a 2-vertex ``MeshLine`` is emitted from ``P_i``
+        to ``P_j``; otherwise an empty geometry is contributed.  Each
+        edge gets emitted from both endpoints (the candidate at the
+        opposite endpoint, in the antipodal direction, also matches), so
+        the final ``MergeByDistance`` snaps the duplicated endpoints
+        together and folds the two collinear copies into one mesh edge.
+
+        Returns the geometry socket of the final ``MergeByDistance``.
+        """
+        nh = self.NH
+        links = tree.links
+        x0 = 17.0  # horizontal anchor for the edge-builder column
+
+        # ForEach zone over the input point cloud.
+        edge_for = ForEachZone(tree, location=(x0, -2.0), domain="POINT",
+                               geometry=points_geometry, node_height=nh)
+        self._place(edge_for.foreach_input, x0, -2.0)
+        self._place(edge_for.foreach_output, x0 + 10.0, -2.0)
+
+        # Position of the current foreach element (a single-vertex geometry).
+        cur_pos_field = Position(tree, location=(x0 + 1.0, -1.0), node_height=nh)
+        cur_pos = SampleIndex(tree, location=(x0 + 2.0, -1.0),
+                              data_type="FLOAT_VECTOR", domain="POINT",
+                              geometry=edge_for.element,
+                              value=cur_pos_field.std_out, index=0,
+                              node_height=nh)
+
+        # Six hex-lattice unit directions (30°, 90°, ..., 330°).
+        directions = [[0.3, 0, 0], [0, -0.3, 0]]
+
+        branch_outputs = []
+        for k, dxyz in enumerate(directions):
+            row = -3.0 - 1.6 * k
+            offset = InputVector(
+                tree, location=(x0 + 0.5, row),
+                value=Vector([d * edge_length for d in dxyz]),
+                label=f"e{k}", hide=True, node_height=nh)
+
+            candidate = VectorMath(tree, location=(x0 + 1.5, row),
+                                   operation="ADD",
+                                   inputs0=cur_pos.std_out,
+                                   inputs1=offset.std_out,
+                                   hide=True, node_height=nh)
+
+            prox = GeometryProximity(tree, location=(x0 + 2.7, row),
+                                     target_element='POINTS',
+                                     geometry=points_geometry,
+                                     sample_position=candidate.std_out,
+                                     hide=True, node_height=nh)
+
+            close_enough = CompareNode(tree, location=(x0 + 4.0, row),
+                                       data_type="FLOAT", operation="GREATER_THAN",
+                                       inputs0=prox.distance,
+                                       inputs1=tolerance,
+                                       hide=True, node_height=nh)
+
+            edge = MeshLine(tree, location=(x0 + 5.0, row),
+                            mode="END_POINTS", count_mode="TOTAL", count=2,
+                            start_location=cur_pos.std_out,
+                            end_location=prox.std_out,
+                            hide=True, node_height=nh)
+
+            gate = Switch(tree, location=(x0 + 6.0, row),
+                          input_type="GEOMETRY",
+                          switch=close_enough.std_out,
+                          true=edge.geometry_out,
+                          hide=True, node_height=nh)
+            branch_outputs.append(gate.std_out)
+
+        # Merge the six per-direction edge candidates inside the foreach.
+        per_point_join = JoinGeometry(tree, location=(x0 + 7.0, -2.0),
+                                      geometry=branch_outputs, node_height=nh)
+        links.new(per_point_join.geometry_out,
+                  edge_for.foreach_output.inputs["Geometry"])
+
+        # Outside the foreach: combine original points with all collected edges
+        # and snap duplicated edge endpoints back onto the lattice vertices.
+        all_edges = edge_for.geometry_out
+        combined = JoinGeometry(tree, location=(x0 + 11.0, 0.0),
+                                geometry=[points_geometry, all_edges],
+                                node_height=nh)
+        cleaned = MergeByDistance(tree, location=(x0 + 12.0, 0.0),
+                                  geometry=combined.geometry_out,
+                                  distance=tolerance,
+                                  node_height=nh)
+        return cleaned.geometry_out, cleaned
+
+    def _build_face_subgraph(self, tree, points_geometry, edges_geometry,
+                             edge_length, face_height):
+        """
+        Append a subgraph that fills hexagonal faces over the lattice and
+        optionally extrudes them along Z.
+
+        The lattice produced by the IFS is the triangular lattice with
+        unit edges of length ``edge_length`` running in directions
+        ±30°, ±90°, ±150°.  Its dual (and the natural "hexagonal tiling"
+        interpretation) places one regular hexagonal cell at each
+        lattice vertex, with hexagon vertices at the midpoints of the
+        triangular-lattice edges.
+
+        For two adjacent hex cells (centres ``edge_length`` apart) to
+        share an edge, the apothem must equal ``edge_length / 2``, hence
+        circumradius ``r = edge_length / sqrt(3)``.  The triangular
+        lattice produced by the IFS has edges along directions
+        ±30°, ±90°, ±150°, which match the 6 center-to-center
+        directions of a *flat-top* hex tiling (vertices at
+        0°+60°k = the ``MeshCircle`` default), so no extra rotation is
+        applied to the prototype hex.
+
+        Construction:
+          1. ``MeshCircle(vertices=6, radius=r, fill=NGON)`` → one hex.
+          2. ``InstanceOnPoints`` over the lattice with that hex.
+          3. ``RealizeInstances`` to expose vertices.
+          4. ``MergeByDistance`` to weld coincident vertices from
+             adjacent hexes into a single tiled mesh.
+          5. If ``face_height > 0``, ``ExtrudeMesh`` (mode=FACES,
+             offset_scale=face_height) along the face normals to give
+             the tiles thickness; the final geometry includes the
+             extruded prisms plus, if requested, the original edge
+             geometry joined in.
+        """
+        nh = self.NH
+        links = tree.links
+        x0 = 30.0
+        r = edge_length / math.sqrt(3.0)
+
+        hex_proto = MeshCircle(tree, location=(x0, -10.0),
+                               vertices=6, radius=r, fill_type='NGON',
+                               node_height=nh)
+
+        instances = InstanceOnPoints(tree, location=(x0 + 1.5, -10.0),
+                                     points=points_geometry,
+                                     instance=hex_proto.geometry_out,
+                                     node_height=nh)
+
+        realized = RealizeInstances(tree, location=(x0 + 2.7, -10.0),
+                                    node_height=nh)
+        links.new(instances.geometry_out, realized.geometry_in)
+
+        welded = MergeByDistance(tree, location=(x0 + 3.7, -10.0),
+                                 geometry=realized.geometry_out,
+                                 distance=edge_length * 0.1,
+                                 node_height=nh)
+
+        face_geo = welded.geometry_out
+
+        if face_height and face_height != 0.0:
+            extrude = ExtrudeMesh(tree, location=(x0 + 4.7, -10.0),
+                                  mode='FACES',
+                                  offset_scale=face_height,
+                                  offset=None,
+                                  node_height=nh)
+            links.new(face_geo, extrude.geometry_in)
+            face_geo = extrude.geometry_out
+
+        if edges_geometry is not None:
+            joined = JoinGeometry(tree, location=(x0 + 6.0, -10.0),
+                                  geometry=[edges_geometry, face_geo],
+                                  node_height=nh)
+            face_geo = joined.geometry_out
+
+        return face_geo, joined
+
+
+class TriangularGridModifier(GeometryNodesModifier):
+    """Triangular lattice: dots at vertices + tube edges.
+
+    The modifier follows the node structure from data/grid.xml:
+
+    1. Build a square grid.
+    2. Shear it to the triangular lattice:
+           (x, y) -> (x + y/2, y*sqrt(3)/2)
+    3. Keep the sheared grid's existing horizontal/vertical edges.
+    4. Add the missing third triangular-lattice edge family by sampling the
+       nearest shifted neighbor and extruding each vertex toward it.
+    5. Wireframe all edge geometry and instance dots on the sheared vertices.
+    """
+
+    def __init__(self, grid_n=8, **kwargs):
+        self.grid_n = grid_n
+        super().__init__('TriangularGridModifier',
+                         automatic_layout=False, **kwargs)
+
+    def _generate_grid(self, tree, colors, grid_size=10, location=(0, 0), **kwargs):
+        (x, y) = location
+        links = tree.links
+
+        edge_thickness = get_from_kwargs(kwargs, "edge_thickness", 0.018)
+        dot_size = get_from_kwargs(kwargs, "dot_size", 0.1)
+        thickness = InputValue(tree, location=(x + 1, y + 2.5), value=edge_thickness, name='EdgeThickness', hide=True)
+        dot_radius = InputValue(tree, location=(x + 1, y + 3), value=dot_size, name='DotRadius', hide=True)
+        grid_size_node = InputInteger(tree, location=(x + 1, y + 2), integer=grid_size, name='GridSize', hide=True)
+        mat1 = get_texture(colors[0], **kwargs)
+        vertex_material = InputMaterial(tree, location=(x + 1, y + 2.5), material=mat1, name='DotMaterial', hide=True)
+
+        mat2 = get_texture(colors[1], **kwargs)
+        edge_material = InputMaterial(tree, location=(x + 1, y + 3), material=mat2, name='EdgeMaterial', hide=True)
+
+        self.materials.append(mat1)
+        self.materials.append(mat2)
+
+        plus_one = MathNode(
+            tree, location=(x + 2, y + 1.5), operation='ADD',
+            inputs0=grid_size_node.std_out, inputs1=1,
+            name='+1', hide=True
+        )
+
+        # --- Square grid -> triangular lattice ---
+        grid = Grid(
+            tree, location=(x + 3, y + 2),
+            size_x=grid_size_node.std_out,
+            size_y=grid_size_node.std_out,
+            vertices_x=plus_one.std_out,
+            vertices_y=plus_one.std_out,
+            name='Grid',
+            hide=True
+        )
+
+        pos = Position(tree, location=(x, y + 1.5))
+
+        # Shear: x' = x + y/2, y' = y*sqrt(3)/2
+        grid_function = make_function(
+            tree,
+            functions={
+                'out': [
+                    'pos_x,pos_y,2.0,/,+',
+                    f'pos_y,{r3},*,2.0,/',
+                    '0',
+                ],
+            },
+            inputs=['pos'],
+            outputs=['out'],
+            vectors=['pos', 'out'],
+            name='TriShear',
+            location=(x + 1, y + 1.5),
+            hide=True,
+        )
+        links.new(pos.std_out, grid_function.inputs['pos'])
+
+        frame_driven_displacement_function = get_from_kwargs(kwargs, "frame_driven_displacement_function", "")
+
+        shift_vector = get_from_kwargs(kwargs, "shift", Vector())
+        shift = InputVector(tree, location=(x + 1, y + 4), vector=shift_vector, label="Shift", hide=True)
+
+        if frame_driven_displacement_function != "":
+            t0 = get_from_kwargs(kwargs, "begin_time", 0)
+            duration = get_from_kwargs(kwargs, "transition_time", DEFAULT_ANIMATION_TIME)
+            [mini, maxi] = get_from_kwargs(kwargs, "domain", [0, 1])
+            # prepare t value
+            time = SceneTime(tree, location=(x + 1, y + 3), std_out="Seconds", hide=True, name="Time")
+
+            t_value = make_function(tree, custom_ops=custom_ops, name="tValue", functions={
+                "t": f"time,{t0},{duration},+,>,{maxi},time,{t0},<,{mini},{mini},{maxi},{mini},-,{duration},/,time,{t0},-,*,+,iff,iff"
+            }, inputs=["time"], outputs=["t"], scalars=["time", "t"],
+                                    location=(x + 2, y + 3), hide=True)
+            links.new(time.std_out, t_value.inputs["time"])
+
+            driver = make_function(tree, name="FrameDrivenDisplacement",
+                                   aux_functions={
+                                       "driver": frame_driven_displacement_function
+                                   },
+                                   functions={
+                                       "pos": "driver,shift,add"
+                                   },
+                                   inputs=["t", "shift"], outputs=["pos"],
+                                   scalars=["t"], vectors=["pos", "shift", "driver"], hide=True,
+                                   location=[x + 3, y + 3])
+            links.new(t_value.outputs["t"], driver.inputs["t"])
+            links.new(shift.std_out, driver.inputs["shift"])
+
+            offset = driver.outputs["pos"]
+        else:
+            offset = shift.std_out
+
+        set_pos = SetPosition(
+            tree, location=(x + 4, y + 2),
+            name='Set Position',
+            offset=offset,
+            hide=True
+        )
+        links.new(grid.geometry_out, set_pos.geometry_in)
+
+        rr_from_set_pos = Reroute(tree, location=(x + 5, y + 2),
+                                  ins=set_pos.geometry_out, name='RerouteFromSetPosition', hide=False)
+        rr_from_set_pos2 = Reroute(tree, location=(x + 6, y + 2),
+                                   ins=rr_from_set_pos.geometry_out, name='RerouteFromSetPosition', hide=True)
+
+        pos2 = Position(tree, location=(x + 4.5, y + 0.5), hide=True)
+
+        # After the shear, a diagonal neighbor is at approx [0.5, -0.34, 0] offset.
+        # Sample the nearest point there, subtract current position -> extrusion vector.
+        shifted_lookup = VectorMath(
+            tree, location=(x + 5.5, y + 0.5), operation='ADD',
+            inputs0=pos2.std_out,
+            inputs1=[0.5, -0.34, 0.0],
+            name='Shift',
+            hide=True
+        )
+
+        sample_nearest = SampleNearest(
+            tree, location=(x + 5.5, y + 1), domain='POINT',
+            geometry=rr_from_set_pos.std_out,
+            sample_position=shifted_lookup.std_out,
+            hide=True
+        )
+
+        sample_neighbor_pos = SampleIndex(
+            tree, location=(x + 5.5, y + 1),
+            data_type='FLOAT_VECTOR',
+            domain='POINT',
+            geometry=rr_from_set_pos2.std_out,
+            value=pos2.std_out,
+            index=sample_nearest.std_out,
+            hide=True
+        )
+
+        diagonal_offset = VectorMath(
+            tree, location=(x + 7.5, y + 1), operation='SUBTRACT',
+            inputs1=pos2.std_out,
+            inputs0=sample_neighbor_pos.std_out,
+            name='NeighborOffset'
+        )
+
+        diagonal_edges = ExtrudeMesh(
+            tree, location=(x + 8.5, y + 1), mode='VERTICES',
+            mesh=rr_from_set_pos2.geometry_out,
+            offset=diagonal_offset.std_out,
+            name='Extrude Mesh',
+            hide=True,
+        )
+
+        # --- Dot instances at vertices ---
+        sphere = IcoSphere(
+            tree, location=(x + 4, y + 3),
+            radius=dot_radius.std_out,
+            subdivisions=1,
+            name='Ico Sphere',
+            hide=True
+        )
+        iop = InstanceOnPoints(
+            tree, location=(x + 5, y + 3),
+            points=set_pos.geometry_out,
+            instance=sphere.geometry_out,
+            name='Instance on Points',
+            hide=True
+        )
+
+        # Wireframe all edges (diagonal_edges already contains the full sheared grid),
+        # then join with dot instances and apply joker material.
+        edge_tubes = WireFrame(
+            tree, location=(x + 9.5, y + 1),
+            geometry=diagonal_edges.geometry_out,
+            radius=thickness.std_out,
+            resolution=4,
+            name='WireframeNode', hide=True
+        )
+
+        mat_dot = SetMaterial(
+            tree, location=(x + 11, y + 1),
+            material=vertex_material.std_out,
+            name='MaterialVertices'
+        )
+
+        mat_edges = SetMaterial(
+            tree, location=(x + 11, y + 1),
+            material=edge_material.std_out,
+            name='MaterialEdges'
+        )
+
+        joined_wire_dot = JoinGeometry(
+            tree, location=(x + 10, y + 2),
+            name='Join Geometry'
+        )
+
+        create_geometry_line(tree, [iop, mat_dot, joined_wire_dot])
+        create_geometry_line(tree, [edge_tubes, mat_edges, joined_wire_dot])
+
+        # Final join: receives grid+dots
+        join = JoinGeometry(tree, location=(x + 12.5, y + 0), name='Join Geometry')
+        create_geometry_line(tree, [joined_wire_dot, join], out=self.group_outputs.inputs[0])
+
+        return join, grid_function, set_pos
+
+    def create_node(self, tree, **kwargs):
+        links = tree.links
+        # Coord(tree, min=(-10, -10), max=(10, 10))
+
+        colors = get_from_kwargs(kwargs, "colors", ['joker', 'custom1'])
+        show_fundamental_plane = get_from_kwargs(kwargs, "show_fundamental_plane", True)
+
+        join, grid_function, set_pos = self._generate_grid(tree, colors, grid_size=2 * self.grid_n, location=(1, 6),
+                                                           **kwargs)
+
+        # --- Fundamental domain ---
+
+        phi_function = make_function(tree, name="phi", functions={
+            "phi": "1,5,sqrt,+,2,/"
+        }, outputs=["phi"], scalars=["phi"], location=(-7, 0.5), hide=True)
+
+        xi_function = make_function(tree, name="xi", functions={
+            "xi": ["1,2,/", "3,sqrt,2,/", "0"]
+        }, outputs=["xi"], vectors=["xi"], location=(-7, 1), hide=True)
+
+        u_function = make_function(tree, name="u =phi + 1 + xi", functions={
+            "u": ["phi,1,+,xi_x,+", "xi_y", "0"]
+        }, inputs=["xi", "phi"], outputs=["u"], vectors=["xi", "u"], scalars=["phi"],
+                                   location=(-6.5, 0.5), hide=True)
+        links.new(xi_function.outputs["xi"], u_function.inputs["xi"])
+        links.new(phi_function.outputs["phi"], u_function.inputs["phi"])
+
+        v = ComplexMathNode(tree, name="v=xi u", z=u_function.outputs["u"],
+                            w=xi_function.outputs["xi"], operation="MUL",
+                            location=(-5, 0.5),
+                            hide=True)
+
+        points = Points(tree, count=1, location=(0, -0.5), hide=True)
+        vertices = PointsToVertices(tree, location=(1, 0), hide=True)
+        extrude_point = ExtrudeMesh(tree, location=(2, 0), mode="VERTICES",
+                                    offset=u_function.outputs["u"],
+                                    name="ExtrudePoint", hide=True)
+        extrude_line = ExtrudeMesh(tree, location=(3, 0), mode="EDGES",
+                                   offset=v.std_out, name="ExtrudeLine", hide=True)
+        set_mat = SetMaterial(tree, location=(4, 0), material="plastic_custom1",
+                              name="FundamentalCellMaterial")
+        set_mat_drawing = SetMaterial(tree, location=(5.5, 0), material="drawing",
+                                      name="Set Material")
+        create_geometry_line(tree, [points, vertices, extrude_point, extrude_line,
+                                    set_mat, set_mat_drawing])
+
+        # --- Backprojection: map grid positions into the fundamental domain ---
+
+        back_translation_prep = make_function(tree, name="BackTranslationPreparation",
+                                              functions={"u*v": "u,cconj,v,cmul",
+                                                         "uv*": "u,v,cconj,cmul",
+                                                         "pu*": "p,u,cconj,cmul",
+                                                         "pv*": "p,v,cconj,cmul",
+                                                         },
+                                              inputs=["u", "v", "p"], outputs=["u*v", "uv*", "pu*", "pv*"],
+                                              vectors=["u*v", "uv*", "u", "v", "pu*", "pv*", "p"], hide=True,
+                                              location=(-4, 0.5)
+                                              )
+        links.new(u_function.outputs["u"], back_translation_prep.inputs["u"])
+        links.new(v.std_out, back_translation_prep.inputs["v"])
+        links.new(grid_function.outputs["out"], back_translation_prep.inputs["p"])
+
+        l_value = InputValue(tree, value=0, name="Lambda", location=(-3, -0.5), hide=False)
+        back_translation = make_function(tree, name="BackTranslation", functions={
+            "pos": "pos,1,l,-,scale,u,pv*_y,uv*_y,/,frac,l,*,scale,add,v,pu*_y,u*v_y,/,frac,l,*,scale,add"
+        },
+                                         inputs=["u*v", "uv*", "pu*", "pv*", "l", "u", "v", "pos"],
+                                         outputs=["pos"],
+                                         vectors=["u*v", "uv*", "pos", "pu*", "pv*", "u", "v"], scalars=["l"],
+                                         location=(-3, 0), hide=True)
+        links.new(grid_function.outputs["out"], back_translation.inputs["pos"])
+        links.new(u_function.outputs["u"], back_translation.inputs["u"])
+        links.new(v.std_out, back_translation.inputs["v"])
+        links.new(back_translation_prep.outputs["u*v"], back_translation.inputs["u*v"])
+        links.new(back_translation_prep.outputs["uv*"], back_translation.inputs["uv*"])
+        links.new(back_translation_prep.outputs["pu*"], back_translation.inputs["pu*"])
+        links.new(back_translation_prep.outputs["pv*"], back_translation.inputs["pv*"])
+        links.new(l_value.std_out, back_translation.inputs["l"])
+
+        links.new(back_translation.outputs["pos"], set_pos.inputs["Position"])
+
+        flag = InputBoolean(tree, value=not show_fundamental_plane, name="FundamentalDomainFlag", location=(3, -3))
+        del_geo = DeleteGeometry(tree, location=(4, -2), selection=flag.std_out, hide=True)
+        create_geometry_line(tree, [set_mat_drawing, del_geo, join])
+        self.group_output.location = (7.4 * 200, -0.1 * 200)
+
+
+class SubstitutionModifier(GeometryNodesModifier):
+    """Like SubstitutionModifier but wraps the substitution in a RepeatZone
+    and runs the substitution in two ForEachZones:
+
+    * a trapezoid ForEachZone (faces with trapez=True), and
+    * a parallelogram ForEachZone (faces with trapez=False) of equivalent
+      structure.
+
+    The iterated seed face is switchable between a trapezoid and a
+    parallelogram (``trapezoid`` toggle), and the iteration count is exposed
+    as an ``Iterations`` integer input.
+
+    Layout and wiring follow video_hat_tile/tmp.xml.
+    """
+
+    def __init__(self, iterations=6, trapezoid=True,
+                 colors=["joker", "custom1", "gray_3"], **kwargs):
+        self.iterations = iterations
+        self.trapezoid = trapezoid
+        # [trapezoid, parallelogram, background] tile colours
+        self.colors = colors
+        super().__init__('SubstitutionModifierRepeat',
+                         automatic_layout=False, **kwargs)
+
+    # -------------------------------------------------------------------
+    # Helper: build one substitution ForEachZone (4 transformations).
+    # -------------------------------------------------------------------
+    @staticmethod
+    def _build_foreach_zone_trapezoid(tree, in_geometry, phi_value,
+                                      in_rep, y_offset, name_suffix):
+        """Return the configured ForEachZone with its 4 transformations.
+
+        `in_rep`    — x counter at which the foreach zone starts.
+        `y_offset`  — y baseline (0.5 in the original trapezoid zone).
+        `name_suffix` — '' for trapez zone, '_p' for parallelogram zone.
+        """
+        links = tree.links
+
+        for_each_zone = ForEachZone(
+            tree, location=(in_rep, y_offset),
+            domain="FACE", node_width=12,
+            geometry=in_geometry, name="ForEachTrapezoid",
+        )
+        for_each_zone.add_socket(socket_type="FLOAT", name="phi",
+                                 value=phi_value, for_input=True)
+
+        in_for = in_rep + 1
+
+        # --- Sample the four corner positions of the current face ---
+        pos = Position(tree, location=(in_for, y_offset - 2.0))
+
+        sample_v1 = SampleIndex(tree, location=(in_for, y_offset - 0.5),
+                                geometry=for_each_zone.element,
+                                data_type="FLOAT_VECTOR", domain="POINT",
+                                value=pos.std_out, hide=True)
+        sample_v1.node.inputs["Index"].default_value = 1
+
+        sample_v2 = SampleIndex(tree, location=(in_for, y_offset - 0.8),
+                                geometry=for_each_zone.element,
+                                data_type="FLOAT_VECTOR", domain="POINT",
+                                value=pos.std_out, hide=True)
+        sample_v2.node.inputs["Index"].default_value = 2
+
+        sample_v3 = SampleIndex(tree, location=(in_for, y_offset - 1.1),
+                                geometry=for_each_zone.element,
+                                data_type="FLOAT_VECTOR", domain="POINT",
+                                value=pos.std_out, hide=True)
+        sample_v3.node.inputs["Index"].default_value = 3
+
+        sample_v0 = SampleIndex(tree, location=(in_for, y_offset - 1.4),
+                                geometry=for_each_zone.element,
+                                data_type="FLOAT_VECTOR", domain="POINT",
+                                value=pos.std_out, hide=True)
+        sample_v0.node.inputs["Index"].default_value = 0
+
+        sample_outs = [sample_v1, sample_v2, sample_v3, sample_v0]
+
+        # --- Four transformations (same as SubstitutionModifier) ---
+        transformations = {
+            1: ["Transf1" + name_suffix, {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "-2,3,/,pi,*"],
+                "translation": "v4,v1,sub",
+                "pivot": "v1"
+            }, True],
+            2: ["Transf2" + name_suffix, {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi"],
+                "translation": "v4,v1,sub,v2,v1,sub,1,phi,phi,*,/,scale,add",
+                "pivot": "v1"
+            }, True],
+            3: ["Transf3" + name_suffix, {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "0"],
+                "translation": "v2,v1,sub,1,phi,/,scale",
+                "pivot": "v1"
+            }, True],
+            4: ["Transf4" + name_suffix, {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi,-3,/"],
+                "translation": "v1,v2,sub,1,phi,phi,*,/,scale",
+                "pivot": "v2"
+            }, False],
+        }
+
+        scale_function = make_function(
+            tree, name="Scale" + name_suffix,
+            functions={"k": "phi,1,-,phi,/"},
+            inputs=["phi"], outputs=["k"],
+            scalars=["phi", "k"],
+            hide=True, location=(in_for, y_offset - 2.5))
+        links.new(for_each_zone.outputs["phi"], scale_function.inputs["phi"])
+
+        join_inner = JoinGeometry(tree, location=(in_for + 10, y_offset - 0.5))
+
+        vertex_labels = ["v1", "v2", "v3", "v4"]
+        for i, [name, function, trapez_marker] in transformations.items():
+            row_y = y_offset - 2.0 * i  # -1.5, -3.5, -5.5, -7.5 for trapez
+
+            if i == 4:
+                v1_new = make_function(
+                    tree, name="v1New" + name_suffix,
+                    functions={"v1": "v4,v2,v3,sub,add"},
+                    inputs=vertex_labels[1:4], outputs=["v1"],
+                    vectors=vertex_labels,
+                    hide=True, location=(in_for + 1, row_y))
+                for k in range(1, 4):
+                    links.new(sample_outs[k].std_out,
+                              v1_new.inputs[vertex_labels[k]])
+
+                index = Index(tree, location=(in_for + 2, row_y),
+                              domain="POINT", hide=True)
+                index_select = CompareNode(
+                    tree, location=(in_for + 3, row_y), data_type="INT",
+                    inputs0=index.std_out, inputs1=1, operation="EQUAL",
+                    hide=True, name="=" + name_suffix)
+                set_pos_i = SetPosition(
+                    tree, location=(in_for + 4, row_y),
+                    geometry=for_each_zone.element,
+                    selection=index_select.std_out, hide=True,
+                    position=v1_new.outputs["v1"])
+
+            transformation = make_function(
+                tree, functions=function,
+                name=name, location=(in_for + 4, row_y - 0.5), hide=True,
+                inputs=["phi", "k"] + vertex_labels,
+                outputs=["rotation", "scaling", "translation", "pivot"],
+                scalars=["phi", "k"],
+                vectors=vertex_labels + ["rotation", "scaling",
+                                         "translation", "pivot"])
+            links.new(for_each_zone.outputs["phi"],
+                      transformation.inputs["phi"])
+            links.new(scale_function.outputs["k"],
+                      transformation.inputs["k"])
+            for sample, label in zip(sample_outs, vertex_labels):
+                links.new(sample.std_out, transformation.inputs[label])
+
+            geom_to_inst = GeometryToInstance(
+                tree, location=(in_for + 5, row_y))
+            scale_elem = ScaleElements(
+                tree, location=(in_for + 6, row_y), domain="FACE",
+                scale=transformation.outputs["scaling"],
+                center=transformation.outputs["pivot"], hide=True)
+            rotate_inst = RotateInstances(
+                tree, location=(in_for + 7, row_y),
+                instances=scale_elem.geometry_out,
+                rotation=transformation.outputs["rotation"],
+                pivot_point=transformation.outputs["pivot"],
+                local_space=False, hide=True)
+            translate_inst = TranslateInstances(
+                tree, location=(in_for + 8, row_y),
+                instances=rotate_inst.geometry_out,
+                translation=transformation.outputs["translation"],
+                local_space=False, hide=True)
+            realize_inst = RealizeInstances(
+                tree, location=(in_for + 9, row_y), hide=True)
+            links.new(translate_inst.geometry_out,
+                      realize_inst.geometry_in)
+            store_kind = StoredNamedAttribute(
+                tree, location=(in_for + 10, row_y),
+                data_type="BOOLEAN", domain="FACE",
+                name="trapez", value=trapez_marker, hide=True)
+
+            if i == 4:
+                for_each_zone.create_geometry_line(
+                    nodes=[set_pos_i, geom_to_inst, scale_elem,
+                           rotate_inst, translate_inst, realize_inst,
+                           store_kind, join_inner])
+            else:
+                for_each_zone.create_geometry_line(
+                    nodes=[geom_to_inst, scale_elem, rotate_inst,
+                           translate_inst, realize_inst, store_kind,
+                           join_inner])
+
+        return for_each_zone
+
+    @staticmethod
+    def _build_foreach_zone_parallelogram(tree, in_geometry, phi_value,
+                                          in_rep, y_offset, name_suffix):
+        """Return the configured ForEachZone with its 4 transformations.
+
+        `in_rep`    — x counter at which the foreach zone starts.
+        `y_offset`  — y baseline (0.5 in the original trapezoid zone).
+        `name_suffix` — '' for trapez zone, '_p' for parallelogram zone.
+        """
+        links = tree.links
+
+        for_each_zone = ForEachZone(
+            tree, location=(in_rep, y_offset),
+            domain="FACE", node_width=12,
+            geometry=in_geometry, name="ForEachParallelogram",
+        )
+        for_each_zone.add_socket(socket_type="FLOAT", name="phi",
+                                 value=phi_value, for_input=True)
+
+        in_for = in_rep + 1
+
+        # --- Sample the four corner positions of the current face ---
+        pos = Position(tree, location=(in_for, y_offset - 2.0))
+
+        sample_v1 = SampleIndex(tree, location=(in_for, y_offset - 0.5),
+                                geometry=for_each_zone.element,
+                                data_type="FLOAT_VECTOR", domain="POINT",
+                                value=pos.std_out, hide=True)
+        sample_v1.node.inputs["Index"].default_value = 1
+
+        sample_v2 = SampleIndex(tree, location=(in_for, y_offset - 0.8),
+                                geometry=for_each_zone.element,
+                                data_type="FLOAT_VECTOR", domain="POINT",
+                                value=pos.std_out, hide=True)
+        sample_v2.node.inputs["Index"].default_value = 2
+
+        sample_v3 = SampleIndex(tree, location=(in_for, y_offset - 1.1),
+                                geometry=for_each_zone.element,
+                                data_type="FLOAT_VECTOR", domain="POINT",
+                                value=pos.std_out, hide=True)
+        sample_v3.node.inputs["Index"].default_value = 3
+
+        sample_v0 = SampleIndex(tree, location=(in_for, y_offset - 1.4),
+                                geometry=for_each_zone.element,
+                                data_type="FLOAT_VECTOR", domain="POINT",
+                                value=pos.std_out, hide=True)
+        sample_v0.node.inputs["Index"].default_value = 0
+
+        sample_outs = [sample_v1, sample_v2, sample_v3, sample_v0]
+
+        # --- Four transformations (same as SubstitutionModifier) ---
+        transformations = {
+            2: ["Transf2" + name_suffix, {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi"],
+                "translation": "v4,v1,sub,v2,v1,sub,1,phi,phi,*,/,scale,add",
+                "pivot": "v1"
+            }, True],
+            3: ["Transf4" + name_suffix, {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi,-3,/"],
+                "translation": "v1,v2,sub,1,phi,/,scale",
+                "pivot": "v2"
+            }, False],
+            4: ["Transf3" + name_suffix, {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "0"],
+                "translation": "v2,v1,sub,1,phi,/,scale",
+                "pivot": "v1"
+            }, True],
+        }
+
+        scale_function = make_function(
+            tree, name="Scale" + name_suffix,
+            functions={"k": "phi,1,-,phi,/"},
+            inputs=["phi"], outputs=["k"],
+            scalars=["phi", "k"],
+            hide=True, location=(in_for, y_offset - 2.5))
+        links.new(for_each_zone.outputs["phi"], scale_function.inputs["phi"])
+
+        join_inner = JoinGeometry(tree, location=(in_for + 10, y_offset - 0.5))
+
+        vertex_labels = ["v1", "v2", "v3", "v4"]
+        for i, [name, function, trapez_marker] in transformations.items():
+            row_y = y_offset - 2.0 * i  # -1.5, -3.5, -5.5, -7.5 for trapez
+
+            if i in (2, 4):
+                # create trapezoid from parallelogram
+                v1_new = make_function(
+                    tree, name="v1New" + name_suffix,
+                    functions={"v1": "v2,v1,v2,sub,phi,1,+,phi,/,scale,add"},
+                    inputs=vertex_labels[0:2] + ["phi"], outputs=["v1"],
+                    vectors=vertex_labels[0:2], scalars=["phi"],
+                    hide=True, location=(in_for + 1, row_y))
+                for k in range(0, 2):
+                    links.new(sample_outs[k].std_out,
+                              v1_new.inputs[vertex_labels[k]])
+                    links.new(for_each_zone.outputs["phi"], v1_new.inputs["phi"])
+
+                index = Index(tree, location=(in_for + 2, row_y),
+                              domain="POINT", hide=True)
+                index_select = CompareNode(
+                    tree, location=(in_for + 3, row_y), data_type="INT",
+                    inputs0=index.std_out, inputs1=1, operation="EQUAL",
+                    hide=True, name="=" + name_suffix)
+                set_pos_i = SetPosition(
+                    tree, location=(in_for + 4, row_y),
+                    geometry=for_each_zone.element,
+                    selection=index_select.std_out, hide=True,
+                    position=v1_new.outputs["v1"])
+
+            transformation = make_function(
+                tree, functions=function,
+                name=name, location=(in_for + 4, row_y - 0.5), hide=True,
+                inputs=["phi", "k"] + vertex_labels,
+                outputs=["rotation", "scaling", "translation", "pivot"],
+                scalars=["phi", "k"],
+                vectors=vertex_labels + ["rotation", "scaling",
+                                         "translation", "pivot"])
+            links.new(for_each_zone.outputs["phi"],
+                      transformation.inputs["phi"])
+            links.new(scale_function.outputs["k"],
+                      transformation.inputs["k"])
+            for sample, label in zip(sample_outs, vertex_labels):
+                links.new(sample.std_out, transformation.inputs[label])
+
+            geom_to_inst = GeometryToInstance(
+                tree, location=(in_for + 5, row_y))
+            scale_elem = ScaleElements(
+                tree, location=(in_for + 6, row_y), domain="FACE",
+                scale=transformation.outputs["scaling"],
+                center=transformation.outputs["pivot"], hide=True)
+            rotate_inst = RotateInstances(
+                tree, location=(in_for + 7, row_y),
+                instances=scale_elem.geometry_out,
+                rotation=transformation.outputs["rotation"],
+                pivot_point=transformation.outputs["pivot"],
+                local_space=False, hide=True)
+            translate_inst = TranslateInstances(
+                tree, location=(in_for + 8, row_y),
+                instances=rotate_inst.geometry_out,
+                translation=transformation.outputs["translation"],
+                local_space=False, hide=True)
+            realize_inst = RealizeInstances(
+                tree, location=(in_for + 9, row_y), hide=True)
+            links.new(translate_inst.geometry_out,
+                      realize_inst.geometry_in)
+            store_kind = StoredNamedAttribute(
+                tree, location=(in_for + 10, row_y),
+                data_type="BOOLEAN", domain="FACE",
+                name="trapez", value=trapez_marker, hide=True)
+
+            if i != 3:
+                for_each_zone.create_geometry_line(
+                    nodes=[set_pos_i, geom_to_inst, scale_elem,
+                           rotate_inst, translate_inst, realize_inst,
+                           store_kind, join_inner])
+            else:
+                for_each_zone.create_geometry_line(
+                    nodes=[geom_to_inst, scale_elem, rotate_inst,
+                           translate_inst, realize_inst, store_kind,
+                           join_inner])
+
+        return for_each_zone
+
+    # -------------------------------------------------------------------
+    # Frame builders (one auxiliary function per frame, cf. the modifiers in
+    # new_stuff/objects/hat_tile.py).  All locations are integer.
+    # -------------------------------------------------------------------
+    @staticmethod
+    def _build_constants_frame(tree, location):
+        """Constants frame: unit vectors and substitution scalars.
+
+        Returns ``(zero, one, xi, phi)`` with ``xi=(1/2, sqrt3/2)`` and ``phi``
+        the golden ratio.
+        """
+        (x, y) = location
+        zero = InputVector(tree, value=[0, 0, 0], name="zero",
+                           location=(x, y), hide=True)
+        one = InputVector(tree, value=[1, 0, 0], name="one",
+                          location=(x, y - 1), hide=True)
+        xi = make_function(tree, name="xi", functions={
+            "xi": ["1,2,/", "3,sqrt,2,/", "0"]
+        }, outputs=["xi"], vectors=["xi"], location=(x, y - 2), hide=True)
+        phi = make_function(tree, name="phi", functions={
+            "phi": "1,5,sqrt,+,2,/"
+        }, outputs=["phi"], scalars=["phi"], location=(x, y - 3), hide=True)
+        Frame(tree, location=(x, y), label="Constants").add([zero, one, xi, phi])
+        return zero, one, xi, phi
+
+    @staticmethod
+    def _build_seed_frame(tree, zero, one, xi, phi, location,
+                          vertices_name, a_expr, quad_name, frame_label,
+                          store_label, trapez_value):
+        """Build one seed face (vertices -> quad -> fill -> mark) and frame it.
+
+        ``a_expr`` is the RPN for the first vertex (``"zero"`` for the
+        trapezoid, ``"one"`` for the parallelogram); the other three vertices
+        are shared.  ``trapez_value`` flags the face for the foreach split.
+        """
+        links = tree.links
+        (x, y) = location
+        params_in = ["zero", "one", "xi", "phi"]
+        params_out = ["a", "b", "c", "d"]
+        vertices = make_function(tree, name=vertices_name, functions={
+            "a": a_expr,
+            "b": "one,phi,1,+,scale",
+            "c": "one,phi,scale,xi,cadd",
+            "d": "xi",
+        }, inputs=params_in, outputs=params_out,
+                                 vectors=params_out + params_in,
+                                 location=(x, y), hide=True)
+        links.new(zero.std_out, vertices.inputs["zero"])
+        links.new(one.std_out, vertices.inputs["one"])
+        links.new(xi.outputs["xi"], vertices.inputs["xi"])
+        links.new(phi.outputs["phi"], vertices.inputs["phi"])
+
+        quad = Quadrilateral(tree, location=(x + 1, y), mode="POINTS",
+                             name=quad_name, hide=True)
+        links.new(vertices.outputs["a"], quad.inputs["Point 1"])
+        links.new(vertices.outputs["b"], quad.inputs["Point 2"])
+        links.new(vertices.outputs["c"], quad.inputs["Point 3"])
+        links.new(vertices.outputs["d"], quad.inputs["Point 4"])
+
+        fill = FillCurve(tree, location=(x + 2, y), hide=True)
+        store = StoredNamedAttribute(
+            tree, location=(x + 3, y),
+            data_type="BOOLEAN", domain="FACE",
+            name="trapez", label=store_label,
+            value=trapez_value, hide=True)
+        create_geometry_line(tree, [quad, fill, store])
+        Frame(tree, location=(x, y), label=frame_label).add(
+            [vertices, quad, fill, store])
+        return store
+
+    def _build_control_frame(self, tree, location):
+        """Control frame: seed toggle, iteration count and tile materials.
+
+        The three materials (trapezoid / parallelogram / background) are built
+        from ``self.colors`` via ``get_texture`` and registered in
+        ``self.materials`` so they can be faded.  ``toggle`` is True for the
+        trapezoid seed, False for the parallelogram.  Returns
+        ``(toggle, iterations_node, trapez_mat, para_mat, bg_mat)``.
+        """
+        (x, y) = location
+        toggle = InputBoolean(tree, value=self.trapezoid,
+                              name="TrapezParallelogramToggle",
+                              location=(x, y))
+        iterations_node = InputInteger(tree, integer=self.iterations,
+                                       name="Iterations",
+                                       location=(x, y - 1))
+
+        mat_labels = ["TrapezMaterial", "ParallelogramMaterial",
+                      "BackgroundMaterial"]
+        mat_nodes = []
+        for i, (label, color) in enumerate(zip(mat_labels, self.colors)):
+            material = get_texture(color)
+            self.materials.append(material)  # register for fading
+            mat_nodes.append(InputMaterial(tree, material=material, name=label,
+                                           location=(x, y - 2 - i)))
+
+        Frame(tree, location=(x, y), label="ControlFrame").add(
+            [toggle, iterations_node] + mat_nodes)
+        return (toggle, iterations_node, *mat_nodes)
+
+    # -------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        # Layout and wiring follow video_hat_tile/tmp.xml.
+        links = tree.links
+
+        # --- Constants frame ---
+        zero, one, xi, phi = self._build_constants_frame(tree, location=(-9, 0))
+
+        # --- Two seed faces (trapezoid / parallelogram frames) ---
+        store_trapez = self._build_seed_frame(
+            tree, zero, one, xi, phi, location=(-7, 1),
+            vertices_name="TrapezVertices", a_expr="zero",
+            quad_name="Trapez", frame_label="Trapezoid",
+            store_label="MarkTrapez", trapez_value=True)
+        store_para = self._build_seed_frame(
+            tree, zero, one, xi, phi, location=(-7, -2),
+            vertices_name="ParallelogramVertices", a_expr="one",
+            quad_name="Parallelogram", frame_label="Parallelogram",
+            store_label="MarkParallelogram", trapez_value=False)
+
+        # --- Control frame: seed toggle + iteration count + tile materials ---
+        toggle, iterations_node, trapez_mat, para_mat, bg_mat = \
+            self._build_control_frame(tree, location=(-9, -4))
+
+        # --- Switch the seed: True -> trapezoid, False -> parallelogram ---
+        seed_switch = Switch(tree, location=(-2, 0), input_type="GEOMETRY",
+                             switch=toggle.std_out,
+                             false=store_para.geometry_out,
+                             true=store_trapez.geometry_out)
+        # InputGeometry reroute: the selected seed feeds both the repeat zone
+        # and the background material downstream.
+        input_geo = Reroute(tree, location=(-1, 1), ins=seed_switch.std_out,
+                            name="InputGeometry")
+
+        # Boolean named attribute, used as selection by the
+        # SeparateGeometry node inside the repeat zone.
+        trapez_attr_bool = NamedAttribute(
+            tree, location=(-1, -2),
+            name="trapez", data_type="BOOLEAN", hide=True)
+
+        # Shared phi reroute so both foreach zones receive the same phi.
+        phi_reroute = Reroute(tree, location=(0, -5),
+                              ins=phi.outputs["phi"],
+                              name="PhiReroute", hide=False)
+
+        # --- Repeat zone wrapping the substitution ---
+        repeat_zone = RepeatZone(tree, location=(0, 0), node_width=18,
+                                 iterations=iterations_node.std_out,
+                                 geometry=input_geo.std_out)
+
+        in_rep = 1
+        # Inside the repeat zone: split iterated geometry into the
+        # trapezoid faces and the parallelogram faces.
+        sep_in = SeparateGeometry(
+            tree, location=(in_rep, -0.5), domain="FACE",
+            selection=trapez_attr_bool.std_out, hide=True)
+        links.new(repeat_zone.repeat_input.outputs["Geometry"],
+                  sep_in.geometry_in)
+
+        # --- Trapezoid ForEachZone ---
+        in_rep_t = in_rep + 1  # = 2 (matches original 'in_for' baseline)
+        trapez_zone = self._build_foreach_zone_trapezoid(
+            tree,
+            in_geometry=sep_in.geometry_out,
+            phi_value=phi_reroute.std_out,
+            in_rep=in_rep_t, y_offset=0.5,
+            name_suffix="")
+
+        # --- Parallelogram ForEachZone (structurally identical) ---
+        in_rep_p = in_rep + 1
+        para_zone = self._build_foreach_zone_parallelogram(
+            tree,
+            in_geometry=sep_in.inverse,
+            phi_value=phi_reroute.std_out,
+            in_rep=in_rep_p, y_offset=-9.5,
+            name_suffix="_p")
+
+        # --- Join two zone outputs, feed iterated geometry back ---
+        join_iter = JoinGeometry(tree, location=(16, -3.5))
+        links.new(trapez_zone.geometry_out, join_iter.geometry_in)
+        links.new(para_zone.geometry_out, join_iter.geometry_in)
+        links.new(join_iter.geometry_out,
+                  repeat_zone.repeat_output.inputs["Geometry"])
+
+        # ----------------------------------------------------------
+        # Post-processing outside the repeat zone
+        # ----------------------------------------------------------
+        right = 18
+        trap_attr_float = NamedAttribute(
+            tree, location=(right, -1),
+            name="trapez", data_type="FLOAT", hide=True)
+        right += 1
+        sep_geo = SeparateGeometry(
+            tree, location=(right, 0), domain="FACE",
+            selection=trap_attr_float.std_out, hide=True)
+        links.new(repeat_zone.repeat_output.outputs["Geometry"],
+                  sep_geo.geometry_in)
+
+        # background = the (switched) seed face, pushed slightly behind
+        mat_bg = SetMaterial(
+            tree, location=(right, 2), material=bg_mat.std_out,
+            geometry=input_geo.std_out)
+        right += 1
+        mat_trap = SetMaterial(tree, location=(right, 0),
+                               material=trapez_mat.std_out,
+                               geometry=sep_geo.geometry_out, hide=True)
+        mat_para = SetMaterial(tree, location=(right, -1),
+                               material=para_mat.std_out,
+                               geometry=sep_geo.inverse, hide=True)
+        tf_bg = TransformGeometry(
+            tree, location=(right, 2),
+            geometry=mat_bg.geometry_out,
+            translation=[0.0, 0.0, -0.01], hide=True)
+
+        right += 1
+        join_final = JoinGeometry(tree, location=(right, 1))
+        links.new(tf_bg.geometry_out, join_final.geometry_in)
+        links.new(mat_trap.geometry_out, join_final.geometry_in)
+        links.new(mat_para.geometry_out, join_final.geometry_in)
+
+        # final placement of the whole tiling (centre + scale)
+        create_geometry_line(tree, [join_final], out=self.group_output.inputs[0])
+
+        right += 1
+        self.group_output.location = (right * 200, 0)
+
+
+class SubstitutionModifierFull(GeometryNodesModifier):
+    """Two-panel point-location demonstration, rebuilt from video_hat_tile/tmp.xml.
+
+    The modifier draws **both** panels side by side in a single node tree:
+
+    * **Left Panel Subdivision** (forward / deflation): a RepeatZone subdivides
+      only the face that currently contains the pin (``Position`` group input,
+      located with a nearest-face lookup).  Every child face records
+
+        - ``PolygonType`` (INT)  0 = trapezoid, 1 = parallelogram,
+          2 / 3 = the two leftover "exit" quads,
+        - ``SwitchColor`` / ``SwitchColorOld`` (BOOL) to alternate the 2 / 3
+          assignment of the two exit quads from one iteration to the next, and
+        - ``TranfoSequence`` (INT), a base-10 *address* of the path taken,
+          ``old * 10 + transform_index`` (1..4).  The pin's face address is
+          broadcast to all children so that ``max(TranfoSequence)`` returns the
+          pin's address.
+
+    * **Right Panel background** (a *reduced* copy that only shows zero or one
+      subdivision, ``min(Iterations, 1)``) plus an **inverse / inflation**
+      RepeatZone that decodes ``max(TranfoSequence)`` digit by digit
+      (``log10`` / ``floor`` / ``power``) and inverse-transforms the pin step by
+      step, walking it back out of the ribbon.
+
+    The pin itself is an external scene object (read with an Object Info node);
+    its world position is fed in through the ``Position`` group input.
+
+    Group inputs: ``Iterations`` (INT), ``Position`` (VECTOR).
+    One auxiliary builder per frame; all node locations are integers.
+    """
+
+    # tile colours for PolygonType 0, 1, 2, 3
+    def __init__(self, iterations=0, position=(0.0, 0.0, 0.0),
+                 colors=("joker", "custom1", "drawing", "example"),
+                 pin_object=None, pin_head_object=None, right_shift=2.75,
+                 **kwargs):
+        self.iterations = iterations
+        self.position = list(position)
+        self.colors = list(colors)
+        self.pin_object = pin_object
+        self.pin_head_object = pin_head_object
+        self.right_shift = right_shift
+        super().__init__('SubstitutionModifierFull',
+                         automatic_layout=False, group_input=True, **kwargs)
+
+    # -- utils
+    def _group_input_node(self, tree, location):
+        """Spawn an extra Group Input node (used to feed Position and number of iterations into the zones)."""
+        n = tree.nodes.new('NodeGroupInput')
+        n.location = (location[0] * 200, location[1] * 100)
+        n.hide = True
+        return n
+
+    @staticmethod
+    def _frame_new_nodes(tree, before_names, label, location):
+        """Parent every still-unframed node created since ``before_names`` into a
+        fresh frame.  Used to wrap a whole panel (its repeat zone, foreach zones,
+        transform groups, leftover quads, ...) in one labelled frame."""
+
+        new = [n for n in tree.nodes
+               if n.name not in before_names and n.type != 'FRAME'
+               and n.parent is None]
+        frame = Frame(tree, location=location, label=label)
+        for n in new:
+            n.parent = frame.node
+        return frame
+
+    # -- transform data
+    # (digit, group_name, function, PolygonType, SwitchColor, uses_setpos)
+    @staticmethod
+    def _trapez_transforms():
+        return [
+            (1, "Transf1", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "-2,3,/,pi,*"],
+                "translation": "v4,v1,sub",
+                "pivot": "v1"}, 0, True, False),
+            (2, "Transf2", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi"],
+                "translation": "v4,v1,sub,v2,v1,sub,1,phi,phi,*,/,scale,add",
+                "pivot": "v1"}, 0, True, False),
+            (3, "Transf3", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "0"],
+                "translation": "v2,v1,sub,1,phi,/,scale",
+                "pivot": "v1"}, 0, False, False),
+            (4, "Transf4", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi,-3,/"],
+                "translation": "v1,v2,sub,1,phi,phi,*,/,scale",
+                "pivot": "v2"}, 1, False, True),
+        ]
+
+    @staticmethod
+    def _para_transforms():
+        return [
+            (2, "Transf2_p", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi"],
+                "translation": "v4,v1,sub,v2,v1,sub,1,phi,phi,*,/,scale,add",
+                "pivot": "v1"}, 0, True, True),
+            (4, "Transf4_p", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi,-3,/"],
+                "translation": "v1,v2,sub,1,phi,/,scale",
+                "pivot": "v2"}, 1, False, False),
+            (3, "Transf3_p", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "0"],
+                "translation": "v2,v1,sub,1,phi,/,scale",
+                "pivot": "v1"}, 0, False, True),
+        ]
+
+    # == Trapezoid, create the geometry of a trapezoid
+    @staticmethod
+    def _build_trapezoid_frame(tree, location):
+        """Seed trapezoid (vertices -> quad -> fill -> PolygonType=0).
+
+        Returns ``(store, phi_node)``.
+        """
+        links = tree.links
+        (x, y) = location
+        one = InputVector(tree, value=[1, 0, 0], name="one",
+                          location=(x, y - 0.5), hide=True)
+        zero = InputVector(tree, value=[0, 0, 0], name="zero",
+                           location=(x, y - 1), hide=True)
+        xi = make_function(tree, name="xi", functions={
+            "xi": ["1,2,/", "3,sqrt,2,/", "0"]
+        }, outputs=["xi"], vectors=["xi"], location=(x, y - 1.5), hide=True)
+        phi = make_function(tree, name="phi", functions={
+            "phi": "1,5,sqrt,+,2,/"
+        }, outputs=["phi"], scalars=["phi"], location=(x, y - 2), hide=True)
+
+        params_in = ["zero", "one", "xi", "phi"]
+        params_out = ["a", "b", "c", "d"]
+        vertices = make_function(tree, name="xi+1", functions={
+            "a": "zero",
+            "b": "one,phi,1,+,scale",
+            "c": "one,phi,scale,xi,cadd",
+            "d": "xi",
+        }, inputs=params_in, outputs=params_out,
+                                 vectors=params_out + params_in,
+                                 location=(x + 1, y), hide=True)
+        links.new(zero.std_out, vertices.inputs["zero"])
+        links.new(one.std_out, vertices.inputs["one"])
+        links.new(xi.outputs["xi"], vertices.inputs["xi"])
+        links.new(phi.outputs["phi"], vertices.inputs["phi"])
+
+        quad = Quadrilateral(tree, location=(x + 2, y), mode="POINTS",
+                             name="Trapez", hide=True)
+        links.new(vertices.outputs["a"], quad.inputs["Point 1"])
+        links.new(vertices.outputs["b"], quad.inputs["Point 2"])
+        links.new(vertices.outputs["c"], quad.inputs["Point 3"])
+        links.new(vertices.outputs["d"], quad.inputs["Point 4"])
+
+        fill = FillCurve(tree, location=(x + 3, y), hide=True)
+        store = StoredNamedAttribute(tree, location=(x + 4, y),
+                                     data_type="INT", domain="FACE",
+                                     name="PolygonType", value=0, hide=True)
+        create_geometry_line(tree, [quad, fill, store])
+        Frame(tree, location=(x, y), label="Trapezoid").add(
+            [one, zero, xi, phi, vertices, quad, fill, store])
+        return store, phi
+
+    # ==================================================================== Pin
+    def _build_pin_frame(self, tree, location):
+        """Object Info pin (Pin + Pin_Head) -> scale -> rotate -> place.
+
+        The pin objects are created in the scene independently of this
+        modifier; here they are read by name (or taken from the constructor).
+        Returns the SetPosition node (pin placed at ``position_socket``).
+        """
+        links = tree.links
+        (x, y) = location
+        pin = self.pin_object or ibpy.get_obj_from_name("Pin")
+        head = self.pin_head_object or ibpy.get_obj_from_name("Pin_Head")
+
+        info_head = ObjectInfo(tree, location=(x, y), name="Pin Head",
+                               transform_space="ORIGINAL", as_instance=True,
+                               object=head, hide=True)
+        info_pin = ObjectInfo(tree, location=(x, y - 1), name="Pin",
+                              transform_space="ORIGINAL", as_instance=True,
+                              object=pin, hide=True)
+        join = JoinGeometry(tree, location=(x + 1, y))
+        links.new(info_head.geometry_out, join.geometry_in)
+        links.new(info_pin.geometry_out, join.geometry_in)
+
+        scale = ScaleInstances(tree, location=(x + 2, y), scale=[0.25] * 3)
+        rotate = RotateInstances(tree, location=(x + 3, y), rotation=[-math.pi / 3, 0, 0], local_space=True)
+        group_input = self._group_input_node(tree, (x + 4, y - 1))
+        set_pos = SetPosition(tree, location=(x + 4, y), position=group_input.outputs["Position"], hide=True)
+
+        create_geometry_line(tree, [join, scale, rotate, set_pos])
+        Frame(tree, location=(x, y), label="Pin").add(
+            [info_head, info_pin, join, scale, rotate, set_pos])
+        return set_pos
+
+    # == one transform unit
+    @staticmethod
+    def _transform_unit(tree, fe, sample_outs, scale_fn, mul_ts,
+                        digit, name, function, polygon_type, switch_color,
+                        uses_setpos, v1new_fn, set_pos_index, x, y, join_children):
+        """Build one affine sub-piece inside a ForEachZone and tag it.
+
+        Geometry line:  (set_pos) -> to-inst -> scale -> rotate -> translate ->
+        realize -> Store(PolygonType) -> Store(SwitchColor) ->
+        Store(TranfoSequence = old*10 + digit) -> join_children.
+
+        Returns the RealizeInstances node (needed for the leftover quads).
+        """
+        links = tree.links
+        vertex_labels = ["v1", "v2", "v3", "v4"]
+
+        set_pos = None
+        if uses_setpos:
+            v1_new = v1new_fn(tree, name="v1New_" + name, location=(x, y))
+            for k in set_pos_index["samples"]:
+                links.new(sample_outs[k].std_out, v1_new.inputs[vertex_labels[k]])
+            if "phi" in [s.name for s in v1_new.inputs]:
+                links.new(fe.outputs["phi"], v1_new.inputs["phi"])
+            index = Index(tree, location=(x + 1, y), domain="POINT", hide=True)
+            sel = CompareNode(tree, location=(x + 1, y - 1), data_type="INT",
+                              inputs0=index.std_out, inputs1=1,
+                              operation="EQUAL", hide=True, name="=" + name)
+            set_pos = SetPosition(tree, location=(x + 2, y),
+                                  geometry=fe.element, selection=sel.std_out,
+                                  position=v1_new.outputs["v1"], hide=True)
+
+        transformation = make_function(
+            tree, functions=function, name=name, location=(x + 3, y), hide=True,
+            inputs=["phi", "k"] + vertex_labels,
+            outputs=["rotation", "scaling", "translation", "pivot"],
+            scalars=["phi", "k"],
+            vectors=vertex_labels + ["rotation", "scaling", "translation", "pivot"])
+        links.new(fe.outputs["phi"], transformation.inputs["phi"])
+        links.new(scale_fn.outputs["k"], transformation.inputs["k"])
+        for sample, label in zip(sample_outs, vertex_labels):
+            links.new(sample.std_out, transformation.inputs[label])
+
+        to_inst = GeometryToInstance(tree, location=(x + 4, y))
+        scale_elem = ScaleElements(tree, location=(x + 5, y), domain="FACE",
+                                   scale=transformation.outputs["scaling"],
+                                   center=transformation.outputs["pivot"], hide=True)
+        rotate_inst = RotateInstances(tree, location=(x + 6, y),
+                                      instances=scale_elem.geometry_out,
+                                      rotation=transformation.outputs["rotation"],
+                                      pivot_point=transformation.outputs["pivot"],
+                                      local_space=False, hide=True)
+        translate_inst = TranslateInstances(tree, location=(x + 7, y),
+                                            instances=rotate_inst.geometry_out,
+                                            translation=transformation.outputs["translation"],
+                                            local_space=False, hide=True)
+        realize = RealizeInstances(tree, location=(x + 8, y), hide=True)
+        links.new(translate_inst.geometry_out, realize.geometry_in)
+
+        store_pt = StoredNamedAttribute(tree, location=(x + 9, y),
+                                        data_type="INT", domain="FACE",
+                                        name="PolygonType", value=polygon_type,
+                                        hide=True)
+        store_sc = StoredNamedAttribute(tree, location=(x + 10, y),
+                                        data_type="BOOLEAN", domain="FACE",
+                                        name="SwitchColor", value=switch_color,
+                                        hide=True)
+        add_d = MathNode(tree, location=(x + 11, y - 1), operation="ADD",
+                         inputs0=mul_ts.std_out, inputs1=digit, hide=True,
+                         name="TS+%d" % digit)
+        store_ts = StoredNamedAttribute(tree, location=(x + 11, y),
+                                        data_type="INT", domain="FACE",
+                                        name="TranfoSequence", value=add_d.std_out,
+                                        hide=True)
+        chain = []
+        if set_pos is not None:
+            chain.append(set_pos)
+        chain += [to_inst, scale_elem, rotate_inst, translate_inst, realize,
+                  store_pt, store_sc, store_ts]
+        create_geometry_line(tree, chain, ins=fe.element)
+        links.new(store_ts.geometry_out, join_children.geometry_in)
+        return realize
+
+    # ===================================== leftover quad + colour alternation
+
+    def _leftover_and_recolor(self, tree, join_children,
+                              sub_points, top_points, x, y):
+        """Add the two exit quads, alternate their PolygonType (2/3) with
+        ``SwitchColor``, recompute ``SwitchColorOld`` and broadcast the pin's
+        ``TranfoSequence`` to all faces.  Returns the final element geometry."""
+        links = tree.links
+
+        # --- exit quads, PolygonType chosen by the sampled SwitchColorOld ---
+        sc_old = NamedAttribute(tree, location=(x, y - 14), name="SwitchColorOld",
+                                data_type="BOOLEAN", hide=True)
+        idx = Index(tree, location=(x, y - 14.5), domain="FACE", hide=True)
+        si_sc = SampleIndex(tree, location=(x + 1, y - 14), data_type="BOOLEAN",
+                            domain="FACE", geometry=join_children.geometry_out,
+                            value=sc_old.std_out, index=idx.std_out, hide=True)
+
+        quad_sub = Quadrilateral(tree, location=(x + 1, y - 10), mode="POINTS",
+                                 name="QuadSub")
+        for i, p in enumerate(sub_points):
+            links.new(p, quad_sub.inputs["Point %d" % (i + 1)])
+        fill_sub = FillCurve(tree, location=(x + 2, y - 10), hide=True)
+        sw_sub = Switch(tree, location=(x + 3, y - 11), input_type="INT",
+                        switch=si_sc.std_out)
+        sw_sub.node.inputs["False"].default_value = 2
+        sw_sub.node.inputs["True"].default_value = 3
+        store_sub = StoredNamedAttribute(tree, location=(x + 3, y - 10),
+                                         data_type="INT", domain="FACE",
+                                         name="PolygonType", value=sw_sub.std_out,
+                                         hide=True)
+        create_geometry_line(tree, [quad_sub, fill_sub, store_sub])
+
+        quad_top = Quadrilateral(tree, location=(x + 1, y - 12), mode="POINTS",
+                                 name="QuadTop")
+        for i, p in enumerate(top_points):
+            links.new(p, quad_top.inputs["Point %d" % (i + 1)])
+        fill_top = FillCurve(tree, location=(x + 2, y - 12), hide=True)
+        sw_top = Switch(tree, location=(x + 3, y - 13), input_type="INT",
+                        switch=si_sc.std_out)
+        sw_top.node.inputs["False"].default_value = 3
+        sw_top.node.inputs["True"].default_value = 2
+        store_top = StoredNamedAttribute(tree, location=(x + 3, y - 12),
+                                         data_type="INT", domain="FACE",
+                                         name="PolygonType", value=sw_top.std_out,
+                                         hide=True)
+        create_geometry_line(tree, [quad_top, fill_top, store_top])
+
+        # --- recompute SwitchColorOld on the four transformed children ---
+        sc_old2 = NamedAttribute(tree, location=(x + 4, y - 5),
+                                 name="SwitchColorOld", data_type="BOOLEAN", hide=True)
+        not_old = BooleanMath(tree, location=(x + 5, y - 5), operation="NOT",
+                              inputs0=sc_old2.std_out)
+        sc_cur = NamedAttribute(tree, location=(x + 4, y - 6), name="SwitchColor",
+                                data_type="BOOLEAN", hide=True)
+        sw_old = Switch(tree, location=(x + 6, y - 5), input_type="BOOLEAN",
+                        switch=sc_cur.std_out, true=not_old.std_out,
+                        false=sc_old2.std_out)
+        store_scold = StoredNamedAttribute(tree, location=(x + 7, y - 4),
+                                           data_type="BOOLEAN", domain="FACE",
+                                           name="SwitchColorOld",
+                                           value=sw_old.std_out, hide=True)
+        links.new(join_children.geometry_out, store_scold.geometry_in)
+
+        # --- broadcast the pin face's TranfoSequence to every child ---
+        group_input_node = self._group_input_node(tree, (x + 7, y - 5))
+        sn = SampleNearest(tree, location=(x + 8, y - 4), domain="FACE",
+                           geometry=store_scold.geometry_out,
+                           sample_position=group_input_node.outputs["Position"], hide=True)
+        ts_attr = NamedAttribute(tree, location=(x + 8, y - 5),
+                                 name="TranfoSequence", data_type="INT", hide=True)
+        si_ts = SampleIndex(tree, location=(x + 9, y - 4), data_type="INT",
+                            domain="FACE", geometry=store_scold.geometry_out,
+                            value=ts_attr.std_out, index=sn.std_out, hide=True)
+        store_pin_ts = StoredNamedAttribute(tree, location=(x + 10, y - 4),
+                                            data_type="INT", domain="FACE",
+                                            name="TranfoSequence",
+                                            value=si_ts.std_out, hide=True)
+        links.new(store_scold.geometry_out, store_pin_ts.geometry_in)
+
+        out_join = JoinGeometry(tree, location=(x + 11, y - 2))
+        links.new(store_pin_ts.geometry_out, out_join.geometry_in)
+        links.new(store_sub.geometry_out, out_join.geometry_in)
+        links.new(store_top.geometry_out, out_join.geometry_in)
+        return out_join
+
+    # ====================================================== ForEach: trapez
+    def _build_foreach_trapezoid(self, tree, in_geo, phi_socket, x, y, suffix):
+        links = tree.links
+        foreach = ForEachZone(tree, location=(x, y), domain="FACE", node_width=26,
+                              geometry=in_geo, name="ForEachTrapezoid" + suffix)
+        foreach.add_socket(socket_type="FLOAT", name="phi", value=phi_socket,
+                           for_input=True)
+
+        xf = x + 1
+        pos = Position(tree, location=(xf - 1, y - 2))
+        sample_outs = []
+        for k, idx in enumerate([1, 2, 3, 0]):
+            si = SampleIndex(tree, location=(xf, y - 0.5 * k), geometry=foreach.element,
+                             data_type="FLOAT_VECTOR", domain="POINT",
+                             value=pos.std_out, index=idx, hide=True)
+            sample_outs.append(si)
+
+        scale_fn = make_function(tree, name="Scale" + suffix,
+                                 functions={"k": "phi,1,-,phi,/"},
+                                 inputs=["phi"], outputs=["k"],
+                                 scalars=["phi", "k"], hide=True,
+                                 location=(xf, y - 3))
+        links.new(foreach.outputs["phi"], scale_fn.inputs["phi"])
+
+        ts_attr = NamedAttribute(tree, location=(xf + 11, y + 1), name="TranfoSequence",
+                                 data_type="INT", hide=True)
+        mul_ts = MathNode(tree, location=(xf + 12, y + 1), operation="MULTIPLY",
+                          inputs0=ts_attr.std_out, inputs1=10, hide=True,
+                          name="TS*10")
+        join_children = JoinGeometry(tree, location=(xf + 14, y - 1))
+
+        def v1new(t, name, location):
+            return make_function(t, name=name, functions={"v1": "v4,v2,v3,sub,add"},
+                                 inputs=["v2", "v3", "v4"], outputs=["v1"],
+                                 vectors=["v1", "v2", "v3", "v4"], hide=True,
+                                 location=location)
+
+        realizes = {}
+        for i, (digit, name, func, pt, sc, usp) in enumerate(self._trapez_transforms()):
+            realizes[name] = self._transform_unit(
+                tree, foreach, sample_outs, scale_fn, mul_ts, digit, name, func, pt, sc,
+                usp, v1new, {"samples": [1, 2, 3]}, xf + 2, y - 2 * i, join_children)
+
+        # leftover exit quads (geometry identical to the deflation tiling)
+        ly = y - 10
+        xf += 11
+        pos_sub = Position(tree, location=(xf + 2, ly - 2))
+        sub_p1 = SampleIndex(tree, location=(xf + 3, ly), geometry=realizes["Transf1"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_sub.std_out, index=3, hide=True)
+        sub_p2 = SampleIndex(tree, location=(xf + 3, ly - 0.5), geometry=realizes["Transf4"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_sub.std_out, index=2, hide=True)
+        sub_p3 = SampleIndex(tree, location=(xf + 3, ly - 1), geometry=realizes["Transf4"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_sub.std_out, index=1, hide=True)
+        sub_p4 = SampleIndex(tree, location=(xf + 3, ly - 1.5), geometry=realizes["Transf1"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_sub.std_out, index=0, hide=True)
+
+        top_p1 = SampleIndex(tree, location=(xf + 3, ly - 2.5), geometry=realizes["Transf4"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_sub.std_out, index=3, hide=True)
+        top_p2 = SampleIndex(tree, location=(xf + 3, ly - 3), geometry=realizes["Transf3"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_sub.std_out, index=3, hide=True)
+        top_p4 = SampleIndex(tree, location=(xf + 3, ly - 3.5), geometry=realizes["Transf4"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_sub.std_out, index=0, hide=True)
+
+        xf -= 11
+
+        out_join = self._leftover_and_recolor(
+            tree, join_children,
+            sub_points=[sub_p1.std_out, sub_p2.std_out, sub_p3.std_out, sub_p4.std_out],
+            top_points=[top_p1.std_out, top_p2.std_out, sample_outs[2].std_out, top_p4.std_out],
+            x=xf + 14, y=y - 1)
+        links.new(out_join.geometry_out, foreach.foreach_output.inputs["Geometry"])
+        return foreach
+
+    # ================================================ ForEach: parallelogram
+    def _build_foreach_parallelogram(self, tree, in_geo, phi_socket, x, y, suffix):
+        links = tree.links
+        fe = ForEachZone(tree, location=(x, y), domain="FACE", node_width=26,
+                         geometry=in_geo, name="ForEachParallelogram" + suffix)
+        fe.add_socket(socket_type="FLOAT", name="phi", value=phi_socket,
+                      for_input=True)
+
+        xf = x + 1
+        pos = Position(tree, location=(xf - 1, y - 2))
+        sample_outs = []
+        for k, idx in enumerate([1, 2, 3, 0]):
+            si = SampleIndex(tree, location=(xf, y - 0.5 * k), geometry=fe.element,
+                             data_type="FLOAT_VECTOR", domain="POINT",
+                             value=pos.std_out, index=idx, hide=True)
+            sample_outs.append(si)
+
+        scale_fn = make_function(tree, name="Scale" + suffix,
+                                 functions={"k": "phi,1,-,phi,/"},
+                                 inputs=["phi"], outputs=["k"],
+                                 scalars=["phi", "k"], hide=True,
+                                 location=(xf, y - 3))
+        links.new(fe.outputs["phi"], scale_fn.inputs["phi"])
+
+        ts_attr = NamedAttribute(tree, location=(xf + 11, y + 1), name="TranfoSequence",
+                                 data_type="INT", hide=True)
+        mul_ts = MathNode(tree, location=(xf + 12, y + 1), operation="MULTIPLY",
+                          inputs0=ts_attr.std_out, inputs1=10, hide=True,
+                          name="TS*10p")
+        join_children = JoinGeometry(tree, location=(xf + 17, y - 1))
+
+        def v1new_p(t, name, location):
+            return make_function(
+                t, name=name,
+                functions={"v1": "v2,v1,v2,sub,phi,1,+,phi,/,scale,add"},
+                inputs=["v1", "v2", "phi"], outputs=["v1"],
+                vectors=["v1", "v2"], scalars=["phi"], hide=True, location=location)
+
+        realizes = {}
+        for i, (digit, name, func, pt, sc, usp) in enumerate(self._para_transforms()):
+            realizes[name] = self._transform_unit(
+                tree, fe, sample_outs, scale_fn, mul_ts, digit, name, func, pt, sc,
+                usp, v1new_p, {"samples": [0, 1]}, xf + 2, y - 2 * i, join_children)
+
+        ly = y - 10
+        xf += 11
+        pos_sub = Position(tree, location=(xf + 2, ly - 1))
+        sub_p2 = SampleIndex(tree, location=(xf + 3, ly - 1), geometry=realizes["Transf4_p"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_sub.std_out, index=2, hide=True)
+        sub_p3 = SampleIndex(tree, location=(xf + 3, ly - 2), geometry=realizes["Transf4_p"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_sub.std_out, index=1, hide=True)
+        sub_p4 = SampleIndex(tree, location=(xf + 3, ly - 3), geometry=realizes["Transf2_p"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_sub.std_out, index=3, hide=True)
+        pos_top = Position(tree, location=(xf + 2, ly - 5))
+        top_p1 = SampleIndex(tree, location=(xf + 3, ly - 4), geometry=realizes["Transf4_p"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_top.std_out, index=3, hide=True)
+        top_p2 = SampleIndex(tree, location=(xf + 3, ly - 5), geometry=realizes["Transf3_p"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_top.std_out, index=3, hide=True)
+        top_p4 = SampleIndex(tree, location=(xf + 3, ly - 6), geometry=realizes["Transf4_p"].geometry_out,
+                             data_type="FLOAT_VECTOR", domain="POINT", value=pos_top.std_out, index=0, hide=True)
+
+        xf -= 11
+        out_join = self._leftover_and_recolor(
+            tree, join_children,
+            sub_points=[sample_outs[0].std_out, sub_p2.std_out, sub_p3.std_out, sub_p4.std_out],
+            top_points=[top_p1.std_out, top_p2.std_out, sample_outs[2].std_out, top_p4.std_out],
+            x=xf + 14, y=y - 1)
+        links.new(out_join.geometry_out, fe.foreach_output.inputs["Geometry"])
+        return fe
+
+    # ====================================== one subdivision repeat (a panel)
+    def _build_subdivision_repeat(self, tree, seed_geo, phi_node, iterations_socket,
+                                  x, y, suffix, with_parallelogram):
+        """RepeatZone that subdivides only the pin's face.  ``with_parallelogram``
+        is True for the left panel and False for the reduced right panel."""
+        links = tree.links
+        poly_attr = NamedAttribute(tree, location=(x + 2, y - 2), name="PolygonType",
+                                   data_type="INT", hide=True)
+        phi_rr = Reroute(tree, location=(x, y - 5), ins=phi_node.outputs["phi"],
+                         name="PhiReroute" + suffix)
+
+        repeat = RepeatZone(tree, location=(x, y), node_width=33,
+                            iterations=iterations_socket, geometry=seed_geo)
+        rep_geo = repeat.repeat_input.outputs["Geometry"]
+
+        # isolate the single face that contains the pin (FindNearestFace)
+        gin = self._group_input_node(tree, (x, y - 3))
+        sample_pin = SampleNearest(tree, location=(x + 1, y - 3), domain="FACE",
+                                   geometry=rep_geo,
+                                   sample_position=gin.outputs["Position"])
+        face_idx = Index(tree, location=(x + 1, y - 2), domain="FACE", hide=True)
+        is_pin = CompareNode(tree, location=(x + 2, y - 1), data_type="INT",
+                             operation="EQUAL", inputs0=face_idx.std_out,
+                             inputs1=sample_pin.std_out, hide=True, name="=pinface" + suffix)
+        sep_pin = SeparateGeometry(tree, location=(x + 3, y), domain="FACE",
+                                   selection=is_pin.std_out, hide=True)
+        links.new(rep_geo, sep_pin.geometry_in)
+
+        # split the pin face into trapez / parallelogram / leftover
+        cmp_trapez = CompareNode(tree, location=(x + 3, y - 2), data_type="INT",
+                                 operation="EQUAL", inputs0=poly_attr.std_out,
+                                 inputs1=0, hide=True, name="=trapez" + suffix)
+        sep_trapez = SeparateGeometry(tree, location=(x + 4, y), domain="FACE",
+                                      selection=cmp_trapez.std_out, hide=True)
+        links.new(sep_pin.geometry_out, sep_trapez.geometry_in)
+
+        cmp_para = CompareNode(tree, location=(x + 4, y - 2), data_type="INT",
+                               operation="EQUAL", inputs0=poly_attr.std_out,
+                               inputs1=1, hide=True, name="=para" + suffix)
+        sep_para = SeparateGeometry(tree, location=(x + 5, y - 1), domain="FACE",
+                                    selection=cmp_para.std_out, hide=True)
+        links.new(sep_trapez.inverse, sep_para.geometry_in)
+
+        trapez_zone = self._build_foreach_trapezoid(
+            tree, sep_trapez.geometry_out, phi_rr.std_out, x + 6, y, suffix)
+
+        join_iter = JoinGeometry(tree, location=(x + 31, y))
+        links.new(trapez_zone.geometry_out, join_iter.geometry_in)
+        if with_parallelogram:
+            para_zone = self._build_foreach_parallelogram(
+                tree, sep_para.geometry_out, phi_rr.std_out, x + 6, y - 16, suffix)
+            links.new(para_zone.geometry_out, join_iter.geometry_in)
+            links.new(sep_para.inverse, join_iter.geometry_in)  # leftover quads
+        else:
+            # reduced panel: parallelograms are not subdivided further
+            links.new(sep_para.inverse, join_iter.geometry_in)
+        links.new(sep_pin.inverse, join_iter.geometry_in)  # non-pin faces
+        links.new(join_iter.geometry_out, repeat.repeat_output.inputs["Geometry"])
+        return repeat
+
+    # ============================================================== Coloring
+    def _build_coloring_frame(self, tree, geometry, location, suffix):
+        """Split by PolygonType (0/1/2/3) and assign the four tile materials.
+        Returns the list of four SetMaterial geometry outputs."""
+        links = tree.links
+        (x, y) = location
+        attr = NamedAttribute(tree, location=(x, y - 1), name="PolygonType",
+                              data_type="INT", hide=True)
+        cmp0 = CompareNode(tree, location=(x + 1, y - 1), data_type="INT",
+                           operation="EQUAL", inputs0=attr.std_out, inputs1=0,
+                           hide=True, name="=0" + suffix)
+        sep0 = SeparateGeometry(tree, location=(x + 2, y), domain="FACE",
+                                selection=cmp0.std_out, hide=True)
+        links.new(geometry, sep0.geometry_in)
+        mat0 = SetMaterial(tree, location=(x + 3, y), material=self.colors[0],
+                           geometry=sep0.geometry_out)
+
+        cmp1 = CompareNode(tree, location=(x + 2, y - 1), data_type="INT",
+                           operation="EQUAL", inputs0=attr.std_out, inputs1=1,
+                           hide=True, name="=1" + suffix)
+        sep1 = SeparateGeometry(tree, location=(x + 3, y - 1), domain="FACE",
+                                selection=cmp1.std_out, hide=True)
+        links.new(sep0.inverse, sep1.geometry_in)
+        mat1 = SetMaterial(tree, location=(x + 4, y - 1), material=self.colors[1],
+                           geometry=sep1.geometry_out)
+
+        cmp2 = CompareNode(tree, location=(x + 3, y - 2), data_type="INT",
+                           operation="EQUAL", inputs0=attr.std_out, inputs1=2,
+                           hide=True, name="=2" + suffix)
+        sep2 = SeparateGeometry(tree, location=(x + 4, y - 2), domain="FACE",
+                                selection=cmp2.std_out, hide=True)
+        links.new(sep1.inverse, sep2.geometry_in)
+        mat2 = SetMaterial(tree, location=(x + 5, y - 2), material=self.colors[2],
+                           geometry=sep2.geometry_out)
+        mat3 = SetMaterial(tree, location=(x + 5, y - 3), material=self.colors[3],
+                           geometry=sep2.inverse)
+        Frame(tree, location=(x, y), label="Coloring").add(
+            [attr, cmp0, sep0, mat0, cmp1, sep1, mat1, cmp2, sep2, mat2, mat3])
+        return [mat0.geometry_out, mat1.geometry_out,
+                mat2.geometry_out, mat3.geometry_out]
+
+    # ===================================================== inverse IFS frames
+    @staticmethod
+    def _build_translation_frame(tree, location, digit_socket, position_socket):
+        """Select the per-digit translation and add the current pin position."""
+        links = tree.links
+        (x, y) = location
+
+        translations = make_function(tree, name="Translations",
+                                     aux_functions={
+                                         "phi": "5,sqrt,1,+,2,/",
+                                         "r32": "3,sqrt,2,/"
+                                     },
+                                     functions={
+                                         "trans0": ["0", "0", "0"],
+                                         "trans1": ["phi,1,+", "0", "0"],
+                                         "trans2": ["phi,0.5,+", "r32,-1,*", "0"],
+                                         "trans3": ["0", "0", "0"],
+                                         "trans4": ["phi,1,+,phi,phi,*,/", "0", "0"]
+                                     }, inputs=[], outputs=["trans1", "trans2", "trans3", "trans4", "trans0"],
+                                     scalars=["phi", "r32"], vectors=["trans1", "trans2", "trans3", "trans4", "trans0"],
+                                     location=(x, y))
+
+        isw = IndexSwitch(tree, location=(x + 1, y - 1), data_type="VECTOR",
+                          index=digit_socket)
+        for _ in range(3):
+            isw.new_item()  # items 0..4
+        for i in range(5):
+            links.new(translations.outputs[f"trans{i}"], isw.slots[i + 1])
+
+        add_pos = VectorMath(tree, location=(x + 2, y), operation="ADD",
+                             inputs0=isw.std_out, inputs1=position_socket)
+        Frame(tree, location=(x, y), label="Translation").add(
+            [translations, isw, add_pos])
+        return add_pos.std_out
+
+    @staticmethod
+    def _build_scaling_frame(tree, location, vector_socket, digit_socket):
+        """Inflate around the trapezoid corner (phi+1,0,0) by phi^2."""
+        links = tree.links
+        (x, y) = location
+        scaling_function = make_function(tree, name="ScalingFunction",
+                                         custom_ops={"iff": {"type": Switch, "class_kwargs": {"input_type": "FLOAT"},
+                                                             "inputs": ("True", "False", "Switch"), "output": "Output",
+                                                             "label": "iff"}},
+                                         aux_functions={
+                                             "phi": "1,5,sqrt,+,2,/",
+                                             "center": ["phi,1,+", "0", "0"]
+                                         },
+                                         functions={
+                                             "center": "center",
+                                             "position": "position,center,sub,digit,0,=,1,phi,phi,*,iff,scale,center,add"
+                                         }, inputs=["position", "digit"], outputs=["position", "center"],
+                                         scalars=["phi", "digit"],
+                                         vectors=["center", "position"], location=(x, y), hide=False)
+        tree.links.new(vector_socket, scaling_function.inputs["position"])
+        tree.links.new(digit_socket, scaling_function.inputs["digit"])
+        Frame(tree, location=(x, y), label="Scaling").add(
+            [scaling_function])
+        return scaling_function.outputs["position"], scaling_function.outputs["center"]
+
+    @staticmethod
+    def _build_rotation_frame(tree, location, digit_socket, vector_socket,
+                              center_socket):
+        """Rotate the inflated point about the corner by the inverse angle."""
+        (x, y) = location
+        isw = IndexSwitch(tree, location=(x, y - 1), data_type="FLOAT",
+                          index=digit_socket)
+        for _ in range(3):
+            isw.new_item()
+        isw.slots[1].default_value = 0.0  # index 0
+        isw.slots[2].default_value = -2.0943951023  # index 1  (-120 deg)
+        isw.slots[3].default_value = math.pi  # index 2  (180 deg)
+        isw.slots[4].default_value = 0.0  # index 3
+        isw.slots[5].default_value = math.pi / 3  # index 4  (60 deg)
+
+        vrot = VectorRotate(tree, location=(x + 1, y), rotation_type="Z_AXIS",
+                            vector=vector_socket, center=center_socket, angle=isw.std_out)
+        Frame(tree, location=(x, y), label="Rotation").add([isw, vrot])
+        return vrot.std_out
+
+    def _build_inverse_ifs(self, tree, left_repeat, pin_geo, x, y):
+        """RepeatZone that decodes max(TranfoSequence) digit-by-digit and
+        inverse-transforms the pin out of the ribbon.  Returns the walked pin."""
+
+        ts_attr = NamedAttribute(tree, location=(x - 2, -7), name="TranfoSequence",
+                                 data_type="INT", hide=True)
+        attr_stat = AttributeStatistic(tree, location=(x - 1, -6), data_type="FLOAT",
+                                       domain="FACE", geometry=left_repeat.geometry_out,
+                                       attribute=ts_attr.std_out, std_out="Max", hide=True)
+        group_input = self._group_input_node(tree, (x - 2, -4))
+        inv_iter = MathNode(tree, location=(x - 1, -4), operation="SUBTRACT",
+                            inputs0=group_input.outputs["Iterations"], inputs1=1, hide=True)
+
+        repeat = RepeatZone(tree, location=(x, y), node_width=11,
+                            iterations=inv_iter.std_out)
+        repeat.add_socket("FLOAT", "Max")
+        repeat.add_socket("GEOMETRY", "Pin")
+        repeat.add_socket("VECTOR", "Position")
+        tree.links.new(attr_stat.std_out, repeat.repeat_input.inputs["Max"])
+        tree.links.new(pin_geo, repeat.repeat_input.inputs["Pin"])
+        tree.links.new(group_input.outputs["Position"], repeat.repeat_input.inputs["Position"])
+
+        max_in = repeat.repeat_input.outputs["Max"]
+        pin_in = repeat.repeat_input.outputs["Pin"]
+        pos_in = repeat.repeat_input.outputs["Position"]
+
+        # leading digit of the base-10 address
+        leading_digit = make_function(tree, name="LeadingDigit", aux_functions={
+            "order": "maximum,lg,floor",
+            "lead_digit": "maximum,10,order,**,/,floor"
+        },
+                                      functions={
+                                          "digit": "lead_digit",
+                                          "maximum": "maximum,10,order,**,lead_digit,*,-"
+                                      }, inputs=["maximum"], outputs=["digit", "maximum"],
+                                      scalars=["maximum", "digit", "lead_digit", "order"], hide=True,
+                                      location=(x + 1, y - 2))
+        tree.links.new(max_in, leading_digit.inputs["maximum"])
+
+        # apply inverse translation
+        translated = self._build_translation_frame(
+            tree, (x + 2, y + 2), leading_digit.outputs["digit"], pos_in)
+
+        # apply inverse scaling
+        scaled, center = self._build_scaling_frame(tree, (x + 6, y + 2), translated, leading_digit.outputs["digit"])
+
+        # apply inverse rotation
+        new_pos = self._build_rotation_frame(
+            tree, (x + 8, y + 2), leading_digit.outputs["digit"], scaled, center)
+
+        set_pin = SetPosition(tree, location=(x + 10, y), geometry=pin_in,
+                              position=new_pos)
+        tree.links.new(leading_digit.outputs["maximum"], repeat.repeat_output.inputs["Max"])
+        tree.links.new(set_pin.geometry_out, repeat.repeat_output.inputs["Pin"])
+        tree.links.new(new_pos, repeat.repeat_output.inputs["Position"])
+        return repeat.repeat_output.outputs["Pin"]
+
+    # =================================================================== main
+    def create_node(self, tree, **kwargs):
+        links = tree.links
+        ibpy.make_new_socket(tree, name='Iterations', io='INPUT',
+                             type='NodeSocketInt')
+        ibpy.make_new_socket(tree, name='Position', io='INPUT',
+                             type='NodeSocketVector')
+        group_input = self.group_inputs
+        group_input.location = (-12 * 200, -4 * 100)
+        group_input.outputs["Iterations"].default_value = self.iterations
+        group_input.outputs["Position"].default_value = self.position
+
+        # --- seed trapezoid ---
+        seed, phi_node = self._build_trapezoid_frame(tree, location=(-11, 1))
+
+        # --- pin object placed at the Position input ---
+        pin = self._build_pin_frame(tree, (-9, -6))
+
+        # --- left panel: full subdivision (records the address) ---
+        seed_scold = StoredNamedAttribute(tree, location=(-6, 1),
+                                          data_type="BOOLEAN", domain="FACE",
+                                          name="SwitchColorOld", value=False, hide=True)
+        seed_ts = StoredNamedAttribute(tree, location=(-5, 1), data_type="INT",
+                                       domain="FACE", name="TranfoSequence",
+                                       value=0, hide=True)
+        create_geometry_line(tree, [seed, seed_scold, seed_ts])
+        before = {n.name for n in tree.nodes}
+        left_repeat = self._build_subdivision_repeat(
+            tree, seed_ts.geometry_out, phi_node, group_input.outputs["Iterations"],
+            x=-3, y=4, suffix="", with_parallelogram=True)
+        self._frame_new_nodes(tree, before, "Left Panel Subdivision", (-3, 4))
+        left_mats = self._build_coloring_frame(
+            tree, left_repeat.geometry_out, location=(31, 2), suffix="")
+
+        # --- right panel: reduced background, min(Iterations, 1) ---
+        # placed well below the (taller) left panel so the two frames don't overlap
+        right_iter = MathNode(tree, location=(-7, -34), operation="MINIMUM",
+                              inputs0=group_input.outputs["Iterations"], inputs1=1, hide=True)
+        before = {n.name for n in tree.nodes}
+        right_repeat = self._build_subdivision_repeat(
+            tree, seed.geometry_out, phi_node, right_iter.std_out,
+            x=-3, y=-34, suffix="_r", with_parallelogram=False)
+        self._frame_new_nodes(tree, before, "Right Panel background", (-3, -34))
+        right_mats = self._build_coloring_frame(
+            tree, right_repeat.geometry_out, location=(31, -34), suffix="_r")
+
+        # --- inverse IFS: walk the pin out of the ribbon ---
+
+        walked_pin = self._build_inverse_ifs(
+            tree, left_repeat, pin.geometry_out, x=33, y=-5)
+
+        # --- assemble the right panel (background + walked pin) and shift it ---
+        right_join = JoinGeometry(tree, location=(46, -6))
+        for g in right_mats:
+            links.new(g, right_join.geometry_in)
+        links.new(walked_pin, right_join.geometry_in)
+        right_tf = TransformGeometry(tree, location=(47, -5),
+                                     geometry=right_join.geometry_out,
+                                     translation=[self.right_shift, 0.0, 0.0])
+
+        # --- final output: left panel + left pin + right panel ---
+        final_join = JoinGeometry(tree, location=(51, 1))
+        for g in left_mats:
+            links.new(g, final_join.geometry_in)
+        links.new(pin.geometry_out, final_join.geometry_in)
+        links.new(right_tf.geometry_out, final_join.geometry_in)
+        links.new(final_join.geometry_out, self.group_outputs.inputs[0])
+        self.group_output.location = (54 * 200, 0)
+
+
+class AnalyserModifier(GeometryNodesModifier):
+    def __init__(self, n=100, max_depth=8, sample_point=None, point_radius=0.01, **kwargs):
+        self.n = n
+        self.max_depth = max_depth
+        # if given (x, y), classify this single fixed point instead of n random
+        # ones (lets a scene place a matching pin and animate the IFS steps)
+        self.sample_point = sample_point
+        # rendered size of the classified point (bump it up for a single point)
+        self.point_radius = point_radius
+        super().__init__('AnalyserModifier', automatic_layout=False,
+                         **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        out = self.group_outputs
+
+        out.location = (40 * 200, 0 * 200)
+        # create constants
+        (one, zero, f_xi, f_phi) = self._create_constants(tree, location=(-10, 0))
+        # create trapezoid
+        g_trapez = self._create_trapezoid(tree, zero, one, f_xi, f_phi, location=(-8, -1))
+        # create parallelogram
+        g_para = self._create_parallelogram(tree, one, f_xi, f_phi, location=(-8, 1))
+        # create substitution trapezoid
+        g_substitution_trap, trap1, trap2, trap3, para = self._substitution_trapezoid(tree, g_trapez, f_phi,
+                                                                                      location=(-4, -2))
+        # create inverse transformations
+        f_inverse_transforms = self._inverse_transforms(tree, trap1, trap2, para, trap3, location=(15, -6))
+
+        # create substitution parallelogram
+        # g_substitution_para = self._substitution_parallelogram(tree,g_para,f_phi,location=(-4,-1))
+        # create random sample points
+        g_points = self._random_samples(tree, location=(11, 7))
+        # classify each sample point by its analyser region
+        (g_sample, out_side) = self._sample_regions(tree, g_trapez, g_substitution_trap, g_points, location=(16, 4))
+        g_ifs = self._apply_ifs(tree, g_sample, f_inverse_transforms, g_substitution_trap, location=(23, 3))
+        g_color = self._colorize(tree, [g_ifs, out_side], location=(33, 3))
+        tree.links.new(g_color.geometry_out, out.inputs[0])
+
+    def _apply_ifs(self, tree, g_sample, inverse_transforms, g_trapez, location=(0, 0)):
+        (x, y) = location
+        links = tree.links
+
+        rr_trap = Reroute(tree, location=(x, y - 3), ins=g_trapez.geometry_out, hide=True, name="Trapez")
+        # IFS step count exposed as an InputInteger so it can be animated
+        # (retrieve with get_geometry_node_from_modifier(mod, "Steps")); default 4
+        # preserves the previous hard-coded iteration count.
+        steps = InputInteger(tree, location=(x - 1, y + 2), integer=4, name="Steps")
+        repeat = RepeatZone(tree, location=(x, y), node_width=6,
+                            iterations=steps.std_out, geometry=g_sample.geometry_out)
+        # transform point according to region
+        set_pos = SetPosition(tree, location=(x + 1, y), geometry=repeat.repeat_input.outputs["Geometry"],
+                              position=inverse_transforms.std_out)
+
+        # adjust region of point according to new position
+        # Find the nearest analyser face for the current point.
+        position = Position(tree, location=(x + 1, y - 3), hide=True)
+        sample_nearest = SampleNearest(
+            tree, location=(x + 2, y - 2), domain="FACE",
+            geometry=rr_trap.geometry_out,
+            sample_position=position.std_out)
+
+        polygon_attr = NamedAttribute(
+            tree, location=(x + 3, y - 2),
+            data_type="INT", name="PolygonType")
+
+        sample_index = SampleIndex(
+            tree, location=(x + 4, y - 1),
+            data_type="INT", domain="FACE",
+            geometry=rr_trap.geometry_out,
+            value=polygon_attr.std_out,
+            index=sample_nearest.std_out)
+
+        store_type = StoredNamedAttribute(
+            tree, location=(x + 5, y),
+            data_type="INT", domain="POINT",
+            name="Type", value=sample_index.std_out)
+
+        # Track Bottom/Top/Left transform labels through each repeat iteration
+        type_attr_ifs = NamedAttribute(tree, location=(x + 5, y - 1.9), data_type="INT", name="Type", hide=True)
+        old_top_attr_ifs = NamedAttribute(tree, location=(x + 5, y - 0.5), data_type="INT", name="OldTop", hide=True)
+        old_left_attr_ifs = NamedAttribute(tree, location=(x + 5.5, y - 1.2), data_type="INT", name="OldLeft",
+                                           hide=True)
+        old_bottom_attr_ifs = NamedAttribute(tree, location=(x + 5.5, y - 0.1), data_type="INT", name="OldBottom",
+                                             hide=True)
+
+        bottom_transform_ifs = IndexSwitch(tree, location=(x + 7, y - 2.1), data_type="INT",
+                                           index=type_attr_ifs.std_out)
+        for _ in range(5):
+            bottom_transform_ifs.new_item()
+        for slot in [1, 2, 3, 6, 7]:
+            links.new(old_bottom_attr_ifs.std_out, bottom_transform_ifs.slots[slot])
+        links.new(old_left_attr_ifs.std_out, bottom_transform_ifs.slots[4])
+        links.new(old_top_attr_ifs.std_out, bottom_transform_ifs.slots[5])
+
+        top_transform_ifs = IndexSwitch(tree, location=(x + 8.5, y - 1.8), data_type="INT",
+                                        index=type_attr_ifs.std_out)
+        for _ in range(5):
+            top_transform_ifs.new_item()
+        for slot in [1, 2, 3, 6, 7]:
+            links.new(old_top_attr_ifs.std_out, top_transform_ifs.slots[slot])
+        links.new(old_bottom_attr_ifs.std_out, top_transform_ifs.slots[4])
+        links.new(old_bottom_attr_ifs.std_out, top_transform_ifs.slots[5])
+
+        left_transform_ifs = IndexSwitch(tree, location=(x + 10, y - 1.6), data_type="INT",
+                                         index=type_attr_ifs.std_out)
+        for _ in range(5):
+            left_transform_ifs.new_item()
+        for slot in [1, 2, 3, 6]:
+            links.new(old_left_attr_ifs.std_out, left_transform_ifs.slots[slot])
+        links.new(old_bottom_attr_ifs.std_out, left_transform_ifs.slots[4])
+        links.new(old_bottom_attr_ifs.std_out, left_transform_ifs.slots[5])
+        links.new(old_top_attr_ifs.std_out, left_transform_ifs.slots[7])
+
+        store_bottom_ifs = StoredNamedAttribute(tree, location=(x + 6.5, y - 3.9), data_type="INT",
+                                                domain="POINT", name="Bottom",
+                                                value=bottom_transform_ifs.std_out, hide=False)
+        store_top_ifs = StoredNamedAttribute(tree, location=(x + 7.5, y - 3.7), data_type="INT",
+                                             domain="POINT", name="Top",
+                                             value=top_transform_ifs.std_out, hide=False)
+        store_left_ifs = StoredNamedAttribute(tree, location=(x + 8.5, y - 3.8), data_type="INT",
+                                              domain="POINT", name="Left",
+                                              value=left_transform_ifs.std_out, hide=False)
+
+        # Read back and store as OldBottom/OldTop/OldLeft for next iteration
+        bottom_attr2_ifs = NamedAttribute(tree, location=(x + 8.5, y - 4.9), data_type="INT",
+                                          name="Bottom", hide=True)
+        top_attr2_ifs = NamedAttribute(tree, location=(x + 9.5, y - 4.8), data_type="INT",
+                                       name="Top", hide=True)
+        left_attr2_ifs = NamedAttribute(tree, location=(x + 10.5, y - 4.9), data_type="INT",
+                                        name="Left", hide=True)
+        store_old_bottom_ifs = StoredNamedAttribute(tree, location=(x + 9.5, y - 3.9), data_type="INT",
+                                                    domain="POINT", name="OldBottom",
+                                                    value=bottom_attr2_ifs.std_out, hide=False)
+        store_old_top_ifs = StoredNamedAttribute(tree, location=(x + 10.5, y - 4.0), data_type="INT",
+                                                 domain="POINT", name="OldTop",
+                                                 value=top_attr2_ifs.std_out, hide=False)
+        store_old_left_ifs = StoredNamedAttribute(tree, location=(x + 11.5, y - 3.9), data_type="INT",
+                                                  domain="POINT", name="OldLeft",
+                                                  value=left_attr2_ifs.std_out, hide=False)
+
+        frame = Frame(tree, location=(x, y), name="Iterated Function System")
+        repeat.create_geometry_line([set_pos, store_type,
+                                     store_bottom_ifs, store_top_ifs, store_left_ifs,
+                                     store_old_bottom_ifs, store_old_top_ifs, store_old_left_ifs])
+
+        attr_old_pos = NamedAttribute(tree, location=(x + 13, y), name="OldPosition",
+                                      data_type="FLOAT_VECTOR", hide=True)
+        reset_position = SetPosition(tree, location=(x + 14, y), position=attr_old_pos.std_out, hilde=True,
+                                     name="ResetPosition")
+        create_geometry_line(tree, [repeat, reset_position])
+        frame.add(
+            [rr_trap, repeat, set_pos, polygon_attr, sample_nearest, sample_index, store_type,
+             type_attr_ifs, old_top_attr_ifs, old_left_attr_ifs, old_bottom_attr_ifs,
+             bottom_transform_ifs, top_transform_ifs, left_transform_ifs,
+             store_bottom_ifs, store_top_ifs, store_left_ifs,
+             bottom_attr2_ifs, top_attr2_ifs, left_attr2_ifs,
+             store_old_bottom_ifs, store_old_top_ifs, store_old_left_ifs,
+             attr_old_pos, reset_position])
+
+        return reset_position
+
+    def _inverse_transforms(self, tree, trap1, trap2, para, trap3, location=(0, 0)):
+        (x, y) = location
+        links = tree.links
+
+        # vertex sampling
+        pos = Position(tree, location=(x, y - 5), hide=True)
+        rr_trap1 = Reroute(tree, location=(x + 0.5, y - 1), name="trap1", ins=trap1.geometry_out)
+        rr_trap2 = Reroute(tree, location=(x + 0.5, y - 3), name="trap2", ins=trap2.geometry_out)
+        rr_para = Reroute(tree, location=(x + 0.5, y - 5), name="para", ins=para.geometry_out)
+        rr_trap3 = Reroute(tree, location=(x + 0.5, y - 7), name="trap3", ins=trap3.geometry_out)
+
+        connections = [rr_trap1, rr_trap2, rr_para, rr_trap3]
+        vertex_sample_nodes = []
+        for c, con in enumerate(connections):
+            for i in range(4):
+                si = SampleIndex(tree, location=(x + 1, y - 2 * c - 0.5 * i), name="v" + str(i + 1), index=i,
+                                 value=pos.std_out,
+                                 domain="POINT", data_type="FLOAT_VECTOR", hide=True, geometry=con.geometry_out)
+                vertex_sample_nodes.append(si)
+
+        (r_60, r_120, r_180) = self._create_rotations(tree, location=(x + 2, y - 1))
+        (one, zero, f_xi, f_phi) = self._create_constants(tree, location=(x + 2, y - 3))
+
+        f_k = make_function(
+            tree, name="k-Scale",
+            functions={"k": "phi,1,-,phi,/"},
+            inputs=["phi"], outputs=["k"],
+            scalars=["phi", "k"],
+            hide=True, location=(x + 3, y - 6))
+        links.new(f_phi.outputs["phi"], f_k.inputs["phi"])
+
+        # compare with notes in IFS_Shortcut.nb
+        transforms = {
+            3: "rot120,1,k,/,scale,p,v4,csub,cmul,v1,cadd",
+            4: "p,v4,csub,v2,v1,csub,1,phi,phi,*,/,scale,csub,-1,k,/,scale,v1,cadd",
+            5: "rot60,1,k,/,scale,p,v2,csub,v1,v2,csub,1,phi,/,scale,csub,cmul,v2,cadd",
+            6: "p,v1,v2,csub,1,phi,/,scale,cadd,v1,csub,1,k,/,scale,v1,cadd",
+        }
+
+        position = Position(tree, location=(x + 4, y + 1))
+        trafos = {}
+        t = 0
+        for key, val in transforms.items():
+            trafo = make_function(tree, name="invTrafo" + str(key),
+                                  functions={"p": val},
+                                  inputs=["p", "one", "phi", "xi", "rot60", "rot120", "k", "v1", "v2", "v3", "v4"],
+                                  outputs=["p"], scalars=["k", "phi"],
+                                  vectors=["p", "rot60", "rot120", "v1", "v2", "v3", "v4"],
+                                  location=(x + 5, y - 2 * (key - 3)))
+            links.new(f_phi.outputs["phi"], trafo.inputs["phi"])
+            links.new(r_60.outputs["rot60"], trafo.inputs["rot60"])
+            links.new(r_120.outputs["rot120"], trafo.inputs["rot120"])
+            links.new(position.std_out, trafo.inputs["p"])
+            links.new(f_k.outputs["k"], trafo.inputs["k"])
+            trafos[key] = trafo.outputs["p"]
+            for i in range(4):
+                links.new(vertex_sample_nodes[i + 4 * t].std_out, trafo.inputs["v" + str(i + 1)])
+            t += 1
+
+        attr_type = NamedAttribute(tree, location=(x + 6, y + 1), data_type="INT", domain="POINT", name="Type",
+                                   hide=True)
+        switch = IndexSwitch(tree, location=(x + 6, y), data_type="VECTOR", index=attr_type.std_out)
+
+        # the first three slots remain untransformed
+        for _ in range(7 - 2):
+            switch.new_item()
+        slots = [position.std_out, position.std_out, position.std_out, trafos[3], trafos[4], trafos[5], trafos[6]]
+        for slot_idx, slot in enumerate(slots):
+            links.new(slot, switch.slots[slot_idx + 1])  # the zero slot is for the index variable
+
+        frame = Frame(tree, location=(x, y), name="InverseTransformations")
+        frame.add(
+            [r_60, r_120, r_180] + vertex_sample_nodes + [pos, rr_trap1, rr_trap2, rr_trap3, rr_para, one, zero, f_xi,
+                                                          f_phi, f_k, r_60, r_120, r_180, position, *trafos.values(),
+                                                          attr_type, switch])
+
+        return switch
+
+    def _colorize(self, tree, geometries, location=(0, 0)):
+        (x, y) = location
+        links = tree.links
+
+        join = JoinGeometry(tree, location=(x - 1, y))
+        for geometry in geometries:
+            links.new(geometry.geometry_out, join.geometry_in)
+
+        for_each = ForEachZone(tree, location=(x, y), domain="POINT", name="ColorizeEachPoint",
+                               geometry=join.geometry_out, node_width=7)
+        attr_type = NamedAttribute(tree, location=(x, y - 3), name="Type", data_type="INT", domain="POINT",
+                                   hide=True)
+        sample_index = SampleIndex(tree, location=(x + 1, y - 1), domain="POINT", geometry=for_each.element,
+                                   data_type="INT", value=attr_type.std_out, hide=True)
+        # PolygonType -> material:
+        #   0 outside, 1 trapez_left, 2 trapez_top, 3 parallelogram, 4 trapez_bottom, 5 bottom, 6 above
+        materials = ["background", "example", "joker", "custom1", "custom2", "important", "custom3"]
+
+        index_switch = IndexSwitch(
+            tree, location=(x + 3, y - 1),
+            data_type="MATERIAL", index=sample_index.std_out)
+        for _ in range(len(materials) - 2):
+            index_switch.new_item()
+        for slot_idx, mat_name in enumerate(materials):
+            index_switch.slots[slot_idx + 1].default_value = (
+                ibpy.get_material(mat_name))
+
+        # Dynamic material selection for slots 1 and 2 based on Bottom/Top transform labels
+        bottom_attr_c = NamedAttribute(tree, location=(x, y - 3.2), name="Bottom",
+                                       data_type="INT", hide=False)
+        sample_bottom_c = SampleIndex(tree, location=(x + 1, y - 2.7), domain="POINT",
+                                      geometry=for_each.element, data_type="INT",
+                                      value=bottom_attr_c.std_out, hide=False)
+        bottom_switch_c = IndexSwitch(tree, location=(x + 2.7, y - 1.9), data_type="MATERIAL",
+                                      index=sample_bottom_c.std_out)
+        bottom_switch_c.new_item()
+        bottom_switch_c.slots[1].default_value = ibpy.get_material("example")
+        bottom_switch_c.slots[2].default_value = ibpy.get_material("joker")
+        bottom_switch_c.slots[3].default_value = ibpy.get_material("Left")
+
+        top_attr_c = NamedAttribute(tree, location=(x, y - 4.1), name="Top",
+                                    data_type="INT", hide=False)
+        sample_top_c = SampleIndex(tree, location=(x + 1, y - 3.8), domain="POINT",
+                                   geometry=for_each.element, data_type="INT",
+                                   value=top_attr_c.std_out, hide=False)
+        top_switch_c = IndexSwitch(tree, location=(x + 2.7, y - 2.9), data_type="MATERIAL",
+                                   index=sample_top_c.std_out)
+        top_switch_c.new_item()
+        top_switch_c.slots[1].default_value = ibpy.get_material("example")
+        top_switch_c.slots[2].default_value = ibpy.get_material("joker")
+        top_switch_c.slots[3].default_value = ibpy.get_material("Left")
+
+        # Override material slots 1 (example) and 2 (joker) with dynamic selections
+        links.new(bottom_switch_c.std_out, index_switch.slots[2])
+        links.new(top_switch_c.std_out, index_switch.slots[3])
+
+        sphere = UVSphere(tree, location=(x + 2, y - 1), radius=self.point_radius, segments=8, rings=4, hide=True)
+        iop = InstanceOnPoints(
+            tree, location=(x + 3, y), hide=True,
+            instance=sphere.geometry_out)
+        set_mat = SetMaterial(
+            tree, location=(x + 4, y),
+            material=index_switch.std_out, hide=True)
+        realize = RealizeInstances(tree, location=(x + 5, y), hide=True)
+        for_each.create_geometry_line(nodes=[iop, set_mat, realize])
+
+        frame = Frame(tree, location=(x, y), name="Colorize")
+        frame.add([for_each, attr_type, sample_index, index_switch,
+                   bottom_attr_c, sample_bottom_c, bottom_switch_c,
+                   top_attr_c, sample_top_c, top_switch_c,
+                   sphere, iop, set_mat, realize])
+
+        return for_each
+
+    def _random_samples(self, tree, location=(0, 0)):
+        (x, y) = location
+        if self.sample_point is not None:
+            # a single fixed point (so a scene pin can mark it)
+            count = 1
+            pos = InputVector(tree, value=[self.sample_point[0], self.sample_point[1], 0.0],
+                              name="SamplePoint", location=(x, y - 1), hide=True)
+            pos_out = pos.std_out
+        else:
+            count = self.n
+            pos = RandomValue(tree, data_type="FLOAT_VECTOR",
+                              min=Vector([-0.25, -0.25, 0]), max=Vector([3, 1, 0]),
+                              location=(x, y - 1), hide=True)
+            pos_out = pos.std_out
+        point_count = InputInteger(tree, value=count, location=(x - 1, y), hide=True, name="PointCount")
+        points = Points(tree, count=point_count.std_out, location=(x, y),
+                        radius=0.01, hide=True)
+
+        pts_to_verts = PointsToVertices(tree, location=(x + 1, y),
+                                        points=points.geometry_out,
+                                        hide=False)
+
+        set_pos = SetPosition(tree, position=pos_out,
+                              geometry=pts_to_verts.geometry_out,
+                              location=(x + 2, y), hide=True)
+
+        position = Position(tree, location=(x + 2, y - 2), hide=True)
+
+        store_position = StoredNamedAttribute(tree, location=(x + 3, y),
+                                              data_type="FLOAT_VECTOR", name="OldPosition",
+                                              value=position.std_out, hide=True)
+
+        store_old_bottom = StoredNamedAttribute(tree, location=(x + 4, y), data_type="INT",
+                                                domain="POINT", name="OldBottom", value=0, hide=True)
+        store_old_top = StoredNamedAttribute(tree, location=(x + 5, y), data_type="INT",
+                                             domain="POINT", name="OldTop", value=1, hide=True)
+        store_old_left = StoredNamedAttribute(tree, location=(x + 6, y), data_type="INT",
+                                              domain="POINT", name="OldLeft", value=2, hide=True)
+
+        create_geometry_line(tree, [points, set_pos, store_position,
+                                    store_old_bottom, store_old_top, store_old_left])
+
+        frame = Frame(tree, location=(x, y), name="RandomPoints")
+        frame.add([points, pos, pts_to_verts, set_pos, position, store_position,
+                   store_old_bottom, store_old_top, store_old_left])
+
+        return store_old_left
+
+    def _sample_regions(self, tree, g_trap, g_substitution_trap, g_points, location):
+        (x, y) = location
+        links = tree.links
+
+        position = Position(tree, location=(x - 2.5, y - 2))
+        inside = InsidePolygon(tree, location=(x - 2, y), target_geometry=g_trap.geometry_out,
+                               source_position=position.std_out, hide=True)
+        sep_geo = SeparateGeometry(tree, location=(x - 1, y), domain="POINT",
+                                   selection=inside.std_out, hide=True)
+
+        # outside
+        attr_type = StoredNamedAttribute(tree, location=(x, y + 1), name="Type", data_type="INT", value=0)
+
+        create_geometry_line(tree, [attr_type], ins=sep_geo.inverse)
+
+        foreach = ForEachZone(tree, location=(x, y), domain="POINT",
+                              node_width=5)
+        foreach.add_socket(socket_type="VECTOR", name="Position",
+                           value=position.std_out, for_input=True)
+
+        # Find the nearest analyser face for the current point.
+        sample_nearest = SampleNearest(
+            tree, location=(x + 1, y - 1), domain="FACE",
+            geometry=g_substitution_trap.geometry_out,
+            sample_position=foreach.foreach_input.outputs["Position"])
+
+        polygon_attr = NamedAttribute(
+            tree, location=(x + 1, y - 3),
+            data_type="INT", name="PolygonType")
+
+        sample_index = SampleIndex(
+            tree, location=(x + 2, y - 1),
+            data_type="INT", domain="FACE",
+            geometry=g_substitution_trap.geometry_out,
+            value=polygon_attr.std_out,
+            index=sample_nearest.std_out)
+
+        store_type = StoredNamedAttribute(
+            tree, location=(x + 3, y),
+            data_type="INT", domain="POINT",
+            name="Type", value=sample_index.std_out)
+
+        # Track Bottom/Top/Left transform labels per point through the IFS iteration
+        type_attr_fs = NamedAttribute(tree, location=(x + 2, y - 2.2), data_type="INT", name="Type", hide=True)
+        old_bottom_attr_fs = NamedAttribute(tree, location=(x + 2, y - 0.1), data_type="INT", name="OldBottom",
+                                            hide=True)
+        old_top_attr_fs = NamedAttribute(tree, location=(x + 1.6, y - 0.8), data_type="INT", name="OldTop", hide=True)
+        old_left_attr_fs = NamedAttribute(tree, location=(x + 1.8, y - 1.5), data_type="INT", name="OldLeft", hide=True)
+
+        # BottomTransform: type→which-old-slot becomes the new Bottom label
+        bottom_transform_fs = IndexSwitch(tree, location=(x + 3.6, y - 2.4), data_type="INT",
+                                          index=type_attr_fs.std_out)
+        for _ in range(5):
+            bottom_transform_fs.new_item()
+        for slot in [1, 2, 3, 6, 7]:
+            links.new(old_bottom_attr_fs.std_out, bottom_transform_fs.slots[slot])
+        links.new(old_left_attr_fs.std_out, bottom_transform_fs.slots[4])
+        links.new(old_top_attr_fs.std_out, bottom_transform_fs.slots[5])
+
+        # TopTransform
+        top_transform_fs = IndexSwitch(tree, location=(x + 4.8, y - 2.0), data_type="INT",
+                                       index=type_attr_fs.std_out)
+        for _ in range(5):
+            top_transform_fs.new_item()
+        for slot in [1, 2, 3, 6, 7]:
+            links.new(old_top_attr_fs.std_out, top_transform_fs.slots[slot])
+        links.new(old_bottom_attr_fs.std_out, top_transform_fs.slots[4])
+        links.new(old_bottom_attr_fs.std_out, top_transform_fs.slots[5])
+
+        # LeftTransform
+        left_transform_fs = IndexSwitch(tree, location=(x + 6.1, y - 1.8), data_type="INT",
+                                        index=type_attr_fs.std_out)
+        for _ in range(5):
+            left_transform_fs.new_item()
+        for slot in [1, 2, 3, 6]:
+            links.new(old_left_attr_fs.std_out, left_transform_fs.slots[slot])
+        links.new(old_bottom_attr_fs.std_out, left_transform_fs.slots[4])
+        links.new(old_bottom_attr_fs.std_out, left_transform_fs.slots[5])
+        links.new(old_top_attr_fs.std_out, left_transform_fs.slots[7])
+
+        store_bottom_fs = StoredNamedAttribute(tree, location=(x + 5.1, y - 3.9), data_type="INT",
+                                               domain="POINT", name="Bottom",
+                                               value=bottom_transform_fs.std_out, hide=False)
+        store_top_fs = StoredNamedAttribute(tree, location=(x + 6.1, y - 3.8), data_type="INT",
+                                            domain="POINT", name="Top",
+                                            value=top_transform_fs.std_out, hide=False)
+        store_left_fs = StoredNamedAttribute(tree, location=(x + 7.0, y - 3.8), data_type="INT",
+                                             domain="POINT", name="Left",
+                                             value=left_transform_fs.std_out, hide=False)
+
+        # Read back the new Bottom/Top/Left and store as OldBottom/OldTop/OldLeft for next iteration
+        bottom_attr2_fs = NamedAttribute(tree, location=(x + 7.0, y - 4.8), data_type="INT",
+                                         name="Bottom", hide=False)
+        top_attr2_fs = NamedAttribute(tree, location=(x + 7.8, y - 4.7), data_type="INT",
+                                      name="Top", hide=False)
+        left_attr2_fs = NamedAttribute(tree, location=(x + 8.7, y - 4.7), data_type="INT",
+                                       name="Left", hide=False)
+        store_old_bottom_fs = StoredNamedAttribute(tree, location=(x + 7.8, y - 3.8), data_type="INT",
+                                                   domain="POINT", name="OldBottom",
+                                                   value=bottom_attr2_fs.std_out, hide=False)
+        store_old_top_fs = StoredNamedAttribute(tree, location=(x + 8.6, y - 3.8), data_type="INT",
+                                                domain="POINT", name="OldTop",
+                                                value=top_attr2_fs.std_out, hide=False)
+        store_old_left_fs = StoredNamedAttribute(tree, location=(x + 9.5, y - 3.8), data_type="INT",
+                                                 domain="POINT", name="OldLeft",
+                                                 value=left_attr2_fs.std_out, hide=False)
+
+        foreach.create_geometry_line([store_type, store_bottom_fs, store_top_fs, store_left_fs,
+                                      store_old_bottom_fs, store_old_top_fs, store_old_left_fs])
+
+        create_geometry_line(tree, [g_points, sep_geo, foreach])
+
+        frame = Frame(tree, location=(x, y), name="FirstSampling")
+        frame.add([position, inside, sep_geo, foreach, sample_nearest, polygon_attr, sample_index,
+                   store_type, type_attr_fs, old_bottom_attr_fs, old_top_attr_fs, old_left_attr_fs,
+                   bottom_transform_fs, top_transform_fs, left_transform_fs,
+                   store_bottom_fs, store_top_fs, store_left_fs,
+                   bottom_attr2_fs, top_attr2_fs, left_attr2_fs,
+                   store_old_bottom_fs, store_old_top_fs, store_old_left_fs])
+
+        return foreach, attr_type
+
+    def _create_constants(self, tree, location):
+        (x, y) = location
+
+        one = InputVector(tree, value=[1, 0, 0], name="one",
+                          location=(x, y), hide=True)
+        zero = InputVector(tree, value=[0, 0, 0], name="zero",
+                           location=(x, y - 0.5), hide=True)
+        xi_function = make_function(tree, name="xi", functions={
+            "xi": ["1,2,/", "3,sqrt,2,/", "0"]
+        }, outputs=["xi"], vectors=["xi"],
+                                    location=(x, y - 1), hide=True)
+        phi_function = make_function(tree, name="phi", functions={
+            "phi": "1,5,sqrt,+,2,/"
+        }, outputs=["phi"], scalars=["phi"],
+                                     location=(x, y - 1.5), hide=True)
+
+        return (one, zero, xi_function, phi_function)
+
+    def _create_rotations(self, tree, location):
+        (x, y) = location
+
+        rots = []
+
+        for i in range(0, 3):
+            r = (i + 1) * 60
+            input_vector = InputVector(tree, value=[0, (i + 1) * pi / 3, 0], location=(x, y - 0.5 * i),
+                                       name="rot" + str(r), hide=True)
+            rots.append(
+                make_function(tree, name="rot" + str(r), functions={
+                    "rot" + str(r): "v,cexp"
+                }, outputs=["rot" + str(r)], vectors=["v", "rot" + str(r)],
+                              inputs=["v"],
+                              location=(x + 1, y - 0.5 * i), hide=True)
+            )
+            tree.links.new(input_vector.std_out, rots[-1].inputs["v"])
+        return rots
+
+    def _create_trapezoid(self, tree,
+                          zero, one, f_xi, f_phi, location):
+        (x, y) = location
+        params_in = ["zero", "one", "xi", "phi"]
+        params_out = ["a", "b", "c", "d"]
+        links = tree.links
+
+        vertices = make_function(tree, name="VerticesTrapez", functions={
+            "a": "zero",
+            "b": "one,phi,1,+,scale",
+            "c": "one,phi,scale,xi,cadd",
+            "d": "xi",
+        }, inputs=params_in, outputs=params_out,
+                                 vectors=params_out + params_in,
+                                 location=(x, y), hide=True)
+        links.new(zero.std_out, vertices.inputs["zero"])
+        links.new(one.std_out, vertices.inputs["one"])
+        links.new(f_xi.outputs["xi"], vertices.inputs["xi"])
+        links.new(f_phi.outputs["phi"], vertices.inputs["phi"])
+
+        trapez = Quadrilateral(tree, location=(x + 1, y), mode="POINTS",
+                               name="Trapez", hide=True)
+        links.new(vertices.outputs["a"], trapez.inputs["Point 1"])
+        links.new(vertices.outputs["b"], trapez.inputs["Point 2"])
+        links.new(vertices.outputs["c"], trapez.inputs["Point 3"])
+        links.new(vertices.outputs["d"], trapez.inputs["Point 4"])
+
+        fill = FillCurve(tree, location=(x + 2, y), hide=True)
+
+        # Mark the trapezoid face with PolygonType=0.
+        store_trapez = StoredNamedAttribute(
+            tree, location=(x + 3, y),
+            data_type="INT", domain="FACE",
+            name="PolygonType", label="MarkTrapez",
+            value=0, hide=True)
+        create_geometry_line(tree, [trapez, fill, store_trapez])
+
+        return store_trapez
+
+    def _create_parallelogram(self, tree, one, f_xi, f_phi, location):
+        (x, y) = location
+        params_in = ["one", "xi", "phi"]
+        params_out = ["a", "b", "c", "d"]
+        links = tree.links
+
+        vertices = make_function(tree, name="VerticesParallelogram", functions={
+            "a": "one",
+            "b": "one,phi,1,+,scale",
+            "c": "one,phi,scale,xi,cadd",
+            "d": "xi",
+        }, inputs=params_in, outputs=params_out,
+                                 vectors=params_out + params_in,
+                                 location=(x, y), hide=True)
+        links.new(one.std_out, vertices.inputs["one"])
+        links.new(f_xi.outputs["xi"], vertices.inputs["xi"])
+        links.new(f_phi.outputs["phi"], vertices.inputs["phi"])
+
+        parallelogram = Quadrilateral(tree, location=(x + 1, y), mode="POINTS",
+                                      name="Parallelogram", hide=True)
+        links.new(vertices.outputs["a"], parallelogram.inputs["Point 1"])
+        links.new(vertices.outputs["b"], parallelogram.inputs["Point 2"])
+        links.new(vertices.outputs["c"], parallelogram.inputs["Point 3"])
+        links.new(vertices.outputs["d"], parallelogram.inputs["Point 4"])
+
+        fill = FillCurve(tree, location=(x + 2, y), hide=True)
+
+        # Mark the parallelogram face with PolygonType=0.
+        store_parallelogram = StoredNamedAttribute(
+            tree, location=(x + 3, y),
+            data_type="INT", domain="FACE",
+            name="PolygonType", label="MarkParallelgram",
+            value=1, hide=True)
+        create_geometry_line(tree, [parallelogram, fill, store_parallelogram])
+
+        return store_parallelogram
+
+    def _substitution_trapezoid(self, tree, g_trapez, f_phi, location):
+        (x, y) = location
+        links = tree.links
+
+        pos = Position(tree, location=(x, y - 5))
+        rr_phi = Reroute(tree, location=(-4, -10), name="phi", ins=f_phi.outputs["phi"], hide=False)
+        rr_trap1 = Reroute(tree, location=(-3.5, -6.5), name="trap", ins=g_trapez.geometry_out, hide=False)
+        rr_trap2 = Reroute(tree, location=(0.5, -8), name="trap", ins=g_trapez.geometry_out, hide=False)
+
+        sample_vs = []
+        for i in range(0, 4):
+            sample_vs.append(SampleIndex(tree, location=(x + 1, y - 4 - 0.5 * i),
+                                         geometry=rr_trap1.std_out,
+                                         data_type="FLOAT_VECTOR", domain="POINT",
+                                         name="v" + str(i + 1), index=i,
+                                         value=pos.std_out, hide=True))
+
+        # --- Four transformations (PolygonType: 1 = trapezoid sub-piece,
+        #                                       2 = parallelogram sub-piece) ---
+        transformations = {
+            1: ["Transf1", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "-2,3,/,pi,*"],
+                "translation": "v4,v1,sub",
+                "pivot": "v1"
+            }, 3],
+            2: ["Transf2", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi"],
+                "translation": "v4,v1,sub,v2,v1,sub,1,phi,phi,*,/,scale,add",
+                "pivot": "v1"
+            }, 4],
+            3: ["Transf3", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "0"],
+                "translation": "v2,v1,sub,1,phi,/,scale",
+                "pivot": "v1"
+            }, 6],
+            4: ["Transf4", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi,-3,/"],
+                "translation": "v1,v2,sub,1,phi,phi,*,/,scale",
+                "pivot": "v2"
+            }, 5],
+        }
+
+        scale_function = make_function(
+            tree, name="k-Scale",
+            functions={"k": "phi,1,-,phi,/"},
+            inputs=["phi"], outputs=["k"],
+            scalars=["phi", "k"],
+            hide=True, location=(x + 1, y - 2.5))
+        links.new(rr_phi.std_out, scale_function.inputs["phi"])
+
+        join_inner = JoinGeometry(tree, location=(x + 18, y - 2))
+
+        vertex_labels = ["v1", "v2", "v3", "v4"]
+        # Track the realized output of each transformation for the
+        # leftover-quad sampling below.
+        realizes = {}
+        for i, [name, function, polygon_type] in transformations.items():
+            row_y = y - 2.0 * i
+
+            if i == 4:
+                v1_new = make_function(
+                    tree, name="v1New",
+                    functions={"v1": "v4,v2,v3,sub,add"},
+                    inputs=vertex_labels[1:4], outputs=["v1"],
+                    vectors=vertex_labels,
+                    hide=True, location=(x + 2, row_y))
+                for k in range(1, 4):
+                    links.new(sample_vs[k].std_out,
+                              v1_new.inputs[vertex_labels[k]])
+
+                index = Index(tree, location=(x + 3, row_y),
+                              domain="POINT", hide=True)
+                index_select = CompareNode(
+                    tree, location=(x + 4, row_y), data_type="INT",
+                    inputs0=index.std_out, inputs1=0, operation="EQUAL",
+                    hide=True, name="=")
+                set_pos_i = SetPosition(
+                    tree, location=(x + 5, row_y),
+                    selection=index_select.std_out, hide=True,
+                    position=v1_new.outputs["v1"])
+
+            transformation = make_function(
+                tree, functions=function,
+                name=name, location=(x + 5, row_y - 0.5), hide=True,
+                inputs=["phi", "k"] + vertex_labels,
+                outputs=["rotation", "scaling", "translation", "pivot"],
+                scalars=["phi", "k"],
+                vectors=vertex_labels + ["rotation", "scaling",
+                                         "translation", "pivot"])
+            links.new(rr_phi.std_out,
+                      transformation.inputs["phi"])
+            links.new(scale_function.outputs["k"],
+                      transformation.inputs["k"])
+            for sample, label in zip(sample_vs, vertex_labels):
+                links.new(sample.std_out, transformation.inputs[label])
+
+            geom_to_inst = GeometryToInstance(
+                tree, location=(x + 6, row_y))
+            scale_elem = ScaleElements(
+                tree, location=(x + 7, row_y), domain="FACE",
+                scale=transformation.outputs["scaling"],
+                center=transformation.outputs["pivot"], hide=True)
+            rotate_inst = RotateInstances(
+                tree, location=(x + 8, row_y),
+                instances=scale_elem.geometry_out,
+                rotation=transformation.outputs["rotation"],
+                pivot_point=transformation.outputs["pivot"],
+                local_space=False, hide=True)
+            translate_inst = TranslateInstances(
+                tree, location=(x + 9, row_y),
+                instances=rotate_inst.geometry_out,
+                translation=transformation.outputs["translation"],
+                local_space=False, hide=True)
+            realize_inst = RealizeInstances(
+                tree, location=(x + 10, row_y), hide=True)
+            links.new(translate_inst.geometry_out,
+                      realize_inst.geometry_in)
+            realizes[i] = realize_inst
+
+            store_kind = StoredNamedAttribute(
+                tree, location=(x + 11, row_y),
+                data_type="INT", domain="FACE",
+                name="PolygonType", value=polygon_type, hide=True)
+
+            if i == 4:
+                create_geometry_line(tree,
+                                     [set_pos_i, geom_to_inst, scale_elem,
+                                      rotate_inst, translate_inst, realize_inst,
+                                      store_kind, join_inner], ins=rr_trap2.geometry_out)
+            else:
+                create_geometry_line(tree,
+                                     [geom_to_inst, scale_elem, rotate_inst,
+                                      translate_inst, realize_inst, store_kind,
+                                      join_inner], ins=rr_trap2.geometry_out)
+
+        # create left-over faces
+        y -= 2
+        rr_sub1 = Reroute(tree, location=(x + 12, y + 1), hide=True, name="sub1", ins=realizes[1].geometry_out)
+        rr_sub3 = Reroute(tree, location=(x + 12, y + 1.5), hide=True, name="sub3", ins=realizes[3].geometry_out)
+        rr_sub4 = Reroute(tree, location=(x + 12, y + 2), hide=True, name="sub4", ins=realizes[4].geometry_out)
+
+        position = Position(tree, location=(x + 13, y + 2), hide=True)
+
+        sample_indices_below = [
+            SampleIndex(tree, location=(x + 14, y + 1), domain="POINT", geometry=rr_sub1.geometry_out,
+                        value=position.std_out, index=2, hide=True),
+            SampleIndex(tree, location=(x + 14, y + 1.5), domain="POINT", geometry=rr_sub4.geometry_out,
+                        value=position.std_out, index=1, hide=True),
+            SampleIndex(tree, location=(x + 14, y + 2), domain="POINT", geometry=rr_sub4.geometry_out,
+                        value=position.std_out, index=0, hide=True),
+            SampleIndex(tree, location=(x + 14, y + 2.5), domain="POINT", geometry=rr_sub1.geometry_out,
+                        value=position.std_out, index=3, hide=True),
+        ]
+
+        sample_indices_above = [
+            SampleIndex(tree, location=(x + 14, y + 3), domain="POINT", geometry=rr_sub3.geometry_out,
+                        value=position.std_out, index=3, hide=True),
+            SampleIndex(tree, location=(x + 14, y + 3.5), domain="POINT", geometry=rr_sub3.geometry_out,
+                        value=position.std_out, index=2, hide=True),
+            sample_vs[2],
+            SampleIndex(tree, location=(x + 14, y + 4), domain="POINT", geometry=rr_sub4.geometry_out,
+                        value=position.std_out, index=3, hide=True),
+        ]
+
+        quad_below = Quadrilateral(tree, location=(x + 15, y + 1), mode="POINTS",
+                                   name="QuadBelow",
+                                   hide=True)
+        below_fill = FillCurve(tree, location=(x + 16, y + 1), hide=True)
+        below_attr = StoredNamedAttribute(tree, location=(x + 17, y + 1), data_type="INT", domain="FACE",
+                                          name="PolygonType", value=1, hide=True)
+        quad_above = Quadrilateral(tree, location=(x + 15, y + 2), mode="POINTS", hide=True)
+        above_fill = FillCurve(tree, location=(x + 16, y + 2), hide=True)
+        above_attr = StoredNamedAttribute(tree, location=(x + 17, y + 2), data_type="INT", domain="FACE",
+                                          name="PolygonType", value=2, hide=True)
+
+        for i in range(4):
+            links.new(sample_indices_below[i].std_out, quad_below.inputs["Point " + str(i + 1)])
+            links.new(sample_indices_above[i].std_out, quad_above.inputs["Point " + str(i + 1)])
+
+        create_geometry_line(tree, [quad_below, below_fill, below_attr, join_inner])
+        create_geometry_line(tree, [quad_above, above_fill, above_attr, join_inner])
+
+        return join_inner, *(realizes.values())
+
+    def _substitution_parallelogram(self, tree, g_para, f_phi, location):
+        (x, y) = location
+        links = tree.links
+
+        x += 1
+        rr_phi = Reroute(tree, location=(-4, 6), ins=f_phi.outputs["phi"], hide=False, name="phi")
+        rr_para2 = Reroute(tree, location=(0, 4), name="para1", ins=g_para.geometry_out, hide=False)
+        rr_para = Reroute(tree, location=(-3.5, -1), name="para2", ins=g_para.geometry_out, hide=False)
+
+        pos = Position(tree, location=(x - 1, y + 2))
+        sample_vs = []
+        for i in range(4):
+            sample_vs.append(
+                SampleIndex(tree, location=(x, y + 0.5 * i),
+                            geometry=rr_para.geometry_out, index=i, name="v" + str(i + 1),
+                            data_type="FLOAT_VECTOR", domain="POINT",
+                            value=pos.std_out, hide=True)
+            )
+
+        transformations = {
+            2: ["Transf2", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi"],
+                "translation": "v4,v1,sub,v2,v1,sub,1,phi,phi,*,/,scale,add",
+                "pivot": "v1"
+            }, 4],
+            3: ["Transf4", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "pi,-3,/"],
+                "translation": "v1,v2,sub,1,phi,/,scale",
+                "pivot": "v2"
+            }, 6],
+            4: ["Transf3", {
+                "scaling": ["k", "k", "k"],
+                "rotation": ["0", "0", "0"],
+                "translation": "v2,v1,sub,1,phi,/,scale",
+                "pivot": "v1"
+            }, 5],
+        }
+        scale_function = make_function(
+            tree, name="Scale",
+            functions={"k": "phi,1,-,phi,/"},
+            inputs=["phi"], outputs=["k"],
+            scalars=["phi", "k"],
+            hide=True, location=(x, y + 2.5))
+        links.new(rr_phi.std_out, scale_function.inputs["phi"])
+
+        join_inner = JoinGeometry(tree, location=(x + 17, y))
+
+        vertex_labels = ["v1", "v2", "v3", "v4"]
+        realizes = {}
+        for i, [name, function, polygon_type] in transformations.items():
+            row_y = y + 2.0 * i
+
+            if i in (2, 4):
+                v1_new = make_function(
+                    tree, name="v1New",
+                    functions={"v1": "v2,v1,v2,sub,phi,1,+,phi,/,scale,add"},
+                    inputs=vertex_labels[0:2] + ["phi"], outputs=["v1"],
+                    vectors=vertex_labels[0:2], scalars=["phi"],
+                    hide=True, location=(x + 1, row_y))
+                for k in range(0, 2):
+                    links.new(sample_vs[k].std_out,
+                              v1_new.inputs[vertex_labels[k]])
+                    links.new(rr_phi.std_out,
+                              v1_new.inputs["phi"])
+
+                index = Index(tree, location=(x + 2, row_y),
+                              domain="POINT", hide=True)
+                index_select = CompareNode(
+                    tree, location=(x + 3, row_y), data_type="INT",
+                    inputs0=index.std_out, inputs1=0, operation="EQUAL",
+                    hide=True, name="=")
+                set_pos_i = SetPosition(
+                    tree, location=(x + 4, row_y),
+                    geometry=g_para.geometry_out,
+                    selection=index_select.std_out, hide=True,
+                    position=v1_new.outputs["v1"])
+
+            transformation = make_function(
+                tree, functions=function,
+                name=name, location=(x + 4, row_y - 0.5), hide=True,
+                inputs=["phi", "k"] + vertex_labels,
+                outputs=["rotation", "scaling", "translation", "pivot"],
+                scalars=["phi", "k"],
+                vectors=vertex_labels + ["rotation", "scaling",
+                                         "translation", "pivot"])
+            links.new(rr_phi.std_out,
+                      transformation.inputs["phi"])
+            links.new(scale_function.outputs["k"],
+                      transformation.inputs["k"])
+            for sample, label in zip(sample_vs, vertex_labels):
+                links.new(sample.std_out, transformation.inputs[label])
+
+            geom_to_inst = GeometryToInstance(
+                tree, location=(x + 5, row_y))
+            scale_elem = ScaleElements(
+                tree, location=(x + 6, row_y), domain="FACE",
+                scale=transformation.outputs["scaling"],
+                center=transformation.outputs["pivot"], hide=True)
+            rotate_inst = RotateInstances(
+                tree, location=(x + 7, row_y),
+                instances=scale_elem.geometry_out,
+                rotation=transformation.outputs["rotation"],
+                pivot_point=transformation.outputs["pivot"],
+                local_space=False, hide=True)
+            translate_inst = TranslateInstances(
+                tree, location=(x + 8, row_y),
+                instances=rotate_inst.geometry_out,
+                translation=transformation.outputs["translation"],
+                local_space=False, hide=True)
+            realize_inst = RealizeInstances(
+                tree, location=(x + 9, row_y), hide=True)
+            realizes[i] = realize_inst
+            links.new(translate_inst.geometry_out,
+                      realize_inst.geometry_in)
+            store_kind = StoredNamedAttribute(
+                tree, location=(x + 10, row_y),
+                data_type="INT", domain="FACE",
+                name="PolygonType", value=polygon_type, hide=True)
+
+            if i != 3:
+                create_geometry_line(tree,
+                                     [set_pos_i, geom_to_inst, scale_elem,
+                                      rotate_inst, translate_inst, realize_inst,
+                                      store_kind, join_inner], ins=rr_para2.geometry_out)
+            else:
+                create_geometry_line(tree,
+                                     [geom_to_inst, scale_elem, rotate_inst,
+                                      translate_inst, realize_inst, store_kind,
+                                      join_inner], ins=rr_para2.geometry_out)
+
+        # create left-over faces
+        x -= 2
+        y += 1
+
+        rr_sub = Reroute(tree, location=(x + 12, y + 1), hide=True, name="sub1", ins=realizes[3].geometry_out)
+
+        position = Position(tree, location=(x + 13, y + 2), hide=True)
+
+        sample_indices_below = [
+            sample_vs[0],
+            SampleIndex(tree, location=(x + 14, y + 1), domain="POINT", geometry=rr_sub.geometry_out,
+                        value=position.std_out, index=1, hide=True),
+            SampleIndex(tree, location=(x + 14, y + 1.5), domain="POINT", geometry=rr_sub.geometry_out,
+                        value=position.std_out, index=0, hide=True),
+            SampleIndex(tree, location=(x + 14, y + 2), domain="POINT", geometry=realizes[2].geometry_out,
+                        value=position.std_out, index=2, hide=True),
+        ]
+
+        sample_indices_above = [
+            SampleIndex(tree, location=(x + 14, y + 3), domain="POINT", geometry=rr_sub.geometry_out,
+                        value=position.std_out, index=2, hide=True),
+            SampleIndex(tree, location=(x + 14, y + 3.5), domain="POINT", geometry=realizes[4].geometry_out,
+                        value=position.std_out, index=2, hide=True),
+            sample_vs[2],
+            SampleIndex(tree, location=(x + 14, y + 4), domain="POINT", geometry=rr_sub.geometry_out,
+                        value=position.std_out, index=3, hide=True),
+        ]
+
+        quad_below = Quadrilateral(tree, location=(x + 15, y + 1), mode="POINTS",
+                                   name="QuadBelow",
+                                   hide=True)
+        below_fill = FillCurve(tree, location=(x + 16, y + 1), hide=True)
+        below_attr = StoredNamedAttribute(tree, location=(x + 17, y + 1), data_type="INT", domain="FACE",
+                                          name="PolygonType", value=3, hide=True)
+        quad_above = Quadrilateral(tree, location=(x + 15, y + 2), mode="POINTS", hide=True)
+        above_fill = FillCurve(tree, location=(x + 16, y + 2), hide=True)
+        above_attr = StoredNamedAttribute(tree, location=(x + 17, y + 2), data_type="INT", domain="FACE",
+                                          name="PolygonType", value=4, hide=True)
+
+        for i in range(4):
+            links.new(sample_indices_below[i].std_out, quad_below.inputs["Point " + str(i + 1)])
+            links.new(sample_indices_above[i].std_out, quad_above.inputs["Point " + str(i + 1)])
+
+        create_geometry_line(tree, [quad_below, below_fill, below_attr, join_inner])
+        create_geometry_line(tree, [quad_above, above_fill, above_attr, join_inner])
+
+        return join_inner
+
+
+class FundamentalDomainCoverModifier(GeometryNodesModifier):
+    "Lay out the fundamental domain with trapezoids"
+
+    def __init__(self, **kwargs):
+        super().__init__('FundamentalDomainCover', automatic_layout=False,
+                         **kwargs)
+
+    def create_node(self, tree, **kwargs):
+        # coord = Coord(tree, min=(-10, -10), max=(10, 10))
+        out = self.group_outputs.inputs[0]
+        self.group_outputs.location = (11 * 200, -1 * 200)
+
+        (one, zero, xi_function, phi_function) = self._create_constants(tree, location=(-10, 0))
+        g_trapzoid = self._create_trapezoid(tree, zero, one, xi_function, phi_function, location=(-8, 0))
+        (u_function, v, g_fundamental_domain) = self._make_fundamental_domain(tree, xi_function, phi_function,
+                                                                              location=(-8, 2))
+        g_full = self._make_copies(tree, g_trapzoid, u_function, v, location=(-5, 0))
+
+        last_join = JoinGeometry(tree, location=(10, -1))
+
+        sample_points = self._sample_points(tree, g_full, location=(-1, 1))
+        create_geometry_line(tree, [sample_points, last_join])
+        create_geometry_line(tree, [g_fundamental_domain, last_join])
+        create_geometry_line(tree, [g_full, last_join], out=out)
+
+    def _sample_points(self, tree, g_full, location):
+        (x, y) = location
+        links = tree.links
+
+        # Random positions in the fundamental domain bounding box
+        random = RandomValue(tree, location=(x, y + 2), hide=True,
+                             min=Vector([-0.25, -0.25, 0]), max=Vector([4.25, 4.25, 0]))
+        points = Points(tree, location=(x, y + 3), count=1000, name="SamplePoints", hide=True)
+        set_pos = SetPosition(tree, location=(x + 2, y + 2), position=random.std_out, hide=True)
+        create_geometry_line(tree, [points, set_pos])
+
+        # Convert point cloud to mesh vertices
+        p2v = PointsToVertices(tree, location=(x + 2, y + 3))
+        links.new(set_pos.geometry_out, p2v.geometry_in)
+
+        # Position field feeds the ForEachZone per-element position socket
+        pos_field = Position(tree, location=(x + 2, y + 1))
+
+        # ForEachZone iterating over the sample point mesh
+        for_each_zone = ForEachZone(
+            tree, location=(x + 3, y + 2),
+            domain="POINT", node_width=7,
+            geometry=p2v.geometry_out,
+            name="ForEachSamplePoints")
+        for_each_zone.add_socket(socket_type="VECTOR", name="Position",
+                                 value=pos_field.std_out, for_input=True)
+
+        # Inside the zone: nearest face of g_full at the current element position
+        sample_nearest = SampleNearest(tree, location=(x + 4, y + 1), domain='FACE',
+                                       geometry=g_full.geometry_out,
+                                       sample_position=for_each_zone.outputs["Position"])
+
+        # Index == face index field; Compare selects the one matching face from g_full
+        index_node = Index(tree, location=(x + 4, y + 0))
+        compare = CompareNode(tree, location=(x + 5, y + 1), data_type="INT", operation="EQUAL",
+                              inputs0=index_node.std_out, inputs1=sample_nearest.std_out)
+        sep_geom = SeparateGeometry(tree, location=(x + 6, y + 1), domain="FACE",
+                                    selection=compare.std_out)
+        links.new(g_full.geometry_out, sep_geom.geometry_in)
+
+        # InsidePolygon: is the sample point truly inside the selected face?
+        inside_test = InsidePolygon(tree, location=(x + 7, y + 2),
+                                    target_geometry=sep_geom.geometry_out,
+                                    source_position=for_each_zone.outputs["Position"])
+
+        # IndexSwitch: pick a material by nearest-face index (9 slots, 0-8)
+        index_switch = IndexSwitch(tree, location=(x + 8, y + 0), data_type="MATERIAL", hide=True)
+        links.new(sample_nearest.std_out, index_switch.index)
+        colors = ['x12_color', 'x13_color', 'x14_color', 'x15_color',
+                  'x23_color', 'x24_color', 'x25_color', 'x34_color', 'x35_color']
+        for _ in range(7):
+            index_switch.new_item()
+        for i in range(1, len(index_switch.slots) - 1):
+            index_switch.slots[i].default_value = get_texture(material=colors[i - 1])
+
+        # UV sphere + instancing (gated by InsidePolygon)
+        sphere = UVSphere(tree, location=(x + 8, y + 2), radius=0.05)
+        iop = InstanceOnPoints(tree, location=(x + 9, y + 2),
+                               instance=sphere.geometry_out,
+                               selection=inside_test.std_out, hide=True)
+        set_mat = SetMaterial(tree, location=(x + 9, y + 1), material=index_switch.std_out)
+
+        # Wire geometry chain inside zone: Element -> iop -> set_mat -> ForEachOutput
+        for_each_zone.create_geometry_line(nodes=[iop, set_mat])
+
+        return for_each_zone
+
+    def _make_fundamental_domain(self, tree, xi, phi, location):
+        (x, y) = location
+        links = tree.links
+
+        u_function = make_function(tree, name="u =phi + 1 + xi", functions={
+            "u": ["phi,1,+,xi_x,+", "xi_y", "0"]
+        }, inputs=["xi", "phi"], outputs=["u"], vectors=["xi", "u"], scalars=["phi"],
+                                   location=(x, y), hide=True)
+        links.new(xi.outputs["xi"], u_function.inputs["xi"])
+        links.new(phi.outputs["phi"], u_function.inputs["phi"])
+
+        v = ComplexMathNode(tree, name="v=xi u", z=u_function.outputs["u"],
+                            w=xi.outputs["xi"], operation="MUL",
+                            location=(x, y - 1),
+                            hide=True)
+
+        point = Points(tree, location=(x + 1, y), position=Vector([0, 0, 0.1]), count=1)
+        p2mesh = PointsToVertices(tree, location=(x + 2, y), hide=True)
+        extrude = ExtrudeMesh(tree, location=(x + 3, y), mesh=point.geometry_out, mode="VERTICES",
+                              offset=u_function.outputs["u"], hide=True)
+        extrude2 = ExtrudeMesh(tree, location=(x + 4, y), mesh=point.geometry_out, mode="EDGES", offset=v.std_out,
+                               hide=True)
+        wireframe = WireFrame(tree, location=(x + 5, y), hide=True)
+
+        join_inner = JoinGeometry(tree, location=(x + 5, y), hide=True)
+        create_geometry_line(tree, [point, p2mesh, extrude, extrude2, wireframe, join_inner])
+
+        return u_function, v, join_inner
+
+    def _create_constants(self, tree, location):
+        (x, y) = location
+
+        one = InputVector(tree, value=[1, 0, 0], name="one",
+                          location=(x, y), hide=True)
+        zero = InputVector(tree, value=[0, 0, 0], name="zero",
+                           location=(x, y - 0.5), hide=True)
+        xi_function = make_function(tree, name="xi", functions={
+            "xi": ["1,2,/", "3,sqrt,2,/", "0"]
+        }, outputs=["xi"], vectors=["xi"],
+                                    location=(x, y - 1), hide=True)
+        phi_function = make_function(tree, name="phi", functions={
+            "phi": "1,5,sqrt,+,2,/"
+        }, outputs=["phi"], scalars=["phi"],
+                                     location=(x, y - 1.5), hide=True)
+
+        return one, zero, xi_function, phi_function
+
+    def _create_trapezoid(self, tree,
+                          zero, one, f_xi, f_phi, location):
+        (x, y) = location
+        params_in = ["zero", "one", "xi", "phi"]
+        params_out = ["a", "b", "c", "d"]
+        links = tree.links
+
+        vertices = make_function(tree, name="VerticesTrapez", functions={
+            "a": "zero",
+            "b": "one,phi,1,+,scale",
+            "c": "one,phi,scale,xi,cadd",
+            "d": "xi",
+        }, inputs=params_in, outputs=params_out,
+                                 vectors=params_out + params_in,
+                                 location=(x, y), hide=True)
+        links.new(zero.std_out, vertices.inputs["zero"])
+        links.new(one.std_out, vertices.inputs["one"])
+        links.new(f_xi.outputs["xi"], vertices.inputs["xi"])
+        links.new(f_phi.outputs["phi"], vertices.inputs["phi"])
+
+        trapez = Quadrilateral(tree, location=(x + 1, y), mode="POINTS",
+                               name="Trapez", hide=True)
+        links.new(vertices.outputs["a"], trapez.inputs["Point 1"])
+        links.new(vertices.outputs["b"], trapez.inputs["Point 2"])
+        links.new(vertices.outputs["c"], trapez.inputs["Point 3"])
+        links.new(vertices.outputs["d"], trapez.inputs["Point 4"])
+
+        fill = FillCurve(tree, location=(x + 2, y), hide=True)
+
+        # Mark the trapezoid face with PolygonType=0.
+        store_trapez = StoredNamedAttribute(
+            tree, location=(x + 3, y),
+            data_type="INT", domain="FACE",
+            name="PolygonType", label="MarkTrapez",
+            value=0, hide=True)
+        create_geometry_line(tree, [trapez, fill, store_trapez])
+
+        return store_trapez
+
+    def _make_copies(self, tree, g_trapezoid, f_u, v, location):
+        (x, y) = location
+        links = tree.links
+
+        join = JoinGeometry(tree, location=(x + 3, y))
+
+        rotations = [Vector([0, 0, pi / 3 * i]) for i in [0, 1, 2, 3, 4, 5, 0, 1, 3, 4]]
+        uv = make_function(tree, name="u+v", functions={
+            "uv": "u,v,cadd"
+        }, inputs=["u", "v"], outputs=["uv"], vectors=["uv", "u", "v"], location=(x, y - 5), hide=True)
+        links.new(f_u.outputs["u"], uv.inputs["u"])
+        links.new(v.std_out, uv.inputs["v"])
+
+        translations = [
+            [0, 0, 0],
+            [0, 0, 0],
+            f_u.outputs["u"],
+            f_u.outputs["u"],
+            v.std_out,
+            v.std_out,
+            v.std_out,
+            f_u.outputs["u"],
+            uv.outputs["uv"],
+            uv.outputs["uv"]
+
+        ]
+
+        for i, (rotation, translation) in enumerate(zip(rotations, translations)):
+            trafo = TransformGeometry(tree, location=(x + 2, y - 0.5 * i), geometry=g_trapezoid.geometry_out,
+                                      rotation=rotation, translation=translation, hide=True)
+
+            create_geometry_line(tree, [g_trapezoid, trafo, join])
+
+        return join
+
+
+class BarnsleyFernModifier(GeometryNodesModifier):
+    """The Barnsley fern, grown by a *parallel* chaos game in geometry nodes.
+
+    ``point_count`` seed points all start at the origin; a repeat zone applies
+    one of the fern's four affine maps to every point on every iteration, the
+    map chosen by a per-point / per-iteration random draw weighted by the fern
+    probabilities (0.01, 0.85, 0.07, 0.07).  After ``iterations`` rounds each
+    point has settled onto the attractor, so the cloud *is* the fern and its
+    density follows the invariant measure.
+
+    Two node values are exposed for animation (fetch by label with
+    :func:`ibpy.get_geometry_node_from_modifier`):
+
+    * ``PointCount`` -- number of points (density), an int
+      (:func:`ibpy.change_default_integer`)
+    * ``PointSize``  -- world radius of each rendered point
+      (:func:`ibpy.change_default_value`)
+
+    The four maps w1..w4 are (x' = a x + b y + e, y' = c x + d y + f):
+        w1  a,b,c,d,e,f = 0, 0, 0, 0.16, 0, 0            p=0.01  (stem)
+        w2              = 0.85, 0.04, -0.04, 0.85, 0, 1.6 p=0.85 (main frond)
+        w3              = 0.20, -0.26, 0.23, 0.22, 0, 1.6 p=0.07 (left leaflet)
+        w4              = -0.15, 0.28, 0.26, 0.24, 0, 0.44 p=0.07 (right leaflet)
+    The fern's natural x is carried in world x, its natural y in world z (the
+    plane the videos draw on), and world y (depth) is pinned to 0.
+    """
+
+    def __init__(self, name='BarnsleyFern', point_count=30000, point_size=0.03,
+                 iterations=50, scale=0.45, colors=None,
+                 wind_amplitude=0.011, wind_frequency=0.15):
+        self.point_count = point_count
+        self.point_size = point_size
+        self.iterations = iterations
+        self.fern_scale = scale
+        # wind: omega_2's off-diagonal (nominal 0.04) oscillates in time
+        self.wind_amplitude = wind_amplitude
+        self.wind_frequency = wind_frequency
+        # one colour per map omega_1..omega_4 (stem, main frond, left, right);
+        # a point is painted by the last map that moved it (its 'map_index')
+        self.colors = colors or [
+            [0.83, 0.37, 0.04, 1],  # omega_1 stem      (vermillion / important)
+            [0.04, 0.62, 0.45, 1],  # omega_2 main      (green / joker)
+            [0.34, 0.71, 0.91, 1],  # omega_3 left leaf (blue / drawing)
+            [0.94, 0.89, 0.26, 1],  # omega_4 right leaf(yellow / example)
+        ]
+        super().__init__(name)
+
+    def create_node(self, tree, **kwargs):
+        # ---- exposed, animatable parameters ------------------------------
+        count = InputInteger(tree, integer=self.point_count)
+        count.node.label = "PointCount"
+        size = InputValue(tree, value=self.point_size)
+        size.node.label = "PointSize"
+
+        # ---- seed cloud: point_count points at the origin, radius = size --
+        points = Points(tree, count=count.std_out, radius=size.std_out)
+
+        # ---- wind: sway omega_2's off-diagonal in time -------------------
+        # omega_2 fires ~85% of the time, so it compounds deep into the fronds
+        # and a tiny oscillation of its rotation makes the tips sway far more
+        # than the base -- exactly how a fern moves in a breeze.  A slow sway
+        # plus a smaller, faster flutter reads as natural wind.
+        scene_time = SceneTime(tree)
+        a1, w1 = self.wind_amplitude, 2 * pi * self.wind_frequency
+        a2, w2 = 0.35 * self.wind_amplitude, 2 * pi * self.wind_frequency * 2.9
+        osc = "%.6f,%.6f,t,*,sin,*,%.6f,%.6f,t,*,sin,*,+" % (a1, w1, a2, w2)
+        wind = make_function(tree.nodes, functions={
+            "b": "0.04," + osc + ",+",  # b(t) = 0.04 + oscillation
+            "nb": "0,0.04," + osc + ",+,-",  # -b(t), for the anti-diagonal
+        }, inputs=["t"], outputs=["b", "nb"], scalars=["t", "b", "nb"],
+                             name="Wind")
+        tree.links.new(scene_time.std_out, wind.inputs["t"])
+
+        # ---- the four maps as 4x4 transform matrices ---------------------
+        # each affine map (x' = a x + b z + e, z' = c x + d z + f, y' = 0 on
+        # the drawing plane) is an AFFINE transform in projective space (w = 1),
+        # so the shift (e,f) lives in the matrix's last column and one
+        # TransformPoint applies the whole map.  CombineMatrix takes COLUMNS
+        # (column-major): col1 = (a,0,c,0), col3 = (b,0,d,0), col4 = (e,0,f,1),
+        # and the bottom row (0,0,0,1) keeps the point homogeneous.
+        # omega_2's off-diagonal +-b is the wind-driven, time-varying value.
+        mats = [
+            CombineMatrix(tree, col1=[0, 0, 0, 0],
+                          col3=[0, 0, 0.16, 0], col4=[0, 0, 0, 1]),  # omega_1 stem
+            CombineMatrix(tree, col1=[0.85, 0, wind.outputs["nb"], 0],
+                          col3=[wind.outputs["b"], 0, 0.85, 0],
+                          col4=[0, 0, 1.6, 1]),  # omega_2 main
+            CombineMatrix(tree, col1=[0.2, 0, 0.23, 0],
+                          col3=[-0.26, 0, 0.22, 0], col4=[0, 0, 1.6, 1]),  # omega_3 left
+            CombineMatrix(tree, col1=[-0.15, 0, 0.26, 0],
+                          col3=[0.28, 0, 0.24, 0], col4=[0, 0, 0.44, 1]),  # omega_4 right
+        ]
+        # label the matrices to match the slide (omega_1 .. omega_4)
+        for i, m in enumerate(mats):
+            m.node.label = "ω_%d" % (i + 1)
+
+        # ---- chaos game --------------------------------------------------
+        iterations_node = InputInteger(tree, integer=self.iterations, label="IterationCount")
+        repeat = RepeatZone(tree, iterations=iterations_node.std_out)
+
+        # r in [0,1): different per point (ID = index) and per round (Seed =
+        # iteration), so every point runs its own random walk over the maps
+        index = Index(tree)
+        rnd = RandomValue(tree, data_type="FLOAT", min=0.0, max=1.0)
+        tree.links.new(index.std_out, rnd.node.inputs["ID"])
+        tree.links.new(repeat.iteration, rnd.node.inputs["Seed"])
+
+        # r -> map index 0..3 by the cumulative fern probabilities
+        # (0.01, 0.86, 0.93); '>' returns 1.0/0.0, so the sum is the index.
+        map_index = make_function(tree.nodes, functions={
+            "idx": "r,0.01,>,r,0.86,>,+,r,0.93,>,+"
+        }, inputs=["r"], outputs=["idx"], scalars=["r"], integers=["idx"],
+                                  name="MapIndex")
+        tree.links.new(rnd.std_out, map_index.inputs["r"])
+
+        # pick the chosen matrix and apply it to the point (a vector op)
+        switch = IndexSwitch(tree, data_type="MATRIX",
+                             index=map_index.outputs["idx"])
+        switch.new_item()
+        switch.new_item()  # two default slots + two more -> four maps
+        for i, m in enumerate(mats):
+            tree.links.new(m.std_out, switch.node.inputs[i + 1])
+
+        position = Position(tree)
+        transform_point = TransformPoint(tree, vector=position.std_out,
+                                         transform=switch.std_out)
+        set_position = SetPosition(tree, position=transform_point.std_out)
+        # remember which map moved the point this round; after the last round
+        # the attribute holds the map that produced the point's final position
+        store_index = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
+                                           name="map_index",
+                                           value=map_index.outputs["idx"])
+        repeat.create_geometry_line([set_position, store_index])
+
+        # ---- fit the natural fern (x in [-2.2,2.7], y in [0,10]) on the plane
+        s = self.fern_scale
+        transform = TransformGeometry(tree, scale=Vector([s, s, s]),
+                                      translation=Vector([-0.24 * s, 0, -4.99 * s]))
+        # ---- colour every point by its map_index (omega_1..omega_4) ---------
+        # a color ramp reads the stored attribute; map_index/3 lands exactly on
+        # the four ramp stops, one colour per map
+        color_mat = gradient_from_attribute(
+            name="FernMapColor", attr_name="map_index", function="fac,3,/",
+            gradient={i / 3: self.colors[i] for i in range(4)})
+        # let the points glow so the colours read on any background
+        _bsdf = color_mat.node_tree.nodes.get("Principled BSDF")
+        if _bsdf is not None and "Emission Strength" in _bsdf.inputs:
+            _bsdf.inputs["Emission Strength"].default_value = 2.0
+        material = SetMaterial(tree, material=color_mat)
+
+        create_geometry_line(tree, [points, repeat, transform, material],
+                             out=self.group_outputs.inputs['Geometry'])
+
+
+class SierpinskiTriangleModifier(GeometryNodesModifier):
+    """The Sierpinski triangle chaos game, entirely inside geometry nodes.
+
+    The three corners are exposed as **input vectors** ``Corner1/2/3`` -- they
+    are the single source of truth.  Everything else is derived from them, so
+    dragging (or animating) a corner reshapes the whole picture at once:
+
+    * the three affine maps ``w_i(p) = 1/2 (p + C_i)`` -- built as 4x4
+      matrices whose *linear* part is a fixed half-scale and whose *translation*
+      column is ``1/2 C_i``, pulled live from the corner vector;
+    * the **parallel cloud** -- ``point_count`` points that each run their own
+      random chaos game through a repeat zone (each corner with probability
+      1/3), so after ``iterations`` rounds the cloud *is* the gasket;
+    * a **single hand-played trajectory** -- one point starting at corner
+      ``start_corner`` (a fixed vertex, not the centroid) and hopping half-way
+      to a random corner ``trajectory_length`` times.  It is a poly-line whose
+      vertex ``k`` sits at ``sum_j w_{k,j} C_j`` for fixed convex weights
+      ``w_{k,j}`` (baked from one random walk), so it too follows the corners.
+      Colour = the corner each hop aimed at (vertex 0 takes ``start_corner``'s
+      colour);
+    * three fat **corner markers** at ``C_i``.
+
+    Points (cloud, trajectory dots, markers) are coloured by a ``map_index``
+    attribute through one shared ramp, so all three colours agree.
+
+    Nodes exposed for animation (fetch by label with
+    :func:`ibpy.get_geometry_node_from_modifier`):
+
+    * ``Corner1`` / ``Corner2`` / ``Corner3`` -- corner positions, vectors
+      (:func:`ibpy.change_default_vector`)
+    * ``PointCount`` -- cloud density, int (:func:`ibpy.change_default_integer`)
+    * ``PointSize``  -- cloud dot radius (:func:`ibpy.change_default_value`)
+    * ``TrajectorySteps`` -- how many hops of the single walk are shown, int
+      (grow 0 -> ``trajectory_length`` to play the construction)
+    * ``TrajectoryDotSize`` / ``MarkerSize`` -- radii, floats
+
+    Corners live in the modifier's local space; defaults form an equilateral
+    triangle centred on the object origin (base 5, sitting the same way the old
+    fitted version did when the carrier plane is at ``[2.5, 0, -0.1]``).
+    """
+
+    def __init__(self, name='SierpinskiTriangle', point_count=40000,
+                 point_size=0.0, iterations=50, corners=None, colors=None,
+                 trajectory_length=14, trajectory_steps=0, dot_size=0.07,
+                 path_radius=0.02, marker_size=0.0, seed=7, start_corner=0):
+        self.point_count = point_count
+        self.point_size = point_size
+        self.iterations = iterations
+        self.trajectory_length = trajectory_length
+        self.trajectory_steps = trajectory_steps
+        self.dot_size = dot_size
+        self.path_radius = path_radius
+        self.marker_size = marker_size
+        self.seed = seed
+        # which corner (index 0..2) the hand-played trajectory starts from;
+        # None falls back to the old centroid start (equal 1/3 weights)
+        self.start_corner = start_corner
+        # three corners in local coordinates (x, y=depth, z), equilateral and
+        # centred on the origin: base 5 along x, height 5*sqrt(3)/2
+        h = 2.5 / math.sqrt(3.0)  # centroid-to-base distance
+        self.corners = corners or [
+            Vector([-2.5, 0.0, -h]),  # C1 bottom-left
+            Vector([2.5, 0.0, -h]),  # C2 bottom-right
+            Vector([2.5, 0.0, 2.0 * h]),  # C3 top (base + 2.5*sqrt(3)); centroid = origin
+        ]
+        # one colour per corner (the corner a point was last pulled toward)
+        self.colors = colors or [
+            [0.83, 0.37, 0.04, 1],  # corner 0 (vermillion / important)
+            [0.04, 0.62, 0.45, 1],  # corner 1 (green / joker)
+            [0.34, 0.71, 0.91, 1],  # corner 2 (blue / drawing)
+        ]
+        super().__init__(name)
+
+    def create_node(self, tree, **kwargs):
+        # ---- corners as exposed input vectors (the single source of truth)
+        corner_nodes = []
+        for i, c in enumerate(self.corners):
+            cv = InputVector(tree, value=c)
+            cv.node.label = "Corner%d" % (i + 1)
+            corner_nodes.append(cv)
+        C = [cn.std_out for cn in corner_nodes]
+
+        # ---- the three midpoint maps, built live from the corner vectors --
+        # w_i(p) = 1/2 p + 1/2 C_i : linear part is 1/2 I (cols 1-3), the
+        # translation column 4 is 1/2 C_i taken straight from the input vector
+        # (CombineMatrix is column-major; the 4th row keeps points homogeneous).
+        mats = []
+        for i, Ci in enumerate(C):
+            half = VectorMath(tree, operation="SCALE", inputs0=Ci,
+                              float_input=0.5)
+            sep = SeparateXYZ(tree, vector=half.std_out)
+            mat = CombineMatrix(tree, col1=[0.5, 0, 0, 0], col2=[0, 0.5, 0, 0],
+                                col3=[0, 0, 0.5, 0],
+                                col4=[sep.x, sep.y, sep.z, 1])
+            mat.node.label = "w_%d" % (i + 1)
+            mats.append(mat)
+
+        # ---- one shared colour material (map_index -> corner colour) ------
+        color_mat = gradient_from_attribute(
+            name="SierpinskiMapColor", attr_name="map_index",
+            function="fac,2,/",
+            gradient={i / 2: self.colors[i] for i in range(3)})
+        _bsdf = color_mat.node_tree.nodes.get("Principled BSDF")
+        if _bsdf is not None and "Emission Strength" in _bsdf.inputs:
+            _bsdf.inputs["Emission Strength"].default_value = 2.0
+
+        join = JoinGeometry(tree)
+
+        # ================================================================
+        #  1) the parallel cloud: every point runs its own chaos game
+        # ================================================================
+        count = InputInteger(tree, integer=self.point_count)
+        count.node.label = "PointCount"
+        size = InputValue(tree, value=self.point_size)
+        size.node.label = "PointSize"
+        points = Points(tree, count=count.std_out, radius=size.std_out)
+
+        repeat = RepeatZone(tree, iterations=self.iterations)
+        index = Index(tree)
+        rnd = RandomValue(tree, data_type="FLOAT", min=0.0, max=1.0)
+        tree.links.new(index.std_out, rnd.node.inputs["ID"])
+        tree.links.new(repeat.iteration, rnd.node.inputs["Seed"])
+        # r -> corner index 0..2 in equal thirds ('>' returns 1.0/0.0)
+        cloud_idx = make_function(tree.nodes, functions={
+            "idx": "r,0.33333,>,r,0.66667,>,+"
+        }, inputs=["r"], outputs=["idx"], scalars=["r"], integers=["idx"],
+                                  name="CloudMapIndex")
+        tree.links.new(rnd.std_out, cloud_idx.inputs["r"])
+        switch = IndexSwitch(tree, data_type="MATRIX",
+                             index=cloud_idx.outputs["idx"])
+        switch.new_item()  # two default slots + one more -> three maps
+        for i, m in enumerate(mats):
+            tree.links.new(m.std_out, switch.node.inputs[i + 1])
+        position = Position(tree)
+        transform_point = TransformPoint(tree, vector=position.std_out,
+                                         transform=switch.std_out)
+        set_position = SetPosition(tree, position=transform_point.std_out)
+        store_index = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
+                                           name="map_index",
+                                           value=cloud_idx.outputs["idx"])
+        repeat.create_geometry_line([set_position, store_index])
+        cloud_mat = SetMaterial(tree, material=color_mat)
+        create_geometry_line(tree, [points, repeat, cloud_mat],
+                             out=join.geometry_in)
+
+        # ================================================================
+        #  2) the single trajectory, as a poly-line driven by the corners
+        # ================================================================
+        # Bake ONE random walk's convex weights: vertex k is
+        #   p_k = wA_k C1 + wB_k C2 + wC_k C3      (weights sum to 1)
+        # from p_0 = start_corner (or the centroid if start_corner is None)
+        # and p_{k+1} = 1/2 p_k + 1/2 C_{choice}.  The weights are constants
+        # (independent of where the corners are), so the position node
+        # re-evaluates against the live corner vectors.
+        rng = np.random.default_rng(self.seed)
+        choices = [int(rng.integers(0, 3))
+                   for _ in range(self.trajectory_length)]
+        if self.start_corner is None:
+            start_weights = [1 / 3, 1 / 3, 1 / 3]
+        else:
+            start_weights = [1.0 if j == self.start_corner else 0.0
+                             for j in range(3)]
+        weights = [start_weights]
+        for s in choices:
+            prev = weights[-1]
+            weights.append([0.5 * prev[j] + (0.5 if j == s else 0.0)
+                            for j in range(3)])
+        # colour of each vertex: vertex 0 takes start_corner's colour (0 when
+        # starting at the centroid, matching the old behaviour)
+        choice_per_vertex = [self.start_corner or 0] + choices
+        n_vertices = self.trajectory_length + 1
+
+        traj_index = Index(tree)
+
+        def const_switch(values, data_type, label):
+            sw = IndexSwitch(tree, data_type=data_type, index=traj_index.std_out)
+            for _ in range(len(values) - 2):  # 2 default slots
+                sw.new_item()
+            for i, v in enumerate(values):
+                sw.node.inputs[i + 1].default_value = v
+            sw.node.label = label
+            return sw
+
+        wA = const_switch([w[0] for w in weights], "FLOAT", "wA")
+        wB = const_switch([w[1] for w in weights], "FLOAT", "wB")
+        wC = const_switch([w[2] for w in weights], "FLOAT", "wC")
+        ch = const_switch(choice_per_vertex, "INT", "choice")
+
+        # p_k = wA C1 + wB C2 + wC C3
+        sa = VectorMath(tree, operation="SCALE", inputs0=C[0],
+                        float_input=wA.std_out)
+        sb = VectorMath(tree, operation="SCALE", inputs0=C[1],
+                        float_input=wB.std_out)
+        sc = VectorMath(tree, operation="SCALE", inputs0=C[2],
+                        float_input=wC.std_out)
+        ab = VectorMath(tree, operation="ADD", inputs0=sa.std_out,
+                        inputs1=sb.std_out)
+        traj_pos = VectorMath(tree, operation="ADD", inputs0=ab.std_out,
+                              inputs1=sc.std_out)
+
+        steps = InputInteger(tree, integer=self.trajectory_steps)
+        steps.node.label = "TrajectorySteps"
+        dot_size = InputValue(tree, value=self.dot_size)
+        dot_size.node.label = "TrajectoryDotSize"
+
+        line = MeshLine(tree, count=n_vertices)  # n edges, index 0..n
+        line_pos = SetPosition(tree, geometry=line.geometry_out,
+                               position=traj_pos.std_out)
+        line_store = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
+                                          name="map_index", value=ch.std_out)
+        tree.links.new(line_pos.geometry_out, line_store.geometry_in)
+        # reveal only the first `steps` hops: drop vertices with index > steps
+        clip_sel = make_function(tree.nodes, functions={"sel": "i,s,>"},
+                                 inputs=["i", "s"], outputs=["sel"],
+                                 scalars=["i", "s", "sel"], name="TrajClip")
+        tree.links.new(traj_index.std_out, clip_sel.inputs["i"])
+        tree.links.new(steps.std_out, clip_sel.inputs["s"])
+        clip = DeleteGeometry(tree, domain="POINT",
+                              geometry=line_store.geometry_out,
+                              selection=clip_sel.outputs["sel"])
+
+        # landing dots: the visited vertices as a coloured point cloud
+        traj_dots = MeshToPoints(tree, mesh=clip.geometry_out)
+        tree.links.new(dot_size.std_out, traj_dots.node.inputs["Radius"])
+        traj_dots_mat = SetMaterial(tree, material=color_mat)
+        tree.links.new(traj_dots.geometry_out, traj_dots_mat.geometry_in)
+        tree.links.new(traj_dots_mat.geometry_out, join.geometry_in)
+
+        # the hops themselves: a thin tube along the surviving edges, carrying
+        # map_index through to the same ramp so each hop wears its corner colour
+        radius = InputValue(tree, value=self.path_radius, label="PathRadius", hide=True)
+        tube = InstanceOnEdges(tree, radius=radius.std_out, name="TrajPath")
+        tree.links.new(clip.geometry_out, tube.geometry_in)
+        tube_mat = SetMaterial(tree, material=color_mat)
+        tree.links.new(tube.geometry_out, tube_mat.geometry_in)
+        tree.links.new(tube_mat.geometry_out, join.geometry_in)
+
+        # ================================================================
+        #  3) the three corner markers (fat dots at C_i)
+        # ================================================================
+        marker_size = InputValue(tree, value=self.marker_size)
+        marker_size.node.label = "MarkerSize"
+        mk_points = Points(tree, count=3, radius=marker_size.std_out)
+        mk_index = Index(tree)
+        corner_switch = IndexSwitch(tree, data_type="VECTOR",
+                                    index=mk_index.std_out)
+        corner_switch.new_item()  # 2 default slots + one more -> three corners
+        for i, ci in enumerate(C):
+            tree.links.new(ci, corner_switch.node.inputs[i + 1])
+        mk_pos = SetPosition(tree, geometry=mk_points.geometry_out,
+                             position=corner_switch.std_out)
+        mk_store = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
+                                        name="map_index", value=mk_index.std_out)
+        tree.links.new(mk_pos.geometry_out, mk_store.geometry_in)
+        mk_mat = SetMaterial(tree, material=color_mat)
+        tree.links.new(mk_store.geometry_out, mk_mat.geometry_in)
+        tree.links.new(mk_mat.geometry_out, join.geometry_in)
+
+        # ---- everything into one output ----------------------------------
+        tree.links.new(join.geometry_out, self.group_outputs.inputs['Geometry'])
+
+
+class ApollonianGasketModifier(GeometryNodesModifier):
+    """The Apollonian gasket, generated live inside geometry nodes as the
+    limit set of a Kleinian group (Indra's Pearls, ch. 7; see
+    ``video_apollonian/indras_utils/indra_generating_algorithms.py``).
+
+    **The algorithm** is the depth-first search over reduced words in the four
+    Moebius generators ``a, b, A, B`` of the gasket group
+    (:class:`ApollonianModel`), with the classic disc-radius termination of
+    ``DepthFirstSearchOriginal.branch_termination_1``: a branch stops as soon
+    as the image of its letter's Schottky circle has radius ``< epsilon``, and
+    plots the image of the letter's (parabolic) fixed point.  Since every
+    plotted point sits inside its terminal disc and neighbouring terminal
+    discs are tangent, ``epsilon`` directly dials the maximum distance between
+    neighbouring points of the curve.
+
+    **Parallelisation.**  The recursion is unrolled level by level in a repeat
+    zone: every point *is* one node of the DFS tree, and per iteration each
+    unfinished point spawns its three children (``DuplicateElements`` with
+    amount ``done ? 1 : 3``; the duplicate index is the child digit ``d``, and
+    the child's letter is ``(letter + d - 1) mod 4``, which excludes the
+    inverse letter exactly like the serial code).  Finished points ride along
+    frozen, so the geometry grows exactly like the adaptive DFS tree --
+    ``epsilon`` prunes it live.
+
+    **Complex arithmetic.**  A word is a complex 2x2 matrix with det 1.  It is
+    stored per point as a ``FLOAT4X4`` attribute via the block embedding
+    ``z = x + iy  ->  [[x, -y], [y, x]]``, so complex matrix products become
+    real 4x4 products (one *Multiply Matrices* node -- the node computes the
+    standard product, right factor applied first, matching ``word @ gen``).
+    ``Separate Matrix`` recovers ``a = (C1R1, C1R2), b = (C3R1, C3R2),
+    c = (C1R3, C1R4), d = (C3R3, C3R4)`` and two labelled function groups do
+    the textbook formulas:
+
+    * branch termination: ``u = c q + d``,
+      ``denom = |u|^2 - |c|^2 r^2``; stop iff ``denom > 0`` (image disc does
+      not contain infinity) and ``r < epsilon * denom``;
+    * point placement: ``p = (a z + b) / (c z + d)`` with ``z`` the fixed
+      point of the current letter, plotted in the x-z plane.
+
+    **Conjugation.**  The raw :class:`ApollonianModel` contains a circle of
+    radius 10000 (a stand-in for the real line), which is fatal for the
+    float32 arithmetic of geometry nodes.  The whole model is therefore
+    conjugated once, in Python, by ``T = S . (-1/(z - pole))`` with the pole
+    in a large hole of the limit set (default ``2i``) and ``S`` a real affine
+    map framing the gasket in a ``2*size`` box centred on the origin.  This
+    turns the strip-shaped gasket into the classic bounded gasket-in-a-circle
+    and keeps every baked constant of order one.  The group is the same up to
+    a change of coordinates.
+
+    Per-point attributes: ``word`` (FLOAT4X4 state), ``letter`` (current =
+    last letter 0..3), ``first_letter`` (branch colour, like the tree
+    colouring of the videos), ``digit``/``stop`` (per-level helpers),
+    ``done`` (frozen).  ``color_by`` picks the colouring attribute:
+    ``'first_letter'`` (default, four solid subtree regions) or
+    ``'last_letter'`` (the letter whose fixed-point image the point is).
+
+    Nodes exposed for animation (fetch by label with
+    :func:`ibpy.get_geometry_node_from_modifier`):
+
+    * ``Epsilon`` -- termination radius (:func:`ibpy.change_default_value`);
+      smaller values refine the gasket live, point count grows ~ 1/epsilon
+    * ``MaxLevel`` -- depth cap of the tree, int
+      (:func:`ibpy.change_default_integer`)
+    * ``PointRadius`` -- point-cloud dot radius
+    """
+
+    def __init__(self, name='ApollonianGasket', epsilon=0.1, max_level=25,
+                 point_radius=0.02, pole=2j, size=2.5, colors=None,
+                 color_by='first_letter'):
+        self.epsilon = epsilon
+        self.max_level = max_level
+        self.point_radius = point_radius
+        self.pole = pole
+        self.size = size
+        # 'first_letter': colour of the level-1 subtree (four solid regions);
+        # 'last_letter': colour of the terminal letter -- the plotted point is
+        # the image of that letter's fixed point, so a/A and b/B interleave
+        # along the curve
+        self.color_by = color_by
+        # one colour per first letter a, b, A, B -- the colour of the level-1
+        # subtree a point belongs to (matches the tree colouring used in
+        # video_apollonian: gray_2, joker, important, custom1)
+        self.colors = colors or [
+            [0.55, 0.55, 0.55, 1],  # a  (gray)
+            [0.04, 0.62, 0.45, 1],  # b  (green / joker)
+            [0.83, 0.37, 0.04, 1],  # A  (orange / important)
+            [230 / 255, 10 / 255, 52 / 255, 1],  # B  (custom1)
+        ]
+        self._prepare_model()
+        super().__init__(name, automatic_layout=False)
+
+    # ------------------------------------------------------------------
+    #  model preparation (python-side, baked into the node constants)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _moebius(m, z):
+        return (m[0][0] * z + m[0][1]) / (m[1][0] * z + m[1][1])
+
+    @staticmethod
+    def _circle_image(m, q, r):
+        """image of the circle (q, r) under the Moebius matrix m (det 1)"""
+        cw, dw = m[1][0], m[1][1]
+        z0 = q - r ** 2 / np.conj(dw / cw + q) if cw != 0 else q
+        cen = ApollonianGasketModifier._moebius(m, z0)
+        rad = abs(cen - ApollonianGasketModifier._moebius(m, q + r))
+        return cen, rad
+
+    def _prepare_model(self):
+        # the gasket group of video_apollonian (ApollonianModel): all four
+        # generators are parabolic with det 1
+        a = np.array([[1, 0], [-2j, 1]])
+        b = np.array([[1 - 1j, 1], [1, 1 + 1j]])
+        A = np.array([[1, 0], [2j, 1]])
+        B = np.array([[1 + 1j, -1], [-1, 1 - 1j]])
+        gens0 = [a, b, A, B]
+        fps0 = [0j, -1j, 0j, -1j]
+        circ0 = [(10000j, 10000.0), (1 - 1j, 1.0), (-0.25j, 0.25),
+                 (-1 - 1j, 1.0)]
+
+        # a coarse serial DFS (float64) gives the limit set's bounding box
+        # after the inversion, so S can frame the gasket deterministically
+        T1 = np.array([[0, -1], [1, -self.pole]])
+        pts = []
+
+        def rec(word, t, level):
+            for d in range(3):
+                t2 = (t + d + 3) % 4
+                q, r = circ0[t2]
+                cw, dw = word[1][0], word[1][1]
+                denom = abs(cw * q + dw) ** 2 - abs(cw) ** 2 * r ** 2
+                w2 = word @ gens0[t2]
+                p = self._moebius(w2, fps0[t2])
+                if (denom > 0 and r / denom < 0.05) or level >= 20:
+                    pts.append(self._moebius(T1, p))
+                else:
+                    rec(w2, t2, level + 1)
+
+        for t0 in range(4):
+            pts.append(self._moebius(T1, self._moebius(gens0[t0], fps0[t0])))
+            rec(gens0[t0], t0, 2)
+        pts = np.array(pts)
+
+        cx = (pts.real.min() + pts.real.max()) / 2
+        cy = (pts.imag.min() + pts.imag.max()) / 2
+        half = max(pts.real.max() - pts.real.min(),
+                   pts.imag.max() - pts.imag.min()) / 2
+        alpha = self.size / half
+        beta = -alpha * (cx + 1j * cy)
+        S = np.array([[np.sqrt(alpha), beta / np.sqrt(alpha)],
+                      [0, 1 / np.sqrt(alpha)]])
+        T = S @ T1  # det 1
+
+        Ti = np.linalg.inv(T)
+        self.gens = [T @ g @ Ti for g in gens0]  # still det 1
+        self.fixed_points = [self._moebius(T, z) for z in fps0]
+        self.circles = [self._circle_image(T, q, r) for (q, r) in circ0]
+
+    @staticmethod
+    def _embed(m):
+        """complex 2x2 -> columns of the real 4x4 block embedding
+        z -> [[Re, -Im], [Im, Re]] (complex product = real 4x4 product)"""
+        am, bm, cm, dm = m[0][0], m[0][1], m[1][0], m[1][1]
+        return ([am.real, am.imag, cm.real, cm.imag],
+                [-am.imag, am.real, -cm.imag, cm.real],
+                [bm.real, bm.imag, dm.real, dm.imag],
+                [-bm.imag, bm.real, -dm.imag, dm.real])
+
+    # ------------------------------------------------------------------
+    #  the node graph
+    # ------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        links = tree.links
+
+        # ================================================================
+        #  dials
+        # ================================================================
+        dial_frame = Frame(tree, label="dials", name="DialFrame",
+                           location=(-27, 9))
+        eps_in = InputValue(tree, location=(0, 0), value=self.epsilon,
+                            label="Epsilon", parent=dial_frame)
+        level_in = InputInteger(tree, location=(0, -1.5),
+                                integer=self.max_level, label="MaxLevel",
+                                parent=dial_frame)
+        radius_in = InputValue(tree, location=(0, -3),
+                               value=self.point_radius, label="PointRadius",
+                               parent=dial_frame)
+        # the repeat zone runs the levels 2..MaxLevel
+        iterations = MathNode(tree, location=(1.5, -1.5),
+                              operation="SUBTRACT",
+                              inputs0=level_in.std_out, inputs1=1,
+                              label="MaxLevel-1", parent=dial_frame, hide=True)
+
+        # ================================================================
+        #  the four generators, baked as real 4x4 block matrices
+        # ================================================================
+        gen_frame = Frame(
+            tree, label="generators a, b, A, B (complex 2x2 as real 4x4 blocks)",
+            name="GeneratorFrame", location=(-27, 5))
+        gen_mats = []
+        for i, (lbl, g) in enumerate(zip(["a", "b", "A", "B"], self.gens)):
+            c1, c2, c3, c4 = self._embed(g)
+            mat = CombineMatrix(tree, location=(i * 1.2, 0), col1=c1, col2=c2,
+                                col3=c3, col4=c4, label=lbl,
+                                parent=gen_frame, hide=True)
+            gen_mats.append(mat)
+
+        # ================================================================
+        #  letter -> generator / fixed point / Schottky circle
+        #  (the letter attribute is read AFTER its store, i.e. these switches
+        #   always see the letter of the current level)
+        # ================================================================
+        letter_frame = Frame(
+            tree, label="letter -> generator / fixed point / Schottky circle",
+            name="LetterFrame", location=(-27, 0))
+        letter_read = NamedAttribute(tree, location=(0, -1.5), data_type="INT",
+                                     name="letter", label="letter",
+                                     parent=letter_frame, hide=True)
+        gen_switch = IndexSwitch(tree, location=(1.5, 0), data_type="MATRIX",
+                                 index=letter_read.std_out,
+                                 label="g[letter]", parent=letter_frame)
+        gen_switch.new_item()
+        gen_switch.new_item()
+        for i, mat in enumerate(gen_mats):
+            links.new(mat.std_out, gen_switch.node.inputs[i + 1])
+        fp_switch = IndexSwitch(tree, location=(1.5, -2), data_type="VECTOR",
+                                index=letter_read.std_out,
+                                label="fixed point of letter (re, im, 0)",
+                                parent=letter_frame)
+        fp_switch.new_item()
+        fp_switch.new_item()
+        for i, z in enumerate(self.fixed_points):
+            fp_switch.node.inputs[i + 1].default_value = (z.real, z.imag, 0)
+        circle_switch = IndexSwitch(
+            tree, location=(1.5, -4), data_type="VECTOR",
+            index=letter_read.std_out,
+            label="Schottky circle of letter (center re, im, radius)",
+            parent=letter_frame)
+        circle_switch.new_item()
+        circle_switch.new_item()
+        for i, (q, r) in enumerate(self.circles):
+            circle_switch.node.inputs[i + 1].default_value = (q.real, q.imag, r)
+        fp_sep = SeparateXYZ(tree, location=(3, -2), vector=fp_switch.std_out,
+                             parent=letter_frame, hide=True)
+        circle_sep = SeparateXYZ(tree, location=(3, -4),
+                                 vector=circle_switch.std_out,
+                                 parent=letter_frame, hide=True)
+
+        # ================================================================
+        #  level 1: the four one-letter words
+        # ================================================================
+        seed_frame = Frame(tree, label="level 1: the four one-letter words",
+                           name="SeedFrame", location=(-19, 3))
+        seed_index = Index(tree, location=(0, -1.5), parent=seed_frame,
+                           hide=True)
+        seed_points = Points(tree, location=(0, 0), count=4,
+                             radius=radius_in.std_out, parent=seed_frame)
+        store_first = StoredNamedAttribute(
+            tree, location=(1, 0), data_type="INT", name="first_letter",
+            value=seed_index.std_out, label="first letter = branch colour",
+            parent=seed_frame, hide=True)
+        seed_letter = StoredNamedAttribute(
+            tree, location=(2, 0), data_type="INT", name="letter",
+            value=seed_index.std_out, label="letter <- index",
+            parent=seed_frame, hide=True)
+        seed_word = StoredNamedAttribute(
+            tree, location=(3, 0), data_type="FLOAT4X4", name="word",
+            value=gen_switch.std_out, label="word <- g[letter]",
+            parent=seed_frame, hide=True)
+        seed_done = StoredNamedAttribute(
+            tree, location=(4, 0), data_type="BOOLEAN", name="done",
+            value=False, label="done <- false", parent=seed_frame, hide=True)
+        # g fixes its own fixed point, so the level-1 point is the fixed
+        # point itself, drawn in the x-z plane
+        fp_world = CombineXYZ(tree, location=(4, -1.5), x=fp_sep.x, y=0,
+                              z=fp_sep.y, label="fixed point in x-z plane",
+                              parent=seed_frame, hide=True)
+        seed_pos = SetPosition(tree, location=(5, 0),
+                               position=fp_world.std_out, parent=seed_frame,
+                               hide=True)
+
+        # ================================================================
+        #  levels 2..MaxLevel: one tree level per iteration
+        # ================================================================
+        loop_frame = Frame(
+            tree, label="levels 2..MaxLevel: grow the DFS tree, one level per iteration",
+            name="LoopFrame", location=(-11.5, 4))
+        repeat = RepeatZone(tree, location=(-11.5, 2), node_width=15,
+                            iterations=iterations.std_out)
+        loop_frame.add(repeat)
+
+        # -- spawn: 3 children per open branch, 1 copy per finished one ----
+        spawn_frame = Frame(
+            tree, label="spawn: 3 children per open branch",
+            name="SpawnFrame", location=(-10.8, -0.5))
+        done_read = NamedAttribute(tree, location=(0, 0), data_type="BOOLEAN",
+                                   name="done", label="done",
+                                   parent=spawn_frame, hide=True)
+        child_count = make_function(
+            tree, functions={"amount": "3,done,2,*,-"}, inputs=["done"],
+            outputs=["amount"], booleans=["done"], integers=["amount"],
+            name="ChildCount", location=(1, 0), parent=spawn_frame)
+        child_count.label = "3 - 2 done"
+        links.new(done_read.std_out, child_count.inputs["done"])
+        dup = DuplicateElements(tree, location=(0.3, 2.5), domain="POINT",
+                                amount=child_count.outputs["amount"],
+                                parent=spawn_frame, hide=True)
+        store_digit = StoredNamedAttribute(
+            tree, location=(1.6, 2.5), data_type="INT", name="digit",
+            value=dup.duplicate_index, label="digit <- duplicate index",
+            parent=spawn_frame, hide=True)
+
+        # -- the child's letter: (letter + digit - 1) mod 4 ----------------
+        advance_frame = Frame(
+            tree, label="child letter: (letter + digit - 1) mod 4 -- skips the inverse",
+            name="AdvanceFrame", location=(-8.6, -1.5))
+        parent_letter = NamedAttribute(tree, location=(0, 0), data_type="INT",
+                                       name="letter", label="parent letter",
+                                       parent=advance_frame, hide=True)
+        digit_read = NamedAttribute(tree, location=(0, -1), data_type="INT",
+                                    name="digit", label="digit",
+                                    parent=advance_frame, hide=True)
+        next_letter = make_function(
+            tree, functions={"t2": "t,d,+,3,+,4,%"}, inputs=["t", "d"],
+            outputs=["t2"], integers=["t", "d", "t2"], name="NextLetter",
+            location=(1, -0.5), parent=advance_frame)
+        next_letter.label = "(t + d + 3) mod 4"
+        links.new(parent_letter.std_out, next_letter.inputs["t"])
+        links.new(digit_read.std_out, next_letter.inputs["d"])
+        letter_switch = Switch(tree, location=(2, -0.5), input_type="INT",
+                               switch=done_read.std_out,
+                               false=next_letter.outputs["t2"],
+                               true=parent_letter.std_out,
+                               label="frozen: keep letter",
+                               parent=advance_frame, hide=True)
+        store_letter = StoredNamedAttribute(
+            tree, location=(0.7, 3.5), data_type="INT", name="letter",
+            value=letter_switch.std_out, label="letter <- child letter",
+            parent=advance_frame, hide=True)
+
+        # -- termination: parent-word image of the child's circle ----------
+        term_frame = Frame(
+            tree,
+            label="branch termination: image disc of child circle under the PARENT word, radius < epsilon",
+            name="TerminationFrame", location=(-7.0, -3.5))
+        parent_word = NamedAttribute(tree, location=(0, 0),
+                                     data_type="FLOAT4X4", name="word",
+                                     label="parent word",
+                                     parent=term_frame, hide=True)
+        parent_sep = SeparateMatrix(tree, location=(1, 0),
+                                    matrix=parent_word.std_out,
+                                    label="c, d of parent word",
+                                    parent=term_frame, hide=True)
+        # u = c q + d ; denom = |u|^2 - |c|^2 r^2 ; the image disc keeps
+        # infinity outside iff denom > 0, and its radius is r / denom
+        termination = make_function(
+            tree, functions={"stop": "dn,0,>,r,eps,dn,*,<,*"},
+            aux_functions={
+                "ur": "cr,qx,*,ci,qy,*,-,dr,+",
+                "ui": "cr,qy,*,ci,qx,*,+,di,+",
+                "dn": "ur,ur,*,ui,ui,*,+,cr,cr,*,ci,ci,*,+,r,r,*,*,-",
+            },
+            inputs=["cr", "ci", "dr", "di", "qx", "qy", "r", "eps"],
+            outputs=["stop"],
+            scalars=["cr", "ci", "dr", "di", "qx", "qy", "r", "eps",
+                     "ur", "ui", "dn", "stop"],
+            name="BranchTermination", location=(2.2, 0), parent=term_frame)
+        termination.label = "r/denom < epsilon ?"
+        links.new(parent_sep.entry(1, 3), termination.inputs["cr"])
+        links.new(parent_sep.entry(1, 4), termination.inputs["ci"])
+        links.new(parent_sep.entry(3, 3), termination.inputs["dr"])
+        links.new(parent_sep.entry(3, 4), termination.inputs["di"])
+        links.new(circle_sep.x, termination.inputs["qx"])
+        links.new(circle_sep.y, termination.inputs["qy"])
+        links.new(circle_sep.z, termination.inputs["r"])
+        links.new(eps_in.std_out, termination.inputs["eps"])
+        store_stop = StoredNamedAttribute(
+            tree, location=(0.4, 5.5), data_type="BOOLEAN", name="stop",
+            value=termination.outputs["stop"],
+            label="stop <- disc small enough", parent=term_frame, hide=True)
+
+        # -- extend the word: word <- word . g[letter] ---------------------
+        word_frame = Frame(tree, label="extend the word: word . g[letter]",
+                           name="WordFrame", location=(-5.8, -2.2))
+        extend = MultiplyMatrices(tree, location=(0, 0),
+                                  matrix1=parent_word.std_out,
+                                  matrix2=gen_switch.std_out,
+                                  label="word . g", parent=word_frame,
+                                  hide=True)
+        word_switch = Switch(tree, location=(1, 0), input_type="MATRIX",
+                             switch=done_read.std_out, false=extend.std_out,
+                             true=parent_word.std_out,
+                             label="frozen: keep word", parent=word_frame,
+                             hide=True)
+        store_word = StoredNamedAttribute(
+            tree, location=(0.5, 4.2), data_type="FLOAT4X4", name="word",
+            value=word_switch.std_out, label="word <- extended word",
+            parent=word_frame, hide=True)
+
+        # -- place the point: p = word(fixed point of letter) --------------
+        place_frame = Frame(
+            tree,
+            label="place the point: p = (a z + b)/(c z + d), z the fixed point of the letter",
+            name="PlaceFrame", location=(-4.6, -1.2))
+        # NOTE: read the word attribute anew -- downstream of its store this
+        # yields the extended word (re-using the switch field here would
+        # multiply a second time)
+        new_word = NamedAttribute(tree, location=(0, 0), data_type="FLOAT4X4",
+                                  name="word", label="extended word",
+                                  parent=place_frame, hide=True)
+        new_sep = SeparateMatrix(tree, location=(0.8, 0),
+                                 matrix=new_word.std_out,
+                                 label="a, b, c, d of the word",
+                                 parent=place_frame, hide=True)
+        moebius = make_function(
+            tree,
+            functions={"p": ["nr,er,*,ni,ei,*,+,dn,/",
+                             "0",
+                             "ni,er,*,nr,ei,*,-,dn,/"]},
+            aux_functions={
+                "nr": "ar,zr,*,ai,zi,*,-,br,+",
+                "ni": "ar,zi,*,ai,zr,*,+,bi,+",
+                "er": "cr,zr,*,ci,zi,*,-,dr,+",
+                "ei": "cr,zi,*,ci,zr,*,+,di,+",
+                "dn": "er,er,*,ei,ei,*,+",
+            },
+            inputs=["ar", "ai", "br", "bi", "cr", "ci", "dr", "di",
+                    "zr", "zi"],
+            outputs=["p"],
+            scalars=["ar", "ai", "br", "bi", "cr", "ci", "dr", "di",
+                     "zr", "zi", "nr", "ni", "er", "ei", "dn"],
+            vectors=["p"],
+            name="MoebiusOnFixedPoint", location=(1.8, -0.5),
+            parent=place_frame)
+        moebius.label = "p = (a z + b)/(c z + d) in x-z plane"
+        links.new(new_sep.entry(1, 1), moebius.inputs["ar"])
+        links.new(new_sep.entry(1, 2), moebius.inputs["ai"])
+        links.new(new_sep.entry(3, 1), moebius.inputs["br"])
+        links.new(new_sep.entry(3, 2), moebius.inputs["bi"])
+        links.new(new_sep.entry(1, 3), moebius.inputs["cr"])
+        links.new(new_sep.entry(1, 4), moebius.inputs["ci"])
+        links.new(new_sep.entry(3, 3), moebius.inputs["dr"])
+        links.new(new_sep.entry(3, 4), moebius.inputs["di"])
+        links.new(fp_sep.x, moebius.inputs["zr"])
+        links.new(fp_sep.y, moebius.inputs["zi"])
+        current_pos = Position(tree, location=(1.8, 0.7), parent=place_frame,
+                               hide=True)
+        pos_switch = Switch(tree, location=(2.8, 0), input_type="VECTOR",
+                            switch=done_read.std_out,
+                            false=moebius.outputs["p"],
+                            true=current_pos.std_out,
+                            label="frozen: keep position",
+                            parent=place_frame, hide=True)
+        set_pos = SetPosition(tree, location=(0.6, 3.2),
+                              position=pos_switch.std_out,
+                              parent=place_frame, hide=True)
+
+        # -- freeze finished branches --------------------------------------
+        freeze_frame = Frame(tree, label="freeze: done <- done or stop",
+                             name="FreezeFrame", location=(-3.0, -0.3))
+        stop_read = NamedAttribute(tree, location=(0, 0), data_type="BOOLEAN",
+                                   name="stop", label="stop",
+                                   parent=freeze_frame, hide=True)
+        done_or_stop = BooleanMath(tree, location=(1, 0), operation="OR",
+                                   inputs0=done_read.std_out,
+                                   inputs1=stop_read.std_out,
+                                   label="done or stop", parent=freeze_frame,
+                                   hide=True)
+        store_done = StoredNamedAttribute(
+            tree, location=(0.3, 2.3), data_type="BOOLEAN", name="done",
+            value=done_or_stop.std_out, label="done <- done or stop",
+            parent=freeze_frame, hide=True)
+
+        repeat.create_geometry_line([dup, store_digit, store_letter,
+                                     store_stop, store_word, set_pos,
+                                     store_done])
+
+        # ================================================================
+        #  colour by first/last letter & output
+        # ================================================================
+        # 'letter' always holds the LAST letter of the word: it is advanced
+        # per level while the branch is open and frozen once done
+        color_attr = ('letter' if self.color_by in ('letter', 'last_letter')
+                      else 'first_letter')
+        color_mat = gradient_from_attribute(
+            name="ApollonianLetterColor", attr_name=color_attr,
+            function="fac,3,/",
+            gradient={i / 3: self.colors[i] for i in range(4)})
+        _bsdf = color_mat.node_tree.nodes.get("Principled BSDF")
+        if _bsdf is not None and "Emission Strength" in _bsdf.inputs:
+            _bsdf.inputs["Emission Strength"].default_value = 2.0
+
+        out_frame = Frame(tree, label="colour by " + color_attr,
+                          name="OutFrame", location=(5, 2))
+        set_material = SetMaterial(tree, location=(0, 0), material=color_mat,
+                                   parent=out_frame)
+
+        create_geometry_line(tree, [seed_points, store_first, seed_letter,
+                                    seed_word, seed_done, seed_pos])
+        links.new(seed_pos.geometry_out, repeat.geometry_in)
+        links.new(repeat.geometry_out, set_material.geometry_in)
+        links.new(set_material.geometry_out,
+                  self.group_outputs.inputs['Geometry'])
+        self.group_outputs.location = (7 * 200, 2 * 100)
+
+
 class HatTileModifier(GeometryNodesModifier):
     """
     Geometry-nodes modifier that places hat tiles on a triangular grid.
@@ -8614,7 +11960,7 @@ class HatTileModifier(GeometryNodesModifier):
         self.anti_hat_object = anti_hat_object
         super().__init__(name=name, automatic_layout=False)
 
-    def create_node(self, tree):
+    def create_node(self, tree, **kwargs):
         # ------------------------------------------------------------
         # exposed parameters
         # ------------------------------------------------------------
@@ -8642,8 +11988,8 @@ class HatTileModifier(GeometryNodesModifier):
         position = Position(tree)
         triangular = make_function(tree, functions={
             "position": [
-                "pos_x,pos_y,0.5,*,+",       # x = a + b/2
-                "pos_y,3,sqrt,*,0.5,*",      # y = b * sqrt(3)/2
+                "pos_x,pos_y,0.5,*,+",  # x = a + b/2
+                "pos_y,3,sqrt,*,0.5,*",  # y = b * sqrt(3)/2
                 "0",
             ]
         }, inputs=["pos"], outputs=["position"], vectors=["pos", "position"],
@@ -8670,12 +12016,12 @@ class HatTileModifier(GeometryNodesModifier):
         # final label = (rand_empty < EmptyProb) ? 0 : rand_label
         # break out into useful selectors:
         label = make_function(tree, functions={
-            "label":      "draw,p,<,not,raw_label,*",
-            "is_tile":    "raw_label,0,>,draw,p,<,not,*",
-            "is_anti":    "raw_label,6,>,draw,p,<,not,*",
+            "label": "draw,p,<,not,raw_label,*",
+            "is_tile": "raw_label,0,>,draw,p,<,not,*",
+            "is_anti": "raw_label,6,>,draw,p,<,not,*",
             # rot_index = (raw_label - 1) for label<=6, (raw_label - 7) for label in 7..12
             #           = raw_label - 1 - 6 * (raw_label > 6)
-            "rot_index":  "raw_label,1,-,raw_label,6,>,6,*,-",
+            "rot_index": "raw_label,1,-,raw_label,6,>,6,*,-",
         }, inputs=["raw_label", "draw", "p"], outputs=["label", "is_tile", "is_anti", "rot_index"],
                               scalars=["raw_label", "draw", "p", "label", "is_tile", "is_anti", "rot_index"],
                               name="LabelLogic", hide=True)
@@ -8715,7 +12061,7 @@ class HatTileModifier(GeometryNodesModifier):
 
         # selection masks for the two branches
         select_fn = make_function(tree, functions={
-            "tile_sel":   "is_tile,is_anti,not,*",
+            "tile_sel": "is_tile,is_anti,not,*",
             "mirror_sel": "is_anti",
         }, inputs=["is_tile", "is_anti"], outputs=["tile_sel", "mirror_sel"],
                                   scalars=["is_tile", "is_anti", "tile_sel", "mirror_sel"],
