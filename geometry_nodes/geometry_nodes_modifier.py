@@ -24,7 +24,8 @@ from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, Instan
     ImportCSV, InputString, SampleIndex, StringJoin, SliceString, TranslateToCenterNode, PolyhedronViewNode, \
     ShowNormalsNode, Rotation, LinearMap, MergeByDistance, DistributePointsOnFaces, MeshBoolean, \
     CombineMatrix, TransformPoint, MultiplyMatrices, SeparateMatrix, DuplicateElements, Reroute, SampleNearest, \
-    TranslateInstances, InsidePolygon, ComplexMathNode, GeometryProximity, MeshCircle
+    TranslateInstances, InsidePolygon, ComplexMathNode, GeometryProximity, MeshCircle, CharToAscii, \
+    StringLength, IntegerMath
 from interface import ibpy
 from interface.ibpy import make_new_socket, Vector, get_node_tree, get_material, get_geometry_node_from_modifier, \
     get_material_of
@@ -12131,3 +12132,1201 @@ class HatTileModifier(GeometryNodesModifier):
 
         # tidy layout
         layout(tree)
+
+
+class ExtendedBrainFuckTapeModifier(GeometryNodesModifier):
+    """
+    Draw a brainfuck/BFF tape as a row of cells, one cell per character of the
+    program, with the ascii code of the character stored on the cell.
+
+    This is the python translation of ``video_bff/tmp.xml``. Every frame of
+    that graph is built by a private method of its own -
+    :meth:`_create_control_frame`, :meth:`_create_tape_frame`,
+    :meth:`_create_cells_frame`, :meth:`_create_glyph_frame` - and the node
+    locations are the ones of the xml, so that the layout of the tree in the
+    editor matches the file it came from. The graph has four parts:
+
+    ``ControlParameter``
+        ``TapeSize`` (int), ``CellSize`` (float) and ``Program`` (string).
+        All three are exposed and can be animated with
+        ``ibpy.get_geometry_node_from_modifier(mod, "TapeSize")`` etc. Note
+        that ``TapeSize`` is written with ``ibpy.change_default_integer`` and
+        ``CellSize`` with ``ibpy.change_default_value``.
+
+    ``Tape``
+        A ``Mesh Line`` of ``TapeSize`` points that ends at
+        ``TapeSize * CellSize`` on the x-axis. A *for each element* zone walks
+        over its points, slices the character at the position of the point out
+        of ``Program`` and converts it with the :class:`CharToAscii` node group
+        into its code point, which is stored on the point as the integer
+        attribute ``Value``.
+
+    ``Cells``
+        A filled quadrilateral of ``CellSize`` x ``CellSize`` is instanced onto
+        every tape point. The instances are realized so that ``Value``
+        propagates onto the cell geometry, and a chain of ``Set Material``
+        nodes then paints each cell by the opcode it holds: every link of the
+        chain takes its material from an ``Input Material`` node in the control
+        frame and its selection from ``Named Attribute("Value")`` compared
+        against the ascii code(s) it stands for. The first link has no
+        selection - it is the fall-back that the later ones override.
+
+    ``Glyphs``
+        A second *for each element* zone renders the character itself with
+        ``String to Curves``. The glyph is filled, given the ``GlyphColor``
+        material and moved onto its tape position, shifted by ``glyph_offset``
+        (a ``Vector Math`` node added to the tape position). By default it is
+        turned upright, so it stands orthogonally on the plane of the cell
+        square (pass ``glyphs_upright=False`` to lay it flat into the cell).
+
+    Positions beyond the end of the program slice to the empty string, which
+    :class:`CharToAscii` maps to ``0`` and ``String to Curves`` renders as
+    nothing - so a tape that is longer than the program ends in blank cells in
+    ``ZeroColor`` rather than repeating the program.
+
+    :param program: the brainfuck program written onto the tape
+    :param tape_size: number of cells; defaults to the length of the program
+    :param cell_size: width and height of a single cell
+    :param glyph_size: height of a glyph as a fraction of ``CellSize``
+    :param glyphs: render the program on top of the cells at all
+    :param glyphs_upright: stand the glyphs orthogonally on the cell square
+        instead of laying them flat into it
+    :param glyph_offset: shift of a glyph against its tape position; the
+        default lifts it half a cell above the plane of the tape
+    :param colors: optional ``{node name: colour name}`` overriding
+        :attr:`CELL_COLORS`, e.g. ``{"BracketColor": "magenta"}``
+    """
+
+    # Colour of a cell by the opcode it holds. The name is the name of the
+    # ``Input Material`` node in the control frame, so the material of, say,
+    # every bracket can be swapped or animated through
+    # ``ibpy.get_geometry_node_from_modifier(mod, "BracketColor")``.
+    #
+    # The hues follow the families of ``video_bff/bff_trace.py`` - blues move a
+    # head, reds do arithmetic, greens copy, violet is control flow - but each
+    # requested name gets a material of its own, so the two members of a pair
+    # can still be told apart.
+    #
+    # The first entry carries no codes: it is the fall-back for every byte that
+    # is not an instruction, which in BFF is the overwhelming majority.
+    CELL_COLORS = (
+        # node name,         colour,             ascii codes
+        ("EmptyColor",       "gray_3",           ()),
+        ("ZeroColor",        "gray_1",           (0,)),
+        ("LessColor",        "drawing",          (ord("<"),)),
+        ("MoreColor",        "cyan",             (ord(">"),)),
+        ("CurlyBraceColor",  "some_logo_blue",   (ord("{"), ord("}"))),
+        ("PlusColor",        "important",        (ord("+"),)),
+        ("MinusColor",       "orange",           (ord("-"),)),
+        ("DotColor",         "joker",            (ord("."),)),
+        ("CommaColor",       "some_logo_green",  (ord(","),)),
+        ("BracketColor",     "x14_color",        (ord("["), ord("]"))),
+    )
+    GLYPH_COLOR = "text"
+
+    def __init__(self, program="[[{.>]-]", tape_size=None, cell_size=1,
+                 glyph_size=0.75, glyphs=True, glyphs_upright=True,
+                 glyph_offset=(0, 0, 0.5), colors=None,
+                 name='ExtendedBrainFuckTape', **kwargs):
+        self.program = program
+        self.tape_size = len(program) if tape_size is None else tape_size
+        self.cell_size = cell_size
+        self.glyph_size = glyph_size
+        self.glyphs = glyphs
+        self.glyphs_upright = glyphs_upright
+        self.glyph_offset = list(glyph_offset)
+        overrides = colors or {}
+        self.cell_colors = tuple(
+            (node_name, overrides.get(node_name, color), codes)
+            for node_name, color, codes in self.CELL_COLORS)
+        self.glyph_color = overrides.get("GlyphColor", self.GLYPH_COLOR)
+        self.kwargs = kwargs
+        super().__init__(name=name, automatic_layout=False)
+
+    def create_node(self, tree, **kwargs):
+        tape_size, cell_size, program, palette, glyph_color = self._create_control_frame(tree)
+        line, zone = self._create_tape_frame(tree, tape_size, cell_size, program)
+        cells = self._create_cells_frame(tree, cell_size, palette, zone)
+
+        out = self.group_outputs
+        # the two zones push the graph far to the right, so the group output
+        # sits well beyond the last frame rather than at the origin
+        out.location = (23.2 * 200, -1.7 * 200)
+
+        if not self.glyphs:
+            tree.links.new(cells.geometry_out, out.inputs["Geometry"])
+            return
+
+        glyphs = self._create_glyph_frame(tree, cell_size, program, glyph_color, line)
+
+        join = JoinGeometry(tree, location=(22, -4))
+        tree.links.new(cells.geometry_out, join.geometry_in)
+        tree.links.new(glyphs.geometry_out, join.geometry_in)
+        tree.links.new(join.geometry_out, out.inputs["Geometry"])
+
+    # ----------------------------------------------------------------
+    def _create_control_frame(self, tree):
+        """``ControlParameter``: the three parameters and the palette.
+
+        :return: ``(tape_size, cell_size, program, palette, glyph_color)``,
+            where ``palette`` maps the node name of a colour to its
+            ``Input Material`` node.
+        """
+        tape_size = InputInteger(tree, location=(-6.7, 0.2), integer=self.tape_size, name="TapeSize")
+        cell_size = InputValue(tree, location=(-6.7, -0.6), value=self.cell_size, name="CellSize")
+        program = InputString(tree, location=(-6.7, -1.8), string=self.program, name="Program")
+
+        # one Input Material node per opcode colour, plus the glyph colour
+        palette = {}
+        for row, (node_name, color, _) in enumerate(self.cell_colors):
+            source = InputMaterial(tree, location=(-6.7, -2.8 - 0.4 * row), material=color,
+                                   name=node_name, **self.kwargs)
+            palette[node_name] = source
+            self.materials.append(source.node.material)
+        glyph_color = InputMaterial(tree, location=(-6.7, -2.8 - 0.4 * len(self.cell_colors)),
+                                    material=self.glyph_color, name="GlyphColor",
+                                    **self.kwargs)
+        self.materials.append(glyph_color.node.material)
+
+        frame = Frame(tree, location=(-6.8, 0.4), label="ControlParameter")
+        frame.add([tape_size, cell_size, program, glyph_color] + list(palette.values()))
+        return tape_size, cell_size, program, palette, glyph_color
+
+    # ----------------------------------------------------------------
+    def _create_tape_frame(self, tree, tape_size, cell_size, program):
+        """``Tape``: the points of the tape and the code sitting on each of them.
+
+        A ``Mesh Line`` of ``TapeSize`` points ends at ``TapeSize * CellSize``
+        on the x-axis. A *for each element* zone walks over its points, slices
+        the character at the index of the point out of ``Program`` and converts
+        it with :class:`CharToAscii` into its code point, which is stored on
+        the point as the integer attribute ``Value``.
+
+        :return: ``(line, zone)`` - the bare line is needed a second time by
+            the glyph frame, the zone carries the codes.
+        """
+        length = MathNode(tree, location=(-2.5, 2.6), operation="MULTIPLY",
+                          inputs0=tape_size.std_out, inputs1=cell_size.std_out,
+                          name="TapeLength")
+        end = CombineXYZ(tree, location=(-1.5, 2.6), x=length.std_out, name="TapeEnd")
+        line = MeshLine(tree, location=(-0.5, 3.6), mode="END_POINTS",
+                        count=tape_size.std_out, start_location=Vector([0, 0, 0]),
+                        end_location=end.std_out)
+
+        zone = ForEachZone(tree, location=(1.5, 3.6), domain="POINT", node_width=5,
+                           geometry=line.geometry_out)
+        character = SliceString(tree, location=(2.5, 4.6), string=program.std_out,
+                                position=zone.index, length=1, name="Character")
+        code = CharToAscii(tree, location=(4, 4.6), char=character.std_out)
+        store = StoredNamedAttribute(tree, location=(5.5, 3.6), data_type="INT",
+                                     domain="POINT", name="Value", value=code.std_out)
+        zone.create_geometry_line([store])
+
+        frame = Frame(tree, location=(-2.6, 4.8), label="Tape")
+        frame.add([length, end, line, zone, character, code, store])
+        return line, zone
+
+    # ----------------------------------------------------------------
+    def _create_cells_frame(self, tree, cell_size, palette, zone):
+        """``Cells``: a square per tape point, painted by the opcode it holds.
+
+        A filled quadrilateral of ``CellSize`` x ``CellSize`` is instanced onto
+        every tape point. The instances are realized so that ``Value``
+        propagates onto the cell geometry, and a chain of ``Set Material``
+        nodes then paints each cell: every link of the chain takes its material
+        from an ``Input Material`` node of the control frame and its selection
+        from ``Named Attribute("Value")`` compared against the ascii code(s) it
+        stands for. The first link has no selection - it is the fall-back that
+        the later ones override.
+
+        :return: the last ``Set Material`` of the chain.
+        """
+        quad = Quadrilateral(tree, location=(6.9, -1.8), mode="RECTANGLE",
+                             width=cell_size.std_out, height=cell_size.std_out)
+        fill = FillCurve(tree, location=(7.9, -1.8), mode="N-gons")
+
+        instances = InstanceOnPoints(tree, location=(8.9, -1.8),
+                                     points=zone.geometry_out,
+                                     instance=fill.geometry_out)
+        # realize, otherwise the attribute "Value" of the tape points reaches
+        # neither the selections below nor the shader of the instanced cell
+        realize = RealizeInstances(tree, location=(9.9, -1.8))
+        # the cell shape reaches the "Instance" socket through the constructor
+        # above, so it must not be piped into "Points" by a geometry line here
+        create_geometry_line(tree, [quad, fill])
+
+        # "Value" lives on the point domain; the selection of Set Material is
+        # read on the face domain, and since all four corners of a cell carry
+        # the same code the interpolation between the two is exact.
+        value = NamedAttribute(tree, location=(9.9, -3.8), data_type="INT", name="Value")
+
+        # the compare and boolean nodes are collapsed and stay outside the
+        # frame, below the link of the chain they feed, so that the frame keeps
+        # the shape of the chain itself
+        painters = []
+        for column, (node_name, _, codes) in enumerate(self.cell_colors):
+            x = 11 + column
+            if codes:
+                tests = [CompareNode(tree, location=(x, -4 - 0.4 * i),
+                                     operation="EQUAL", data_type="INT",
+                                     inputs0=value.std_out, inputs1=code,
+                                     name="Is" + node_name + str(i), hide=True)
+                         for i, code in enumerate(codes)]
+                selection = tests[0].std_out
+                for test in tests[1:]:
+                    selection = BooleanMath(tree, location=(x, -5.5), operation="OR",
+                                            inputs0=selection, inputs1=test.std_out,
+                                            hide=True).std_out
+            else:
+                selection = None  # the fall-back link paints every cell
+            painters.append(SetMaterial(tree, location=(x - 0.1, -1.8), selection=selection,
+                                        material=palette[node_name].std_out,
+                                        name="Paint" + node_name))
+        create_geometry_line(tree, [instances, realize] + painters)
+
+        frame = Frame(tree, location=(6.8, -1.4), label="Cells")
+        frame.add([quad, fill, instances, realize, value] + painters)
+        return painters[-1]
+
+    # ----------------------------------------------------------------
+    def _create_glyph_frame(self, tree, cell_size, program, glyph_color, line):
+        """``Glyphs``: the program itself, rendered on top of the tape positions.
+
+        Strings are not fields, so the glyph of a cell can only be built inside
+        a zone, where the slice is a single value. The zone walks the same tape
+        points a second time and carries their position in as an input item, so
+        that each glyph knows where to land.
+
+        :return: the glyph zone.
+        """
+        position = Position(tree, location=(6.7, -8.6))
+        glyphs = ForEachZone(tree, location=(7.7, -7.6), domain="POINT", node_width=7,
+                             geometry=line.geometry_out)
+        glyphs.add_socket(socket_type="VECTOR", name="Location",
+                          value=position.std_out, for_input=True)
+
+        glyph_char = SliceString(tree, location=(8.7, -6.6), string=program.std_out,
+                                 position=glyphs.index, length=1, name="GlyphCharacter")
+        glyph_scale = MathNode(tree, location=(8.7, -9.6), operation="MULTIPLY",
+                               inputs0=cell_size.std_out, inputs1=self.glyph_size,
+                               name="GlyphSize")
+        # BOTTOM alignment puts the baseline at the origin of the glyph, so
+        # after the upright turn the letter rises out of the cell plane instead
+        # of being cut in half by it
+        curves = StringToCurves(tree, location=(9.7, -7.6), string=glyph_char.std_out,
+                                size=glyph_scale.std_out, align_x="CENTER",
+                                align_y="BOTTOM")
+        glyph_realize = RealizeInstances(tree, location=(10.7, -7.6))
+        glyph_fill = FillCurve(tree, location=(11.7, -7.6), mode="N-gons")
+        glyph_material = SetMaterial(tree, location=(12.7, -7.6),
+                                     material=glyph_color.std_out, name="PaintGlyph")
+        # the glyph does not sit on the tape position itself: this shift lifts
+        # it out of the plane of the cells, so an upright letter clears the
+        # square it belongs to instead of growing out of its middle
+        shift = VectorMath(tree, location=(12.6, -9), operation="ADD",
+                           inputs0=glyphs.foreach_input.outputs["Location"],
+                           inputs1=self.glyph_offset)
+        # a quarter turn about x takes the glyph out of the plane of the cell
+        # square and stands it upright on the tape
+        upright = [pi / 2, 0, 0] if self.glyphs_upright else [0, 0, 0]
+        glyph_place = TransformGeometry(tree, location=(13.7, -8.6),
+                                        translation=shift.std_out,
+                                        rotation=upright, name="PlaceGlyph")
+        glyphs.create_geometry_line(
+            [glyph_realize, glyph_fill, glyph_material, glyph_place],
+            ins=curves.geometry_out)
+
+        frame = Frame(tree, location=(6.6, -6.4), label="Glyphs")
+        frame.add([position, glyphs, glyph_char, glyph_scale, curves,
+                   glyph_realize, glyph_fill, glyph_material, shift, glyph_place])
+        return glyphs
+
+
+class SimpleBrainFuckModifier(GeometryNodesModifier):
+    """
+    A whole brainfuck machine running inside geometry nodes: a tape of cells
+    whose values are incremented and decremented, a head that walks along it,
+    and a program that is consumed one instruction per ``step_duration``.
+
+    This is the python translation of the ``SimpleBrainFuck`` graph in
+    ``video_bff/tmp.xml``, completed and debugged. Every frame of that graph is
+    built by a private method of its own.
+
+    **The encoding.** The machine does *not* use ascii for its output.
+    ``code_table`` is ``"ABC...Z"``, so a cell holding 8 prints ``H`` and one
+    holding 15 prints ``O``. That is what makes the program short enough to
+    read: ``HELLO`` needs the values 8, 5, 12, 12, 15 rather than the ascii
+    72, 69, 76, 76, 79. The table is drawn above the tape so the viewer can do
+    the lookup along with the machine.
+
+    **The state.** A simulation zone carries
+
+    ``Geometry``
+        the tape itself. This is the answer to "how do the cell values get
+        incremented" - the values live in the integer point attribute
+        ``Value`` of the tape geometry, and the zone hands that geometry from
+        one frame to the next. ``+`` and ``-`` are a single ``Store Named
+        Attribute`` whose *selection* is ``Index == PointerPosition``, so only
+        the cell under the head changes; ``Sample Index`` reads that cell back
+        out for ``.`` and for the increment itself.
+
+    ``Input``
+        the part of the program that has not run yet. One character is sliced
+        off its front per step, so ``Input`` doubles as the program counter -
+        which is also why ``[`` and ``]`` are *not* supported: a loop would
+        have to jump backwards into a part of the string that no longer
+        exists. The five instructions ``> < + - .`` are.
+
+    ``Output``, ``Current``, ``PointerPosition``, ``Step``, ``StartTime``, ``Time``
+        what has been printed, the instruction being executed, the position of
+        the head, the index of the current step, and the clock.
+
+    ``Time`` accumulates ``Delta Time`` rather than reading the scene clock, so
+    the machine is driven by the simulation itself. Nothing happens before
+    ``start_time``; after that the step index is
+    ``trunc((Time - StartTime) / StepDuration)`` and an instruction is executed
+    on every frame where that index goes up *and* the program is not yet empty.
+    The xml carries a second state item ``OldStep`` for the comparison, but it
+    is written from the same socket as ``Step`` and so always holds the same
+    value; ``Step`` alone is the previous step index, and that is all the
+    comparison needs.
+
+    Because the state lives in a simulation zone, the machine only runs when
+    blender steps the scene forward one frame at a time. Jumping straight to a
+    frame shows whatever the zone last cached, and ``render_with_skips`` will
+    treat frames as still unless some *object* is animated - see the scene
+    ``BffScene.simple_brain_fuck`` for what that means in practice.
+
+    The frames of the graph:
+
+    ``ControlParameter``, ``Variables``
+        the constants and the four state seeds (``Input``, ``Output``,
+        ``PointerPosition``, ``Step``).
+
+    ``Tape``
+        a ``Mesh Line`` of ``TapeSize`` points with ``Value = 0`` on every
+        point - the tape as the machine starts it.
+
+    ``RunProgram``
+        the simulation zone: the clock, the slicing of ``Input`` and the
+        handover of every state item.
+
+    ``Automaton``
+        the instruction decoder. ``Char To Ascii`` turns the current
+        instruction into its code, one ``Compare`` per opcode fires, and each
+        comparison is ``AND``-ed with "a step has just begun" so that an
+        instruction takes effect exactly once however many frames it is on
+        screen for.
+
+    ``Cells``, ``CellValues``
+        the tape as it looks: one square per cell, coloured by whether the cell
+        is still zero, holds a value, or is the one under the head, with the
+        value written on it as a number by a *for each element* zone.
+
+    ``CodeTable``, ``TableFrame``
+        ``A``…1 to ``Z``…26 in a row above the tape, drawn by a repeat zone,
+        with a rectangle around it that is sized from the bounding box of what
+        came out - so it fits whatever alphabet is passed in.
+
+    ``InputDisplay``, ``CurrentDisplay``, ``OutputDisplay``
+        three framed boxes below the tape holding the remaining program, the
+        instruction being executed and what has been printed so far.
+
+    ``SimulatedGeometry``
+        the text inside those three boxes and the head marker under the tape.
+        Unlike in the xml this is built *outside* the simulation zone, from the
+        state that the zone outputs: it is redrawn from scratch every frame, so
+        carrying it through the zone as state would only feed it back to be
+        thrown away.
+
+    :param program: the brainfuck program, in ``> < + - .``
+    :param code_table: the alphabet the cell values index into, 1-based
+    :param tape_size: number of cells
+    :param cell_size: width and height of a single cell
+    :param step_duration: seconds one instruction is on screen. Must be at
+        least two frames; below that the machine simply runs at one
+        instruction per frame instead of skipping any.
+    :param start_time: seconds before the first instruction runs
+    :param tape_tilt: angle the tape is laid back by, so that a camera looking
+        along +y sees the faces of the cells rather than their edge
+    :param glyph_size: height of the number on a cell, as a fraction of
+        ``CellSize``
+    :param display_height: height of the three read-out boxes
+    :param colors: optional ``{node name: colour name}`` overriding
+        :attr:`CELL_COLORS`, and the two entries ``GlyphColor`` and
+        ``FrameColor``
+    """
+
+    # "HELLO" as 8, 5, 12, 12, 15 - see the class docstring. Cell 0 is raised
+    # to 8 and printed, the head steps right and cell 1 is raised to 5, then
+    # the head steps back onto cell 0, which is topped up to 12 for the two
+    # Ls and to 15 for the O. 27 instructions instead of the 70-odd an ascii
+    # HELLO needs.
+    HELLO = "++++++++.>+++++.<++++..+++."
+    ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+    # Colour of a cell by what is in it. The name is the name of the
+    # ``Input Material`` node in the control frame, so any of them can be
+    # swapped or animated through
+    # ``ibpy.get_geometry_node_from_modifier(mod, "PointerColor")``.
+    #
+    # The chain is applied in this order and each link overrides the previous
+    # one, so the first entry is the fall-back and the last one wins.
+    CELL_COLORS = (
+        ("ZeroColor", "gray_1"),        # nothing in it yet
+        ("ValueColor", "drawing"),      # holds a value
+        ("PointerColor", "important"),  # the cell the head is on
+    )
+    GLYPH_COLOR = "text"    # the numbers on the cells and all the text
+    FRAME_COLOR = "gray_2"  # the boxes around the displays and the code table
+
+    # ascii codes of the five instructions
+    DOT, PLUS, MINUS, LEFT, RIGHT = ord("."), ord("+"), ord("-"), ord("<"), ord(">")
+
+    # how the code table is laid out: one entry every ``table_spacing`` along
+    # x, the letter ``table_line_gap`` below its number, and a frame around it
+    # that is ``table_margin`` times the extent of the whole row
+    table_spacing = 0.6
+    table_line_gap = 0.7
+    table_glyph_size = 0.5
+    table_margin = 1.1
+    frame_radius = 0.03
+
+    def __init__(self, program=None, code_table=None, tape_size=5, cell_size=1,
+                 step_duration=0.5, start_time=3.0, tape_tilt=0.4607669,
+                 glyph_size=0.6, display_height=2.0, colors=None,
+                 name="SimpleBrainFuck", **kwargs):
+        self.program = self.HELLO if program is None else program
+        self.code_table = self.ALPHABET if code_table is None else code_table
+        self.tape_size = tape_size
+        self.cell_size = cell_size
+        self.step_duration = step_duration
+        self.start_time = start_time
+        self.tape_tilt = tape_tilt
+        self.glyph_size = glyph_size
+        self.display_height = display_height
+        overrides = colors or {}
+        self.cell_colors = tuple((node_name, overrides.get(node_name, color))
+                                 for node_name, color in self.CELL_COLORS)
+        self.glyph_color = overrides.get("GlyphColor", self.GLYPH_COLOR)
+        self.frame_color = overrides.get("FrameColor", self.FRAME_COLOR)
+        self.kwargs = kwargs
+        super().__init__(name=name, automatic_layout=False)
+
+    # ----------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._create_control_frame(tree)
+        variables = self._create_variables_frame(tree)
+        tape = self._create_tape_frame(tree, control)
+        run = self._create_run_program_frame(tree, control, variables, tape)
+
+        cells = self._create_cells_frame(tree, control, run)
+        table = self._create_code_table_frame(tree, control)
+        displays = [
+            self._create_display_frame(tree, control, "InputDisplay",
+                                       control["InputDisplaySize"],
+                                       control["InputPosition"], location=(26, -21)),
+            self._create_display_frame(tree, control, "CurrentDisplay",
+                                       control["CurrentDisplaySize"],
+                                       control["CurrentPosition"], location=(26, -24)),
+            self._create_display_frame(tree, control, "OutputDisplay",
+                                       control["OutputDisplaySize"],
+                                       control["OutputPosition"], location=(26, -27)),
+        ]
+        simulated = self._create_simulated_geometry_frame(tree, control, run)
+
+        out = self.group_outputs
+        out.location = (38 * 200, -2 * 200)
+        join = JoinGeometry(tree, location=(36, -4))
+        for piece in [cells, table, simulated] + displays:
+            tree.links.new(piece, join.geometry_in)
+        tree.links.new(join.geometry_out, out.inputs["Geometry"])
+
+    # ----------------------------------------------------------------
+    def _create_control_frame(self, tree):
+        """``ControlParameter``: every constant of the machine.
+
+        :return: ``{name: node}``, so that the frames downstream can pick the
+            parameter they need by the name it carries in the editor.
+        """
+        x = -23.8
+        control = {
+            "TapeSize": InputInteger(tree, location=(x, 0), integer=self.tape_size,
+                                     name="TapeSize"),
+            "CellSize": InputValue(tree, location=(x, -0.8), value=self.cell_size,
+                                   name="CellSize"),
+            "StartTime": InputValue(tree, location=(x, -1.6), value=self.start_time,
+                                    name="StartTime"),
+            "StepDuration": InputValue(tree, location=(x, -2.4), value=self.step_duration,
+                                       name="StepDuration"),
+            "CodeTable": InputString(tree, location=(x, -3.2), string=self.code_table,
+                                     name="CodeTable"),
+        }
+
+        # one Input Material node per colour of a cell, plus the two that
+        # everything else is drawn in
+        palette = {}
+        for row, (node_name, color) in enumerate(self.cell_colors):
+            palette[node_name] = InputMaterial(tree, location=(x, -4.4 - 0.4 * row),
+                                               material=color, name=node_name,
+                                               **self.kwargs)
+        for offset, (node_name, color) in enumerate(
+                (("GlyphColor", self.glyph_color), ("FrameColor", self.frame_color))):
+            palette[node_name] = InputMaterial(
+                tree, location=(x, -4.4 - 0.4 * (len(self.cell_colors) + offset)),
+                material=color, name=node_name, **self.kwargs)
+        for source in palette.values():
+            self.materials.append(source.node.material)
+        control.update(palette)
+
+        # The three read-outs below the tape, and the code table above it, are
+        # all centred on the middle of the tape, which runs from x=0 to
+        # x=TapeSize*CellSize. Everything the machine shows is therefore
+        # stacked in one column and a camera looking along +y frames it whole.
+        middle = 0.5 * self.tape_size * self.cell_size
+        for row, (node_name, value) in enumerate((
+                ("InputDisplaySize", 6.0), ("OutputDisplaySize", 6.0),
+                ("CurrentDisplaySize", 2.0))):
+            control[node_name] = InputValue(tree, location=(x, -7.0 - 0.4 * row),
+                                            value=value, name=node_name)
+        for row, (node_name, value) in enumerate((
+                ("InputPosition", [middle - 5.0, 0, -3.0]),
+                ("CurrentPosition", [middle, 0, -3.0]),
+                ("OutputPosition", [middle + 5.0, 0, -3.0]))):
+            control[node_name] = InputVector(tree, location=(x, -8.6 - 0.8 * row),
+                                             vector=Vector(value), name=node_name)
+        # where the code table starts - its entries grow to the right from
+        # here, so it is shifted left by half its own width - and how far the
+        # head marker hangs below the tape
+        table_start = middle - 0.5 * (len(self.code_table) - 1) * self.table_spacing
+        control["TablePosition"] = InputVector(tree, location=(x, -11.0),
+                                               vector=Vector([table_start, 0, 2.8]),
+                                               name="TablePosition")
+        control["PointerOffset"] = InputVector(tree, location=(x, -11.8),
+                                               vector=Vector([0, 0, -0.9 * self.cell_size]),
+                                               name="PointerOffset")
+
+        frame = Frame(tree, location=(-24, 0.6), label="ControlParameter")
+        frame.add(list(control.values()))
+        return control
+
+    # ----------------------------------------------------------------
+    def _create_variables_frame(self, tree):
+        """``Variables``: the four values the simulation starts from."""
+        x = -15.8
+        variables = {
+            "Input": InputString(tree, location=(x, 0), string=self.program,
+                                 name="Program", label="Input"),
+            "Output": InputString(tree, location=(x, -0.8), string="",
+                                  name="OutputStart", label="Output"),
+            "Pointer": InputInteger(tree, location=(x, -1.6), integer=0,
+                                    name="PointerPosition"),
+            # -1, so that the first step (index 0) counts as an advance and the
+            # first instruction is executed rather than skipped
+            "Step": InputInteger(tree, location=(x, -2.4), integer=-1, name="Step"),
+        }
+        frame = Frame(tree, location=(-16, 0.6), label="Variables")
+        frame.add(list(variables.values()))
+        return variables
+
+    # ----------------------------------------------------------------
+    def _create_tape_frame(self, tree, control):
+        """``Tape``: the cells as the machine starts them, all holding zero.
+
+        :return: the geometry socket of the initial tape.
+        """
+        length = MathNode(tree, location=(-8, 0), operation="MULTIPLY",
+                          inputs0=control["TapeSize"].std_out,
+                          inputs1=control["CellSize"].std_out, name="TapeLength")
+        end = CombineXYZ(tree, location=(-7, 0), x=length.std_out, name="TapeEnd")
+        line = MeshLine(tree, location=(-6, 0.6), mode="END_POINTS",
+                        count=control["TapeSize"].std_out,
+                        start_location=Vector([0, 0, 0]), end_location=end.std_out)
+        # every cell starts empty. The attribute has to exist from the first
+        # frame on, otherwise the "Sample Index" in the automaton has nothing
+        # to read and the cells have nothing to be coloured by.
+        zeros = StoredNamedAttribute(tree, location=(-4.6, 0.6), data_type="INT",
+                                     domain="POINT", name="Value", value=0,
+                                     label="ClearTape")
+        create_geometry_line(tree, [line, zeros])
+        frame = Frame(tree, location=(-8.2, 1.4), label="Tape")
+        frame.add([length, end, line, zeros])
+        return zeros.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_run_program_frame(self, tree, control, variables, tape):
+        """``RunProgram``: the simulation zone - the clock and the program counter.
+
+        :return: ``{name: socket}`` of the state as it leaves the zone.
+        """
+        zone = Simulation(tree, location=(2, 5), node_width=20, geometry=tape)
+        sim_in, sim_out = zone.simulation_input, zone.simulation_output
+        for socket_type, socket_name, initial in (
+                ("FLOAT", "StartTime", control["StartTime"].std_out),
+                ("INT", "Step", variables["Step"].std_out),
+                ("INT", "PointerPosition", variables["Pointer"].std_out),
+                ("STRING", "Input", variables["Input"].std_out),
+                ("STRING", "Output", variables["Output"].std_out),
+                ("STRING", "Current", ""),
+                ("FLOAT", "Time", 0.0)):
+            zone.add_socket(socket_type=socket_type, name=socket_name, value=initial)
+
+        # --- the clock -------------------------------------------------
+        # the zone's own Delta Time rather than the scene clock, so that the
+        # machine keeps its own time and a state item is all that is needed
+        time = MathNode(tree, location=(3.2, 6.4), operation="ADD",
+                        inputs0=sim_in.outputs["Delta Time"],
+                        inputs1=sim_in.outputs["Time"], name="Clock")
+        since = MathNode(tree, location=(4.4, 6.4), operation="SUBTRACT",
+                         inputs0=time.std_out, inputs1=sim_in.outputs["StartTime"],
+                         name="SinceStart")
+        scaled = MathNode(tree, location=(5.6, 6.4), operation="DIVIDE",
+                          inputs0=since.std_out,
+                          inputs1=control["StepDuration"].std_out, name="InSteps")
+        # -1 while the machine is still waiting, so that the first real step
+        # (index 0) is an increase and fires the first instruction
+        waiting = MathNode(tree, location=(6.8, 6.4), operation="MAXIMUM",
+                           inputs0=scaled.std_out, inputs1=-1.0, name="NotBeforeStart")
+        step = MathNode(tree, location=(8.0, 6.4), operation="TRUNC",
+                        inputs0=waiting.std_out, name="StepIndex")
+        # An instruction is executed on the one frame where the step index goes
+        # up, never on the frames in between - otherwise a single "+" would
+        # count once per rendered frame. Comparing against the *previous* index
+        # rather than using the difference as a count also means that a
+        # step_duration shorter than a frame degrades to one instruction per
+        # frame instead of skipping instructions.
+        advance = CompareNode(tree, location=(9.2, 6.4), operation="GREATER_THAN",
+                              data_type="INT", inputs0=step.std_out,
+                              inputs1=sim_in.outputs["Step"], name="Advance")
+
+        # --- the program counter ---------------------------------------
+        current = SliceString(tree, location=(3.2, 4.6), string=sim_in.outputs["Input"],
+                              position=0, length=1, name="Instruction")
+        opcode = CharToAscii(tree, location=(4.4, 4.6), char=current.std_out)
+        rest = StringLength(tree, location=(3.2, 3.6), string=sim_in.outputs["Input"],
+                            name="Remaining")
+        # the clock keeps going after the last instruction, so without this the
+        # machine would go on "executing" the empty string: the head would stay
+        # put but the read-out would blank and the tape would keep being
+        # rewritten. Halting on an empty program leaves the finished state up.
+        running = CompareNode(tree, location=(4.4, 3.6), operation="GREATER_THAN",
+                              data_type="INT", inputs0=rest.std_out, inputs1=0,
+                              name="NotHalted")
+        fire = BooleanMath(tree, location=(10.4, 6.4), operation="AND",
+                           inputs0=advance.std_out, inputs1=running.std_out,
+                           name="ExecuteNow")
+        eaten = Switch(tree, location=(9.2, 4.0), input_type="INT",
+                       switch=fire.std_out, false=0, true=1, name="Consume")
+        # slicing from position 1 for the whole remaining length drops the
+        # instruction that has just run: "Input" is the program counter
+        consumed = SliceString(tree, location=(10.4, 3.6), string=sim_in.outputs["Input"],
+                               position=eaten.std_out, length=rest.std_out,
+                               name="RestOfProgram")
+        # the display should show the instruction that produced the state on
+        # screen, so it is only updated when one is actually executed
+        shown = Switch(tree, location=(10.4, 4.6), input_type="STRING",
+                       switch=fire.std_out, false=sim_in.outputs["Current"],
+                       true=current.std_out, name="ShownInstruction")
+
+        # --- the reroutes that carry the decoded step into the automaton ---
+        code_in = Reroute(tree, location=(11.6, 4.6), ins=opcode.std_out, name="Opcode")
+        fire_in = Reroute(tree, location=(11.6, 4.2), ins=fire.std_out, name="Fire")
+        head_in = Reroute(tree, location=(11.6, 3.8),
+                          ins=sim_in.outputs["PointerPosition"], name="Head")
+
+        pointer, tape_out, output = self._create_automaton_frame(
+            tree, control, sim_in, code_in.std_out, fire_in.std_out, head_in.std_out)
+
+        for socket, name in ((time.std_out, "Time"), (step.std_out, "Step"),
+                             (sim_in.outputs["StartTime"], "StartTime"),
+                             (consumed.std_out, "Input"), (shown.std_out, "Current"),
+                             (pointer, "PointerPosition"), (output, "Output")):
+            tree.links.new(socket, sim_out.inputs[name])
+        # replaces the pass-through that the Simulation wrapper puts in
+        tree.links.new(tape_out, sim_out.inputs["Geometry"])
+
+        frame = Frame(tree, location=(1.6, 7.4), label="RunProgram")
+        frame.add([zone, time, since, scaled, waiting, step, advance, running, fire,
+                   current, opcode, rest, eaten, consumed, shown,
+                   code_in, fire_in, head_in])
+        return {name: sim_out.outputs[name] for name in
+                ("Geometry", "Step", "PointerPosition", "Input", "Output", "Current")}
+
+    # ----------------------------------------------------------------
+    def _create_automaton_frame(self, tree, control, sim_in, opcode, fire, head):
+        """``Automaton``: what the five instructions do.
+
+        Every instruction is one ``Compare`` against its ascii code, ``AND``-ed
+        with *fire* - "a new step has just begun". Without that ``AND`` an
+        instruction would take effect once per rendered frame instead of once.
+
+        :return: ``(pointer, tape, output)`` sockets for the state to be
+            written back into the simulation.
+        """
+        built = []
+
+        def keep(node):
+            built.append(node)
+            return node
+
+        def decodes(code, row, label):
+            """``True`` on the frame the instruction ``code`` is executed."""
+            is_op = keep(CompareNode(tree, location=(12.4, row), operation="EQUAL",
+                                     data_type="INT", inputs0=opcode, inputs1=code,
+                                     name="Is" + label, hide=True))
+            return keep(BooleanMath(tree, location=(13.6, row), operation="AND",
+                                    inputs0=is_op.std_out, inputs1=fire,
+                                    name="Do" + label, hide=True)).std_out
+
+        def step_of(condition, row, label):
+            """1 on the frame the instruction runs, 0 otherwise."""
+            return keep(Switch(tree, location=(14.8, row), input_type="INT",
+                               switch=condition, false=0, true=1, name=label)).std_out
+
+        # --- the head --------------------------------------------------
+        right = step_of(decodes(self.RIGHT, 3.2, "Right"), 3.2, "StepRight")
+        left = step_of(decodes(self.LEFT, 2.4, "Left"), 2.4, "StepLeft")
+        forward = keep(IntegerMath(tree, location=(16.0, 2.8), operation="ADD",
+                                   inputs0=head, inputs1=right, name="HeadRight"))
+        backward = keep(IntegerMath(tree, location=(17.0, 2.8), operation="SUBTRACT",
+                                    inputs0=forward.std_out, inputs1=left,
+                                    name="HeadLeft"))
+        # the tape does not wrap and it does not grow, so the head is kept on
+        # it - without this a program with one ">" too many would write into a
+        # cell that is not drawn and silently do nothing visible
+        last = keep(IntegerMath(tree, location=(16.0, 2.0), operation="SUBTRACT",
+                                inputs0=control["TapeSize"].std_out, inputs1=1,
+                                name="LastCell"))
+        capped = keep(IntegerMath(tree, location=(18.0, 2.8), operation="MINIMUM",
+                                  inputs0=backward.std_out, inputs1=last.std_out,
+                                  name="NotPastTheEnd"))
+        pointer = keep(IntegerMath(tree, location=(19.0, 2.8), operation="MAXIMUM",
+                                   inputs0=capped.std_out, inputs1=0,
+                                   name="NotBeforeStart"))
+
+        # --- the cell under the head ------------------------------------
+        # this is where the values live: an integer attribute of the tape
+        # geometry, which the simulation zone hands from frame to frame
+        stored = NamedAttribute(tree, location=(12.4, 0.2), data_type="INT",
+                                name="Value")
+        cell = SampleIndex(tree, location=(13.6, 0.2), data_type="INT", domain="POINT",
+                           geometry=sim_in.outputs["Geometry"], value=stored.std_out,
+                           index=head, name="CellUnderHead")
+        plus = step_of(decodes(self.PLUS, 1.2, "Plus"), 1.2, "Increment")
+        minus = step_of(decodes(self.MINUS, 0.4, "Minus"), 0.4, "Decrement")
+        raised = IntegerMath(tree, location=(16.0, 0.8), operation="ADD",
+                             inputs0=cell.std_out, inputs1=plus, name="CellPlus")
+        lowered = IntegerMath(tree, location=(17.0, 0.8), operation="SUBTRACT",
+                              inputs0=raised.std_out, inputs1=minus, name="CellMinus")
+        # only the cell the head is on is written, every other one keeps what
+        # it had - this selection is the whole of "+" and "-"
+        here = Index(tree, location=(16.0, -0.6))
+        selection = CompareNode(tree, location=(17.0, -0.6), operation="EQUAL",
+                                data_type="INT", inputs0=here.std_out, inputs1=head,
+                                name="AtTheHead", hide=True)
+        tape = StoredNamedAttribute(tree, location=(18.4, 0.2), data_type="INT",
+                                    domain="POINT", name="Value",
+                                    selection=selection.std_out, value=lowered.std_out,
+                                    label="WriteCell")
+        tree.links.new(sim_in.outputs["Geometry"], tape.geometry_in)
+
+        # --- printing ---------------------------------------------------
+        # the point of the exercise: the cell value indexes into the code
+        # table, so 8 prints H. The table is 1-based, hence the -1.
+        place = IntegerMath(tree, location=(13.6, 4.8), operation="SUBTRACT",
+                            inputs0=cell.std_out, inputs1=1, name="TableIndex")
+        letter = SliceString(tree, location=(14.8, 4.8), string=control["CodeTable"].std_out,
+                             position=place.std_out, length=1, name="Letter")
+        # an empty cell has no letter; without this "." on a zero cell would
+        # print an A, because slicing at -1 clamps to the front of the table
+        holds = CompareNode(tree, location=(13.6, 5.6), operation="GREATER_THAN",
+                            data_type="INT", inputs0=cell.std_out, inputs1=0,
+                            name="CellHoldsALetter", hide=True)
+        prints = BooleanMath(tree, location=(14.8, 5.6), operation="AND",
+                             inputs0=decodes(self.DOT, 6.4, "Dot"), inputs1=holds.std_out,
+                             name="DoPrint", hide=True)
+        printed = Switch(tree, location=(16.0, 5.6), input_type="STRING",
+                         switch=prints.std_out, false="", true=letter.std_out,
+                         name="Printed")
+        # The empty string of a step that does not print appends nothing, so
+        # the join can run unconditionally. The order of the two links matters
+        # and is the reverse of the order they are made in: blender puts the
+        # newest link into a multi-input socket on top, and Join Strings
+        # concatenates top to bottom. Linking what has been printed so far
+        # *second* is what makes the output read HELLO rather than OLLEH.
+        output = StringJoin(tree, location=(17.4, 5.6), delimiter="",
+                            strings=printed.std_out, name="Print")
+        tree.links.new(sim_in.outputs["Output"], output.node.inputs["Strings"])
+
+        frame = Frame(tree, location=(12.0, 7.0), label="Automaton")
+        frame.add(built + [stored, cell, raised, lowered, here, selection, tape,
+                           place, letter, holds, prints, printed, output])
+        return pointer.std_out, tape.geometry_out, output.std_out
+
+    # ----------------------------------------------------------------
+    def _create_cells_frame(self, tree, control, run):
+        """``Cells``: the tape as it looks, coloured by what is in it.
+
+        A filled square is instanced onto every tape point and the instances
+        are realized, so that the point attribute ``Value`` reaches the faces.
+        A chain of ``Set Material`` then paints them: the first link has no
+        selection and is the fall-back, each later one overrides it where its
+        selection holds. The number in the cell is built by a *for each
+        element* zone, because ``Value to String`` needs a single value and a
+        string is not a field.
+
+        :return: the geometry socket of the finished tape.
+        """
+        tape = run["Geometry"]
+        quad = Quadrilateral(tree, location=(26, 2), mode="RECTANGLE",
+                             width=control["CellSize"].std_out,
+                             height=control["CellSize"].std_out)
+        fill = FillCurve(tree, location=(27, 2), mode="N-gons")
+        create_geometry_line(tree, [quad, fill])
+        instances = InstanceOnPoints(tree, location=(28, 2.6), points=tape,
+                                     instance=fill.geometry_out)
+        realize = RealizeInstances(tree, location=(29, 2.6))
+
+        value = NamedAttribute(tree, location=(28, 1.2), data_type="INT", name="Value")
+        here = Index(tree, location=(28, 0.6))
+        holds = CompareNode(tree, location=(29, 1.2), operation="NOT_EQUAL",
+                            data_type="INT", inputs0=value.std_out, inputs1=0,
+                            name="CellHoldsAValue", hide=True)
+        under = CompareNode(tree, location=(29, 0.6), operation="EQUAL",
+                            data_type="INT", inputs0=here.std_out,
+                            inputs1=run["PointerPosition"], name="CellUnderHead",
+                            hide=True)
+        selections = (None, holds.std_out, under.std_out)
+
+        painters = [SetMaterial(tree, location=(30 + column, 2.6), selection=selection,
+                                material=control[node_name].std_out,
+                                name="Paint" + node_name)
+                    for column, ((node_name, _), selection)
+                    in enumerate(zip(self.cell_colors, selections))]
+        create_geometry_line(tree, [instances, realize] + painters)
+
+        numbers = self._create_cell_values(tree, control, tape)
+        joined = JoinGeometry(tree, location=(34, 2.6))
+        tree.links.new(painters[-1].geometry_out, joined.geometry_in)
+        tree.links.new(numbers, joined.geometry_in)
+        # the tape lies in the x-y plane, which a camera looking along +y sees
+        # edge-on. Laying it back brings the faces of the cells into view; the
+        # numbers are pre-turned by the complement of this angle in
+        # _create_cell_values, so that they come out upright.
+        tilt = TransformGeometry(tree, location=(35, 2.6),
+                                 rotation=[self.tape_tilt, 0, 0], name="LayTapeBack")
+        create_geometry_line(tree, [joined, tilt])
+
+        frame = Frame(tree, location=(25.6, 3.4), label="Cells")
+        frame.add([quad, fill, instances, realize, value, here, holds, under,
+                   joined, tilt] + painters)
+        return tilt.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_cell_values(self, tree, control, tape):
+        """``CellValues``: the number every cell holds, written on it.
+
+        :return: the geometry socket of the numbers.
+        """
+        value = NamedAttribute(tree, location=(26, -2), data_type="INT", name="Value")
+        position = Position(tree, location=(26, -2.6))
+        zone = ForEachZone(tree, location=(27, -1.4), domain="POINT", node_width=6,
+                           geometry=tape)
+        zone.add_socket(socket_type="INT", name="Value", value=value.std_out,
+                        for_input=True)
+        zone.add_socket(socket_type="VECTOR", name="Location", value=position.std_out,
+                        for_input=True)
+
+        digits = ValueToString(tree, location=(28, -0.8), data_type="INT",
+                               value=zone.foreach_input.outputs["Value"], name="CellValue")
+        size = MathNode(tree, location=(28, -2.4), operation="MULTIPLY",
+                        inputs0=control["CellSize"].std_out, inputs1=self.glyph_size,
+                        name="NumberSize")
+        curves = StringToCurves(tree, location=(29, -1.4), string=digits.std_out,
+                                size=size.std_out, align_x="CENTER", align_y="BOTTOM")
+        realize = RealizeInstances(tree, location=(30, -1.4))
+        fill = FillCurve(tree, location=(31, -1.4), mode="N-gons")
+        painted = SetMaterial(tree, location=(32, -1.4),
+                              material=control["GlyphColor"].std_out, name="PaintNumber")
+        # the whole tape is laid back by tape_tilt further downstream, so a
+        # number turned by the complement of that angle ends up standing
+        # upright on a cell that is itself leaning away from the camera
+        placed = TransformGeometry(tree, location=(33, -1.4),
+                                   translation=zone.foreach_input.outputs["Location"],
+                                   rotation=[pi / 2 - self.tape_tilt, 0, 0],
+                                   name="PlaceNumber")
+        zone.create_geometry_line([realize, fill, painted, placed],
+                                  ins=curves.geometry_out)
+
+        frame = Frame(tree, location=(25.6, -0.6), label="CellValues")
+        frame.add([value, position, zone, digits, size, curves, realize, fill,
+                   painted, placed])
+        return zone.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_code_table_frame(self, tree, control):
+        """``CodeTable``: ``A``…1 to ``Z``…26, framed.
+
+        A repeat zone walks the table one character at a time - again because
+        ``Slice String`` needs a single index - and joins the letter and its
+        number into the geometry it carries. The frame around the result is a
+        rectangle sized from the bounding box of what came out, so it fits
+        whatever alphabet is passed in.
+
+        :return: the geometry socket of the table.
+        """
+        table = control["CodeTable"]
+        size = StringLength(tree, location=(-14.4, 16.6), string=table.std_out,
+                            name="TableLength")
+        zone = RepeatZone(tree, location=(-13, 16), node_width=8,
+                          iterations=size.std_out)
+
+        origin = SeparateXYZ(tree, location=(-12, 17.4),
+                             vector=control["TablePosition"].std_out)
+        column = MathNode(tree, location=(-12, 15.4), operation="MULTIPLY",
+                          inputs0=zone.iteration, inputs1=self.table_spacing,
+                          name="Column")
+        across = MathNode(tree, location=(-11, 17.4), operation="ADD",
+                          inputs0=origin.x, inputs1=column.std_out, name="AtColumn")
+        # the number sits on the line of TablePosition, the letter one line below
+        number_at = CombineXYZ(tree, location=(-9.5, 17.4), x=across.std_out,
+                               y=origin.y, z=origin.z, name="NumberPosition")
+        below = MathNode(tree, location=(-10.5, 16.2), operation="SUBTRACT",
+                         inputs0=origin.z, inputs1=self.table_line_gap,
+                         name="LetterLine")
+        letter_at = CombineXYZ(tree, location=(-9.5, 16.2), x=across.std_out,
+                               y=origin.y, z=below.std_out, name="LetterPosition")
+
+        letter = SliceString(tree, location=(-12, 14.6), string=table.std_out,
+                             position=zone.iteration, length=1, name="Letter")
+        letter_curves = StringToCurves(tree, location=(-11, 14.6), string=letter.std_out,
+                                       size=self.table_glyph_size, align_x="CENTER",
+                                       align_y="MIDDLE", hide=True)
+        # the table is read as "A is 1", so the label is the 1-based index
+        rank = IntegerMath(tree, location=(-12, 15.8), operation="ADD",
+                           inputs0=zone.iteration, inputs1=1, name="Rank")
+        number = ValueToString(tree, location=(-11, 15.8), data_type="INT",
+                               value=rank.std_out, name="RankLabel")
+        number_curves = StringToCurves(tree, location=(-10, 15.8), string=number.std_out,
+                                       size=self.table_glyph_size, align_x="CENTER",
+                                       align_y="MIDDLE", hide=True)
+
+        entries, ends = [], []
+        for curves, position, row, label in ((number_curves, number_at, 17.4, "Number"),
+                                             (letter_curves, letter_at, 14.6, "Letter")):
+            # String to Curves hands out instances of outlines; realizing and
+            # filling them turns them into the solid letter that is drawn
+            realize = RealizeInstances(tree, location=(-8, row))
+            fill = FillCurve(tree, location=(-7, row), mode="N-gons")
+            # the entry is one piece of geometry, not a field, so it can be
+            # moved with Transform Geometry - Set Position would need it to be
+            # an instance first and would then have to be realized again
+            place = TransformGeometry(tree, location=(-6, row),
+                                      translation=position.std_out,
+                                      rotation=[pi / 2, 0, 0], name="Place" + label)
+            create_geometry_line(tree, [realize, fill, place], ins=curves.geometry_out)
+            entries += [realize, fill, place]
+            ends.append(place)
+
+        pair = JoinGeometry(tree, location=(-5, 16))
+        for end in ends:
+            tree.links.new(end.geometry_out, pair.geometry_in)
+        grown = JoinGeometry(tree, location=(-4.4, 16))
+        tree.links.new(pair.geometry_out, grown.geometry_in)
+        tree.links.new(zone.repeat_input.outputs["Geometry"], grown.geometry_in)
+        tree.links.new(grown.geometry_out, zone.repeat_output.inputs["Geometry"])
+
+        box = self._create_table_frame(tree, control, zone.geometry_out)
+        joined = JoinGeometry(tree, location=(-1.6, 16))
+        tree.links.new(zone.geometry_out, joined.geometry_in)
+        tree.links.new(box, joined.geometry_in)
+        painted = SetMaterial(tree, location=(-1, 16),
+                              material=control["GlyphColor"].std_out, name="PaintTable")
+        create_geometry_line(tree, [joined, painted])
+
+        frame = Frame(tree, location=(-14.6, 18.4), label="CodeTable")
+        frame.add([size, zone, origin, column, across, number_at, below, letter_at,
+                   letter, letter_curves, rank, number, number_curves, pair, grown,
+                   joined, painted] + entries)
+        return painted.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_table_frame(self, tree, control, table):
+        """The rectangle around the code table, sized from what it contains.
+
+        :return: the geometry socket of the rectangle.
+        """
+        bounds = BoundingBox(tree, location=(-3, 14.6), geometry=table)
+        extent = VectorMath(tree, location=(-2, 15.2), operation="SUBTRACT",
+                            inputs0=bounds.max_out, inputs1=bounds.min_out,
+                            name="TableExtent")
+        margin = VectorMath(tree, location=(-1, 15.2), operation="SCALE",
+                            inputs0=extent.std_out, float_input=self.table_margin,
+                            name="WithMargin")
+        sides = SeparateXYZ(tree, location=(0, 15.2), vector=margin.std_out)
+        middle = VectorMath(tree, location=(-2, 13.8), operation="ADD",
+                            inputs0=bounds.min_out, inputs1=bounds.max_out,
+                            name="TableCorners")
+        centre = VectorMath(tree, location=(-1, 13.8), operation="SCALE",
+                            inputs0=middle.std_out, float_input=0.5, name="TableCentre")
+        # the table stands in the x-z plane, so its width and height are the x
+        # and z of the bounding box, while the rectangle is born in x-y
+        box = Quadrilateral(tree, location=(1, 14.6), mode="RECTANGLE",
+                            width=sides.x, height=sides.z)
+        # a bare curve renders as a hair thin enough to disappear, so the
+        # rectangle is given a body before it is drawn
+        wire = CurveWireFrame(tree, location=(2, 14.6), radius=self.frame_radius,
+                              resolution=4, geometry=box.geometry_out)
+        place = TransformGeometry(tree, location=(3, 14.6), translation=centre.std_out,
+                                  rotation=[pi / 2, 0, 0], name="PlaceTableFrame")
+        painted = SetMaterial(tree, location=(4, 14.6),
+                              material=control["FrameColor"].std_out,
+                              name="PaintTableFrame")
+        create_geometry_line(tree, [wire, place, painted])
+
+        frame = Frame(tree, location=(-4.4, 15.8), label="TableFrame")
+        frame.add([bounds, extent, margin, sides, middle, centre, box,
+                   wire, place, painted])
+        return painted.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_display_frame(self, tree, control, label, width, position, location):
+        """One of the three framed boxes below the tape.
+
+        :param width: the ``Value`` node holding the width of the box
+        :param position: the ``Vector`` node holding the middle of the box
+        :param location: where the frame goes in the node editor
+        :return: the geometry socket of the box.
+        """
+        x, y = location
+        box = Quadrilateral(tree, location=(x, y), mode="RECTANGLE",
+                            width=width.std_out, height=self.display_height)
+        # a bare curve renders as a hair thin enough to disappear, so the
+        # rectangle is given a body before it is drawn
+        wire = CurveWireFrame(tree, location=(x + 1, y), radius=self.frame_radius,
+                              resolution=4, geometry=box.geometry_out)
+        place = TransformGeometry(tree, location=(x + 2, y), translation=position.std_out,
+                                  rotation=[pi / 2, 0, 0], name="Place" + label)
+        painted = SetMaterial(tree, location=(x + 3, y),
+                              material=control["FrameColor"].std_out,
+                              name="Paint" + label)
+        create_geometry_line(tree, [place, painted], ins=wire.geometry_out)
+
+        frame = Frame(tree, location=(x - 0.4, y + 0.8), label=label)
+        frame.add([box, wire, place, painted])
+        return painted.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_simulated_geometry_frame(self, tree, control, run):
+        """``SimulatedGeometry``: everything that is redrawn every frame.
+
+        The three strings the machine carries, each written into its box, and
+        the marker under the cell the head is on. This is built from the state
+        the simulation zone *outputs*, not inside the zone: none of it is
+        state, it is a picture of the state.
+
+        :return: the geometry socket.
+        """
+        pieces, written = [], []
+        for row, (label, text, box_width, position) in enumerate((
+                ("InputText", run["Input"], control["InputDisplaySize"],
+                 control["InputPosition"]),
+                ("CurrentText", run["Current"], control["CurrentDisplaySize"],
+                 control["CurrentPosition"]),
+                ("OutputText", run["Output"], control["OutputDisplaySize"],
+                 control["OutputPosition"]))):
+            y = -8 - 3 * row
+            # Plain text centred on the origin, *not* String to Curves' own
+            # SCALE_TO_FIT: a text box hangs off the origin rather than
+            # surrounding it, and where inside the box the text ends up moves
+            # with how far it had to be shrunk - the 27 character program comes
+            # out below the box that a two letter output sits in the middle of.
+            # Centred text is in the same place whatever it says, and the
+            # fitting is done below, where it can be measured.
+            curves = StringToCurves(tree, location=(26, y), string=text,
+                                    size=0.6 * self.display_height, align_x="CENTER",
+                                    align_y="MIDDLE", name=label, hide=True)
+            realize = RealizeInstances(tree, location=(27, y))
+            fill = FillCurve(tree, location=(28, y), mode="N-gons")
+            # how much wider than its box the text came out
+            bounds = BoundingBox(tree, location=(29, y - 1.4))
+            extent = VectorMath(tree, location=(30, y - 1.4), operation="SUBTRACT",
+                                inputs0=bounds.max_out, inputs1=bounds.min_out,
+                                name="Extent" + label)
+            across = SeparateXYZ(tree, location=(31, y - 1.4), vector=extent.std_out)
+            # an empty string has no geometry and hence no width; the guard
+            # keeps the division finite, and the MINIMUM below then leaves it
+            # alone at scale 1
+            wide = MathNode(tree, location=(32, y - 1.4), operation="MAXIMUM",
+                            inputs0=across.x, inputs1=1e-3, name="Width" + label)
+            ratio = MathNode(tree, location=(33, y - 1.4), operation="DIVIDE",
+                             inputs0=box_width.std_out, inputs1=wide.std_out,
+                             name="Ratio" + label)
+            # only ever shrink: a short output should not be blown up to the
+            # full width of a box that is sized for the whole program
+            factor = MathNode(tree, location=(34, y - 1.4), operation="MINIMUM",
+                              inputs0=ratio.std_out, inputs1=1.0, name="Fit" + label)
+            scale = CombineXYZ(tree, location=(35, y - 1.4), x=factor.std_out,
+                               y=factor.std_out, z=factor.std_out,
+                               name="Scale" + label)
+            place = TransformGeometry(tree, location=(29, y),
+                                      translation=position.std_out,
+                                      rotation=[pi / 2, 0, 0], scale=scale.std_out,
+                                      name="Place" + label)
+            create_geometry_line(tree, [realize, fill, place], ins=curves.geometry_out)
+            tree.links.new(fill.geometry_out, bounds.geometry_in)
+            pieces += [curves, realize, fill, bounds, extent, across, wide, ratio,
+                       factor, scale, place]
+            written.append(place)
+
+        # --- the head marker -------------------------------------------
+        # the x of the cell is read off the tape rather than recomputed from
+        # TapeSize and CellSize, so the marker cannot drift away from the cells
+        # if the spacing of the Mesh Line is ever changed
+        at = Position(tree, location=(26, -14))
+        spot = SampleIndex(tree, location=(27, -14), data_type="FLOAT_VECTOR",
+                           domain="POINT", geometry=run["Geometry"], value=at.std_out,
+                           index=run["PointerPosition"], name="CellPosition")
+        along = SeparateXYZ(tree, location=(28, -14), vector=spot.std_out)
+        drop = SeparateXYZ(tree, location=(28, -14.8),
+                           vector=control["PointerOffset"].std_out)
+        under = CombineXYZ(tree, location=(29, -14), x=along.x, y=drop.y, z=drop.z,
+                           name="MarkerPosition")
+        # an arrow pointing up at the cell, short enough to stay in the gap
+        # between the tape and the read-outs below it
+        tip = ConeMesh(tree, location=(26, -16), vertices=32, radius_top=0,
+                       radius_bottom=0.35 * self.cell_size, depth=0.5 * self.cell_size)
+        stem = CylinderMesh(tree, location=(26, -17), vertices=32,
+                            radius=0.1 * self.cell_size, depth=0.5 * self.cell_size)
+        lowered = TransformGeometry(tree, location=(27, -17),
+                                    translation=[0, 0, -0.5 * self.cell_size],
+                                    name="StemBelowTip")
+        create_geometry_line(tree, [stem, lowered])
+        marker = JoinGeometry(tree, location=(28, -16))
+        tree.links.new(tip.geometry_out, marker.geometry_in)
+        tree.links.new(lowered.geometry_out, marker.geometry_in)
+        put = TransformGeometry(tree, location=(29, -16), translation=under.std_out,
+                                name="PlaceMarker")
+        painted = SetMaterial(tree, location=(30, -16),
+                              material=control["PointerColor"].std_out,
+                              name="PaintMarker")
+        create_geometry_line(tree, [marker, put, painted])
+
+        # the three strings are painted together, and only then joined with the
+        # marker: a Set Material without a selection paints everything it is
+        # handed, so putting the marker in first would take its colour away
+        lettering = JoinGeometry(tree, location=(33, -10))
+        for piece in written:
+            tree.links.new(piece.geometry_out, lettering.geometry_in)
+        text = SetMaterial(tree, location=(34, -10),
+                           material=control["GlyphColor"].std_out, name="PaintText")
+        create_geometry_line(tree, [lettering, text])
+
+        joined = JoinGeometry(tree, location=(35, -12))
+        tree.links.new(text.geometry_out, joined.geometry_in)
+        tree.links.new(painted.geometry_out, joined.geometry_in)
+
+        frame = Frame(tree, location=(25.6, -7.2), label="SimulatedGeometry")
+        frame.add(pieces + [at, spot, along, drop, under, tip, stem, lowered,
+                            marker, put, painted, lettering, text, joined])
+        return joined.geometry_out

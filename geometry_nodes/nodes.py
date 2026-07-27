@@ -333,6 +333,10 @@ class Node:
             return SliceString(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type == "STRING_LENGTH":
             return StringLength(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
+        if type == "FunctionNodeMatchString":
+            # the xml exporter falls back to the bl_idname for this node,
+            # since it does not carry a short type enum
+            return MatchString(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type == "CURVE_PRIMITIVE_CIRCLE":
             mode = attributes["mode"]
             return CurveCircle(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200,
@@ -1357,8 +1361,18 @@ class StringToCurves(GreenNode):
                  align_x="CENTER",
                  align_y="MIDDLE",
                  pivot_mode="MIDPOINT",
-                 string="0", size=1, character_spacing=1, word_spacing=1, line_spacing=1, textbox_width=0, **kwargs):
+                 string="0", size=1, character_spacing=1, word_spacing=1, line_spacing=1,
+                 textbox_width=0, textbox_height=0, **kwargs):
         """
+        :param align_x: "LEFT", "CENTER", "RIGHT", "JUSTIFY" or "FLUSH"
+        :param align_y: "TOP", "TOP_BASELINE", "MIDDLE", "BOTTOM_BASELINE" or "BOTTOM"
+        :param pivot_mode: "MIDPOINT", "TOP_LEFT", ... "BOTTOM_RIGHT"
+        :param overflow: "OVERFLOW", "SCALE_TO_FIT" or "TRUNCATE"
+
+        The four settings above and the font moved from node properties into
+        (menu) sockets in blender 5.x. Both spellings are accepted here: the old
+        enum identifiers as well as the menu labels ("Top Baseline"), so that
+        existing call sites keep working on either version.
         """
         self.node = tree.nodes.new(type="GeometryNodeStringToCurves")
         super().__init__(tree, location=location, **kwargs)
@@ -1367,11 +1381,25 @@ class StringToCurves(GreenNode):
         self.line = self.node.outputs["Line"]
         self.pivot_point = self.node.outputs["Pivot Point"]
 
-        self.node.overflow = overflow
-        self.node.align_x = align_x
-        self.node.align_y = align_y
-        self.node.pivot_mode = pivot_mode
-        self.node.font = bpy.data.fonts.get(font)
+        if hasattr(self.node, "align_x"):  # blender 4.x: node properties
+            self.node.overflow = overflow
+            self.node.align_x = align_x
+            self.node.align_y = align_y
+            self.node.pivot_mode = pivot_mode
+            self.node.font = bpy.data.fonts.get(font)
+        else:  # blender 5.x: menu sockets, labelled "Top Baseline" etc.
+            def as_label(identifier):
+                return identifier.replace("_", " ").title()
+
+            self.node.inputs["Overflow"].default_value = as_label(overflow)
+            self.node.inputs["Align X"].default_value = as_label(align_x)
+            self.node.inputs["Align Y"].default_value = as_label(align_y)
+            self.node.inputs["Pivot Point"].default_value = as_label(pivot_mode)
+            # an unknown font name must not clear the socket, the default font
+            # of the socket is a working font while None renders nothing
+            typeface = bpy.data.fonts.get(font)
+            if typeface is not None:
+                self.node.inputs["Font"].default_value = typeface
 
         if isinstance(string, str):
             self.node.inputs["String"].default_value = string
@@ -1407,6 +1435,12 @@ class StringToCurves(GreenNode):
             self.node.inputs["Text Box Width"].default_value = textbox_width
         else:
             self.tree.links.new(textbox_width, self.node.inputs["Text Box Width"])
+
+        # overflow="SCALE_TO_FIT" needs both, it fits the text into the box
+        if isinstance(textbox_height, (int, float)):
+            self.node.inputs["Text Box Height"].default_value = textbox_height
+        else:
+            self.tree.links.new(textbox_height, self.node.inputs["Text Box Height"])
 
 
 # curve operations
@@ -1505,6 +1539,82 @@ class SliceString(BlueNode):
                 self.node.inputs["String"].default_value = string
             else:
                 self.tree.links.new(string, self.node.inputs["String"])
+
+
+class MatchString(BlueNode):
+    """
+    Wrapper for blender's ``Match String`` node (``FunctionNodeMatchString``).
+
+    It compares ``String`` against ``Key`` and returns a boolean. Note that
+    blender offers only "Starts With", "Ends With" and "Contains" - there is
+    no "Equals". For strings that are known to be a single character,
+    "Starts With" is the exact comparison.
+    """
+
+    def __init__(self, tree, location=(0, 0), string=None, operation="Starts With", key=None, **kwargs):
+        """
+        :param string: the string that is tested, either a python str or a socket
+        :param operation: "Starts With", "Ends With" or "Contains"
+        :param key: the string that is searched for, either a python str or a socket
+        """
+        self.node = tree.nodes.new(type="FunctionNodeMatchString")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Result"]
+
+        if isinstance(operation, str):
+            self.node.inputs["Operation"].default_value = operation
+        else:
+            self.tree.links.new(operation, self.node.inputs["Operation"])
+
+        if string is not None:
+            if isinstance(string, str):
+                self.node.inputs["String"].default_value = string
+            else:
+                self.tree.links.new(string, self.node.inputs["String"])
+
+        if key is not None:
+            if isinstance(key, str):
+                self.node.inputs["Key"].default_value = key
+            else:
+                self.tree.links.new(key, self.node.inputs["Key"])
+
+
+class FindInString(BlueNode):
+    """
+    Wrapper for blender's ``Find in String`` node (``FunctionNodeFindInString``).
+
+    ``std_out`` is "First Found", the position of the first occurrence of
+    ``Search`` inside ``String``, and ``count_out`` is "Count", the number of
+    occurrences.
+
+    Careful: "First Found" is **0** when nothing was found, not -1, so it cannot
+    be distinguished from a hit at position 0 on its own. Use ``count_out`` to
+    tell the two apart.
+    """
+
+    def __init__(self, tree, location=(0, 0), string=None, search=None, **kwargs):
+        """
+        :param string: the string that is searched through, python str or socket
+        :param search: the string that is searched for, python str or socket
+        """
+        self.node = tree.nodes.new(type="FunctionNodeFindInString")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["First Found"]
+        self.count_out = self.node.outputs["Count"]
+
+        if string is not None:
+            if isinstance(string, str):
+                self.node.inputs["String"].default_value = string
+            else:
+                self.tree.links.new(string, self.node.inputs["String"])
+
+        if search is not None:
+            if isinstance(search, str):
+                self.node.inputs["Search"].default_value = search
+            else:
+                self.tree.links.new(search, self.node.inputs["Search"])
 
 
 # default meshes
@@ -2201,6 +2311,10 @@ class BoundingBox(GreenNode):
 
         self.geometry_out = self.node.outputs["Bounding Box"]
         self.geometry_in = self.node.inputs["Geometry"]
+        # the two corners, e.g. to size a frame around a piece of geometry:
+        # max - min is its extent, (min + max)/2 its centre
+        self.min_out = self.node.outputs["Min"]
+        self.max_out = self.node.outputs["Max"]
 
         if geometry:
             self.tree.links.new(geometry, self.node.inputs["Geometry"])
@@ -3541,6 +3655,39 @@ class MathNode(BlueNode):
                 tree.links.new(inputs2, self.node.inputs[2])
 
 
+class IntegerMath(BlueNode):
+    """
+    Wrapper for blender's ``Integer Math`` node (``FunctionNodeIntegerMath``).
+
+    The integer counterpart of :class:`MathNode`. Use it wherever a value has to
+    stay exact, since routing an integer through the float ``Math`` node and
+    back relies on an implicit conversion on both ends.
+
+    Unlike :class:`MathNode` the inputs are tested against ``None`` rather than
+    for truthiness, so that a literal ``0`` can be passed as an operand.
+    """
+
+    def __init__(self, tree, location=(0, 0), operation="ADD", inputs0=None,
+                 inputs1=None, inputs2=None, **kwargs):
+        """
+        :param operation: "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "MODULO", ...
+        """
+        self.node = tree.nodes.new(type="FunctionNodeIntegerMath")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs[0]
+
+        if operation:
+            self.node.operation = operation
+        for slot, value in enumerate((inputs0, inputs1, inputs2)):
+            if value is None:
+                continue
+            if isinstance(value, (bool, int)):
+                self.node.inputs[slot].default_value = value
+            else:
+                tree.links.new(value, self.node.inputs[slot])
+
+
 class CompareNode(BlueNode):
     def __init__(self, tree, location=(0, 0), operation="EQUAL",
                  data_type="FLOAT",
@@ -3572,10 +3719,12 @@ class CompareNode(BlueNode):
                 if isinstance(inputs2, (bool, int, float)):
                     self.node.inputs["Epsilon"].default_value = inputs2
                 else:
-                    tree.links.new(inputs2, self.node.inputs["psilon"])
+                    tree.links.new(inputs2, self.node.inputs["Epsilon"])
         elif data_type == "INT":
+            # A and B of the integer comparison are inputs 2 and 3; inputs 0
+            # and 1 belong to the float variant and are ignored by the node
             if isinstance(inputs0, (bool, int, float)):
-                self.node.inputs[0].default_value = inputs0
+                self.node.inputs[2].default_value = inputs0
             else:
                 tree.links.new(inputs0, self.node.inputs[2])
             if isinstance(inputs1, (bool, int, float)):
@@ -3751,19 +3900,16 @@ class Switch(BlueNode):
         self.true = self.node.inputs["True"]
         self.false = self.node.inputs["False"]
 
-        if switch:
-            tree.links.new(switch, self.switch)
-
-        if true:
-            if isinstance(true, bpy.types.NodeSocket):
-                tree.links.new(true, self.true)
+        # tested against None rather than truthiness, so that the perfectly
+        # ordinary branch values 0, False and "" are written instead of
+        # silently falling through to the default of the socket
+        for value, socket in ((switch, self.switch), (true, self.true), (false, self.false)):
+            if value is None:
+                continue
+            if isinstance(value, bpy.types.NodeSocket):
+                tree.links.new(value, socket)
             else:
-                self.true.default_value = true
-        if false:
-            if isinstance(false, (bpy.types.NodeSocket)):
-                tree.links.new(false, self.false)
-            else:
-                self.false.default_value = false
+                socket.default_value = value
 
 
 class IndexSwitch(BlueNode):
@@ -3995,10 +4141,21 @@ class Simulation(GreenNode):
         """
         :param socket_type: "FLOAT", "INT", "BOOLEAN", "VECTOR", "ROTATION", "STRING", "RGBA", "OBJECT", "IMAGE", "GEOMETRY", "COLLECTION", "TEXTURE", "MATERIAL"
         :param name:
+        :param value: the value the state carries into the first frame. A
+            socket is linked into the initial-value input of the zone, anything
+            else is written as its default. Pass ``None`` to leave it alone.
         :return:
         """
         self.simulation_output.state_items.new(socket_type, name)
-        self.simulation_input.outputs[name].default_value = value
+        if value is None:
+            return
+        # the *initial* value of a state item is an input of the zone input
+        # node; its output carries the state of the running simulation
+        initial = self.simulation_input.inputs[name]
+        if isinstance(value, bpy.types.NodeSocket):
+            self.tree.links.new(value, initial)
+        elif hasattr(initial, "default_value"):
+            initial.default_value = value
 
     def join_in_geometries(self, out_socket_name=None):
         join = JoinGeometry(self.tree, geometry=self.simulation_input.outputs[0:-1])
@@ -5900,6 +6057,97 @@ class OnRightNode(NodeGroup):
         tree.links.new(self.group_inputs.outputs["B"], on_right.inputs["b"])
         tree.links.new(self.group_inputs.outputs["Position"], on_right.inputs["pos"])
         tree.links.new(on_right.outputs["result"], self.group_outputs.inputs["Result"])
+
+
+class CharToAscii(NodeGroup):
+    """
+    Convert a string of length one into its ascii code.
+
+    Blender has no node that maps a character onto its code point, but it does
+    not need one: written out in its natural order, the ascii table *is* a
+    string in which every character sits at its own code point. So looking the
+    character up in that string and adding the code of its first entry is the
+    whole conversion::
+
+        table = " !\"#$...xyz{|}~"        (code 32 up to code 126)
+
+        Find in String(String = table, Search = Char)
+            First Found --> + 32 --> Switch(true) --> ASCII
+            Count       ------------> Switch(switch)     ^
+                                      0 --> Switch(false)-+
+
+    The ``Switch`` is what keeps "not in the table" apart from "found at
+    position 0": blender's ``Find in String`` reports ``First Found = 0`` in
+    *both* cases, and only ``Count`` tells them apart. ``Count`` is 0 exactly
+    when the character is absent, and it can never exceed 1 because every
+    character occurs in the table once - so it can drive the boolean ``Switch``
+    socket directly, no comparison node needed.
+
+    A string that is not in the table - most importantly the empty string that
+    ``Slice String`` returns for an out-of-range position - therefore yields
+    ``0``.
+
+    Only the *printable* part of the ascii table is covered (32 ``space`` to
+    126 ``~``). The control codes 0..31 and 127 ``DEL`` are skipped: they have
+    no printable form that could go into the lookup string. The covered range
+    contains all letters, all digits, all punctuation and therefore all ten
+    brainfuck instructions.
+
+    Usage::
+
+        code = CharToAscii(tree, char=slice_string.std_out)
+        ... code.std_out ...   # the integer code point
+    """
+
+    # printable range of the ascii table
+    FIRST_PRINTABLE = 32  # ' '
+    LAST_PRINTABLE = 126  # '~'
+
+    def __init__(self, tree, char=None,
+                 first_code=FIRST_PRINTABLE, last_code=LAST_PRINTABLE, **kwargs):
+        """
+        :param char: the character to convert, either a python str or a socket
+        :param first_code: first ascii code that is covered by the lookup table
+        :param last_code: last ascii code that is covered by the lookup table
+        """
+        self.name = get_from_kwargs(kwargs, "name", "CharToAscii")
+        self.first_code = first_code
+        self.last_code = last_code
+
+        super().__init__(tree, inputs={"Char": "STRING"}, outputs={"ASCII": "INT"},
+                         auto_layout=False, name=self.name, **kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+        self.std_out = self.node.outputs["ASCII"]
+
+        if char is not None:
+            if isinstance(char, str):
+                self.node.inputs["Char"].default_value = char
+            else:
+                tree.links.new(char, self.node.inputs["Char"])
+
+    def fill_group_with_node(self, tree, **kwargs):
+        table = "".join(chr(code) for code in range(self.first_code, self.last_code + 1))
+
+        lookup = InputString(tree, location=(0, 1), string=table, name="AsciiTable")
+        find = FindInString(tree, location=(2, 0), string=lookup.std_out,
+                            search=self.group_inputs.outputs["Char"], name="Lookup")
+        # the position inside the table is the code point, offset by the code of
+        # the table's first character
+        shift = IntegerMath(tree, location=(4, -1), operation="ADD",
+                            inputs0=find.std_out, inputs1=self.first_code,
+                            name="AddFirstCode")
+        # Count is 0 exactly when the character is not in the table, and never
+        # larger than 1 - so it doubles as the boolean that picks the fall-back
+        found = Switch(tree, location=(6, 0), input_type="INT",
+                       switch=find.count_out, true=shift.std_out, false=0,
+                       name="FoundInTable")
+
+        tree.links.new(found.std_out, self.group_outputs.inputs["ASCII"])
+
+        self.group_inputs.location = (-400, 0)
+        self.group_outputs.location = (1600, 0)
 
 
 # aux functions #
