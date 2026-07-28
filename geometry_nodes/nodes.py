@@ -6589,9 +6589,43 @@ class Structure:
         self.extra = None  # third operand slot for ternary operators
 
 
+def split_rpn(expression):
+    """Split an RPN expression into tokens on commas outside quoted literals.
+
+    The comma is what separates the tokens of a formula, so a comma that is
+    *part of* a token - the brainfuck instruction ``,``, say - has to be
+    protected. Single quotes do that::
+
+        "letter,',',in"    ->  ["letter", "','", "in"]
+        "letter,'<',in"    ->  ["letter", "'<'", "in"]
+
+    Quoting is also what tells a literal apart from an operator of the same
+    spelling: ``<`` is ``LESS_THAN`` and ``'<'`` is the character. Every
+    operator token is unquoted, so an expression written before quoting
+    existed splits exactly as it always did.
+
+    :return: the list of tokens, quotes included - :func:`build_function`
+        strips them when it reads the literal.
+    """
+    tokens, token, quoted = [], [], False
+    for character in expression:
+        if character == "'":
+            quoted = not quoted
+            token.append(character)
+        elif character == "," and not quoted:
+            tokens.append("".join(token))
+            token = []
+        else:
+            token.append(character)
+    if quoted:
+        raise ValueError("unbalanced quote in the expression %r" % expression)
+    tokens.append("".join(token))
+    return tokens
+
+
 def make_function(nodes_or_tree, functions={}, aux_functions={},
                   inputs=[], outputs=[], vectors=[], scalars=[], integers=[], rotations=[],
-                  booleans=[],
+                  booleans=[], strings=[],
                   node_group_type="GeometryNodes",
                   name="FunctionNode", hide=True, location=(0, 0), parent=None,
                   custom_ops={}):
@@ -6614,6 +6648,24 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
     the RPN evaluation but whose group sockets are created as
     ``NodeSocketBool``.  Combine with the ``not``/``and``/``or`` operators (the
     ``FunctionNodeBooleanMath`` node) for boolean logic, e.g. ``"exit,not"``.
+
+    ``strings`` likewise lists variable names whose group sockets are created
+    as ``NodeSocketString``.  There is no string *arithmetic* built in - blender
+    has no equivalent of ``ShaderNodeMath`` for text - so a string variable is
+    only ever passed to a ``custom_ops`` entry that knows what to do with it,
+    such as ``Find in String`` or ``Slice String``.
+
+    A literal string is written into a formula in **single quotes**, and the
+    quotes do two jobs.  They protect a comma, which is otherwise what
+    separates the tokens (see :func:`split_rpn`), and they tell a literal apart
+    from an operator of the same spelling: ``<`` is ``LESS_THAN`` while
+    ``'<'`` is the character.  So the ten brainfuck instructions are written::
+
+        "letter,'<',in"    "letter,'>',in"    "letter,',',in"
+        "letter,'[',in"    "letter,'+',in"    ...
+
+    Unquoted they would be read as ``LESS_THAN``, ``GREATER_THAN``, a token
+    separator, and so on.
 
     ``custom_ops`` extends the RPN operator vocabulary with user-defined
     nodes.  It is a dict mapping an operator token (the string that appears in
@@ -6692,6 +6744,8 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
             make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketInt")
         if ins in booleans:
             make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketBool")
+        if ins in strings:
+            make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketString")
         if ins in rotations:
             make_new_socket(tree, name=ins, io="INPUT", type="NodeSocketRotation")
 
@@ -6704,6 +6758,8 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
             make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketInt")
         if outs in booleans:
             make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketBool")
+        if outs in strings:
+            make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketString")
         if outs in rotations:
             make_new_socket(tree, name=outs, io="OUTPUT", type="NodeSocketRotation")
 
@@ -6712,17 +6768,19 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
         out = {}
         for k, v in funs.items():
             if isinstance(v, list):
-                out[k] = [s.split(",") for s in v]
+                out[k] = [split_rpn(s) for s in v]
             else:
-                out[k] = v.split(",")
+                out[k] = split_rpn(v)
         return out
 
     aux_stacks = _parse(aux_functions)
     stacks = _parse(functions)
 
-    # integers and booleans behave like scalars inside the RPN evaluation; only
-    # the group socket type differs, so merge them for variable-token recognition
-    scalar_vars = list(scalars) + list(integers) + list(booleans)
+    # integers, booleans and strings behave like scalars inside the RPN
+    # evaluation - a token is looked up in in_channels and linked, and nothing
+    # cares what flows down the wire - so they are merged for variable-token
+    # recognition and only the group socket type differs
+    scalar_vars = list(scalars) + list(integers) + list(booleans) + list(strings)
 
     # union of all tokens across aux and main expressions, used to decide
     # whether an input vector (or aux vector) needs a SeparateXYZ node
@@ -6742,7 +6800,7 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
     # SeparateXYZ when any formula references a component
     in_channels = {}
     for ins in inputs:
-        if ins in scalars or ins in integers or ins in booleans:
+        if ins in scalars or ins in integers or ins in booleans or ins in strings:
             in_channels[ins] = group_inputs.outputs[ins]
         if ins in vectors or ins in rotations:
             in_channels[ins] = group_inputs.outputs[ins]
@@ -6810,7 +6868,7 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
     # output channels (identical to make_function)
     out_channels = {}
     for key, value in functions.items():
-        if key in scalars or key in integers or key in booleans:
+        if key in scalars or key in integers or key in booleans or key in strings:
             out_channels[key] = group_outputs.inputs[key]
         elif key in vectors or key in rotations:
             if isinstance(functions[key], list):
@@ -7227,6 +7285,10 @@ def build_function(tree, stack, scalars=[], vectors=[], rotations=[], in_channel
                 number = Vector([0, 1, 0])
             elif next_element == "e_z":
                 number = Vector([0, 0, 1])
+            elif len(next_element) > 1 and next_element[0] == next_element[-1] == "'":
+                # a literal string, e.g. "'abc'". It cannot contain a comma,
+                # which is what separates the tokens of the expression
+                number = next_element[1:-1]
             elif next_element[0] == "(":
                 next_element = next_element[1:-1]
                 numbers = next_element.split(" ")
