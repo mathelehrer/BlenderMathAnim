@@ -247,11 +247,6 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
     # Applied in this order, each overriding the last: the fall-back is "has
     # not run yet", then "has run", then "has run but is inside a loop that is
     # still open, so it will run again".
-    PROGRAM_COLORS = (
-        ("ProgramColor", "text"),  # still to come
-        ("DoneColor", "gray_2"),  # run, and not coming back
-        ("WaitingColor", "example"),  # waiting for the next turn of its loop
-    )
 
     # ascii codes of the seven instructions
     DOT, PLUS, MINUS, LEFT, RIGHT = ord("."), ord("+"), ord("-"), ord("<"), ord(">")
@@ -303,8 +298,6 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         overrides = colors or {}
         self.cell_colors = tuple((node_name, overrides.get(node_name, color))
                                  for node_name, color in self.CELL_COLORS)
-        self.program_colors = tuple((node_name, overrides.get(node_name, color))
-                                    for node_name, color in self.PROGRAM_COLORS)
         self.glyph_color = overrides.get("GlyphColor", self.GLYPH_COLOR)
         self.frame_color = overrides.get("FrameColor", self.FRAME_COLOR)
         self.kwargs = kwargs
@@ -481,12 +474,12 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
             palette[node_name] = InputMaterial(tree, location=(x, -4.4 - 0.4 * row),
                                                material=color, name=node_name,
                                                **self.kwargs)
-        rest = list(self.program_colors) + [("GlyphColor", self.glyph_color),
+        rest =[("GlyphColor", self.glyph_color),
                                             ("FrameColor", self.frame_color)]
         for offset, (node_name, color) in enumerate(rest):
             palette[node_name] = InputMaterial(
                 tree, location=(x, -4.4 - 0.4 * (len(self.cell_colors) + offset)),
-                material=color, name=node_name, **self.kwargs)
+                material=color, name=node_name,hide=True, **self.kwargs)
         for source in palette.values():
             self.materials.append(source.node.material)
         control.update(palette)
@@ -2080,7 +2073,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
     # The chain is applied in this order and each link overrides the previous
     # one, so the first entry is the fall-back and the last one wins.
     CELL_COLORS = (
-        ("ZeroColor", "gray_1"),  # anything that is not an instruction
+        ("ZeroColor", "gray_4"),  # anything that is not an instruction
         ("ValueColor", "drawing"),  # holds the code of one of the ten
         ("PointerColor", "important"),  # the cell head0 is on, and its square
     )
@@ -2160,7 +2153,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
     # it. One number per line, and a header line, since Import CSV spends the
     # first line of the file on the name of the column.
     TAPE_SOURCES = ("ReplicatorData", "FoodData")
-    TAPE_FILES = ("replicator.csv", "food.csv")
+    TAPE_FILES = ("replicator", "food")
 
     def __init__(self, code_table=None, table_width=30, tape_size=64, cell_size=0.25,
                  step_duration=0.5, start_time=3.0, tape_tilt=0.4607669,
@@ -2182,7 +2175,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         self.tape_files = tuple(self.TAPE_FILES if tape_files is None else tape_files)
         # the column the values stand in - whatever the header line of the file
         # says, so that the Named Attribute nodes read what Import CSV wrote
-        self.tape_columns = tuple(csv_column(os.path.join(DATA_DIR, file_name))
+        self.tape_columns = tuple(csv_column(os.path.join(DATA_DIR, file_name+".csv"))
                                   for file_name in self.tape_files)
         overrides = colors or {}
         self.cell_colors = tuple((node_name, overrides.get(node_name, color))
@@ -2292,7 +2285,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         # a different soup is a different file rather than a different graph.
         for row, (node_name, file_name) in enumerate(zip(self.TAPE_SOURCES, self.tape_files)):
             control[node_name] = ImportCSV(tree, location=(x, -12.6 - 1.2 * row),
-                                           path=os.path.join(DATA_DIR, file_name),
+                                           path=os.path.join(DATA_DIR, file_name+".csv"),
                                            name=node_name, label=file_name)
 
         frame = Frame(tree, location=(-24, 0.6), label="ControlParameter")
@@ -2785,12 +2778,14 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         :return: the geometry socket of the numbers.
         """
         value = NamedAttribute(tree, location=(26, -2), data_type="INT", name="Value")
-        position = Position(tree, location=(26, -2.6))
+        position = Position(tree, location=(25, -2.6))
+        shift = VectorMath(tree, location=(26, -2.6), hide=True, operation="ADD", inputs0=position.std_out,
+                           inputs1=Vector([0, 0, 0.25]))
         zone = ForEachZone(tree, location=(27, -1.4), domain="POINT", node_width=6,
                            geometry=tape)
         zone.add_socket(socket_type="INT", name="Value", value=value.std_out,
                         for_input=True)
-        zone.add_socket(socket_type="VECTOR", name="Location", value=position.std_out,
+        zone.add_socket(socket_type="VECTOR", name="Location", value=shift.std_out,
                         for_input=True)
         held = zone.foreach_input.outputs["Value"]
 
@@ -3111,147 +3106,6 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
                    wire, place, painted])
         return painted.geometry_out
 
-    # # ----------------------------------------------------------------
-    # def _create_program_strip(self, tree, control, variables, run):
-    #     """``ProgramStrip``: the whole program, written out once and left alone.
-    #
-    #     The program is drawn one instruction per column, spread across the
-    #     input display, and it does not move. What moves is ``CurrentDisplay``,
-    #     a box that runs along the strip and stands around the instruction the
-    #     counter points at. So the program is read where a program is normally
-    #     read - in one piece, in one place - and the machine is what travels
-    #     over it. A loop then shows as the box running back to the ``[`` and
-    #     crossing the same instructions again.
-    #
-    #     Columns are of one width whatever stands in them, so the strip is a
-    #     ruler and the box's position is the program counter to scale.
-    #
-    #     Each instruction is painted by what has become of it - see
-    #     :attr:`PROGRAM_COLORS`. The one worth the trouble is ``WaitingColor``:
-    #     an instruction that has run but sits inside a loop that is still open
-    #     will run again, and :meth:`_loop_starts` says which those are. What is
-    #     left in ``DoneColor`` is what has run for the last time, so the strip
-    #     goes dark behind the box only where the machine is never coming back.
-    #
-    #     The box marks the instruction *about to* run, not the one just run -
-    #     the tape beside it is the state that instruction is about to act on,
-    #     which is how a debugger shows the same thing.
-    #
-    #     :return: the geometry socket of the strip and of the box on it.
-    #     """
-    #     program = variables["Input"].std_out
-    #     counter = run["Counter"]
-    #     size = StringLength(tree, location=(17, -21.4), string=program,
-    #                         name="StripLength")
-    #
-    #     # --- where the strip sits ---------------------------------------
-    #     origin = SeparateXYZ(tree, location=(17, -22.2),
-    #                          vector=control["InputPosition"].std_out)
-    #     half = MathNode(tree, location=(18, -22.2), operation="MULTIPLY",
-    #                     inputs0=control["InputDisplaySize"].std_out, inputs1=0.5,
-    #                     name="HalfDisplay")
-    #     edge = MathNode(tree, location=(19, -22.2), operation="SUBTRACT",
-    #                     inputs0=origin.x, inputs1=half.std_out, name="DisplayLeftEdge")
-    #     # A column per instruction, plus one at each end. The first is the
-    #     # margin that keeps column 0 clear of the left edge; the second is
-    #     # where the counter ends up when the program has run out, and the box
-    #     # that marks it needs somewhere to park that is still inside the
-    #     # display rather than astride its right edge.
-    #     spacing = MathNode(tree, location=(18, -23), operation="DIVIDE",
-    #                        inputs0=control["InputDisplaySize"].std_out,
-    #                        inputs1=len(self.program) + 2, name="StripSpacing")
-    #     first = MathNode(tree, location=(20, -22.2), operation="ADD",
-    #                      inputs0=edge.std_out, inputs1=spacing.std_out,
-    #                      name="FirstColumn")
-    #     glyph = MathNode(tree, location=(19, -23), operation="MULTIPLY",
-    #                      inputs0=spacing.std_out, inputs1=self.strip_glyph_size,
-    #                      name="StripGlyphSize")
-    #
-    #     # --- which loop is open where the counter stands -----------------
-    #     entry = SliceString(tree, location=(17, -23.8), string=variables["Loops"].std_out,
-    #                         position=counter, length=1, name="LoopEntry")
-    #     encoded = CharToAscii(tree, location=(18, -23.8), char=entry.std_out,
-    #                           name="LoopCode")
-    #     opened = IntegerMath(tree, location=(19, -23.8), operation="SUBTRACT",
-    #                          inputs0=encoded.std_out, inputs1=self.JUMP_ORIGIN,
-    #                          name="OpenLoop")
-    #     # 1-based, so 0 means the counter is not inside a loop at all and
-    #     # nothing is waiting
-    #     inside = CompareNode(tree, location=(20, -23.8), operation="GREATER_THAN",
-    #                          data_type="INT", inputs0=opened.std_out, inputs1=0,
-    #                          name="InsideALoop", hide=True)
-    #
-    #     # --- one column per instruction ----------------------------------
-    #     zone = RepeatZone(tree, location=(21, -21.4), node_width=9,
-    #                       iterations=size.std_out)
-    #     column = zone.iteration
-    #     letter = SliceString(tree, location=(22, -22.2), string=program,
-    #                          position=column, length=1, name="StripLetter")
-    #     curves = StringToCurves(tree, location=(23, -22.2), string=letter.std_out,
-    #                             size=glyph.std_out, align_x="CENTER",
-    #                             align_y="MIDDLE", hide=True)
-    #     realize = RealizeInstances(tree, location=(24, -22.2))
-    #     fill = FillCurve(tree, location=(25, -22.2), mode="N-gons")
-    #     # column n stands n spacings in from the first one, and stays there
-    #     along = MathNode(tree, location=(23, -21.4), operation="MULTIPLY",
-    #                      inputs0=column, inputs1=spacing.std_out,
-    #                      name="StripOffset")
-    #     across = MathNode(tree, location=(24, -21.4), operation="ADD",
-    #                       inputs0=first.std_out, inputs1=along.std_out,
-    #                       name="ColumnPosition")
-    #     at = CombineXYZ(tree, location=(25, -21.4), x=across.std_out, y=origin.y,
-    #                     z=origin.z, name="StripPlace")
-    #     place = TransformGeometry(tree, location=(26, -22.2), translation=at.std_out,
-    #                               rotation=[pi / 2, 0, 0], name="PlaceColumn")
-    #
-    #     done = CompareNode(tree, location=(22, -24.6), operation="LESS_THAN",
-    #                        data_type="INT", inputs0=column, inputs1=counter,
-    #                        name="HasRun", hide=True)
-    #     # the "[" itself is not re-executed - "]" jumps back to the instruction
-    #     # after it - so the block that is waiting starts one column further on
-    #     after = CompareNode(tree, location=(22, -25.4), operation="GREATER_EQUAL",
-    #                         data_type="INT", inputs0=column, inputs1=opened.std_out,
-    #                         name="InTheBody", hide=True)
-    #     within = BooleanMath(tree, location=(23, -25.4), operation="AND",
-    #                          inputs0=inside.std_out, inputs1=after.std_out,
-    #                          name="InAnOpenLoop", hide=True)
-    #     waits = BooleanMath(tree, location=(24, -25.4), operation="AND",
-    #                         inputs0=within.std_out, inputs1=done.std_out,
-    #                         name="WillRunAgain", hide=True)
-    #     now = CompareNode(tree, location=(22, -26.2), operation="EQUAL",
-    #                       data_type="INT", inputs0=column, inputs1=counter,
-    #                       name="IsCurrent", hide=True)
-    #
-    #     selections = (None, done.std_out, waits.std_out)
-    #     painters = [SetMaterial(tree, location=(27 + step, -22.2), selection=selection,
-    #                             material=control[node_name].std_out,
-    #                             name="Paint" + node_name)
-    #                 for step, ((node_name, _), selection)
-    #                 in enumerate(zip(self.program_colors, selections))]
-    #     painters.append(SetMaterial(tree, location=(30, -22.2), selection=now.std_out,
-    #                                 material=control["PointerColor"].std_out,
-    #                                 name="PaintCurrentInstruction"))
-    #     create_geometry_line(tree, [realize, fill, place] + painters,
-    #                          ins=curves.geometry_out)
-    #
-    #     grown = JoinGeometry(tree, location=(31, -22.2))
-    #     tree.links.new(painters[-1].geometry_out, grown.geometry_in)
-    #     tree.links.new(zone.repeat_input.outputs["Geometry"], grown.geometry_in)
-    #     tree.links.new(grown.geometry_out, zone.repeat_output.inputs["Geometry"])
-    #
-    #     frame = Frame(tree, location=(16.6, -20.6), label="ProgramStrip")
-    #     frame.add([size, origin, half, edge, spacing, first, glyph, entry, encoded,
-    #                opened, inside, zone, letter, curves, realize, fill,
-    #                along, across, at, place, done, after, within, waits, now,
-    #                grown] + painters)
-    #
-    #     cursor = self._create_cursor_frame(tree, control, counter, first, spacing,
-    #                                        origin)
-    #     both = JoinGeometry(tree, location=(33, -22.2))
-    #     for piece in (zone.geometry_out, cursor):
-    #         tree.links.new(piece, both.geometry_in)
-    #     frame.add([both])
-    #     return both.geometry_out
 
     # ----------------------------------------------------------------
     def _create_cursor_frame(self, tree, control, counter, first, spacing, origin):
