@@ -22,7 +22,8 @@ SOCKET_TYPES = {"STRING": 'NodeSocketString', "BOOLEAN": 'NodeSocketBool', "MATE
                 "COLLECTION": 'NodeSocketCollection',
                 "GEOMETRY": 'NodeSocketGeometry', "TEXTURE": 'NodeSocketTexture', "FLOAT": 'NodeSocketFloat',
                 "COLOR": 'NodeSocketColor', "OBJECT": 'NodeSocketObject', "ROTATION": 'NodeSocketRotation',
-                "MATRIX": 'NodeSocketMatrix', "IMAGE": 'NodeSocketImage', "VALUE": 'NodeSocketFloat'}
+                "MATRIX": 'NodeSocketMatrix', "IMAGE": 'NodeSocketImage', "VALUE": 'NodeSocketFloat',
+                "BUNDLE": 'NodeSocketBundle', "CLOSURE": 'NodeSocketClosure'}
 
 
 def maybe_flatten(list_of_lists):
@@ -3166,6 +3167,179 @@ class ImportCSV(GreenNode):
 
         if path is not None:
             self.node.inputs["Path"].default_value = path
+
+# Bundles #
+#
+# A bundle is blender 5's way of tying a handful of sockets together and
+# carrying them along one link. It is not a data type the nodes can compute
+# with - nothing reads a bundle except the nodes below, which put values in and
+# take them out again by name - so what it buys is entirely in the picture: ten
+# materials that would otherwise cross the whole graph as ten links cross it as
+# one, and a frame that needs them says so with a single Separate Bundle.
+#
+# The names are the contract. A Combine and the Separate that opens it have to
+# agree on them, which is why :class:`CombineBundle` keeps its item list around
+# for :class:`SeparateBundle` to be built from.
+
+
+class CombineBundle(GreenNode):
+    """Ties named sockets into one bundle.
+
+    :param items: what goes in, as ``(name, socket_type)`` or
+        ``(name, socket_type, socket)`` triples - the third being the value to
+        link into that slot straight away. Socket types are blender's own
+        spelling: "MATERIAL", "INT", "FLOAT", "BOOLEAN", "VECTOR", "STRING",
+        "GEOMETRY", "MATRIX", "ROTATION", "RGBA", "OBJECT", "COLLECTION",
+        "IMAGE", "TEXTURE", "MENU", "BUNDLE", "CLOSURE".
+
+    Example::
+
+        colors = CombineBundle(tree, items=[(name, "MATERIAL", node.std_out)
+                                            for name, node in palette.items()])
+        # ... and wherever they are needed:
+        here = SeparateBundle(tree, bundle=colors.std_out, items=colors.items)
+        red = here.outputs["ImportantColor"]
+    """
+
+    def __init__(self, tree, location=(0, 0), items=None, **kwargs):
+        self.node = tree.nodes.new(type="NodeCombineBundle")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Bundle"]
+        #: the items in the order they were added, for the Separate that opens
+        #: this bundle again - the two have to agree on names and types
+        self.items = []
+        for item in items or []:
+            self.add_socket(*item)
+
+    def add_socket(self, name="Item", socket_type="MATERIAL", value=None):
+        """One more thing in the bundle.
+
+        :param value: an output socket to link into it, or ``None`` to leave
+            the slot to be linked later.
+        :return: the input socket of the new slot.
+        """
+        self.node.bundle_items.new(socket_type, name)
+        self.items.append((name, socket_type))
+        socket = self.node.inputs[name]
+        if value is not None:
+            self.tree.links.new(value, socket)
+        return socket
+
+
+class SeparateBundle(GreenNode):
+    """Takes a bundle apart again into the sockets it was made of.
+
+    The items have to match the :class:`CombineBundle` they came from, so pass
+    that node's :attr:`~CombineBundle.items` rather than writing the list twice.
+    The outputs are reached by name: ``node.outputs["LessColor"]``.
+    """
+
+    def __init__(self, tree, location=(0, 0), bundle=None, items=None, **kwargs):
+        self.node = tree.nodes.new(type="NodeSeparateBundle")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_in = self.node.inputs["Bundle"]
+        self.items = []
+        for item in items or []:
+            self.add_socket(*item[:2])
+
+        if bundle is not None:
+            tree.links.new(bundle, self.node.inputs["Bundle"])
+
+    def add_socket(self, name="Item", socket_type="MATERIAL"):
+        """One more thing to take out of the bundle.
+
+        :return: the output socket of the new slot.
+        """
+        self.node.bundle_items.new(socket_type, name)
+        self.items.append((name, socket_type))
+        return self.node.outputs[name]
+
+    def out(self, name):
+        """The socket of one item, by name."""
+        return self.node.outputs[name]
+
+
+class GetBundleItem(GreenNode):
+    """One item out of a bundle, by name, without unpacking the rest.
+
+    What :class:`SeparateBundle` is for a frame that needs everything, this is
+    for one that needs one thing: ``Exists`` says whether the bundle had it,
+    and the bundle itself comes out again so that these can be chained.
+
+    :param path: the name of the item, which is a *socket*, so it can be built
+        at run time rather than written into the graph.
+    :param socket_type: what type to read it as. Blender cannot know it from
+        the bundle, so getting this wrong is how an item goes missing.
+    """
+
+    def __init__(self, tree, location=(0, 0), bundle=None, path=None,
+                 socket_type="MATERIAL", remove=False, **kwargs):
+        self.node = tree.nodes.new(type="NodeGetBundleItem")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.node.socket_type = socket_type
+        self.std_out = self.node.outputs["Item"]
+        self.exists = self.node.outputs["Exists"]
+        self.bundle_out = self.node.outputs["Bundle"]
+
+        if bundle is not None:
+            tree.links.new(bundle, self.node.inputs["Bundle"])
+        if path is not None:
+            if isinstance(path, str):
+                self.node.inputs["Path"].default_value = path
+            else:
+                tree.links.new(path, self.node.inputs["Path"])
+        if isinstance(remove, bool):
+            self.node.inputs["Remove"].default_value = remove
+        else:
+            tree.links.new(remove, self.node.inputs["Remove"])
+
+
+class StoreBundleItem(GreenNode):
+    """A bundle with one item put into it, or replaced.
+
+    The counterpart of :class:`GetBundleItem`: bundle in, bundle out, one slot
+    different. Use it to override a single entry of a bundle that is otherwise
+    passed on untouched.
+    """
+
+    def __init__(self, tree, location=(0, 0), bundle=None, path=None,
+                 value=None, socket_type="MATERIAL", **kwargs):
+        self.node = tree.nodes.new(type="NodeStoreBundleItem")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.node.socket_type = socket_type
+        self.std_out = self.node.outputs["Bundle"]
+
+        if bundle is not None:
+            tree.links.new(bundle, self.node.inputs["Bundle"])
+        if path is not None:
+            if isinstance(path, str):
+                self.node.inputs["Path"].default_value = path
+            else:
+                tree.links.new(path, self.node.inputs["Path"])
+        if value is not None:
+            tree.links.new(value, self.node.inputs["Item"])
+
+
+class JoinBundle(GreenNode):
+    """Several bundles merged into one.
+
+    The ``Bundle`` input takes any number of links, like Join Geometry does.
+    Where two bundles carry the same name the later link wins.
+    """
+
+    def __init__(self, tree, location=(0, 0), bundles=None, **kwargs):
+        self.node = tree.nodes.new(type="NodeJoinBundle")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Bundle"]
+        self.bundle_in = self.node.inputs["Bundle"]
+
+        for bundle in bundles or []:
+            tree.links.new(bundle, self.node.inputs["Bundle"])
 
 
 class SceneTime(RedNode):

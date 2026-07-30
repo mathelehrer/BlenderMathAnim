@@ -11,7 +11,7 @@ from geometry_nodes.nodes import Points, InputValue, InstanceOnPoints, JoinGeome
     CurveWireFrame, ValueToString, StringToCurves, FillCurve, CompareNode, \
     InputMaterial, BoundingBox, InputString, SampleIndex, StringJoin, SliceString, Reroute, CharToAscii, \
     StringLength, IntegerMath, FindInString, SetPosition, ImportCSV, NodeGroup, \
-    DomainSize
+    DomainSize, CombineBundle, SeparateBundle, GetBundleItem, SceneTime, ExtrudeMesh
 from interface.ibpy import Vector
 from utils.constants import DATA_DIR
 from utils.kwargs import get_from_kwargs
@@ -2151,7 +2151,8 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
     # and reading the file of the same position in ``tape_files``. Tape 0 is
     # the one drawn on top - the self-replicator - and tape 1 the food below
     # it. One number per line, and a header line, since Import CSV spends the
-    # first line of the file on the name of the column.
+    # first line of the file on the name of the column. The names are given
+    # without the ".csv" - that and DATA_DIR are added when the path is built.
     TAPE_SOURCES = ("ReplicatorData", "FoodData")
     TAPE_FILES = ("replicator", "food")
 
@@ -2255,6 +2256,19 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         for source in palette.values():
             self.materials.append(source.node.material)
         control.update(palette)
+
+        # The ten instruction colours travel as one bundle rather than as ten
+        # links. Every frame that paints an instruction wants all ten - the
+        # code table above the tape, the numbers on the cells - so what crossed
+        # the graph as ten wires from here to each of them now crosses as one,
+        # and the frame that receives it says what it is unpacking in a single
+        # Separate Bundle. The Input Material nodes stay where they are: the
+        # bundle gathers them rather than replacing them, so each colour is
+        # still a node of its own to reach for by name.
+        control["OpColors"] = CombineBundle(
+            tree, location=(x + 1.6, -4.4), name="OPColorBundle",
+            items=[(node_name, "MATERIAL", palette[node_name].std_out)
+                   for node_name, _, _ in self.opcode_colors])
 
         # The read-outs below the tape and the code table above it are all
         # centred on the middle of the tape, which runs from x=0 to
@@ -2676,8 +2690,14 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
                                        name="Turn" + label)
             put = TransformGeometry(tree, location=(31, y), translation=where.std_out,
                                     name="Put" + label)
-            painted = SetMaterial(tree, location=(32, y),
-                                  material=control[colour].std_out,
+            # one item out of the bundle rather than all ten: an arrow is
+            # painted in the colour of the instructions that move it, and
+            # nothing here cares about the other nine
+            paint = GetBundleItem(tree, location=(31.4, y - 0.6),
+                                  bundle=control["OpColors"].std_out, path=colour,
+                                  socket_type="MATERIAL", name="ColorOf" + label,
+                                  hide=True)
+            painted = SetMaterial(tree, location=(32, y), material=paint.std_out,
                                   name="Paint" + label)
             # which tape the head is on, so that the Set Position downstream
             # moves the arrow to the same line as the cell it points at
@@ -2686,7 +2706,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
                                          value=line.std_out, label="TapeOf" + label)
             create_geometry_line(tree, [body, turned, put, painted, rides])
             pieces += [spot, line, along, drop, where, tip, stem, below, body,
-                       turned, put, painted, rides]
+                       turned, put, paint, painted, rides]
             marks.append(rides)
 
         # --- the square around the instruction being executed ------------
@@ -2836,12 +2856,16 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         fill = FillCurve(tree, location=(32, -1.4), mode="N-gons")
         # the fall-back paints every glyph and has no selection; the ten links
         # after it each override it on the cells holding their instruction
+        opcolors = SeparateBundle(tree, location=(32.4, -3.2),
+                                  bundle=control["OpColors"].std_out,
+                                  items=control["OpColors"].items,
+                                  name="OPColors")
         painters = ([SetMaterial(tree, location=(33, -1.4),
                                  material=control["GlyphColor"].std_out,
                                  name="PaintNumber")]
                     + [SetMaterial(tree, location=(33, -1.8 - 0.35 * row),
                                    selection=color_selection.outputs[node_name],
-                                   material=control[node_name].std_out,
+                                   material=opcolors.out(node_name),
                                    name="PaintCell" + node_name, hide=True)
                        for row, node_name in enumerate(socket_labels)])
         # the whole tape is laid back by tape_tilt further downstream, so a
@@ -2857,7 +2881,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         frame = Frame(tree, location=(25.6, -0.6), label="CellValues")
         frame.add([value, position, zone, digits, rank, letter, color_selection,
                    glyph, size, bigger, glyph_size, curves, realize, fill,
-                   placed] + painters)
+                   placed, opcolors] + painters)
         return zone.geometry_out
 
     # ----------------------------------------------------------------
@@ -3037,10 +3061,13 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
 
         selections = [color_selection.outputs[label] for label in socket_labels]
 
+        opcolors = SeparateBundle(tree, location=(-3.4, 15.4),
+                                  bundle=control["OpColors"].std_out,
+                                  items=control["OpColors"].items, name="OPColors")
         painters = ([SetMaterial(tree, location=[-2, 16.5], material=control["ZeroColor"].std_out, hide=True,
                                  name="PaintDefault")] +
                     [SetMaterial(tree, location=(-2, 16 - 0.5 * row), selection=selection,
-                                 material=control[node_name].std_out,
+                                 material=opcolors.out(node_name),
                                  name="Paint" + node_name, hide=True)
                      for row, ((node_name, _, _), selection)
                      in enumerate(zip(self.opcode_colors, selections))])
@@ -3061,7 +3088,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         frame = Frame(tree, location=(-14.6, 18.4), label="CodeTable")
         frame.add([size, zone, origin, column, across, number_at, row, letter_at,
                    letter, letter_size, letter_curves, rank, number, number_curves,
-                   pair, grown, joined] + entries)
+                   pair, grown, joined, opcolors] + entries)
         return joined.geometry_out
 
     # ----------------------------------------------------------------
@@ -3258,4 +3285,430 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
     #     frame.add(pieces + [at, spot, along, drop, under, tip, stem, lowered,
     #                         marker, put, painted, lettering, text, joined])
     #     return joined.geometry_out
+
+
+class SoupWatcherModifier(GeometryNodesModifier):
+    """
+    100 tapes from a running ``soup.Soup``, read off ``soup_watcher.py``'s
+    data file and laid out flat: two columns of 50, each tape a row of 64
+    cells running left to right. Every ``frames_per_snapshot`` frames of the
+    scene, the block of 100 tapes on screen is replaced by the next one
+    recorded in the file - watching the animation run is watching the soup
+    evolve, the same way ``soup_watcher.py`` watched it in the first place.
+
+    See ``BrainFuckSimpleModifier``/``BrainFuckExtendedModifier`` above for
+    the general node vocabulary this reuses - ``ForEachZone`` + ``Slice
+    String`` to turn text into per-cell geometry, ``make_function`` RPN for
+    the layout math, ``FindInString`` to test a character against an
+    operator's colour. Two things are deliberately different here, though:
+
+    - Nothing stands a glyph upright to face the camera. A cell's character,
+      when it has one, is extruded straight out of the flat tape it sits on
+      (:class:`ExtrudeMesh`, a fixed ``+z``) rather than counter-rotated to
+      stand perpendicular to it - "stick out of the tape" rather than "stand
+      next to it". Every tape, background strip and whatever sticks up from
+      it alike, is therefore built flat in the x-y plane and shares a single
+      tilt at the very end, so a hundred tapes read as one flat, angled
+      sheet rather than a hundred separate little upright cards.
+    - There is no simulation zone anywhere in this graph, unlike the two BFF
+      machines: each frame's picture depends only on the frame number, not
+      on the previous frame's, so :class:`SceneTime` reads the current frame
+      directly and a couple of ``floor``/``modulo`` RPN steps turn it into
+      which snapshot's 6400 characters of the data file are on screen.
+
+    A cell shows nothing unless its byte was one of the ten BFF instructions
+    when ``soup_watcher.py`` recorded it: that is what ``soup.render()``
+    already encodes (an instruction's own character, ``'0'`` for a zero
+    byte, ``' '`` for anything else), so a blank cell here is a cell
+    ``Switch`` never lets through to ``String to Curves`` at all, not a cell
+    drawn and then hidden.
+
+    :param data_file: name of the file ``soup_watcher.py`` wrote, resolved
+        against ``DATA_DIR`` unless it is already an absolute path
+    :param max_snapshots: use only the first this many snapshots of the file
+        (``None`` - the default - uses all of them)
+    :param cell_size: width of one cell, and so the spacing of the 64
+        characters along a tape
+    :param column_gap: gap between the two columns of tapes, in the same
+        units as ``cell_size``
+    :param row_spacing: vertical distance between one tape and the next
+    :param tape_tilt: angle the whole sheet of tapes is tilted back by, so
+        that a camera looking along +y sees their faces rather than their
+        edges - the "slightly angled view"
+    :param glyph_size: height of an instruction's glyph, as a fraction of
+        ``cell_size``
+    :param stick_out: how far a glyph is extruded above the tape, in the
+        same units as ``cell_size``
+    :param frames_per_snapshot: how many frames a block of 100 tapes stays
+        on screen before the next one takes its place
+    :param colors: optional ``{node name: colour name}`` overriding the
+        colour of an instruction (see ``BrainFuckExtendedModifier.OPCODE_COLORS``),
+        or the two entries ``GlyphColor`` (an instruction's default colour,
+        never actually seen - every glyph on screen is one of the ten and so
+        always overridden by its own colour, but it is the fall-back that
+        keeps that chain total) and ``TapeColor`` (the background strips).
+    """
+
+    TAPE = 64  # bytes per tape - matches soup.py's TAPE and soup_watcher.py's data
+    ROWS = 50  # tapes stacked in one column
+    COLUMNS = 2
+    TAPES_PER_SNAPSHOT = ROWS * COLUMNS  # 100, matching soup_watcher.py's --top
+
+    # the ten instructions and their colours - the same list
+    # BrainFuckExtendedModifier colours its own tapes and code table with, so
+    # a soup tape and a running machine's tape read as the same alphabet
+    OPCODE_COLORS = BrainFuckExtendedModifier.OPCODE_COLORS
+    OPERATORS = BFFNode.COMMANDS
+    GLYPH_COLOR = "text"
+    TAPE_COLOR = "gray_4"
+
+    def __init__(self, data_file="soup_evolution.csv", max_snapshots=None,
+                cell_size=0.09, column_gap=1.2, row_spacing=0.13,
+                tape_tilt=0.4607669, glyph_size=0.85, stick_out=0.05,
+                frames_per_snapshot=10, colors=None, name="SoupWatcher",
+                **kwargs):
+        self.cell_size = cell_size
+        self.column_gap = column_gap
+        self.row_spacing = row_spacing
+        self.tape_tilt = tape_tilt
+        self.glyph_size = glyph_size
+        self.stick_out = stick_out
+        self.frames_per_snapshot = frames_per_snapshot
+
+        overrides = colors or {}
+        self.opcode_colors = tuple((node_name, overrides.get(node_name, color), character)
+                                   for node_name, color, character in self.OPCODE_COLORS)
+        self.glyph_color = overrides.get("GlyphColor", self.GLYPH_COLOR)
+        self.tape_color = overrides.get("TapeColor", self.TAPE_COLOR)
+
+        path = data_file if os.path.isabs(data_file) else os.path.join(DATA_DIR, data_file)
+        self.tapes, self.num_snapshots = self._load_snapshots(path, max_snapshots)
+
+        self.kwargs = kwargs
+        super().__init__(name=name, automatic_layout=False)
+
+    # ----------------------------------------------------------------
+    @classmethod
+    def _load_snapshots(cls, path, max_snapshots):
+        """Read ``path`` and concatenate whole snapshots of 100 tapes.
+
+        :return: ``(all_tapes, num_snapshots)`` - one string, every
+            snapshot's 100 tapes of 64 characters each, back to back in the
+            order ``soup_watcher.py`` appended them, and how many of them
+            there are.
+        """
+        with open(path) as file:
+            lines = [line.rstrip("\n") for line in file if line.rstrip("\n")]
+        for i, line in enumerate(lines):
+            if len(line) != cls.TAPE:
+                raise ValueError(
+                    "%s line %d: expected %d characters (one tape), got %d"
+                    % (path, i, cls.TAPE, len(line)))
+        num_snapshots = len(lines) // cls.TAPES_PER_SNAPSHOT
+        if max_snapshots is not None:
+            num_snapshots = min(num_snapshots, max_snapshots)
+        if num_snapshots < 1:
+            raise ValueError("%s has fewer than %d tapes (one snapshot)"
+                             % (path, cls.TAPES_PER_SNAPSHOT))
+        lines = lines[:num_snapshots * cls.TAPES_PER_SNAPSHOT]
+        return "".join(lines), num_snapshots
+
+    # ----------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._create_control_frame(tree)
+        offset = self._create_snapshot_offset(tree, control)
+        bars = self._create_tape_bars_frame(tree, control)
+        glyphs = self._create_glyphs_frame(tree, control, offset)
+
+        joined = JoinGeometry(tree, location=(10, 0))
+        tree.links.new(bars, joined.geometry_in)
+        tree.links.new(glyphs, joined.geometry_in)
+        # everything above is flat in the x-y plane; one tilt at the very end
+        # is what makes this "a slightly angled view" rather than a camera
+        # looking at a hundred tapes edge-on
+        tilt = TransformGeometry(tree, location=(11, 0), rotation=[self.tape_tilt, 0, 0],
+                                 name="TiltIntoView")
+        create_geometry_line(tree, [joined, tilt])
+
+        out = self.group_outputs
+        tree.links.new(tilt.geometry_out, out.inputs["Geometry"])
+
+    # ----------------------------------------------------------------
+    def _create_control_frame(self, tree):
+        """``Control``: the data, the palette, and the two knobs that drive time.
+
+        :return: ``{name: node}``, so that the frames downstream can pick
+            what they need by the name it carries in the editor.
+        """
+        x = -14
+        control = {
+            "CellSize": InputValue(tree, location=(x, 0), value=self.cell_size,
+                                   name="CellSize", hide=True),
+            "FramesPerSnapshot": InputInteger(tree, location=(x, -0.6),
+                                              integer=self.frames_per_snapshot,
+                                              name="FramesPerSnapshot", hide=True),
+            "NumSnapshots": InputInteger(tree, location=(x, -1.2),
+                                         integer=self.num_snapshots,
+                                         name="NumSnapshots", hide=True),
+            # the whole data file, every snapshot's tapes back to back - see
+            # :meth:`_load_snapshots`. A cell's character is read out of this
+            # with Slice String rather than one Import CSV row per cell: the
+            # existing tape_files convention is one *number* per row, and
+            # this data is a fixed-width block of *text* instead.
+            "Tapes": InputString(tree, location=(x, -1.8), string=self.tapes,
+                                 name="Tapes", hide=True),
+            "Operators": InputString(tree, location=(x, -2.4), string=self.OPERATORS,
+                                     name="Operators", hide=True),
+        }
+
+        # **self.kwargs carries things like `emission=0.6` through to every
+        # material - see BrainFuckSimpleModifier._create_control_frame's
+        # identical forwarding. These scenes are lit mostly by emission on a
+        # black background (video_bff/scene_bff.py's `_setup_render`), and
+        # the plain preset materials render nearly black without it.
+        palette = {}
+        for row, (node_name, color, _) in enumerate(self.opcode_colors):
+            palette[node_name] = InputMaterial(tree, location=(x, -3.4 - 0.4 * row),
+                                               material=color, name=node_name,
+                                               **self.kwargs, hide=True)
+        palette["GlyphColor"] = InputMaterial(
+            tree, location=(x, -3.4 - 0.4 * len(self.opcode_colors)),
+            material=self.glyph_color, name="GlyphColor", **self.kwargs, hide=True)
+        palette["TapeColor"] = InputMaterial(
+            tree, location=(x, -3.8 - 0.4 * len(self.opcode_colors)),
+            material=self.tape_color, name="TapeColor", **self.kwargs, hide=True)
+        for source in palette.values():
+            self.materials.append(source.node.material)
+        control.update(palette)
+
+        # the ten instruction colours travel as one bundle - see the same
+        # choice in BrainFuckExtendedModifier._create_control_frame
+        control["OpColors"] = CombineBundle(
+            tree, location=(x + 1.6, -3.4), name="OPColorBundle",
+            items=[(node_name, "MATERIAL", palette[node_name].std_out)
+                   for node_name, _, _ in self.opcode_colors])
+
+        frame = Frame(tree, location=(x - 0.4, 0.6), label="Control")
+        frame.add(list(control.values()))
+        return control
+
+    # ----------------------------------------------------------------
+    def _create_snapshot_offset(self, tree, control):
+        """How far into ``control["Tapes"]`` the block on screen right now starts.
+
+        A pure function of the current frame - no simulation zone needed,
+        since nothing here accumulates: the block index is
+        ``floor(frame / FramesPerSnapshot) mod NumSnapshots``, and the offset
+        is that many whole snapshots' worth of characters.
+
+        :return: an INT socket, the character offset of the current snapshot.
+        """
+        frame_now = SceneTime(tree, location=(-8, 3), std_out="Frame", hide=True)
+        offset = make_function(
+            tree, name="SnapshotOffset",
+            functions={
+                "offset": "frame,fps,/,floor,n,%%,%d,*" % (self.TAPES_PER_SNAPSHOT * self.TAPE)
+            },
+            inputs=["frame", "fps", "n"], outputs=["offset"],
+            scalars=["frame", "fps"], integers=["n", "offset"],
+            hide=True, location=(-7, 3))
+        tree.links.new(frame_now.std_out, offset.inputs["frame"])
+        tree.links.new(control["FramesPerSnapshot"].std_out, offset.inputs["fps"])
+        tree.links.new(control["NumSnapshots"].std_out, offset.inputs["n"])
+
+        frame = Frame(tree, location=(-8.2, 3.6), label="SnapshotOffset")
+        frame.add([frame_now, offset])
+        return offset.outputs["offset"]
+
+    # ----------------------------------------------------------------
+    def _create_tape_bars_frame(self, tree, control):
+        """``TapeBars``: a flat background strip for each of the 100 tapes.
+
+        One point per tape - ``Index`` is the tape number, ``0`` to ``99`` -
+        positioned by column and row exactly as :meth:`_create_glyphs_frame`
+        positions a tape's cells, so a glyph and the strip under it always
+        agree on where their tape sits. A single rectangle is instanced onto
+        all hundred: the strips carry no information of their own, unlike
+        the glyphs, so they need only one shared colour between them.
+
+        :return: the geometry socket of the hundred strips.
+        """
+        n = self.TAPES_PER_SNAPSHOT
+        index = Index(tree, location=(-8, -2), hide=True)
+        layout = make_function(
+            tree, name="TapeBarPosition",
+            aux_functions={
+                "row": "index,%d,%%" % self.ROWS,
+                "col": "index,%d,/,floor" % self.ROWS,
+            },
+            functions={
+                # the strip is centred on its point, so it needs to sit half
+                # a tape's width past the left edge of its column
+                "position": [
+                    "col,%d,cellSize,*,columnGap,+,*,%d,cellSize,*,2,/,+" % (self.TAPE, self.TAPE),
+                    "0",
+                    "row,rowSpacing,*,-1,*",
+                ],
+            },
+            inputs=["index", "cellSize", "columnGap", "rowSpacing"],
+            outputs=["position"], vectors=["position"],
+            scalars=["index", "cellSize", "columnGap", "rowSpacing", "row", "col"],
+            hide=True, location=(-7, -2))
+        tree.links.new(index.std_out, layout.inputs["index"])
+        tree.links.new(control["CellSize"].std_out, layout.inputs["cellSize"])
+        layout.inputs["columnGap"].default_value = self.column_gap
+        layout.inputs["rowSpacing"].default_value = self.row_spacing
+
+        points = Points(tree, location=(-6, -2), count=n)
+        placed = SetPosition(tree, location=(-5, -2), position=layout.outputs["position"])
+        create_geometry_line(tree, [points, placed])
+
+        width = MathNode(tree, location=(-6, -3), operation="MULTIPLY",
+                         inputs0=control["CellSize"].std_out, inputs1=0.99 * self.TAPE,
+                         name="BarWidth", hide=True)
+        height = MathNode(tree, location=(-6, -3.4), operation="MULTIPLY",
+                          inputs0=control["CellSize"].std_out, inputs1=0.7,
+                          name="BarHeight", hide=True)
+        bar = Quadrilateral(tree, location=(-5, -3), mode="RECTANGLE",
+                            width=width.std_out, height=height.std_out)
+        fill = FillCurve(tree, location=(-4, -3), mode="N-gons")
+        create_geometry_line(tree, [bar, fill])
+
+        instances = InstanceOnPoints(tree, location=(-3, -2), points=placed.geometry_out,
+                                     instance=fill.geometry_out)
+        realize = RealizeInstances(tree, location=(-2, -2))
+        painted = SetMaterial(tree, location=(-1, -2), material=control["TapeColor"].std_out,
+                              name="PaintTapes")
+        create_geometry_line(tree, [instances, realize, painted])
+
+        frame = Frame(tree, location=(-8.2, -1.4), label="TapeBars")
+        frame.add([index, layout, points, placed, width, height, bar, fill, instances,
+                  realize, painted])
+        return painted.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_glyphs_frame(self, tree, control, snapshot_offset):
+        """``Glyphs``: the operator that shows through each cell, if any.
+
+        One point per cell of every tape in the snapshot -
+        :attr:`TAPES_PER_SNAPSHOT` times :attr:`TAPE` of them, laid out the
+        same way :meth:`_create_tape_bars_frame` lays out the tapes
+        themselves - then a ``ForEachZone`` reads the one character
+        ``snapshot_offset`` and this cell's own flattened index select out of
+        ``control["Tapes"]``, keeps it only if it is one of the ten
+        instructions (blank otherwise), and turns what is left into a letter
+        standing extruded out of the tape rather than lying flat on it.
+
+        :return: the geometry socket of however many glyphs the snapshot holds.
+        """
+        count = self.TAPES_PER_SNAPSHOT * self.TAPE
+        index = Index(tree, location=(-8, -8), hide=True)
+        layout = make_function(
+            tree, name="CellPosition",
+            aux_functions={
+                "cell": "index,%d,%%" % self.TAPE,
+                "tapeIdx": "index,%d,/,floor" % self.TAPE,
+                "row": "tapeIdx,%d,%%" % self.ROWS,
+                "col": "tapeIdx,%d,/,floor" % self.ROWS,
+            },
+            functions={
+                "position": [
+                    "cell,cellSize,*,col,%d,cellSize,*,columnGap,+,*,+" % self.TAPE,
+                    "0",
+                    "row,rowSpacing,*,-1,*",
+                ],
+            },
+            inputs=["index", "cellSize", "columnGap", "rowSpacing"],
+            outputs=["position"], vectors=["position"],
+            scalars=["index", "cellSize", "columnGap", "rowSpacing",
+                     "cell", "tapeIdx", "row", "col"],
+            hide=True, location=(-7, -8))
+        tree.links.new(index.std_out, layout.inputs["index"])
+        tree.links.new(control["CellSize"].std_out, layout.inputs["cellSize"])
+        layout.inputs["columnGap"].default_value = self.column_gap
+        layout.inputs["rowSpacing"].default_value = self.row_spacing
+
+        points = Points(tree, location=(-6, -8), count=count)
+        placed = SetPosition(tree, location=(-5, -8), position=layout.outputs["position"])
+        create_geometry_line(tree, [points, placed])
+
+        global_index = IntegerMath(tree, location=(-6, -9), operation="ADD",
+                                   inputs0=snapshot_offset, inputs1=index.std_out,
+                                   name="GlobalIndex", hide=True)
+        position = Position(tree, location=(-6, -9.6), hide=True)
+
+        zone = ForEachZone(tree, location=(-4, -8), domain="POINT", node_width=9,
+                           geometry=placed.geometry_out)
+        zone.add_socket(socket_type="INT", name="GlobalIndex",
+                        value=global_index.std_out, for_input=True)
+        zone.add_socket(socket_type="VECTOR", name="Location",
+                        value=position.std_out, for_input=True)
+
+        letter = SliceString(tree, location=(-3, -8), string=control["Tapes"].std_out,
+                             position=zone.foreach_input.outputs["GlobalIndex"],
+                             length=1, name="Letter")
+
+        # "in" is Find in String's count of the letter inside a character
+        # set - see BrainFuckExtendedModifier._create_code_table_frame for
+        # the same pattern applied to the ascii table instead of a tape
+        custom_ops = {
+            "in": {"type": FindInString, "inputs": ("String", "Search"),
+                  "output": "Count", "label": "in"},
+        }
+        socket_labels = [node_name for node_name, _, _ in self.opcode_colors]
+        color_selection = make_function(
+            tree, name="ColorSelector", custom_ops=custom_ops,
+            functions=dict(
+                {node_name: "'%s',letter,in" % character
+                 for node_name, _, character in self.opcode_colors},
+                IsOperator="commands,letter,in,0,>"),
+            inputs=["letter", "commands"], outputs=socket_labels + ["IsOperator"],
+            strings=["letter", "commands"], booleans=socket_labels + ["IsOperator"],
+            hide=True, location=(-3, -9.4))
+        tree.links.new(letter.std_out, color_selection.inputs["letter"])
+        tree.links.new(control["Operators"].std_out, color_selection.inputs["commands"])
+        is_operator = color_selection.outputs["IsOperator"]
+
+        # a cell that is not one of the ten instructions gets the empty
+        # string, and String to Curves draws nothing for it - a blank cell
+        # is one that never reaches the curve at all, not one drawn and
+        # then hidden
+        glyph = Switch(tree, location=(-2, -8), input_type="STRING", switch=is_operator,
+                       true=letter.std_out, false="", name="GlyphOrBlank")
+
+        size = MathNode(tree, location=(-2, -8.6), operation="MULTIPLY",
+                        inputs0=control["CellSize"].std_out, inputs1=self.glyph_size,
+                        name="GlyphSize", hide=True)
+        curves = StringToCurves(tree, location=(-1, -8), string=glyph.std_out,
+                                size=size.std_out, align_x="CENTER", align_y="MIDDLE")
+        realize = RealizeInstances(tree, location=(0, -8))
+        fill = FillCurve(tree, location=(1, -8), mode="N-gons")
+        # the tape is flat in x-y; a fixed +z offset is what "sticking out of
+        # the tape" means here, rather than an extrusion along whatever the
+        # fill's own face normal happens to be
+        stick_out = ExtrudeMesh(tree, location=(2, -8), mode="FACES",
+                                offset=Vector([0, 0, 1]), offset_scale=self.stick_out,
+                                name="StickOut")
+
+        opcolors = SeparateBundle(tree, location=(1, -10), bundle=control["OpColors"].std_out,
+                                  items=control["OpColors"].items, name="OPColors")
+        painters = ([SetMaterial(tree, location=(3, -8), material=control["GlyphColor"].std_out,
+                                 name="PaintDefault")]
+                   + [SetMaterial(tree, location=(3, -8.4 - 0.3 * row),
+                                  selection=color_selection.outputs[node_name],
+                                  material=opcolors.out(node_name),
+                                  name="Paint" + node_name, hide=True)
+                      for row, node_name in enumerate(socket_labels)])
+
+        placed_glyph = TransformGeometry(tree, location=(4, -8),
+                                         translation=zone.foreach_input.outputs["Location"],
+                                         name="PlaceGlyph")
+        zone.create_geometry_line([realize, fill, stick_out] + painters + [placed_glyph],
+                                  ins=curves.geometry_out)
+
+        frame = Frame(tree, location=(-8.2, -7.4), label="Glyphs")
+        frame.add([index, layout, points, placed, global_index, position, zone, letter,
+                  color_selection, glyph, size, curves, realize, fill, stick_out,
+                  opcolors, placed_glyph] + painters)
+        return zone.geometry_out
 
