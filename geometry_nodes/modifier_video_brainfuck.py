@@ -11,7 +11,8 @@ from geometry_nodes.nodes import Points, InputValue, InstanceOnPoints, JoinGeome
     CurveWireFrame, ValueToString, StringToCurves, FillCurve, CompareNode, \
     InputMaterial, BoundingBox, InputString, SampleIndex, StringJoin, SliceString, Reroute, CharToAscii, \
     StringLength, IntegerMath, FindInString, SetPosition, ImportCSV, NodeGroup, \
-    DomainSize, CombineBundle, SeparateBundle, GetBundleItem, SceneTime, ExtrudeMesh
+    DomainSize, CombineBundle, SeparateBundle, GetBundleItem, SceneTime, ExtrudeMesh, \
+    IndexSwitch
 from interface.ibpy import Vector
 from utils.constants import DATA_DIR
 from utils.kwargs import get_from_kwargs
@@ -3299,7 +3300,7 @@ class SoupWatcherModifier(GeometryNodesModifier):
     See ``BrainFuckSimpleModifier``/``BrainFuckExtendedModifier`` above for
     the general node vocabulary this reuses - ``ForEachZone`` + ``Slice
     String`` to turn text into per-cell geometry, ``make_function`` RPN for
-    the layout math, ``FindInString`` to test a character against an
+    the layout math, ``FindInStSoupWatcherModifierring`` to test a character against an
     operator's colour. Two things are deliberately different here, though:
 
     - Nothing stands a glyph upright to face the camera. A cell's character,
@@ -3314,17 +3315,34 @@ class SoupWatcherModifier(GeometryNodesModifier):
       machines: each frame's picture depends only on the frame number, not
       on the previous frame's, so :class:`SceneTime` reads the current frame
       directly and a couple of ``floor``/``modulo`` RPN steps turn it into
-      which snapshot's 6400 characters of the data file are on screen.
+      which snapshot's 100 tape rows of the data file are on screen.
+
+    The whole file is piped in through one ``Import CSV`` node rather than
+    baked into the graph. Blender cannot carry text as a geometry attribute -
+    there is no ``STRING`` attribute type, so ``Import CSV`` keeps only
+    *numeric* columns - so the data is stored as *bytes*: 64 integer columns
+    ``c0..c63``, one per cell, and one row per tape (see
+    ``video_bff/data/soup_evolution_bytes.csv``). A cell reads its byte by
+    sampling the column ``cell`` of the tape at row ``snapshot_offset +
+    tapeIdx`` (an ``Index Switch`` picks the column, since a named attribute
+    cannot be chosen by a runtime index), turns the byte back into a one-
+    character string with a ``Slice String`` into a 128-entry ascii table,
+    and hands that to exactly the same colour/curve pipeline the string once
+    fed. This keeps the ~6 M cells out of the ``.blend`` - a baked string
+    that big is what an earlier version choked on.
 
     A cell shows nothing unless its byte was one of the ten BFF instructions
     when ``soup_watcher.py`` recorded it: that is what ``soup.render()``
-    already encodes (an instruction's own character, ``'0'`` for a zero
-    byte, ``' '`` for anything else), so a blank cell here is a cell
-    ``Switch`` never lets through to ``String to Curves`` at all, not a cell
-    drawn and then hidden.
+    already encoded (an instruction's own character, ``'0'`` for a zero
+    byte, ``' '`` for anything else), and the ascii table reproduces the same
+    character from the byte, so a blank cell here is a cell ``Switch`` never
+    lets through to ``String to Curves`` at all, not a cell drawn and then
+    hidden.
 
-    :param data_file: name of the file ``soup_watcher.py`` wrote, resolved
-        against ``DATA_DIR`` unless it is already an absolute path
+    :param data_file: the byte csv (64 columns ``c0..c63``, ``;`` delimited,
+        one row per tape) - convert ``soup_watcher.py``'s ``soup_evolution.csv``
+        with ``video_bff/data``'s converter. Resolved against ``DATA_DIR``
+        unless it is already an absolute path
     :param max_snapshots: use only the first this many snapshots of the file
         (``None`` - the default - uses all of them)
     :param cell_size: width of one cell, and so the spacing of the 64
@@ -3339,6 +3357,9 @@ class SoupWatcherModifier(GeometryNodesModifier):
         ``cell_size``
     :param stick_out: how far a glyph is extruded above the tape, in the
         same units as ``cell_size``
+    :param cell_square: side of one cell's background square, as a fraction of
+        ``cell_size`` - just under 1 leaves a thin gap between neighbouring
+        cells, so a tape reads as 64 separate squares rather than a solid bar
     :param frames_per_snapshot: how many frames a block of 100 tapes stays
         on screen before the next one takes its place
     :param colors: optional ``{node name: colour name}`` overriding the
@@ -3362,9 +3383,9 @@ class SoupWatcherModifier(GeometryNodesModifier):
     GLYPH_COLOR = "text"
     TAPE_COLOR = "gray_4"
 
-    def __init__(self, data_file="soup_evolution.csv", max_snapshots=None,
-                cell_size=0.09, column_gap=1.2, row_spacing=0.13,
-                tape_tilt=0.4607669, glyph_size=0.85, stick_out=0.05,
+    def __init__(self, data_file="soup_evolution_bytes.csv", max_snapshots=None,
+                cell_size=0.09, column_gap=0.4, row_spacing=0.13,
+                tape_tilt=0, glyph_size=0.85, stick_out=0.05, cell_square=0.9,
                 frames_per_snapshot=10, colors=None, name="SoupWatcher",
                 **kwargs):
         self.cell_size = cell_size
@@ -3373,6 +3394,7 @@ class SoupWatcherModifier(GeometryNodesModifier):
         self.tape_tilt = tape_tilt
         self.glyph_size = glyph_size
         self.stick_out = stick_out
+        self.cell_square = cell_square
         self.frames_per_snapshot = frames_per_snapshot
 
         overrides = colors or {}
@@ -3382,36 +3404,51 @@ class SoupWatcherModifier(GeometryNodesModifier):
         self.tape_color = overrides.get("TapeColor", self.TAPE_COLOR)
 
         path = data_file if os.path.isabs(data_file) else os.path.join(DATA_DIR, data_file)
-        self.tapes, self.num_snapshots = self._load_snapshots(path, max_snapshots)
+        self.data_file = path
+        self.num_snapshots = self._count_snapshots(path, max_snapshots)
 
         self.kwargs = kwargs
         super().__init__(name=name, automatic_layout=False)
 
     # ----------------------------------------------------------------
     @classmethod
-    def _load_snapshots(cls, path, max_snapshots):
-        """Read ``path`` and concatenate whole snapshots of 100 tapes.
+    def _count_snapshots(cls, path, max_snapshots):
+        """How many whole snapshots of 100 tapes the byte csv holds.
 
-        :return: ``(all_tapes, num_snapshots)`` - one string, every
-            snapshot's 100 tapes of 64 characters each, back to back in the
-            order ``soup_watcher.py`` appended them, and how many of them
-            there are.
+        The data itself never passes through python - ``Import CSV`` reads it
+        at render time (see :meth:`_create_control_frame`). All that is needed
+        here is the row count, so the ``... mod NumSnapshots`` wrap in
+        :meth:`_create_snapshot_offset` knows where the file ends. Rows are
+        counted by streaming the file (one tape per line, plus a header line),
+        never holding it in memory - the file is ~20 MB of integers.
+
+        :return: the number of whole snapshots (blocks of
+            :attr:`TAPES_PER_SNAPSHOT` tapes), capped to ``max_snapshots``
+            when that is given.
         """
-        with open(path) as file:
-            lines = [line.rstrip("\n") for line in file if line.rstrip("\n")]
-        for i, line in enumerate(lines):
-            if len(line) != cls.TAPE:
-                raise ValueError(
-                    "%s line %d: expected %d characters (one tape), got %d"
-                    % (path, i, cls.TAPE, len(line)))
-        num_snapshots = len(lines) // cls.TAPES_PER_SNAPSHOT
+        with open(path, newline="") as file:
+            tape_rows = sum(1 for line in file if line.strip()) - 1  # minus header
+
+        num_snapshots = tape_rows // cls.TAPES_PER_SNAPSHOT
         if max_snapshots is not None:
             num_snapshots = min(num_snapshots, max_snapshots)
         if num_snapshots < 1:
             raise ValueError("%s has fewer than %d tapes (one snapshot)"
                              % (path, cls.TAPES_PER_SNAPSHOT))
-        lines = lines[:num_snapshots * cls.TAPES_PER_SNAPSHOT]
-        return "".join(lines), num_snapshots
+        return num_snapshots
+
+    # ----------------------------------------------------------------
+    @staticmethod
+    def _ascii_table():
+        """A 128-character string whose position ``i`` is ``chr(i)``.
+
+        Non-printables (below 32, and 127) are blanked so a stray byte can
+        never smuggle a newline or control code into a glyph; every character
+        the tapes actually carry - the ten instructions, ``'0'`` and ``' '`` -
+        is printable and lands on itself. ``Slice String`` at position
+        ``byte`` then reverses ``ord`` the byte csv did.
+        """
+        return "".join(chr(i) if 32 <= i < 127 else " " for i in range(128))
 
     # ----------------------------------------------------------------
     def create_node(self, tree, **kwargs):
@@ -3450,14 +3487,23 @@ class SoupWatcherModifier(GeometryNodesModifier):
             "NumSnapshots": InputInteger(tree, location=(x, -1.2),
                                          integer=self.num_snapshots,
                                          name="NumSnapshots", hide=True),
-            # the whole data file, every snapshot's tapes back to back - see
-            # :meth:`_load_snapshots`. A cell's character is read out of this
-            # with Slice String rather than one Import CSV row per cell: the
-            # existing tape_files convention is one *number* per row, and
-            # this data is a fixed-width block of *text* instead.
-            "Tapes": InputString(tree, location=(x, -1.8), string=self.tapes,
-                                 name="Tapes", hide=True),
-            "Operators": InputString(tree, location=(x, -2.4), string=self.OPERATORS,
+            # the whole data file, read at render time as a point cloud of one
+            # point per tape with 64 INT columns ``c0..c63`` - one per cell.
+            # ``;`` is the delimiter because the file's integers are separated
+            # by it and it never appears otherwise. The glyph frame samples a
+            # cell's column of the right tape row out of this (see
+            # :meth:`_create_byte_lookup`); nothing baked, unlike the string
+            # this replaced.
+            "Csv": ImportCSV(tree, location=(x, -1.8), delimiter=";",
+                             path=self.data_file, name="Csv", label="soup bytes",
+                             hide=True),
+            # position i holds ``chr(i)`` (non-printables blanked), so that a
+            # byte sampled above becomes its character with one Slice String -
+            # the byte was that character's ascii code when the file was written
+            "AsciiTable": InputString(tree, location=(x, -2.4),
+                                      string=self._ascii_table(),
+                                      name="AsciiTable", hide=True),
+            "Operators": InputString(tree, location=(x, -3.0), string=self.OPERATORS,
                                      name="Operators", hide=True),
         }
 
@@ -3494,20 +3540,21 @@ class SoupWatcherModifier(GeometryNodesModifier):
 
     # ----------------------------------------------------------------
     def _create_snapshot_offset(self, tree, control):
-        """How far into ``control["Tapes"]`` the block on screen right now starts.
+        """Which tape row the block on screen right now starts at.
 
         A pure function of the current frame - no simulation zone needed,
         since nothing here accumulates: the block index is
         ``floor(frame / FramesPerSnapshot) mod NumSnapshots``, and the offset
-        is that many whole snapshots' worth of characters.
+        is that many whole snapshots' worth of tape *rows* into the point
+        cloud (:attr:`TAPES_PER_SNAPSHOT` rows each).
 
-        :return: an INT socket, the character offset of the current snapshot.
+        :return: an INT socket, the tape-row offset of the current snapshot.
         """
         frame_now = SceneTime(tree, location=(-8, 3), std_out="Frame", hide=True)
         offset = make_function(
             tree, name="SnapshotOffset",
             functions={
-                "offset": "frame,fps,/,floor,n,%%,%d,*" % (self.TAPES_PER_SNAPSHOT * self.TAPE)
+                "offset": "frame,fps,/,floor,n,%%,%d,*" % self.TAPES_PER_SNAPSHOT
             },
             inputs=["frame", "fps", "n"], outputs=["offset"],
             scalars=["frame", "fps"], integers=["n", "offset"],
@@ -3522,32 +3569,57 @@ class SoupWatcherModifier(GeometryNodesModifier):
 
     # ----------------------------------------------------------------
     def _create_tape_bars_frame(self, tree, control):
-        """``TapeBars``: a flat background strip for each of the 100 tapes.
+        """``TapeBars``: 64 little cell squares per tape, not one long strip.
 
-        One point per tape - ``Index`` is the tape number, ``0`` to ``99`` -
-        positioned by column and row exactly as :meth:`_create_glyphs_frame`
-        positions a tape's cells, so a glyph and the strip under it always
-        agree on where their tape sits. A single rectangle is instanced onto
-        all hundred: the strips carry no information of their own, unlike
-        the glyphs, so they need only one shared colour between them.
+        Each tape is a ``MeshLine`` of :attr:`TAPE` points - one per cell,
+        ``cell_size`` apart - and a small square (``cell_square`` of a cell
+        wide, so a thin gap shows between neighbours) is instanced on every
+        point. That row of 64 is then instanced onto one point per tape,
+        placed by column and row exactly as :meth:`_create_glyphs_frame`
+        places that tape's cells, so a glyph always sits on its own square.
 
-        :return: the geometry socket of the hundred strips.
+        :return: the geometry socket of the 100 x 64 squares.
         """
         n = self.TAPES_PER_SNAPSHOT
+        cell_size = control["CellSize"].std_out
+
+        # one tape's 64 cell centres: a mesh line from x=0 to (TAPE-1)*cellSize,
+        # so cell c sits at c*cellSize - the same x a glyph's cell uses
+        span = MathNode(tree, location=(-7, -3.4), operation="MULTIPLY",
+                        inputs0=cell_size, inputs1=self.TAPE - 1,
+                        name="TapeSpan", hide=True)
+        end = CombineXYZ(tree, location=(-6.4, -3.4), x=span.std_out, name="TapeEnd",
+                         hide=True)
+        cell_line = MeshLine(tree, location=(-6, -3.2), mode="END_POINTS",
+                             count=self.TAPE, start_location=Vector([0, 0, 0]),
+                             end_location=end.std_out)
+
+        # the square instanced on each cell centre, a hair under a cell wide so
+        # neighbours do not touch - the "small separation" between cells
+        side = MathNode(tree, location=(-7, -4), operation="MULTIPLY",
+                        inputs0=cell_size, inputs1=self.cell_square,
+                        name="CellSquareSide", hide=True)
+        square = Quadrilateral(tree, location=(-6, -4), mode="RECTANGLE",
+                               width=side.std_out, height=side.std_out)
+        fill = FillCurve(tree, location=(-5, -4), mode="N-gons")
+        create_geometry_line(tree, [square, fill])
+        cells = InstanceOnPoints(tree, location=(-4.4, -3.2), points=cell_line.geometry_out,
+                                 instance=fill.geometry_out, name="CellSquares")
+
+        # one point per tape, placed at its column/row - the glyph layout
+        # without the per-cell term, which the mesh line above supplies
         index = Index(tree, location=(-8, -2), hide=True)
         layout = make_function(
-            tree, name="TapeBarPosition",
+            tree, name="TapeRowPosition",
             aux_functions={
                 "row": "index,%d,%%" % self.ROWS,
                 "col": "index,%d,/,floor" % self.ROWS,
             },
             functions={
-                # the strip is centred on its point, so it needs to sit half
-                # a tape's width past the left edge of its column
                 "position": [
-                    "col,%d,cellSize,*,columnGap,+,*,%d,cellSize,*,2,/,+" % (self.TAPE, self.TAPE),
+                    "col,%d,cellSize,*,columnGap,+,*" % self.TAPE,
+                    "row,rowSpacing,*",
                     "0",
-                    "row,rowSpacing,*,-1,*",
                 ],
             },
             inputs=["index", "cellSize", "columnGap", "rowSpacing"],
@@ -3555,7 +3627,7 @@ class SoupWatcherModifier(GeometryNodesModifier):
             scalars=["index", "cellSize", "columnGap", "rowSpacing", "row", "col"],
             hide=True, location=(-7, -2))
         tree.links.new(index.std_out, layout.inputs["index"])
-        tree.links.new(control["CellSize"].std_out, layout.inputs["cellSize"])
+        tree.links.new(cell_size, layout.inputs["cellSize"])
         layout.inputs["columnGap"].default_value = self.column_gap
         layout.inputs["rowSpacing"].default_value = self.row_spacing
 
@@ -3563,28 +3635,62 @@ class SoupWatcherModifier(GeometryNodesModifier):
         placed = SetPosition(tree, location=(-5, -2), position=layout.outputs["position"])
         create_geometry_line(tree, [points, placed])
 
-        width = MathNode(tree, location=(-6, -3), operation="MULTIPLY",
-                         inputs0=control["CellSize"].std_out, inputs1=0.99 * self.TAPE,
-                         name="BarWidth", hide=True)
-        height = MathNode(tree, location=(-6, -3.4), operation="MULTIPLY",
-                          inputs0=control["CellSize"].std_out, inputs1=0.7,
-                          name="BarHeight", hide=True)
-        bar = Quadrilateral(tree, location=(-5, -3), mode="RECTANGLE",
-                            width=width.std_out, height=height.std_out)
-        fill = FillCurve(tree, location=(-4, -3), mode="N-gons")
-        create_geometry_line(tree, [bar, fill])
-
-        instances = InstanceOnPoints(tree, location=(-3, -2), points=placed.geometry_out,
-                                     instance=fill.geometry_out)
+        # each tape point carries a whole 64-square row; realize flattens both
+        # instance levels into the 6400 squares that make up the sheet
+        tapes = InstanceOnPoints(tree, location=(-3, -2), points=placed.geometry_out,
+                                 instance=cells.geometry_out, name="TapeRows")
         realize = RealizeInstances(tree, location=(-2, -2))
         painted = SetMaterial(tree, location=(-1, -2), material=control["TapeColor"].std_out,
                               name="PaintTapes")
-        create_geometry_line(tree, [instances, realize, painted])
+        create_geometry_line(tree, [tapes, realize, painted])
 
         frame = Frame(tree, location=(-8.2, -1.4), label="TapeBars")
-        frame.add([index, layout, points, placed, width, height, bar, fill, instances,
-                  realize, painted])
+        frame.add([index, layout, points, placed, span, end, cell_line, side, square,
+                  fill, cells, tapes, realize, painted])
         return painted.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_byte_lookup(self, tree, control, cell_index, snapshot_offset):
+        """The byte on screen at each display cell.
+
+        ``cell_index`` is the flat index of the display cell
+        (``0 .. TAPES_PER_SNAPSHOT*TAPE - 1``). ``cell = index mod TAPE`` is
+        which of the 64 columns it wants, ``tapeIdx = index // TAPE`` which of
+        the snapshot's 100 tapes it is on, and that tape's row in the point
+        cloud is ``snapshot_offset + tapeIdx``.
+
+        A named attribute cannot be chosen by a value known only at render
+        time, so all 64 columns ``c0..c63`` are sampled at that row and an
+        ``Index Switch`` keyed on ``cell`` keeps the one that belongs here -
+        the byte that was this cell's character's ascii code.
+
+        :return: ``(switch, nodes)`` - the Index Switch whose ``std_out`` is
+            the byte, and every node built here so the caller can frame them.
+        """
+        cell = IntegerMath(tree, location=(-6, -10.0), operation="MODULO",
+                           inputs0=cell_index, inputs1=self.TAPE,
+                           name="CellInTape", hide=True)
+        tape_idx = IntegerMath(tree, location=(-6, -10.3), operation="DIVIDE",
+                               inputs0=cell_index, inputs1=self.TAPE,
+                               name="TapeIndex", hide=True)
+        row = IntegerMath(tree, location=(-6, -10.6), operation="ADD",
+                          inputs0=tape_idx.std_out, inputs1=snapshot_offset,
+                          name="TapeRow", hide=True)
+
+        csv_geo = control["Csv"].geometry_out
+        switch = IndexSwitch(tree, location=(-3.4, -10.3), data_type="INT",
+                             index=cell.std_out, name="CellByte", hide=True)
+        nodes = [cell, tape_idx, row, switch]
+        for c in range(self.TAPE):
+            attr = NamedAttribute(tree, location=(-5.2, -10.0 - 0.04 * c),
+                                  data_type="INT", name="c%d" % c, label="c%d" % c,
+                                  hide=True)
+            sample = SampleIndex(tree, location=(-4.4, -10.0 - 0.04 * c),
+                                 data_type="INT", domain="POINT", geometry=csv_geo,
+                                 value=attr.std_out, index=row.std_out, hide=True)
+            switch.add_item(socket=sample.std_out)
+            nodes += [attr, sample]
+        return switch, nodes
 
     # ----------------------------------------------------------------
     def _create_glyphs_frame(self, tree, control, snapshot_offset):
@@ -3593,11 +3699,11 @@ class SoupWatcherModifier(GeometryNodesModifier):
         One point per cell of every tape in the snapshot -
         :attr:`TAPES_PER_SNAPSHOT` times :attr:`TAPE` of them, laid out the
         same way :meth:`_create_tape_bars_frame` lays out the tapes
-        themselves - then a ``ForEachZone`` reads the one character
-        ``snapshot_offset`` and this cell's own flattened index select out of
-        ``control["Tapes"]``, keeps it only if it is one of the ten
-        instructions (blank otherwise), and turns what is left into a letter
-        standing extruded out of the tape rather than lying flat on it.
+        themselves - then :meth:`_create_byte_lookup` reads the byte at this
+        cell out of the imported point cloud, a ``ForEachZone`` turns it back
+        into its character, keeps it only if it is one of the ten instructions
+        (blank otherwise), and turns what is left into a letter standing
+        extruded out of the tape rather than lying flat on it.
 
         :return: the geometry socket of however many glyphs the snapshot holds.
         """
@@ -3614,8 +3720,8 @@ class SoupWatcherModifier(GeometryNodesModifier):
             functions={
                 "position": [
                     "cell,cellSize,*,col,%d,cellSize,*,columnGap,+,*,+" % self.TAPE,
+                    "row,rowSpacing,*",
                     "0",
-                    "row,rowSpacing,*,-1,*",
                 ],
             },
             inputs=["index", "cellSize", "columnGap", "rowSpacing"],
@@ -3632,20 +3738,23 @@ class SoupWatcherModifier(GeometryNodesModifier):
         placed = SetPosition(tree, location=(-5, -8), position=layout.outputs["position"])
         create_geometry_line(tree, [points, placed])
 
-        global_index = IntegerMath(tree, location=(-6, -9), operation="ADD",
-                                   inputs0=snapshot_offset, inputs1=index.std_out,
-                                   name="GlobalIndex", hide=True)
+        byte, byte_nodes = self._create_byte_lookup(tree, control, index.std_out,
+                                                    snapshot_offset)
         position = Position(tree, location=(-6, -9.6), hide=True)
 
         zone = ForEachZone(tree, location=(-4, -8), domain="POINT", node_width=9,
                            geometry=placed.geometry_out)
-        zone.add_socket(socket_type="INT", name="GlobalIndex",
-                        value=global_index.std_out, for_input=True)
+        zone.add_socket(socket_type="INT", name="Byte",
+                        value=byte.std_out, for_input=True)
         zone.add_socket(socket_type="VECTOR", name="Location",
                         value=position.std_out, for_input=True)
 
-        letter = SliceString(tree, location=(-3, -8), string=control["Tapes"].std_out,
-                             position=zone.foreach_input.outputs["GlobalIndex"],
+        # the byte is this cell's character's ascii code (what the byte csv
+        # stored); one Slice String into the ascii table turns it back into the
+        # character, and everything downstream is exactly what the string
+        # version fed - a Find in String colour test and String to Curves.
+        letter = SliceString(tree, location=(-3, -8), string=control["AsciiTable"].std_out,
+                             position=zone.foreach_input.outputs["Byte"],
                              length=1, name="Letter")
 
         # "in" is Find in String's count of the letter inside a character
@@ -3707,8 +3816,8 @@ class SoupWatcherModifier(GeometryNodesModifier):
                                   ins=curves.geometry_out)
 
         frame = Frame(tree, location=(-8.2, -7.4), label="Glyphs")
-        frame.add([index, layout, points, placed, global_index, position, zone, letter,
+        frame.add([index, layout, points, placed, position, zone, letter,
                   color_selection, glyph, size, curves, realize, fill, stick_out,
-                  opcolors, placed_glyph] + painters)
+                  opcolors, placed_glyph] + byte_nodes + painters)
         return zone.geometry_out
 
