@@ -1,8 +1,9 @@
 import math
 import os
 
-from geometry_nodes.geometry_nodes_modifier import GeometryNodesModifier
+import numpy as np
 
+from geometry_nodes.geometry_nodes_modifier import GeometryNodesModifier
 from geometry_nodes.nodes import Points, InputValue, InstanceOnPoints, JoinGeometry, \
     create_geometry_line, RealizeInstances, Position, make_function, Index, SetMaterial, \
     RepeatZone, StoredNamedAttribute, NamedAttribute, VectorMath, TransformGeometry, InputVector, MeshLine, BooleanMath, \
@@ -12,8 +13,12 @@ from geometry_nodes.nodes import Points, InputValue, InstanceOnPoints, JoinGeome
     InputMaterial, BoundingBox, InputString, SampleIndex, StringJoin, SliceString, Reroute, CharToAscii, \
     StringLength, IntegerMath, FindInString, SetPosition, ImportCSV, NodeGroup, \
     DomainSize, CombineBundle, SeparateBundle, GetBundleItem, SceneTime, ExtrudeMesh, \
-    IndexSwitch
+    IndexSwitch, CurveLine, ResampleCurve, InputTangent, CaptureAttribute, DuplicateElements, \
+    RandomValue, AlignRotationToVector, IcoSphere, MeshToCurve, CurveCircle, CurveToMesh, UVSphere, SetShadeSmooth, \
+    SampleCurve, PointsToCurve, SetCurveNormal, VectorRotate, MapRange, MixNode, AccumulateField, \
+    CurveLength
 from interface.ibpy import Vector
+from objects.logo import logo_curve
 from utils.constants import DATA_DIR
 from utils.kwargs import get_from_kwargs
 
@@ -3820,4 +3825,2669 @@ class SoupWatcherModifier(GeometryNodesModifier):
                   color_selection, glyph, size, curves, realize, fill, stick_out,
                   opcolors, placed_glyph] + byte_nodes + painters)
         return zone.geometry_out
+
+
+# One grid unit is 200 px in both directions, so a half-integer coordinate is
+# still a round 100 px and nodes cannot end up a few pixels out of line.
+GRID = 200
+
+# ---------------------------------------------------------------------------
+# The flight path
+# ---------------------------------------------------------------------------
+# The molecule does not sit still and let the camera fly past it; the camera is
+# fixed and the molecule flies. It does that by sliding along a track - a fixed
+# space curve - so that point *i* of the molecule sits at arc length
+# ``HeadOffset - i * Spacing`` along it. Animating ``HeadOffset`` moves the
+# whole thing, and the shape it takes on the way is the shape of the track.
+#
+# This replaces the sine that used to modulate the axis. A sine could bend the
+# molecule but never loop it: a loop is not a function of x, it comes back over
+# itself. A track can be any curve at all, and the price is only that it has to
+# be computed here and handed to the graph rather than written as one formula.
+#
+# The track is written to a csv and read back by an Import CSV node, the same
+# way the tape scenes get their data. It is regenerated whenever the geometry
+# constants below change.
+#
+# The screen, for reference: the camera sits on -y looking at the x-z plane, so
+# x runs across and z runs up. With a 40 mm lens 36 units back the frame is
+# about x in [-16.2, 16.2] and z in [-9.1, 9.1].
+
+DNA_TRACK_FILE = "dna_track"
+
+TRACK_X_IN = 40.0      # the track starts here, well off screen to the right
+TRACK_Z_UP = 1.6       # height of the incoming run, in the upper half
+TRACK_X_LOOP = 1.0     # where the roller-coaster loop sits
+TRACK_R1 = 2.7         # and how big it is
+TRACK_DEPTH = 4.5      # how far back in y a loop steps to clear its own entry
+TRACK_X_LEFT = -11.0   # how far left it gets before turning back
+TRACK_R2 = 2.8         # radius of the 180 degree turn that sends it back right
+TRACK_X_OUT = 30.0     # the track ends here, off screen to the right again
+TRACK_STEP = 0.08      # spacing of the samples written to the csv
+
+# Height of the last straight, and so of the fork: this is the one number in
+# the track that the *choreography* depends on rather than the composition.
+# Everything the molecule does after it unzips happens here - the strand that
+# stays runs along this line, and the strand that leaves climbs off the top of
+# the frame from it - so how far the peel has to lift, and how far the molecule
+# is stretched while it does, is set by how low this is. It was -7, a whole
+# frame height below the middle, which cost twenty units of lift; near the
+# middle it costs ten.
+TRACK_Z_OUT = -1.0
+# and therefore the height the turn has to start from, since a 180 degree turn
+# drops exactly its own diameter. Derived rather than written down, because
+# what matters is where the turn comes *out*.
+TRACK_Z_MID = TRACK_Z_OUT + 2.0 * TRACK_R2
+
+# The unzipping gate. The molecule does not open all at once: it opens where it
+# has stepped back in y, and the track only ever does that once it is out of the
+# turn and running along the bottom of the frame. Below ``TRACK_Y_WOUND`` the
+# helix is untouched, above ``TRACK_Y_OPEN`` it is split as far as the scene has
+# dialled it, and in between it splays - so the fork stands still on screen and
+# the molecule unzips itself by flying through it.
+#
+# Both numbers are read by :class:`DNAModifier` as well as written into the
+# track here, for the same reason the scene reads ``marks`` rather than typing
+# arc lengths of its own: retuning the path cannot silently leave the gate
+# somewhere the molecule never reaches.
+TRACK_Y_WOUND = 6.0    # y at which the strands begin to come apart
+TRACK_Y_OPEN = 9.0     # y beyond which they are all the way apart
+TRACK_OPEN_RUN = 8.0   # how far along the last straight that takes
+
+
+def _smoothstep(u):
+    """3u^2 - 2u^3, clamped. Zero slope at both ends, so two segments joined
+    with it meet without a kink - which matters here because a kink in the
+    track is a kink in the molecule."""
+    u = 0.0 if u < 0.0 else (1.0 if u > 1.0 else u)
+    return u * u * (3.0 - 2.0 * u)
+
+
+def dna_flight_path():
+    """The track, as a list of ``(x, y, z)`` sampled every ``TRACK_STEP``.
+
+    Five segments, each picking up where the last left off and with the same
+    tangent, so the whole thing is smooth:
+
+    1. straight in from the right, level, in the upper half;
+    2. a full 360 degree loop in the middle of the upper half. ``y`` ramps
+       across it, so where the path crosses itself on screen it is really
+       ``TRACK_DEPTH`` apart in depth and nothing intersects;
+    3. on towards the left border, climbing to ``TRACK_Z_MID`` and coming back
+       to ``y = 0``;
+    4. the turn: 180 degrees, so it comes out heading right again, a full
+       ``2 * TRACK_R2`` lower than it went in - which is the whole reason
+       segment 3 climbs. The turn has to come out at ``TRACK_Z_OUT``, near the
+       middle of the frame, and a hairpin worth looking at has to be a few
+       units across, so it must go in that much higher;
+    5. straight out to the right, just below the middle, and off the screen.
+
+    ``y`` is doing two jobs at once, and they are worth keeping apart. Across
+    the loop it is *depth*: the loop crosses its own entry on screen, and
+    stepping back by ``TRACK_DEPTH`` is what keeps the molecule from flying
+    through itself. From the turn onwards it is a *signal*: nothing crosses
+    anything down there any more, so the last segment's step back to
+    ``TRACK_Y_OPEN`` is free to mean "past the fork" - see the constants above.
+    Every move of ``y`` is a smoothstep between values that match at the joins,
+    so the depth never jumps; a jump in y is not a shortcut but a length of
+    track pointing straight at the camera, which the arc-length resampling
+    below would faithfully fill with base pairs piled on one spot.
+
+    :return: ``(points, length, marks)`` - the samples, the total arc length,
+        and the arc length at which each segment ends, keyed by name. The scene
+        times its beats against ``marks`` rather than against numbers of its
+        own, so retuning the track above cannot silently desynchronise them.
+    """
+    pts = [(TRACK_X_IN, 0.0, TRACK_Z_UP)]
+    ends = []
+
+    def straight(x0, z0, x1, z1, y0, y1, n, y_over=1.0):
+        """One straight run, with ``y`` and ``z`` eased across it.
+
+        :param y_over: the fraction of the segment ``y`` makes its move in.
+            The default spends the whole segment on it; a smaller value gets
+            the move done early and then holds, which is how the last straight
+            is over the gate while it is still on screen rather than half a
+            frame width off the right edge.
+        """
+        for k in range(1, n + 1):
+            u = k / n
+            pts.append((x0 + (x1 - x0) * u,
+                        y0 + (y1 - y0) * _smoothstep(u / y_over),
+                        z0 + (z1 - z0) * _smoothstep(u)))
+
+    tau = 2.0 * pi
+
+    # 1 - fly in from the right
+    straight(TRACK_X_IN, TRACK_Z_UP, TRACK_X_LOOP, TRACK_Z_UP, 0.0, 0.0, 400)
+    ends.append(("loop_start", len(pts) - 1))
+
+    # 2 - the roller-coaster loop
+    n = 400
+    for k in range(1, n + 1):
+        a = tau * k / n
+        pts.append((TRACK_X_LOOP - TRACK_R1 * math.sin(a),
+                    TRACK_DEPTH * _smoothstep(a / tau),
+                    TRACK_Z_UP + TRACK_R1 - TRACK_R1 * math.cos(a)))
+    ends.append(("loop_end", len(pts) - 1))
+
+    # 3 - on to the left, climbing to the height the turn needs to start at,
+    # and back out of the loop's depth
+    straight(TRACK_X_LOOP, TRACK_Z_UP, TRACK_X_LEFT, TRACK_Z_MID,
+             TRACK_DEPTH, 0.0, 400)
+    ends.append(("turn_start", len(pts) - 1))
+
+    # 4 - the 180 degree turn, ending level and heading right. It also spends
+    # itself getting y up to the near edge of the gate, so that the molecule
+    # comes out of the turn with the fork immediately ahead of it.
+    n = 600
+    for k in range(1, n + 1):
+        b = 0.5 * tau * k / n
+        pts.append((TRACK_X_LEFT - TRACK_R2 * math.sin(b),
+                    TRACK_Y_WOUND * _smoothstep(b / (0.5 * tau)),
+                    TRACK_Z_MID - TRACK_R2 + TRACK_R2 * math.cos(b)))
+    ends.append(("turn_end", len(pts) - 1))
+
+    # 5 - away to the right and off the screen, crossing the gate as it goes
+    # and staying over it: anything that drifted back under TRACK_Y_WOUND here
+    # would wind itself up again on the way out.
+    z_out = TRACK_Z_OUT
+    straight(TRACK_X_LEFT, z_out, TRACK_X_OUT, z_out,
+             TRACK_Y_WOUND, TRACK_Y_OPEN, 900,
+             y_over=TRACK_OPEN_RUN / (TRACK_X_OUT - TRACK_X_LEFT))
+
+    # resample at a uniform arc length, so that "length along the track" and
+    # "distance travelled" are the same number - the molecule is spaced by arc
+    # length and would otherwise bunch up wherever the samples happen to crowd
+    cumulative = [0.0]
+    for a, b in zip(pts, pts[1:]):
+        step = math.sqrt(sum((q - p) ** 2 for p, q in zip(a, b)))
+        cumulative.append(cumulative[-1] + step)
+    total = cumulative[-1]
+
+    even, j = [], 0
+    s = 0.0
+    while s < total:
+        while j < len(cumulative) - 2 and cumulative[j + 1] < s:
+            j += 1
+        span = cumulative[j + 1] - cumulative[j]
+        f = 0.0 if span == 0 else (s - cumulative[j]) / span
+        even.append(tuple(p + (q - p) * f for p, q in zip(pts[j], pts[j + 1])))
+        s += TRACK_STEP
+    return even, total, {name: cumulative[i] for name, i in ends}
+
+
+def write_dna_track(path):
+    """Put the track where an ``Import CSV`` node can read it.
+
+    The first line is spent on the column header - ``Import CSV`` always does
+    that and has no option not to - so the columns arrive in the graph as three
+    float attributes called X, Y and Z.
+
+    :return: ``(length, marks)`` - see :func:`dna_flight_path`.
+    """
+    points, total, marks = dna_flight_path()
+    with open(path, "w") as file:
+        file.write("X,Y,Z\n")
+        for x, y, z in points:
+            file.write("%.5f,%.5f,%.5f\n" % (x, y, z))
+    return total, marks
+
+
+class DNAModifier(GeometryNodesModifier):
+    """A DNA double helix that flies along a track.
+
+    Rebuilt from ``video_bff/tmp.xml``, the node tree that was authored in the
+    Blender editor, with the sine that used to bend the axis replaced by
+    :func:`dna_flight_path` - see the comment above it for why.
+
+    The molecule is built in seven steps, and each is a frame in the editor:
+
+    ``ControlFrame``
+        Every number the helix depends on, in one column, plus the palette. The
+        five that the scene animates - ``HeadOffset``, ``StrandSeparation``,
+        ``TiltLength``, ``BaseSize`` and ``PeelHeight`` - are the whole of the
+        choreography. Three of them have a ``Default*`` twin that is never
+        keyframed; see ``Unzipping Gate``.
+    ``Flight Path``
+        The track, read from csv, and the arc length each point of the molecule
+        sits at: ``HeadOffset - Index * Spacing``.
+    ``LinearStructure``
+        A line of ``pairs`` points, moved onto the track.
+    ``Unzipping Gate``
+        One number per point, from its own ``y``: 0 where the molecule is still
+        a double helix, 1 where it has come apart, smoothstepped between
+        ``TRACK_Y_WOUND`` and ``TRACK_Y_OPEN`` in between. The molecule does not
+        open all at once - it opens *where it is*, and the track only steps back
+        in ``y`` once it is out of the turn, so the fork stands still at the
+        bottom left of the frame and the molecule unzips itself by flying
+        through it.
+    ``Helix``
+        The line is tilted by an amount that grows with the index, duplicated
+        into two splines, and the two are pushed apart along the curve normal.
+        Because the tilt turns the normal as it goes, "pushed apart along the
+        normal" is what makes the pair of strands wind around each other - and
+        because the tilt is driven by the *index* rather than by arc length,
+        the helix is fixed in the molecule and the molecule slides along the
+        track without appearing to screw itself forward. All of it is built
+        twice, wound and open, and the gate mixes the two.
+    ``Strand Shift``
+        The two strands slide along the tangent in opposite directions, which
+        opens the major and minor groove. This frame also holds ``PeelHeight``:
+        where the helix has unwound, lifting one strand takes it off the top of
+        the frame and leaves the other behind.
+    ``Base Pair Coloring``
+        Each point is given a ``BaseType`` in 0..3, so that the two strands of
+        a pair always carry complementary bases.
+    ``Bases And Pairing``
+        A for-each zone builds one base per point, aimed at its partner.
+    ``Strand Geometry``
+        The two backbones, swept to tubes, with a sphere on every point.
+
+    Three deliberate departures from the xml:
+
+    * The three ``Switch`` nodes that chose an RGBA colour and the
+      ``Store Named Attribute`` that wrote it to ``C`` are gone. The same three
+      switches are now ``input_type='MATERIAL'`` and pick one of the project
+      colours ``custom1 / joker / important / drawing``. A material is not a
+      field, so they cannot live where the colour switches did: they sit inside
+      the for-each zone, where one iteration means one base.
+    * A ``Bit Math`` node hung unconnected in the ``Helix`` frame of the xml. It
+      fed nothing and is not reproduced.
+    * The xml's ``Selective Untwisting`` and ``Selective StrandOpening`` frames
+      each compared ``y`` against 6 and switched a *parameter*: ``TiltLength``
+      or ``StrandSeparation``, default on one side of the line and dialled on
+      the other. Those two frames are one ``Unzipping Gate`` here, and what it
+      feeds is not a parameter but a crossfade between two whole helices. The
+      reason is in ``_create_helix_frame``: a Tilt Length that varies from
+      point to point does not describe a molecule that is unwinding, it
+      describes one that is being wrung out, and the shorter the fork the
+      more violently. Switching sharply, as the xml does, hides that in a
+      single bad segment; smoothing it - which is what this is for - would
+      have spread it over the whole fork.
+
+    :param pairs: number of base pairs. Each contributes one point per strand.
+    :param spacing: distance between base pairs along the track. The molecule
+        is therefore ``(pairs - 1) * spacing`` long.
+    :param head_offset: where the leading end starts out along the track.
+        Animate this and the molecule flies.
+    :param tilt_length: index period of the helical twist. Larger unwinds it.
+    :param strand_separation: distance between the two backbones. Larger splits
+        them apart.
+    :param strand_shift: how far the two strands slide apart along the tangent -
+        the width of the minor groove.
+    :param base_size: scale of one base. Zero makes the bases vanish.
+    :param peel_height: how far the second strand is lifted in world z.
+    :param base_colors: the four base materials, in ``BaseType`` order.
+    :param strand_color: material of the two swept backbones.
+    :param molecule_color: material of the spheres sitting on the backbones.
+    """
+
+    # radii of the swept tubes and of the spheres, as the xml had them
+    BACKBONE_RADIUS = 0.10
+    BACKBONE_SPHERE_RADIUS = 0.13
+    BASE_BOND_RADIUS = 0.10
+    BASE_ATOM_RADIUS = 0.17
+
+    # how many atoms a base of each ``BaseType`` is drawn with. Two purines and
+    # two pyrimidines, so that a pair is always one long and one short.
+    BASE_ATOMS = (4, 5, 2, 3)
+
+    BASE_COLORS = ("custom1", "joker", "important", "drawing")
+
+    def __init__(self, pairs=200, spacing=0.34, head_offset=0.0,
+                 tilt_length=1.6899462938308716, strand_separation=1.5,
+                 strand_shift=0.35, base_size=0.7, peel_height=0.0,
+                 base_colors=None, strand_color="gray_4",
+                 molecule_color="gray_7", seed=4, name="DNA", **kwargs):
+        self.pairs = pairs
+        self.spacing = spacing
+        self.head_offset = head_offset
+        self.tilt_length = tilt_length
+        self.strand_separation = strand_separation
+        self.strand_shift = strand_shift
+        self.base_size = base_size
+        self.peel_height = peel_height
+        self.base_colors = tuple(base_colors or self.BASE_COLORS)
+        self.strand_color = strand_color
+        self.molecule_color = molecule_color
+        self.seed = seed
+        self.kwargs = kwargs
+
+        # the track is data, so it goes in the data directory next to the tapes
+        self.track_path = os.path.join(DATA_DIR, DNA_TRACK_FILE + ".csv")
+        #: total arc length of the track, and the arc length at which each of
+        #: its segments ends - what the scene needs in order to say "start the
+        #: split once the turn is behind us" without knowing how the track is
+        #: put together
+        self.track_length, self.track_marks = write_dna_track(self.track_path)
+        #: length of the molecule itself, in the same units
+        self.molecule_length = (pairs - 1) * spacing
+
+        super().__init__(name=name, automatic_layout=False)
+
+    # ------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._create_control_frame(tree)
+        flight = self._create_flight_path_frame(tree, control)
+        line = self._create_linear_structure_frame(tree, control, flight)
+        gate = self._create_unzipping_gate_frame(tree)
+        helix = self._create_helix_frame(tree, control, line, gate)
+        strands = self._create_strand_shift_frame(tree, control, helix)
+        colored = self._create_base_pair_coloring_frame(tree, control, helix,
+                                                        strands)
+        bases = self._create_bases_and_pairing_frame(tree, control, helix,
+                                                     strands, colored)
+        backbone = self._create_strand_geometry_frame(tree, control, strands)
+
+        join = JoinGeometry(tree, location=(82.0, 0.0), node_height=GRID,
+                            name="JoinMolecule")
+        for piece in (backbone, bases):
+            tree.links.new(piece, join.geometry_in)
+        tree.links.new(join.geometry_out, self.group_outputs.inputs["Geometry"])
+        self.group_outputs.location = (83.5 * GRID, 0)
+
+    # ------------------------------------------------------------------
+    def _create_control_frame(self, tree):
+        """``ControlFrame``: every constant the molecule depends on.
+
+        One column, so that the whole shape of the thing can be changed without
+        hunting through the graph for the node that holds the number. The scene
+        reaches four of these by label and keyframes them.
+
+        :return: ``{name: node}``, keyed by the label the node carries in the
+            editor.
+        """
+        x = 0.0
+        control = {
+            "Pairs": InputInteger(tree, location=(x, 0.0), integer=self.pairs,
+                                  name="Pairs", node_height=GRID),
+            "Spacing": InputValue(tree, location=(x, -0.5), value=self.spacing,
+                                  name="Spacing", node_height=GRID),
+            "HeadOffset": InputValue(tree, location=(x, -1.0),
+                                     value=self.head_offset, name="HeadOffset",
+                                     node_height=GRID),
+            "TiltLength": InputValue(tree, location=(x, -1.5),
+                                     value=self.tilt_length, name="TiltLength",
+                                     node_height=GRID),
+            "StrandSeparation": InputValue(tree, location=(x, -2.0),
+                                           value=self.strand_separation,
+                                           name="StrandSeparation",
+                                           node_height=GRID),
+            "StrandShift": InputValue(tree, location=(x, -2.5),
+                                      value=self.strand_shift,
+                                      name="StrandShift", node_height=GRID),
+            "BaseSize": InputValue(tree, location=(x, -3.0),
+                                   value=self.base_size, name="BaseSize",
+                                   node_height=GRID),
+            "PeelHeight": InputValue(tree, location=(x, -3.5),
+                                     value=self.peel_height, name="PeelHeight",
+                                     node_height=GRID),
+        }
+
+        # The three the scene keyframes to open the molecule have a twin here
+        # that it never touches. The twin is what the molecule looks like where
+        # it is still wound, the original what it looks like where it is open,
+        # and the gate crossfades between them - so before the scene moves a
+        # dial the two are equal and the gate has nothing to do, which is why
+        # the first seventeen seconds need no keyframes of their own.
+        for row, (twin, value) in enumerate([
+                ("DefaultTiltLength", self.tilt_length),
+                ("DefaultStrandSeparation", self.strand_separation),
+                ("DefaultBaseSize", self.base_size)]):
+            control[twin] = InputValue(tree, location=(x - 1.5, -1.5 - 0.5 * row),
+                                       value=value, name=twin, node_height=GRID)
+
+        # the palette. The four bases first, in BaseType order, then the two
+        # colours the backbone is drawn in.
+        palette = [("Base%d" % i, color)
+                   for i, color in enumerate(self.base_colors)]
+        palette += [("Strand", self.strand_color),
+                    ("Molecule", self.molecule_color)]
+        for row, (node_name, color) in enumerate(palette):
+            control[node_name] = InputMaterial(
+                tree, location=(x, -4.5 - 0.5 * row), material=color,
+                name=node_name, node_height=GRID, **self.kwargs)
+        for node_name, _ in palette:
+            self.materials.append(control[node_name].node.material)
+
+        # The six materials travel as one bundle rather than as six wires. Two
+        # frames want them - the base switches inside the for-each zone and the
+        # two backbone Set Material nodes - and both are the whole width of the
+        # graph away from here, so what crossed it as six long wires now
+        # crosses as one, and the frame that receives it says what it is
+        # unpacking in a single Separate Bundle. The Input Material nodes stay
+        # where they are: the bundle gathers them rather than replacing them,
+        # so each colour is still a node of its own to reach for by name.
+        control["Palette"] = CombineBundle(
+            tree, location=(1.0, -5.5), name="Palette", node_height=GRID,
+            items=[(node_name, "MATERIAL", control[node_name].std_out)
+                   for node_name, _ in palette])
+
+        frame = Frame(tree, location=(x - 0.5, 0.5), label="ControlFrame",
+                      node_height=GRID)
+        frame.add(list(control.values()))
+        return control
+
+    # ------------------------------------------------------------------
+    def _create_flight_path_frame(self, tree, control):
+        """``Flight Path``: where each point of the molecule is, and when.
+
+        The track comes in as a point cloud - one point per row of the csv,
+        with the three columns as float attributes - which is turned back into
+        a curve by placing each point at ``(X, Y, Z)`` and joining them in
+        order.
+
+        Point *i* of the molecule then sits at arc length
+        ``HeadOffset - i * Spacing`` along that curve. ``Sample Curve`` reads a
+        different length for every point, so one node serves the whole
+        molecule, and lengths past either end of the track are clamped to its
+        ends - which is why the track begins and ends off screen, where the
+        pile-up cannot be seen.
+
+        :return: the vector socket of the position each point should take.
+        """
+        csv = ImportCSV(tree, location=(2.5, 0.0), path=self.track_path,
+                        name="TrackFile", label=DNA_TRACK_FILE,
+                        node_height=GRID)
+
+        columns = []
+        for row, axis in enumerate("XYZ"):
+            columns.append(NamedAttribute(tree, location=(2.5, -1.5 - 0.5 * row),
+                                          data_type="FLOAT", name=axis,
+                                          node_height=GRID))
+        combine = CombineXYZ(tree, location=(4.0, -2.0), node_height=GRID,
+                             x=columns[0].std_out, y=columns[1].std_out,
+                             z=columns[2].std_out, name="TrackPoint")
+        placed = SetPosition(tree, location=(5.5, 0.0),
+                             geometry=csv.geometry_out,
+                             position=combine.std_out, node_height=GRID,
+                             name="PlaceTrack")
+        track = PointsToCurve(tree, location=(7.0, 0.0), node_height=GRID,
+                              name="Track")
+        tree.links.new(placed.geometry_out, track.geometry_in)
+
+        index = Index(tree, location=(4.0, -4.0), node_height=GRID,
+                      name="FlightIndex")
+        along = MathNode(tree, location=(5.5, -4.0), operation="MULTIPLY",
+                         inputs0=index.std_out,
+                         inputs1=control["Spacing"].std_out, node_height=GRID,
+                         name="AlongMolecule")
+        arc = MathNode(tree, location=(7.0, -4.0), operation="SUBTRACT",
+                       inputs0=control["HeadOffset"].std_out,
+                       inputs1=along.std_out, node_height=GRID,
+                       name="ArcLength", label="ArcLength")
+
+        sample = SampleCurve(tree, location=(8.5, -1.0), mode="LENGTH",
+                             data_type="FLOAT", all_curves=True,
+                             node_height=GRID, name="SampleTrack")
+        tree.links.new(track.geometry_out, sample.geometry_in)
+        tree.links.new(arc.std_out, sample.node.inputs["Length"])
+
+        frame = Frame(tree, location=(2.0, 0.5), label="Flight Path",
+                      node_height=GRID)
+        frame.add([csv, combine, placed, track, index, along, arc,
+                   sample] + columns)
+        return sample.position_out
+
+    # ------------------------------------------------------------------
+    def _create_linear_structure_frame(self, tree, control, flight):
+        """``LinearStructure``: the axis of the molecule, laid on the track.
+
+        The line here exists only to carry ``pairs`` points in order - its own
+        length and direction are thrown away by the Set Position, which moves
+        every point onto the track instead of offsetting it.
+
+        The normal is set explicitly to minimum twist. The default would flip
+        where the track turns through the vertical, and the track does that
+        twice on purpose.
+
+        :return: the geometry socket of the molecule's axis.
+        """
+        line = CurveLine(tree, location=(12.0, 0.0), mode="DIRECTION",
+                         direction=[1.0, 0.0, 0.0],
+                         length=self.molecule_length, node_height=GRID,
+                         name="Axis")
+        resample = ResampleCurve(tree, location=(13.5, 0.0),
+                                 curve=line.geometry_out, mode="Count",
+                                 count=control["Pairs"].std_out,
+                                 node_height=GRID, name="OnePointPerPair")
+        placed = SetPosition(tree, location=(15.0, 0.0),
+                             geometry=resample.geometry_out, position=flight,
+                             node_height=GRID, name="OntoTrack")
+        normal = SetCurveNormal(tree, location=(16.5, 0.0),
+                                curve=placed.geometry_out,
+                                mode="Minimum Twist", node_height=GRID,
+                                name="StableNormal")
+
+        frame = Frame(tree, location=(11.5, 0.5), label="LinearStructure",
+                      node_height=GRID)
+        frame.add([line, resample, placed, normal])
+        return normal.geometry_out
+
+    # ------------------------------------------------------------------
+    def _create_unzipping_gate_frame(self, tree):
+        """``Unzipping Gate``: how open each point of the molecule is.
+
+        One number per point, ``0`` where the helix is to stay wound and ``1``
+        where it is to be all the way open, read off the point's own ``y``:
+        ``TRACK_Y_WOUND`` maps to 0, ``TRACK_Y_OPEN`` to 1, and the smoothstep
+        in the middle is the fork. Everything the split does - the separation,
+        the untwisting, the shrinking bases, the strand that peels away - is
+        this one field crossfading between a wound branch and an open one, so
+        they cannot come apart in different places.
+
+        The gate is a *field* and deliberately not a selection. Every consumer
+        blends with it rather than switching on it, which is the whole reason
+        the transition can be smoothed at all - see ``Helix`` for the one place
+        where blending the parameter instead of the position would have been a
+        disaster.
+
+        The track is what puts the gate where it is: ``y`` only ever climbs past
+        ``TRACK_Y_WOUND`` on the last straight, so the fork stands at the exit
+        of the turn and the molecule unzips itself by flying through it.
+
+        :return: the float socket of the gate.
+        """
+        here = Position(tree, location=(17.0, -6.5), node_height=GRID,
+                        name="GatePosition")
+        depth = SeparateXYZ(tree, location=(18.5, -6.5),
+                            vector=here.std_out, node_height=GRID,
+                            name="Depth")
+        gate = MapRange(tree, location=(20.0, -6.5), data_type="FLOAT",
+                        interpolation_type="SMOOTHSTEP", value=depth.y,
+                        from_min=TRACK_Y_WOUND, from_max=TRACK_Y_OPEN,
+                        to_min=0.0, to_max=1.0, node_height=GRID,
+                        name="Unzipped", label="Unzipped")
+
+        frame = Frame(tree, location=(16.5, -6.0), label="Unzipping Gate",
+                      node_height=GRID)
+        frame.add([here, depth, gate])
+        return gate.std_out
+
+    # ------------------------------------------------------------------
+    def _create_helix_frame(self, tree, control, axis, gate):
+        """``Helix``: one line becomes two strands winding around each other.
+
+        The two strands sit on opposite ends of a spoke that turns as it goes
+        down the molecule. The spoke starts from a reference direction
+        perpendicular to the track and is rotated about the tangent by
+        ``index / TiltLength``; a spoke that turns steadily is what makes the
+        pair wind. Raising ``TiltLength`` unwinds it, raising
+        ``StrandSeparation`` pulls the two apart, and doing both at once is the
+        molecule splitting.
+
+        The reference direction is ``normalize(tangent x y)`` rather than the
+        curve's own normal, and that choice is load-bearing. The curve normal
+        is carried along the curve by minimum twist, so after two loops it
+        points somewhere that depends on the whole history of the track - which
+        would leave the strands separating in an arbitrary plane, quite
+        possibly straight into the screen where the split would be invisible.
+        The cross product has no history: wherever the molecule is running
+        horizontally the spoke is vertical, so the split always opens upwards.
+        It is well defined everywhere on this track because the track's tangent
+        never comes near the y axis - it only ever leans a few degrees out of
+        the x-z plane, to clear its own loops.
+
+        Because the twist is driven by the *index* rather than by arc length,
+        the helix is fixed in the molecule: it slides along the track without
+        appearing to screw itself forward.
+
+        All of that is built **twice**, once from the untouched
+        ``Default*`` values and once from the dials the scene keyframes, and
+        the gate mixes the two *offset vectors*. Mixing the vectors is not a
+        detail; mixing the parameters instead - one Tilt Length that slides
+        from 1.7 to 60 across the fork - is what the node editor invites, and
+        it does not work. The angle is ``index / TiltLength``: at index 150
+        that is 85 radians at the wound end of the fork and 2.5 at the open
+        end, so a fork thirty pairs wide would have to spend thirteen full
+        turns getting from one to the other. The strands would come out of it
+        shredded. Two branches and a vector mix have no such term: each branch
+        turns at its own gentle rate, and the crossfade between them decays the
+        wound branch's radius to nothing while the open one grows, which is
+        exactly what a strand coming off a helix looks like.
+
+        The tangent and the two indices are captured because everything
+        downstream needs them *after* the topology has changed: a field
+        evaluated after ``Duplicate Elements`` no longer knows which strand it
+        is on, and one evaluated after ``Curve to Mesh`` no longer knows which
+        pair it came from.
+
+        :param gate: the unzipping gate - 0 where the molecule is to stay
+            wound, 1 where it is to be open.
+        :return: dict with the geometry socket and the captured fields.
+        """
+        tangent = InputTangent(tree, location=(18.5, -2.5), node_height=GRID,
+                               name="Tangent")
+        unit_tangent = VectorMath(tree, location=(20.0, -2.5),
+                                  operation="NORMALIZE",
+                                  inputs0=tangent.std_out, node_height=GRID,
+                                  name="UnitTangent")
+        # The gate is captured here, on the axis, and every consumer reads the
+        # captured copy. Read live instead, and each Set Position further down
+        # would evaluate it on the points *the one before it had already
+        # moved*: the second strand, pushed a separation off the axis, would
+        # ask the gate about a y it does not have and get a different answer
+        # from its own partner, which shows up as a pair that opens by
+        # different amounts at its two ends. Freezing it is also the honest
+        # statement of what the gate means - a base pair opens as a unit, at
+        # the depth its axis is at, not at the depth either strand ends up.
+        capture_tangent = CaptureAttribute(
+            tree, location=(21.5, 0.0), domain="POINT", geometry=axis,
+            items=[("Tangent", "FLOAT_VECTOR", unit_tangent.std_out),
+                   ("Unzipped", "FLOAT", gate)],
+            node_height=GRID, name="CaptureTangent")
+        unzipped = capture_tangent["Unzipped"]
+
+        pair_index = Index(tree, location=(21.5, -1.5), node_height=GRID,
+                           name="PairIndexSource")
+        capture_pair = CaptureAttribute(
+            tree, location=(23.0, 0.0), domain="POINT",
+            geometry=capture_tangent.geometry_out,
+            items=[("PairIndex", "INT", pair_index.std_out)],
+            node_height=GRID, name="CapturePairIndex")
+
+        duplicate = DuplicateElements(tree, location=(24.5, 0.0),
+                                      domain="SPLINE",
+                                      geometry=capture_pair.geometry_out,
+                                      amount=2, node_height=GRID,
+                                      name="TwoStrands")
+        capture_spline = CaptureAttribute(
+            tree, location=(26.0, 0.0), domain="POINT",
+            geometry=duplicate.geometry_out,
+            items=[("SplineIndex", "INT", duplicate.duplicate_index)],
+            node_height=GRID, name="CaptureSplineIndex")
+
+        # The reference direction: perpendicular to the track and, wherever the
+        # track runs level, vertical. ``y x tangent`` rather than the other way
+        # round, and the order matters by the end of the shot. The curve runs
+        # from the head of the molecule backwards, so on the last straight -
+        # which is where the whole split happens - its tangent points left, and
+        # this order is what puts the second strand *above* the first there.
+        # The other order puts it below, and ``PeelHeight``, which lifts in
+        # world z, would then drag it up through its own partner on the way
+        # out of frame.
+        reference = VectorMath(tree, location=(24.5, -2.5),
+                               operation="CROSS_PRODUCT",
+                               inputs0=[0.0, 1.0, 0.0],
+                               inputs1=capture_tangent["Tangent"],
+                               node_height=GRID, name="Reference")
+        unit_reference = VectorMath(tree, location=(26.0, -2.5),
+                                    operation="NORMALIZE",
+                                    inputs0=reference.std_out,
+                                    node_height=GRID, name="UnitReference")
+        # the two branches. Each is "turn the reference spoke by index over a
+        # tilt length, then push the second strand out along it by a
+        # separation" - the wound one on the values the molecule was built
+        # with, the open one on the values the scene dials.
+        branches = []
+        for row, (label, tilt, apart) in enumerate([
+                ("Wound", "DefaultTiltLength", "DefaultStrandSeparation"),
+                ("Open", "TiltLength", "StrandSeparation")]):
+            twist = MathNode(tree, location=(24.5, -4.0 - 1.5 * row),
+                             operation="DIVIDE",
+                             inputs0=capture_pair["PairIndex"],
+                             inputs1=control[tilt].std_out, node_height=GRID,
+                             name=label + "Twist", label=label + "Twist")
+            spoke = VectorRotate(tree, location=(26.0, -4.0 - 1.5 * row),
+                                 rotation_type="AXIS_ANGLE",
+                                 vector=unit_reference.std_out,
+                                 axis=capture_tangent["Tangent"],
+                                 angle=twist.std_out, node_height=GRID,
+                                 name=label + "Spoke")
+            offset = VectorMath(tree, location=(27.5, -4.0 - 1.5 * row),
+                                operation="SCALE", inputs0=spoke.std_out,
+                                node_height=GRID, name=label + "Separation")
+            tree.links.new(control[apart].std_out,
+                           offset.node.inputs["Scale"])
+            branches += [twist, spoke, offset]
+
+        separation = MixNode(tree, location=(29.0, -4.5), data_type="VECTOR",
+                             factor=unzipped, input_a=branches[2].std_out,
+                             input_b=branches[5].std_out, node_height=GRID,
+                             name="Unzip", label="Unzip")
+
+        # the second strand is pushed a whole separation along the spoke, then
+        # both are pulled back half of it, so the axis of the molecule stays on
+        # the track instead of drifting to one side of it
+        push = SetPosition(tree, location=(30.5, 0.0),
+                           geometry=capture_spline.geometry_out,
+                           selection=duplicate.duplicate_index,
+                           offset=separation.std_out, node_height=GRID,
+                           name="PushSecondStrand")
+        recenter_offset = VectorMath(tree, location=(30.5, -4.5),
+                                     operation="SCALE",
+                                     inputs0=separation.std_out,
+                                     float_input=-0.5, node_height=GRID,
+                                     name="HalfSeparation")
+        recenter = SetPosition(tree, location=(32.0, 0.0),
+                               geometry=push.geometry_out,
+                               offset=recenter_offset.std_out,
+                               node_height=GRID, name="RecenterAxis")
+
+        frame = Frame(tree, location=(18.0, 0.5), label="Helix",
+                      node_height=GRID)
+        frame.add([tangent, unit_tangent, capture_tangent, pair_index,
+                   capture_pair, duplicate, capture_spline, reference,
+                   unit_reference, separation, push,
+                   recenter_offset, recenter] + branches)
+        return {
+            "geometry": recenter.geometry_out,
+            "Tangent": capture_tangent["Tangent"],
+            "Unzipped": unzipped,
+            "PairIndex": capture_pair["PairIndex"],
+            "SplineIndex": capture_spline["SplineIndex"],
+        }
+
+    # ------------------------------------------------------------------
+    def _create_strand_shift_frame(self, tree, control, helix):
+        """``Strand Shift``: open the grooves, and later peel the two apart.
+
+        Strand 0 slides one way along the tangent, strand 1 the other. Two
+        strands exactly opposite each other would leave two identical grooves;
+        sliding them apart makes one wide and one narrow, which is what the eye
+        reads as DNA.
+
+        ``PeelHeight`` then lifts strand 1 in world z. It is deliberately a
+        world direction rather than the curve normal: which strand is the upper
+        one changes from turn to turn while the helix is wound, so there is no
+        "upper strand" to lift until the helix has unwound.
+
+        The lift is gated, and has to be. It is 26 units, which is off the top
+        of the frame; applied to the whole of strand 1 it would tear the part
+        of the molecule that is still a double helix in half. Multiplied by the
+        gate it lifts only what the fork has already let go of, so the second
+        strand climbs out of the frame *from* the fork - which is the picture
+        the shot is after in the first place.
+
+        :return: the geometry socket of the finished pair of strands.
+        """
+        backward = MathNode(tree, location=(35.5, -3.0), operation="MULTIPLY",
+                            inputs0=control["StrandShift"].std_out,
+                            inputs1=-1.0, node_height=GRID,
+                            name="BackwardShift")
+        shift_first = VectorMath(tree, location=(37.0, -2.0),
+                                 operation="SCALE", inputs0=helix["Tangent"],
+                                 node_height=GRID, name="ShiftFirstStrand")
+        tree.links.new(backward.std_out, shift_first.node.inputs["Scale"])
+        first = BooleanMath(tree, location=(37.0, -3.5), operation="NOT",
+                            inputs0=helix["SplineIndex"], node_height=GRID,
+                            name="IsFirstStrand")
+        move_first = SetPosition(tree, location=(38.5, 0.0),
+                                 geometry=helix["geometry"],
+                                 selection=first.std_out,
+                                 offset=shift_first.std_out, node_height=GRID,
+                                 name="MoveFirstStrand")
+
+        shift_second = VectorMath(tree, location=(37.0, -1.0),
+                                  operation="SCALE", inputs0=helix["Tangent"],
+                                  node_height=GRID, name="ShiftSecondStrand")
+        tree.links.new(control["StrandShift"].std_out,
+                       shift_second.node.inputs["Scale"])
+        move_second = SetPosition(tree, location=(40.0, 0.0),
+                                  geometry=move_first.geometry_out,
+                                  selection=helix["SplineIndex"],
+                                  offset=shift_second.std_out,
+                                  node_height=GRID, name="MoveSecondStrand")
+
+        peel_where_open = MathNode(tree, location=(37.0, -4.5),
+                                   operation="MULTIPLY",
+                                   inputs0=control["PeelHeight"].std_out,
+                                   inputs1=helix["Unzipped"], node_height=GRID,
+                                   name="PeelWhereOpen")
+        lift = CombineXYZ(tree, location=(38.5, -4.5), node_height=GRID,
+                          z=peel_where_open.std_out, name="Lift")
+        peel = SetPosition(tree, location=(41.5, 0.0),
+                           geometry=move_second.geometry_out,
+                           selection=helix["SplineIndex"],
+                           offset=lift.std_out, node_height=GRID,
+                           name="PeelSecondStrand")
+
+        frame = Frame(tree, location=(35.0, 0.5), label="Strand Shift",
+                      node_height=GRID)
+        frame.add([backward, shift_first, first, move_first, shift_second,
+                   move_second, peel_where_open, lift, peel])
+        return peel.geometry_out
+
+    # ------------------------------------------------------------------
+    def _create_base_pair_coloring_frame(self, tree, control, helix, strands):
+        """``Base Pair Coloring``: which of the four bases each point carries.
+
+        ``BaseType = (PairIndex + SplineIndex) % 2 + 2 * random(PairIndex)``.
+
+        The parity term is what makes a pair complementary: the two points of
+        one pair differ in ``SplineIndex`` and therefore always land on
+        different parities. The random bit is seeded by ``PairIndex`` alone, so
+        both points of a pair draw the *same* bit and the pair is one of
+        A-T / T-A / G-C / C-G rather than an arbitrary combination.
+
+        The xml also built an RGBA colour here and stored it as ``C``. That is
+        replaced by the material switches in the for-each zone - see the class
+        docstring - so only the integer survives.
+
+        :return: the geometry socket carrying the ``BaseType`` attribute.
+        """
+        purine = RandomValue(tree, location=(43.5, -2.0), data_type="BOOLEAN",
+                             probability=0.5, seed=self.seed, node_height=GRID,
+                             name="PurineOrPyrimidine")
+        tree.links.new(helix["PairIndex"], purine.node.inputs["ID"])
+        purine.node.inputs["Seed"].default_value = self.seed
+
+        parity_sum = MathNode(tree, location=(43.5, -3.5), operation="ADD",
+                              inputs0=helix["PairIndex"],
+                              inputs1=helix["SplineIndex"], node_height=GRID,
+                              name="PairPlusStrand")
+        parity = IntegerMath(tree, location=(45.0, -3.5), operation="MODULO",
+                             inputs0=parity_sum.std_out, inputs1=2,
+                             node_height=GRID, name="Parity")
+        upper = MathNode(tree, location=(45.0, -2.0), operation="MULTIPLY",
+                         inputs0=purine.std_out, inputs1=2.0,
+                         node_height=GRID, name="HighBit")
+        base_type = MathNode(tree, location=(46.5, -3.0), operation="ADD",
+                             inputs0=parity.std_out, inputs1=upper.std_out,
+                             node_height=GRID, name="BaseType")
+        store = StoredNamedAttribute(tree, location=(48.0, 0.0),
+                                     data_type="INT", domain="POINT",
+                                     name="BaseType", value=base_type.std_out,
+                                     node_height=GRID)
+        tree.links.new(strands, store.geometry_in)
+        store.node.label = "BaseType"
+
+        frame = Frame(tree, location=(43.0, 0.5), label="Base Pair Coloring",
+                      node_height=GRID)
+        frame.add([purine, parity_sum, parity, upper, base_type, store])
+        return store.geometry_out
+
+    # ------------------------------------------------------------------
+    def _create_bases_and_pairing_frame(self, tree, control, helix, strands,
+                                        colored):
+        """``Bases And Pairing``: one base per point, aimed at its partner.
+
+        A base is a short chain of 2..5 atoms - spheres on a mesh line, with
+        the line itself swept to a tube for the bonds. How many atoms is what
+        distinguishes the four ``BaseType`` values on screen, so a long base
+        always faces a short one across the helix.
+
+        The aim comes from sampling the position of the partner point.
+        ``Duplicate Elements`` laid the second strand straight after the first,
+        so the partner of point *i* is point *i + pairs* modulo *2 * pairs*,
+        and the vector between them is what the base is rotated onto.
+
+        The size of a base is gated along with everything else: bases that
+        still reach across to a partner keep the size they were built with, and
+        only the ones past the fork shrink to the stubs an unpaired strand is
+        drawn with. It goes into the zone as an input item rather than being
+        read inside it, because a field has to be evaluated where its geometry
+        is - out here, once per element.
+
+        :return: the geometry socket of all the bases.
+        """
+        pairs = Reroute(tree, location=(50.0, -6.0), node_height=GRID,
+                        ins=control["Pairs"].std_out, name="PairsIn")
+
+        index = Index(tree, location=(50.0, -4.5), node_height=GRID,
+                      name="BaseIndex")
+        stride = MathNode(tree, location=(51.0, -5.5), operation="ADD",
+                          inputs0=pairs.std_out, inputs1=0.0,
+                          node_height=GRID, name="Stride")
+        partner_raw = MathNode(tree, location=(52.5, -4.5), operation="ADD",
+                               inputs0=index.std_out, inputs1=stride.std_out,
+                               node_height=GRID, name="PartnerRaw")
+        total = MathNode(tree, location=(51.0, -6.5), operation="MULTIPLY",
+                         inputs0=pairs.std_out, inputs1=2.0, node_height=GRID,
+                         name="TotalPoints")
+        partner = IntegerMath(tree, location=(54.0, -5.0), operation="MODULO",
+                              inputs0=partner_raw.std_out,
+                              inputs1=total.std_out, node_height=GRID,
+                              name="PartnerIndex")
+
+        here = Position(tree, location=(52.5, -3.0), node_height=GRID,
+                        name="BasePosition")
+        there = SampleIndex(tree, location=(55.5, -3.0),
+                            data_type="FLOAT_VECTOR", domain="POINT",
+                            geometry=strands, value=here.std_out,
+                            index=partner.std_out, node_height=GRID,
+                            name="PartnerPosition")
+        across = VectorMath(tree, location=(57.0, -3.0), operation="SUBTRACT",
+                            inputs0=there.std_out, inputs1=here.std_out,
+                            node_height=GRID, name="AcrossTheHelix")
+        aim = AlignRotationToVector(tree, location=(58.5, -3.0), axis="Z",
+                                    pivot_axis="AUTO", vector=across.std_out,
+                                    node_height=GRID, name="AimAtPartner")
+
+        base_type = NamedAttribute(tree, location=(58.5, -1.0),
+                                   data_type="INT", name="BaseType",
+                                   node_height=GRID)
+        base_type.node.label = "BaseType"
+
+        size = MixNode(tree, location=(58.5, -6.5), data_type="FLOAT",
+                       factor=helix["Unzipped"],
+                       input_a=control["DefaultBaseSize"].std_out,
+                       input_b=control["BaseSize"].std_out, node_height=GRID,
+                       name="SizeHere", label="SizeHere")
+
+        # one iteration per point of the two strands
+        zone = ForEachZone(tree, location=(60.0, 0.0), domain="POINT",
+                           node_width=12.5, geometry=colored,
+                           node_height=GRID, name="ForEachBase")
+        zone.add_socket("INT", "BaseType", value=base_type.std_out,
+                        for_input=True)
+        zone.add_socket("ROTATION", "Rotation", value=aim.std_out,
+                        for_input=True)
+        zone.add_socket("FLOAT", "BaseSize", value=size.std_out,
+                        for_input=True)
+        zone.foreach_output.location = (72.5 * GRID, 0)
+        inside_type = zone.foreach_input.outputs["BaseType"]
+
+        atoms = IndexSwitch(tree, location=(61.5, -2.0), data_type="INT",
+                            index=inside_type, node_height=GRID,
+                            name="AtomsPerBase")
+        for _ in range(len(self.BASE_ATOMS) - 2):
+            atoms.new_item()
+        for slot, count in enumerate(self.BASE_ATOMS):
+            atoms.node.inputs[slot + 1].default_value = count
+
+        chain = MeshLine(tree, location=(63.0, -2.0), mode="END_POINTS",
+                         count_mode="TOTAL", count=atoms.std_out,
+                         start_location=[0.0, 0.0, 0.0], node_height=GRID,
+                         name="BaseChain")
+        chain.node.inputs["Offset"].default_value = [0.0, 0.0, 1.0]
+        chain_out = Reroute(tree, location=(64.0, -2.0), node_height=GRID,
+                            ins=chain.geometry_out, name="ChainOut")
+
+        atom = IcoSphere(tree, location=(63.0, -0.5),
+                         radius=self.BASE_ATOM_RADIUS, subdivisions=2,
+                         node_height=GRID, name="Atom")
+        atom_instances = InstanceOnPoints(tree, location=(65.0, -0.5),
+                                          points=chain_out.geometry_out,
+                                          instance=atom.geometry_out,
+                                          node_height=GRID, name="Atoms")
+
+        bonds = MeshToCurve(tree, location=(65.0, -2.0),
+                            mesh=chain_out.geometry_out, node_height=GRID,
+                            name="Bonds")
+        bond_profile = CurveCircle(tree, location=(63.0, -3.5), mode="RADIUS",
+                                   resolution=32,
+                                   radius=self.BASE_BOND_RADIUS,
+                                   node_height=GRID, name="BondProfile")
+        bond_mesh = CurveToMesh(tree, location=(66.5, -2.0),
+                                curve=bonds.geometry_out,
+                                profile_curve=bond_profile.geometry_out,
+                                fill_caps=False, node_height=GRID,
+                                name="BondMesh")
+
+        base = JoinGeometry(tree, location=(68.0, -1.0), node_height=GRID,
+                            name="JoinBase")
+        for piece in (atom_instances.geometry_out, bond_mesh.geometry_out):
+            tree.links.new(piece, base.geometry_in)
+
+        placed = InstanceOnPoints(tree, location=(69.5, 0.0),
+                                  points=zone.element,
+                                  instance=base.geometry_out,
+                                  rotation=zone.foreach_input.outputs["Rotation"],
+                                  node_height=GRID, name="PlaceBase")
+        tree.links.new(zone.foreach_input.outputs["BaseSize"],
+                       placed.node.inputs["Scale"])
+
+        material = self._create_base_material_switches(tree, control,
+                                                       inside_type)
+        paint = SetMaterial(tree, location=(71.0, 0.0),
+                            geometry=placed.geometry_out, material=material,
+                            node_height=GRID, name="PaintBase")
+        tree.links.new(paint.geometry_out,
+                       zone.foreach_output.inputs["Geometry"])
+
+        frame = Frame(tree, location=(49.5, 0.5), label="Bases And Pairing",
+                      node_height=GRID)
+        frame.add([pairs, index, stride, partner_raw, total, partner, here,
+                   there, across, aim, base_type, size, zone, atoms, chain,
+                   chain_out, atom, atom_instances, bonds, bond_profile,
+                   bond_mesh, base, placed, paint] + self._switch_nodes)
+        return zone.geometry_out
+
+    # ------------------------------------------------------------------
+    def _create_base_material_switches(self, tree, control, base_type):
+        """The three switches that were RGBA in the xml, now materials.
+
+        ``BaseType`` packs the two bits the xml switched on: its low bit is the
+        pair parity, its high bit the purine/pyrimidine draw. Unpacking them
+        here rather than carrying two more sockets into the zone keeps the zone
+        interface to the two things it really needs.
+
+        :return: the material socket of the base.
+        """
+        # only the four base colours are taken out of the palette here - a
+        # Separate Bundle names what it wants, so the two backbone materials
+        # travel past this frame untouched
+        colors = SeparateBundle(
+            tree, location=(59.5, -5.0), bundle=control["Palette"].std_out,
+            items=[("Base%d" % i, "MATERIAL") for i in range(4)],
+            node_height=GRID, name="BaseColors")
+
+        parity = IntegerMath(tree, location=(61.5, -4.5), operation="MODULO",
+                             inputs0=base_type, inputs1=2, node_height=GRID,
+                             name="BaseParity")
+        high = IntegerMath(tree, location=(61.5, -5.5), operation="DIVIDE",
+                           inputs0=base_type, inputs1=2, node_height=GRID,
+                           name="BaseHighBit")
+
+        even = Switch(tree, location=(63.5, -4.5), input_type="MATERIAL",
+                      switch=high.std_out, false=colors.out("Base0"),
+                      true=colors.out("Base2"), node_height=GRID,
+                      name="EvenPairMaterial")
+        odd = Switch(tree, location=(63.5, -5.5), input_type="MATERIAL",
+                     switch=high.std_out, false=colors.out("Base1"),
+                     true=colors.out("Base3"), node_height=GRID,
+                     name="OddPairMaterial")
+        base = Switch(tree, location=(65.5, -5.0), input_type="MATERIAL",
+                      switch=parity.std_out, false=even.std_out,
+                      true=odd.std_out, node_height=GRID,
+                      name="BaseMaterial")
+
+        self._switch_nodes = [colors, parity, high, even, odd, base]
+        return base.std_out
+
+    # ------------------------------------------------------------------
+    def _create_strand_geometry_frame(self, tree, control, strands):
+        """``Strand Geometry``: the two backbones as solid tubes.
+
+        The curve is swept to a tube for the sugar-phosphate backbone, and a
+        sphere is dropped on every point so the backbone reads as a chain of
+        atoms rather than a smooth pipe.
+
+        :return: the geometry socket of both backbones.
+        """
+        curve = Reroute(tree, location=(74.0, -1.0), node_height=GRID,
+                        ins=strands, name="StrandsIn")
+        colors = SeparateBundle(
+            tree, location=(75.5, -1.0), bundle=control["Palette"].std_out,
+            items=[("Strand", "MATERIAL"), ("Molecule", "MATERIAL")],
+            node_height=GRID, name="BackboneColors")
+
+        profile = CurveCircle(tree, location=(74.0, -2.5), mode="RADIUS",
+                              resolution=32, radius=self.BACKBONE_RADIUS,
+                              node_height=GRID, name="BackboneProfile")
+        tube = CurveToMesh(tree, location=(75.5, -2.5),
+                           curve=curve.geometry_out,
+                           profile_curve=profile.geometry_out,
+                           fill_caps=False, node_height=GRID,
+                           name="Backbone")
+        tube_material = SetMaterial(tree, location=(77.0, -2.5),
+                                    geometry=tube.geometry_out,
+                                    material=colors.out("Strand"),
+                                    node_height=GRID, name="PaintBackbone")
+
+        atom = UVSphere(tree, location=(74.0, 0.5),
+                        radius=self.BACKBONE_SPHERE_RADIUS, segments=32,
+                        rings=16, node_height=GRID, name="BackboneAtom")
+        atoms = InstanceOnPoints(tree, location=(75.5, 0.5),
+                                 points=curve.geometry_out,
+                                 instance=atom.geometry_out, node_height=GRID,
+                                 name="BackboneAtoms")
+        atom_material = SetMaterial(tree, location=(77.0, 0.5),
+                                    geometry=atoms.geometry_out,
+                                    material=colors.out("Molecule"),
+                                    node_height=GRID, name="PaintAtoms")
+
+        join = JoinGeometry(tree, location=(78.5, -1.0), node_height=GRID,
+                            name="JoinBackbone")
+        for piece in (tube_material.geometry_out, atom_material.geometry_out):
+            tree.links.new(piece, join.geometry_in)
+        smooth = SetShadeSmooth(tree, location=(80.0, -1.0),
+                                geometry=join.geometry_out, node_height=GRID,
+                                name="SmoothBackbone")
+
+        frame = Frame(tree, location=(73.5, 0.5), label="Strand Geometry",
+                      node_height=GRID)
+        frame.add([curve, colors, profile, tube, tube_material, atom, atoms,
+                   atom_material, join, smooth])
+        return smooth.geometry_out
+
+
+class RNAGridModifier(GeometryNodesModifier):
+    """The 256 bytes as 256 little RNA strands, growing onto the screen column
+    by column.
+
+    A 16 x 16 grid of cells. Each cell holds one single strand of four bases -
+    :class:`DNAModifier`'s molecule cut down to one backbone and four of its
+    bases - and, right next to it, the number that strand spells out, written
+    once in decimal and once in base 4.
+
+    That is the whole point of the picture: a base is a digit. Four bases with
+    four colours are a four-digit number in base 4, and four base-4 digits are
+    exactly the 256 values of a byte, which is what a cell of a BFF tape holds.
+    The grid is that dictionary, all 256 entries of it, in one shot.
+
+    Three of the four colours are :class:`DNAModifier`'s, unchanged, so a
+    strand here reads as a piece of the molecule the video opened with. The
+    fourth is not: DNA's fourth base is thymine and RNA's is uracil, so the
+    colour of DNA's fourth base is the one that is replaced. The atom counts
+    :attr:`BASE_ATOMS` come over from :class:`DNAModifier` untouched - the two
+    purines and the two pyrimidines are drawn with the same number of atoms
+    here as there - while the radii are opened up (see the constants below): a
+    cell of this grid is a diagram of a number, seen 256 at a time, not a
+    molecule seen from a metre away.
+
+    Digit order is the same in the strand and in the text: the top base of a
+    strand is the most significant digit, the leftmost character of the base-4
+    number, and the bottom base is the least significant. The four characters
+    of the base-4 number are painted in their own base's colour, so that
+    reading the strand and reading the number are visibly the same act.
+
+    The layout is column-major - ``number = 16 * column + row`` - which makes
+    each column one high nibble: a whole column shares the first *two* base-4
+    digits, and only the bottom two bases change as the eye runs down it.
+
+    The grid grows on rather than appearing: a column's cells scale up from
+    nothing over ``growth_frames``, and each column starts ``speed_up`` times
+    as long after its predecessor as the one before did. With the default
+    ``speed_up`` below 1 the gaps shrink geometrically, so the first columns
+    can be read one at a time and the last ones snap in almost together. Cells
+    whose column has not started yet are not built at all (the for-each zone's
+    selection), rather than built and scaled to zero.
+
+    Everything is built in the x-z plane, facing a camera that looks along +y,
+    like the rest of the flat scenes in this file.
+
+    :param column_spacing: distance between the columns of the grid.
+    :param row_spacing: distance between the rows.
+    :param base_spacing: distance between two bases along one strand.
+    :param helix_radius: how far the backbone is offset from the axis of the
+        strand. This is what little is left of DNA's helix: the four backbone
+        points sit on a circle of this radius, at ``base_twist`` to each other.
+    :param base_twist: angle between one base and the next, in radians. Zero
+        makes a flat comb, larger values wind the strand up.
+    :param base_phase: the direction the middle of the fan of bases points, in
+        radians, measured in the x-y plane. The default ``pi`` aims the bases
+        left, away from the two numbers on the right of the cell.
+    :param bond_length: distance between two atoms of one base.
+    :param glyph_size: height of the characters of the two numbers.
+    :param digit_spacing: distance between two digits of the base-4 number.
+    :param text_x: x of the middle of both numbers, measured from the axis of
+        the strand.
+    :param line_gap: vertical distance between the decimal and the base-4 line.
+    :param start_frame: frame at which the first column starts to grow.
+    :param column_delay: frames between the first column and the second.
+    :param speed_up: what that delay is multiplied by for every further column.
+        Below 1 the grid gets faster as it fills, which is what is wanted; 1
+        gives a constant rhythm.
+    :param growth_frames: how long one column takes to grow to full size.
+    :param base_colors: the four base materials, in digit order 0..3. The
+        default is :attr:`BASE_COLORS`.
+    :param strand_color: material of the swept backbone.
+    :param molecule_color: material of the spheres sitting on the backbone.
+    :param text_color: material of the decimal number.
+    """
+
+    COLUMNS = 16
+    ROWS = 16
+    #: bases on one strand, which is also the number of digits a byte has in
+    #: base 4 - the two are the same thing here
+    BASES = 4
+    RADIX = 4
+    #: position ``d`` of this string is the character of digit ``d``
+    DIGITS = "0123"
+
+    #: atom counts and base names in digit order: two purines, then the two
+    #: pyrimidines, exactly as :class:`DNAModifier` draws them
+    BASE_ATOMS = DNAModifier.BASE_ATOMS
+    BASE_NAMES = ("A", "G", "C", "U")
+
+    #: three of DNA's four base colours, and one that is not: DNA's fourth base
+    #: is thymine, RNA's is uracil, so the fourth colour has to go
+    BASE_COLORS = DNAModifier.BASE_COLORS[:3] + ("example",)
+
+    #: the backbone is DNA's, to the millimetre
+    BACKBONE_RADIUS = DNAModifier.BACKBONE_RADIUS
+    BACKBONE_SPHERE_RADIUS = DNAModifier.BACKBONE_SPHERE_RADIUS
+    #: the bases are not: DNA draws them at ``base_size`` 0.4, which leaves an
+    #: atom of radius 0.04 and a bond of 0.024. At the size a cell of a 16 x 16
+    #: grid gets on screen that is a thread, and the colour it carries is what
+    #: the whole picture is about, so a base here is drawn about twice as fat.
+    BASE_ATOM_RADIUS = 0.075
+    BASE_BOND_RADIUS = 0.045
+
+    def __init__(self, column_spacing=3.1, row_spacing=1.75,
+                 base_spacing=0.42, helix_radius=0.12, base_twist=0.45,
+                 base_phase=pi, bond_length=1,
+                 glyph_size=0.5, digit_spacing=0.26, text_x=0.85,
+                 line_gap=0.62,
+                 start_frame=1, column_delay=14.0, speed_up=0.88,
+                 growth_frames=18.0,
+                 base_colors=None, strand_color="gray_4",
+                 molecule_color="gray_7", text_color="text",
+                 name="RNAGrid", **kwargs):
+        self.column_spacing = column_spacing
+        self.row_spacing = row_spacing
+        self.base_spacing = base_spacing
+        self.helix_radius = helix_radius
+        self.base_twist = base_twist
+        self.base_phase = base_phase
+        self.bond_length = bond_length
+        self.glyph_size = glyph_size
+        self.digit_spacing = digit_spacing
+        self.text_x = text_x
+        self.line_gap = line_gap
+        self.start_frame = start_frame
+        self.column_delay = column_delay
+        self.speed_up = speed_up
+        self.growth_frames = growth_frames
+        self.base_colors = tuple(base_colors or self.BASE_COLORS)
+        self.strand_color = strand_color
+        self.molecule_color = molecule_color
+        self.text_color = text_color
+        self.kwargs = kwargs
+        super().__init__(name=name, automatic_layout=False)
+
+    # ------------------------------------------------------------------
+    # what the scene needs to know about the timing, without taking the
+    # formula in _create_cell_layout_frame apart
+    # ------------------------------------------------------------------
+    def column_start_frame(self, column):
+        """The frame at which ``column`` starts to grow.
+
+        ``start_frame + column_delay * (1 + q + ... + q^(column-1))`` with
+        ``q = speed_up`` - the geometric sum the graph computes in one line of
+        RPN, evaluated here in python so that a scene can hang a camera move or
+        a caption off the same number.
+        """
+        q = self.speed_up
+        if abs(q - 1.0) < 1e-9:
+            gaps = column
+        else:
+            gaps = (1.0 - q ** column) / (1.0 - q)
+        return self.start_frame + self.column_delay * gaps
+
+    def reveal_end_frame(self):
+        """The frame at which the last cell of the grid is at full size."""
+        return self.column_start_frame(self.COLUMNS - 1) + self.growth_frames
+
+    # ------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._create_control_frame(tree)
+        cells = self._create_cell_layout_frame(tree)
+        grid = self._create_cell_frame(tree, control, cells)
+
+        tree.links.new(grid, self.group_outputs.inputs["Geometry"])
+        self.group_outputs.location = (13 * 200, 0)
+
+    # ------------------------------------------------------------------
+    def _create_control_frame(self, tree):
+        """``Palette``: the seven materials the grid is drawn in.
+
+        Unlike :class:`DNAModifier` there is no column of Input Value nodes
+        beside them. Nothing here is a knob that survives to render time: the
+        grid is 256 cells of four bases whatever happens, and every distance in
+        it is folded into the RPN of a Function node at build time.
+
+        :return: ``{name: node}``, keyed by the label the node carries in the
+            editor.
+        """
+        x = -21.0
+        palette = [("Base%d" % digit, color)
+                   for digit, color in enumerate(self.base_colors)]
+        palette += [("Strand", self.strand_color),
+                    ("Molecule", self.molecule_color),
+                    ("Text", self.text_color)]
+
+        control = {}
+        for row, (node_name, color) in enumerate(palette):
+            # **self.kwargs carries things like `emission=0.6` through to every
+            # material, as in the tape modifiers above - these scenes are lit
+            # mostly by emission on a black background
+            control[node_name] = InputMaterial(tree, location=(x, -0.4 * row),
+                                               material=color, name=node_name,
+                                               hide=True, **self.kwargs)
+            self.materials.append(control[node_name].node.material)
+
+        frame = Frame(tree, location=(x - 0.4, 0.6), label="Palette")
+        frame.add(list(control.values()))
+        return control
+
+    # ------------------------------------------------------------------
+    def _create_cell_layout_frame(self, tree):
+        """``CellLayout``: where every cell is, how big it is, and whether it
+        is there at all.
+
+        One point per cell, and one Function node that turns the index of that
+        point into the three things the for-each zone downstream needs:
+
+        ``Location``
+            ``column = index // ROWS`` across, ``row = index % ROWS`` down.
+            Column-major, so that a column of the grid is 16 consecutive
+            numbers and the whole column shares its top two base-4 digits.
+        ``Scale``
+            zero until the cell's column starts, then smoothstep to one over
+            ``growth_frames``. This is what "grows onto the screen" means: the
+            cell is built at full size and scaled about its own origin.
+        ``Visible``
+            true once the column has started. It becomes the selection of the
+            zone, so a cell that is not on screen yet is not built - 256 cells
+            of four bases and six little glyphs is enough geometry that it is
+            worth not building the ones nobody can see.
+
+        The reveal times are a geometric series: column *c* starts at
+        ``start_frame + column_delay * (1 - q^c)/(1 - q)``, ``q = speed_up``.
+        Successive gaps are ``column_delay * q^c``, so with ``q < 1`` the grid
+        accelerates as it fills. :meth:`column_start_frame` is the same formula
+        in python.
+
+        :return: ``{name: socket}`` - the point cloud, the index field, and the
+            three outputs.
+        """
+        x = -19.0
+        count = self.COLUMNS * self.ROWS
+
+        points = Points(tree, location=(x, 0.0), count=count, name="Cells")
+        index = Index(tree, location=(x, -1.2), name="CellIndex", hide=True)
+        # no simulation zone anywhere here: what a cell looks like depends only
+        # on the current frame, never on the previous one, so the frame number
+        # is read straight off the scene - the same choice SoupWatcherModifier
+        # makes above
+        now = SceneTime(tree, location=(x, -1.8), std_out="Frame", name="Now",
+                        hide=True)
+
+        q = float(self.speed_up)
+        delay = repr(float(self.column_delay))
+        first = repr(float(self.start_frame))
+        if abs(q - 1.0) < 1e-9:
+            # a constant rhythm: c gaps before column c
+            gaps = "col"
+        elif q < 1.0:
+            # (1 - q^c)/(1 - q), written so that both literals stay positive
+            gaps = "1,%s,col,**,-,%s,/" % (repr(q), repr(1.0 - q))
+        else:
+            # the same sum for a grid that slows down instead
+            gaps = "%s,col,**,1,-,%s,/" % (repr(q), repr(q - 1.0))
+        start = "%s,%s,*,%s,+" % (gaps, delay, first)
+
+        layout = make_function(
+            tree, name="CellLayout",
+            aux_functions={
+                "col": "index,%d,/,floor" % self.ROWS,
+                "row": "index,%d,%%" % self.ROWS,
+                "start": start,
+                "grow": "frame,start,-,%s,/,0,max,1,min"
+                        % repr(float(self.growth_frames)),
+                # 3g^2 - 2g^3, so a cell arrives and settles instead of
+                # stopping dead at full size
+                "smooth": "grow,grow,*,3,2,grow,*,-,*",
+            },
+            functions={
+                "Location": [
+                    "col,%s,-,%s,*" % (repr((self.COLUMNS - 1) / 2),
+                                       repr(self.column_spacing)),
+                    "0",
+                    "%s,row,-,%s,*" % (repr((self.ROWS - 1) / 2),
+                                       repr(self.row_spacing)),
+                ],
+                "Scale": ["smooth", "smooth", "smooth"],
+                "Visible": "frame,start,>",
+            },
+            inputs=["index", "frame"],
+            outputs=["Location", "Scale", "Visible"],
+            vectors=["Location", "Scale"], booleans=["Visible"],
+            scalars=["index", "frame", "col", "row", "start", "grow", "smooth"],
+            hide=True, location=(x + 1.6, -1.2))
+        tree.links.new(index.std_out, layout.inputs["index"])
+        tree.links.new(now.std_out, layout.inputs["frame"])
+
+        frame = Frame(tree, location=(x - 0.4, 0.6), label="CellLayout")
+        frame.add([points, index, now, layout])
+        return {
+            "geometry": points.geometry_out,
+            "index": index.std_out,
+            "Location": layout.outputs["Location"],
+            "Scale": layout.outputs["Scale"],
+            "Visible": layout.outputs["Visible"],
+        }
+
+    # ------------------------------------------------------------------
+    def _create_cell_frame(self, tree, control, cells):
+        """``Cell``: one iteration of the for-each zone is one cell.
+
+        Everything inside is built in the cell's own coordinates, with the axis
+        of the strand at the origin, and the last two nodes of the zone scale
+        it by ``Scale`` and move it to ``Location``. Transform Geometry scales
+        about the origin before it translates, so a cell grows out of the point
+        it will end up on rather than out of the middle of the grid.
+
+        The zone carries the cell's number in as ``Number``. Inside, that is a
+        single value rather than a field, which is what makes the numbers
+        possible at all: ``Value to String`` and ``String to Curves`` have no
+        field inputs, so a number can only be written by a graph that handles
+        one cell at a time.
+
+        :return: the geometry socket of the whole grid.
+        """
+        zone = ForEachZone(tree, location=(-16, 0), domain="POINT",
+                           node_width=25, geometry=cells["geometry"],
+                           selection=cells["Visible"], name="Cell")
+        zone.add_socket("INT", "Number", value=cells["index"], for_input=True)
+        zone.add_socket("VECTOR", "Location", value=cells["Location"],
+                        for_input=True)
+        zone.add_socket("VECTOR", "Scale", value=cells["Scale"],
+                        for_input=True)
+        number = zone.foreach_input.outputs["Number"]
+
+        aim, aim_nodes = self._create_base_directions(tree)
+        strand, backbone, strand_nodes = self._create_strand(tree, control, aim)
+        bases, base_nodes = self._create_bases(tree, control, backbone, aim,
+                                               number)
+        labels, label_nodes = self._create_labels(tree, control, number)
+
+        join = JoinGeometry(tree, location=(6.5, 0.0), name="JoinCell")
+        for piece in [strand] + bases + labels:
+            tree.links.new(piece, join.geometry_in)
+        place = TransformGeometry(tree, location=(8.0, 0.0),
+                                  geometry=join.geometry_out,
+                                  translation=zone.foreach_input.outputs["Location"],
+                                  scale=zone.foreach_input.outputs["Scale"],
+                                  name="PlaceCell")
+        tree.links.new(place.geometry_out, zone.foreach_output.inputs["Geometry"])
+
+        frame = Frame(tree, location=(-16.4, 0.6), label="Cell")
+        frame.add([zone, join, place] + aim_nodes + strand_nodes + base_nodes
+                  + label_nodes)
+        return zone.geometry_out
+
+    # ------------------------------------------------------------------
+    def _create_base_directions(self, tree):
+        """Which way base ``slot`` points, and where its backbone atom sits.
+
+        ``theta = base_phase + (slot - (BASES-1)/2) * base_twist`` - the four
+        bases fanned symmetrically about ``base_phase`` - and from it a unit
+        vector in the x-y plane for the base to be aimed along, and the same
+        vector at ``helix_radius`` for the backbone point to be pushed to.
+
+        This is where :class:`DNAModifier`'s helix ends up. There it is built
+        the honest way, by tilting the curve so that its own normal turns; a
+        strand of four points does not need a curve normal to be persuaded to
+        wind, and computing the direction outright means the bases can be aimed
+        at it without a Capture Attribute to carry it across the topology
+        change.
+
+        :return: ``(node, nodes)`` - the Function node, with outputs ``offset``
+            and ``direction``, and the list to frame.
+        """
+        half = repr((self.BASES - 1) / 2)
+        radius = repr(self.helix_radius)
+        aim = make_function(
+            tree, name="BaseDirection",
+            aux_functions={
+                "theta": "slot,%s,-,%s,*,%s,+" % (half, repr(self.base_twist),
+                                                  repr(self.base_phase)),
+            },
+            functions={
+                "direction": ["theta,cos", "theta,sin", "0"],
+                "offset": ["theta,cos,%s,*" % radius,
+                           "theta,sin,%s,*" % radius, "0"],
+            },
+            inputs=["slot"], outputs=["direction", "offset"],
+            vectors=["direction", "offset"], scalars=["slot", "theta"],
+            hide=True, location=(-13.5, 3.4))
+        slot = Index(tree, location=(-14.6, 3.4), name="BaseSlot", hide=True)
+        tree.links.new(slot.std_out, aim.inputs["slot"])
+        return aim, [slot, aim]
+
+    # ------------------------------------------------------------------
+    def _create_strand(self, tree, control, aim):
+        """``Strand``: the backbone of one cell, swept to a tube.
+
+        A line of ``BASES`` points along +z, each pushed out to
+        ``helix_radius`` in the direction its base points, so the backbone
+        zigzags around the axis the way a real one winds. The line is a curve
+        all the way through - Set Position keeps whatever it is given - so it
+        can be swept with Curve to Mesh, and its points are also what the bases
+        and the backbone spheres are instanced on.
+
+        :return: ``(geometry, backbone, nodes)`` - the painted strand, the
+            curve whose points carry the four bases, and the list to frame.
+        """
+        span = (self.BASES - 1) * self.base_spacing
+        axis = CurveLine(tree, location=(-13.5, 2.2), mode="POINTS",
+                         start=Vector([0.0, 0.0, -0.5 * span]),
+                         end=Vector([0.0, 0.0, 0.5 * span]), name="StrandAxis")
+        points = ResampleCurve(tree, location=(-12.4, 2.2), mode="Count",
+                               curve=axis.geometry_out, count=self.BASES,
+                               name="OnePointPerBase")
+        backbone = SetPosition(tree, location=(-11.3, 2.2),
+                               geometry=points.geometry_out,
+                               offset=aim.outputs["offset"], name="Wind")
+
+        profile = CurveCircle(tree, location=(-11.3, 1.4), mode="RADIUS",
+                              resolution=12, radius=self.BACKBONE_RADIUS,
+                              name="BackboneProfile", hide=True)
+        tube = CurveToMesh(tree, location=(-10.2, 2.0),
+                           curve=backbone.geometry_out,
+                           profile_curve=profile.geometry_out, fill_caps=False,
+                           name="Backbone")
+        tube_material = SetMaterial(tree, location=(-9.1, 2.0),
+                                    geometry=tube.geometry_out,
+                                    material=control["Strand"].std_out,
+                                    name="PaintBackbone")
+
+        atom = UVSphere(tree, location=(-11.3, 3.0),
+                        radius=self.BACKBONE_SPHERE_RADIUS, segments=16,
+                        rings=8, name="BackboneAtom", hide=True)
+        atoms = InstanceOnPoints(tree, location=(-10.2, 3.0),
+                                 points=backbone.geometry_out,
+                                 instance=atom.geometry_out,
+                                 name="BackboneAtoms")
+        atom_material = SetMaterial(tree, location=(-9.1, 3.0),
+                                    geometry=atoms.geometry_out,
+                                    material=control["Molecule"].std_out,
+                                    name="PaintAtoms")
+
+        join = JoinGeometry(tree, location=(-8.0, 2.5), name="JoinStrand")
+        for piece in (tube_material.geometry_out, atom_material.geometry_out):
+            tree.links.new(piece, join.geometry_in)
+        smooth = SetShadeSmooth(tree, location=(-6.9, 2.5),
+                                geometry=join.geometry_out,
+                                name="SmoothStrand")
+
+        nodes = [axis, points, backbone, profile, tube, tube_material, atom,
+                 atoms, atom_material, join, smooth]
+        return smooth.geometry_out, backbone.geometry_out, nodes
+
+    # ------------------------------------------------------------------
+    def _create_bases(self, tree, control, backbone, aim, number):
+        """``Bases``: the four base molecules, one per backbone point.
+
+        The base of slot *j* is digit *j* of the number in base 4, counting
+        from the bottom of the strand: ``digit = (number // 4^j) % 4``. Four
+        of them, bottom to top, are the number's base-4 digits least
+        significant first, so the strand read from the top spells the number
+        the way it is written.
+
+        Which base a point gets cannot be an Index Switch, because a base is
+        geometry rather than a value: all four are built and each is instanced
+        with a *selection*, ``digit == d``. The four selections are disjoint by
+        construction, so every point gets exactly one base.
+
+        A base itself is :class:`DNAModifier`'s: ``BASE_ATOMS[d]`` spheres on a
+        chain, with the chain swept to a thin tube for the bonds, aimed away
+        from the backbone by aligning its +z with the direction the slot
+        points.
+
+        :return: ``(geometries, nodes)`` - one geometry socket per base type
+            and the list to frame.
+        """
+        selector = make_function(
+            tree, name="BaseSelector",
+            aux_functions={
+                "digit": "number,%d,slot,**,/,floor,%d,%%"
+                         % (self.RADIX, self.RADIX),
+            },
+            functions={"IsBase%d" % d: "digit,%d,=" % d
+                       for d in range(self.RADIX)},
+            inputs=["number", "slot"],
+            outputs=["IsBase%d" % d for d in range(self.RADIX)],
+            booleans=["IsBase%d" % d for d in range(self.RADIX)],
+            scalars=["number", "slot", "digit"],
+            hide=True, location=(-13.5, 0.8))
+        slot = Index(tree, location=(-14.6, 0.8), name="DigitSlot", hide=True)
+        tree.links.new(slot.std_out, selector.inputs["slot"])
+        tree.links.new(number, selector.inputs["number"])
+
+        # the base points away from the backbone: its chain is built along +z
+        # and Align Rotation to Vector turns that onto the slot's direction
+        rotation = AlignRotationToVector(tree, location=(-13.5, 0.0), axis="Z",
+                                         pivot_axis="AUTO",
+                                         vector=aim.outputs["direction"],
+                                         name="AimBase")
+
+        # one sphere and one bond profile for all four base types
+        atom = IcoSphere(tree, location=(-12.4, 0.0),
+                         radius=self.BASE_ATOM_RADIUS, subdivisions=2,
+                         name="BaseAtom", hide=True)
+        profile = CurveCircle(tree, location=(-12.4, -0.4), mode="RADIUS",
+                              resolution=8, radius=self.BASE_BOND_RADIUS,
+                              name="BondProfile", hide=True)
+
+        nodes = [slot, selector, rotation, atom, profile]
+        geometries = []
+        for d, atoms_per_base in enumerate(self.BASE_ATOMS):
+            y = -1.2 - 1.4 * d
+            name = self.BASE_NAMES[d]
+            chain = MeshLine(tree, location=(-12.4, y), mode="END_POINTS",
+                             count_mode="TOTAL", count=atoms_per_base,
+                             start_location=Vector([0.0, 0.0, 0.0]),
+                             end_location=Vector([0.0, 0.0, self.bond_length]),
+                             name="Chain" + name)
+            spheres = InstanceOnPoints(tree, location=(-11.3, y),
+                                       points=chain.geometry_out,
+                                       instance=atom.geometry_out,
+                                       name="Atoms" + name)
+            bonds = MeshToCurve(tree, location=(-11.3, y - 0.5),
+                                mesh=chain.geometry_out, name="Bonds" + name,
+                                hide=True)
+            bond_mesh = CurveToMesh(tree, location=(-10.2, y - 0.5),
+                                    curve=bonds.geometry_out,
+                                    profile_curve=profile.geometry_out,
+                                    fill_caps=False, name="BondMesh" + name)
+            base = JoinGeometry(tree, location=(-9.1, y - 0.2),
+                                name="JoinBase" + name)
+            for piece in (spheres.geometry_out, bond_mesh.geometry_out):
+                tree.links.new(piece, base.geometry_in)
+            painted = SetMaterial(tree, location=(-8.0, y - 0.2),
+                                  geometry=base.geometry_out,
+                                  material=control["Base%d" % d].std_out,
+                                  name="Paint" + name)
+            placed = InstanceOnPoints(tree, location=(-6.9, y - 0.2),
+                                      points=backbone,
+                                      selection=selector.outputs["IsBase%d" % d],
+                                      instance=painted.geometry_out,
+                                      rotation=rotation.std_out,
+                                      name="Place" + name)
+            nodes += [chain, spheres, bonds, bond_mesh, base, painted, placed]
+            geometries.append(placed.geometry_out)
+
+        return geometries, nodes
+
+    # ------------------------------------------------------------------
+    def _create_labels(self, tree, control, number):
+        """``Numbers``: the same byte written twice, next to its strand.
+
+        The decimal on the upper line, the four base-4 digits on the lower one,
+        and every one of those four characters painted in the colour of the
+        base that stands for it - so the row of four colours down the strand
+        and the row of four characters across the text are the same row, said
+        twice.
+
+        The digits are single values, not a field: inside the for-each zone the
+        cell's number is one number, so ``digit_k = (number // 4^(3-k)) % 4``
+        is too, and it can drive a Slice String into ``DIGITS`` and an Index
+        Switch over the four materials. Both would be impossible one level up,
+        where the number is a field over 256 cells.
+
+        The text comes out of String to Curves lying in the x-y plane; the
+        quarter turn about x stands it up in the x-z plane the rest of the cell
+        is built in.
+
+        :return: ``(geometries, nodes)`` - one geometry socket per line of
+            text and the list to frame.
+        """
+        digits = make_function(
+            tree, name="Base4Digits",
+            functions={"Digit%d" % k: "number,%d,/,floor,%d,%%"
+                                      % (self.RADIX ** (self.BASES - 1 - k),
+                                         self.RADIX)
+                       for k in range(self.BASES)},
+            inputs=["number"],
+            outputs=["Digit%d" % k for k in range(self.BASES)],
+            integers=["Digit%d" % k for k in range(self.BASES)],
+            scalars=["number"],
+            hide=True, location=(-13.5, -7.0))
+        tree.links.new(number, digits.inputs["number"])
+
+        nodes = [digits]
+        geometries = []
+
+        # the decimal, centred on the upper line
+        decimal = ValueToString(tree, location=(-12.4, -6.2), data_type="INT",
+                                value=number, name="Decimal", hide=True)
+        curves = StringToCurves(tree, location=(-11.3, -6.2),
+                                string=decimal.std_out, size=2*self.glyph_size,
+                                align_x="CENTER", align_y="MIDDLE",
+                                name="DecimalCurves")
+        realize = RealizeInstances(tree, location=(-10.2, -6.2))
+        fill = FillCurve(tree, location=(-9.1, -6.2), mode="N-gons")
+        painted = SetMaterial(tree, location=(-8.0, -6.2),
+                              material=control["Text"].std_out,
+                              name="PaintDecimal")
+        placed = TransformGeometry(
+            tree, location=(-6.9, -6.2),
+            translation=Vector([self.text_x, 0.0, 0.5 * self.line_gap]),
+            rotation=[pi / 2, 0.0, 0.0], name="PlaceDecimal")
+        create_geometry_line(tree, [realize, fill, painted, placed],
+                             ins=curves.geometry_out)
+        nodes += [decimal, curves, realize, fill, painted, placed]
+        geometries.append(placed.geometry_out)
+
+        # and the four base-4 digits below it, most significant first
+        left = -0.5 * (self.BASES - 1) * self.digit_spacing
+        for k in range(self.BASES):
+            y = -7.6 - 1.0 * k
+            digit = digits.outputs["Digit%d" % k]
+            character = SliceString(tree, location=(-12.4, y),
+                                    string=self.DIGITS, position=digit,
+                                    length=1, name="Digit%d" % k, hide=True)
+            # a material cannot be picked by a selection the way a base is -
+            # Set Material takes one - so here the choice really is a switch
+            color = IndexSwitch(tree, location=(-12.4, y - 0.4),
+                                data_type="MATERIAL", index=digit,
+                                name="Digit%dColor" % k, hide=True)
+            for d in range(self.RADIX):
+                color.add_item(socket=control["Base%d" % d].std_out)
+
+            curves = StringToCurves(tree, location=(-11.3, y),
+                                    string=character.std_out,
+                                    size=self.glyph_size, align_x="CENTER",
+                                    align_y="MIDDLE",
+                                    name="Digit%dCurves" % k)
+            realize = RealizeInstances(tree, location=(-10.2, y))
+            fill = FillCurve(tree, location=(-9.1, y), mode="N-gons")
+            painted = SetMaterial(tree, location=(-8.0, y),
+                                  material=color.std_out,
+                                  name="PaintDigit%d" % k)
+            placed = TransformGeometry(
+                tree, location=(-6.9, y),
+                translation=Vector([self.text_x + left + k * self.digit_spacing,
+                                    0.0, -0.5 * self.line_gap]),
+                rotation=[pi / 2, 0.0, 0.0], name="PlaceDigit%d" % k)
+            create_geometry_line(tree, [realize, fill, painted, placed],
+                                 ins=curves.geometry_out)
+            nodes += [character, color, curves, realize, fill, painted, placed]
+            geometries.append(placed.geometry_out)
+
+        return geometries, nodes
+
+
+#: how many circles the logo's chain is made of - the ``N`` the graph builds
+#: the outline from, and the only thing that decides what shape it is
+LOGO_CIRCLES = 4
+#: how many points the graph draws the outline with. A geometry budget, baked
+#: into the node tree rather than a dial: it is the polyline the strand is
+#: sampled off, so it only has to be much finer than the base spacing, and each
+#: of the ``2 * N`` half circles gets the same share of it whatever its size.
+LOGO_SAMPLES = 2000
+
+#: how the complex plane is laid into blender's axes. Per plane: which axis
+#: takes the real part, which takes the imaginary part, which is left over, and
+#: the unit normal of the plane. ``"xy"`` is
+#: :func:`utils.utils.z2vec`'s default and what the rest of the Apollonian
+#: video draws in; ``"xz"`` is ``z2vec(..., z_dir=True)``, the plane the flat
+#: scenes of the BFF video use.
+LOGO_PLANES = {
+    "xy": ((0, 1, 2), (0.0, 0.0, 1.0)),
+    "xz": ((0, 2, 1), (0.0, -1.0, 0.0)),
+}
+
+
+def logo_outline(n=LOGO_CIRCLES, samples=LOGO_SAMPLES):
+    """The logo's outline, as a closed smooth curve.
+
+    **Nothing in the modifier calls this.**
+    :meth:`RNALogoModifier._create_logo_path_frame` builds the same curve out
+    of ``Math`` nodes, so that ``N`` is a socket rather than a decision taken
+    at build time. This is the same formula in python: the reference the graph
+    is checked against, and the readable statement of what it draws.
+
+    :func:`objects.logo.logo_curve` is the logo drawn in one stroke: a chain of
+    tangent circles - the big one in the middle and smaller ones going down
+    each side - as the image under ``z -> 1/conj(z)`` of a row of half circles.
+    The parameter runs over ``[-pi, pi]`` and the curve closes there *exactly*
+    (``logo_curve(-pi, n) == logo_curve(pi, n)`` to the last bit) for whole
+    ``n``, which is what the track downstream needs.
+    ``video_bff/scene_bff.py``'s ``branding`` draws the same thing with
+    :class:`~objects.curve.Curve`, over a domain that runs a tenth past ``pi``;
+    that overshoot is harmless for a curve that is only looked at and is left
+    out here, since it would leave the loop open.
+
+    ``n`` is how much logo there is. Every circle is tangent to the next and
+    each is smaller than the last, so raising it adds detail at the bottom of
+    the picture and nowhere else: at 4 the chain ends in a circle a sixth of
+    the height, at 20 in one a hundredth. :func:`logo_radii` has them all,
+    exactly.
+
+    For a strand riding on the outline, 4 is about as far as it goes, and the
+    limit is the molecule rather than the curve. A base is at least
+    ``spacing`` from the next, so on a circle small enough the bases are wider
+    apart than the circle is round and what renders is a tangle rather than a
+    strand. At 4 every circle including the last is clean; by 8 the smallest
+    two have gone; by 20 the bottom of the logo is a knot. The outline itself
+    is fine at any ``n`` - it is only what is riding on it that runs out of
+    room.
+
+    The result is halved, which puts it in ``x`` in ``[-0.5, 0.5]`` and ``y``
+    in ``[0, 1]`` - the box the Apollonian limit set used to arrive in, so that
+    ``scale`` still means the diameter of the whole logo and a camera framed
+    for one is framed for the other.
+
+    :param n: circles per side of the chain.
+    :param samples: how many points the outline is drawn with. The last repeats
+        the first, exactly, so the polyline is closed.
+    :return: the outline as an array of complex numbers.
+    """
+    return 0.5 * logo_curve(np.linspace(-np.pi, np.pi, samples + 1), n)
+
+
+def logo_radii(n=LOGO_CIRCLES):
+    """The exact radius of every circle the outline is made of.
+
+    The outline is not merely smooth, it is *circles*, and that is worth having
+    in closed form rather than measuring. Before the inversion, ``logo_curve``
+    is a row of ``n`` half circles all of radius ``1/4``, the ``k``-th centred
+    at ``c_k = (n/4 - k/2) + 3i/4``; the parameter runs down the row and back
+    up it, so each circle is traversed once, in two halves. Inversion in the
+    unit circle takes a circle to a circle, of radius
+    ``r / | |c|^2 - r^2 |`` - so every arc of the logo has a radius that can be
+    written down, and there is nothing to fit.
+
+    That is what replaced the least-squares circle fit this file used to run
+    over a window of the source points. The fit was there because the source
+    was a fractal and had no curvature to read off; on the outline it was
+    answering a question that has an exact answer, and answering it slightly
+    wrong - it reported 3.27 for the big circle where the truth is 3.
+
+    Halved along with the outline itself, so these are radii of the curve
+    :func:`logo_outline` hands back, before ``scale``.
+
+    :param n: how many circles the chain has.
+    :return: the ``n`` radii, in the order ``k = 0 .. n-1`` - smallest first,
+        up to the big one in the middle of the chain and back down.
+    """
+    k = np.arange(n)
+    centre = 0.25 * n - 0.5 * k
+    return 0.125 / np.abs(centre ** 2 + 0.5625 - 0.0625)
+
+
+def logo_track_length(n=LOGO_CIRCLES, scale=1.0):
+    """How far it is once round the logo.
+
+    Every circle is gone round exactly once, so the arc length is the sum of
+    their circumferences and :func:`logo_radii` is all it takes. The graph gets
+    the same number from a ``Curve Length`` node on the polyline it draws,
+    which agrees with this to the fifth decimal at the default ``samples``;
+    this one exists so that a scene can know how far to ramp ``HeadOffset``
+    without evaluating the modifier.
+
+    :param n: how many circles the chain has.
+    :param scale: the diameter the logo is drawn at.
+    :return: the arc length of one lap.
+    """
+    return float(2.0 * np.pi * scale * logo_radii(n).sum())
+
+
+def logo_track_bases(n=LOGO_CIRCLES, bases_per_circle=17):
+    """How many bases one lap of the logo holds.
+
+    Every arc of the chain is a whole circle and each gets
+    ``bases_per_circle`` of them whatever its size, so the count is a
+    multiplication - which is the point of stepping by the circumference
+    rather than by a fixed distance.
+
+    :param n: how many circles the chain has.
+    :param bases_per_circle: bases on each of them.
+    :return: bases in a lap.
+    """
+    return int(n * bases_per_circle)
+
+
+def _in_frame(origin):
+    """Where to put a node that is going to end up inside a frame.
+
+    Locations in this file are *absolute*: :meth:`Frame.add` parents a node
+    after it has been placed, and blender rewrites ``location`` to be relative
+    while leaving the node where it was on screen. So the contents of a frame
+    have to be written down in absolute coordinates, and what the editor - and
+    an exported xml - shows for a framed node is the difference between the
+    two. This turns the second back into the first, so that the numbers in the
+    code are the numbers in the xml.
+
+    :param origin: the frame's own location.
+    :return: a function of a node's location within that frame.
+    """
+    return lambda x, y: (origin[0] + x, origin[1] + y)
+
+
+class RNALogoModifier(GeometryNodesModifier):
+    """A single strand of RNA that draws the logo.
+
+    :class:`DNAModifier` flies a double helix along a track read from a csv;
+    this grows one strand along a track the graph *draws*, out of two integers.
+    Nothing is read from disk and nothing is measured: the logo is a chain of
+    circles, so where a base goes, how sharply the curve turns under it and
+    which way it should point all have closed forms, and ``LogoCurve`` hands
+    back all three.
+
+    The molecule is built in seven frames:
+
+    ``ControlFrame``
+        Five numbers and the palette. ``Progress`` is the whole of the
+        choreography - it is both how far the head has got and how many bases
+        are behind it, so one ramp draws the logo.
+    ``CreateLogo Intrinsic Resolution``
+        ``PointCount`` points with :func:`objects.logo.logo_curve` evaluated
+        over them as a field. This is the polyline everything downstream reads;
+        its resolution is "intrinsic" in the sense that it is the same all the
+        way round, in the *parameter*, which is not the same as being even along
+        the curve - that is what the next two frames are for.
+    ``DistanceToNextPoint``
+        How far it is from each point of the outline to the next.
+    ``PointSelection``
+        The step a base is entitled to here - one ``BasesPerCircle``-th of the
+        way round the circle it is standing on - and the running total of how
+        many bases the outline has been worth so far. Laying that total out
+        along the x axis gives the ``Ruler``, a curve whose *arc length is the
+        base number*.
+    ``GrowTheCurve``
+        Base *i* sits at station ``Progress - i``, wrapped into one lap, and
+        one Sample Curve on the ruler turns that back into a position, a radius
+        and a normal.
+    ``Strand``
+        ``Progress`` points, moved onto the logo.
+    ``Bases`` and ``Strand Geometry``
+        A base per point, aimed down the normal, and the backbone swept to a
+        tube - all three scaled by the radius, so the molecule is the same
+        shape on the big circles and the small ones.
+
+    **Why the sampling is not evenly spaced.** A base every fixed distance puts
+    twenty of them on a circle only once its radius passes about a unit, and
+    the logo's circles run from a radius of 3 down to a hundredth of that - so
+    the small ones would get a handful of bases, then three, then one. Stepping
+    by ``2 pi r / BasesPerCircle`` instead gives every circle the same number
+    however small it is. The cost is that where a base sits is then a running
+    total, which no field can work out; ``PointSelection`` pays it with an
+    Accumulate Field, once, over the outline.
+
+    :param n: circles per side of the chain - how much logo there is.
+    :param scale: the diameter the logo is drawn at.
+    :param progress: how far round the head has got, in bases, and therefore
+        how many bases there are. Animate this and the logo draws itself.
+    :param point_count: points the outline is drawn with. It only has to be
+        much finer than the bases; each of the ``2 n`` half circles gets the
+        same share of it whatever its size.
+    :param bases_per_circle: bases on every circle of the chain, whatever its
+        radius.
+    :param axis_length: length of the line the strand's points are resampled
+        from. Thrown away by the Set Position that moves them onto the logo.
+    :param backbone_scale: backbone bead size per unit of radius.
+    :param tube_fraction: the swept tube's scale as a fraction of the beads' -
+        and, since the bases take the same number, their size too.
+    :param base_colors: the four base materials, in ``BaseType`` order.
+    :param strand_color: material of the swept backbone.
+    :param molecule_color: material of the spheres sitting on the backbone.
+    :param seed: which strand of RNA this is. Changing it deals the bases again.
+    """
+
+    #: the two purines and the two pyrimidines, drawn with as many atoms as
+    #: :class:`DNAModifier` draws them with
+    BASE_ATOMS = DNAModifier.BASE_ATOMS
+    BASE_NAMES = ("A", "G", "C", "U")
+    #: three of DNA's four base colours and one that is not - DNA's fourth base
+    #: is thymine, RNA's is uracil
+    BASE_COLORS = DNAModifier.BASE_COLORS[:3] + ("example",)
+
+    BACKBONE_RADIUS = DNAModifier.BACKBONE_RADIUS
+    BACKBONE_SPHERE_RADIUS = DNAModifier.BACKBONE_SPHERE_RADIUS
+    BASE_BOND_RADIUS = DNAModifier.BASE_BOND_RADIUS
+    BASE_ATOM_RADIUS = DNAModifier.BASE_ATOM_RADIUS
+
+    def __init__(self, n=16, scale=12.0, progress=275, point_count=2000,
+                 bases_per_circle=17, axis_length=120.0, shift=(0.0, 0.0, 0.0),
+                 plane="xy", backbone_scale=1.1, tube_fraction=0.5,
+                 base_colors=None, strand_color="gray_4",
+                 molecule_color="gray_7", seed=4, name="RNALogo", **kwargs):
+        self.n = n
+        self.scale = scale
+        self.progress = progress
+        self.point_count = point_count
+        self.bases_per_circle = bases_per_circle
+        self.axis_length = axis_length
+        self.shift = tuple(shift)
+        self.plane = plane
+        self.backbone_scale = backbone_scale
+        self.tube_fraction = tube_fraction
+        self.base_colors = tuple(base_colors or self.BASE_COLORS)
+        self.strand_color = strand_color
+        self.molecule_color = molecule_color
+        self.seed = seed
+        self.kwargs = kwargs
+
+        #: the arc length of one lap, and how many bases it holds - the unit
+        #: ``Progress`` counts in. Both are closed forms rather than anything
+        #: the graph tells us, so that a scene can ramp ``Progress`` to a whole
+        #: lap without evaluating the modifier first.
+        self.track_length = logo_track_length(n, scale)
+        self.track_bases = logo_track_bases(n, bases_per_circle)
+
+        super().__init__(name=name, automatic_layout=False)
+
+    # ------------------------------------------------------------------
+    def bases_for_whole_logo(self):
+        """How many bases a whole lap of the logo takes."""
+        return self.track_bases
+
+    # ------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._create_control_frame(tree)
+        logo = self._create_logo_frame(tree, control)
+        reach = self._create_distance_frame(tree, control, logo)
+        ruler = self._create_point_selection_frame(tree, control, logo, reach)
+        path = self._create_grow_frame(tree, control, logo, ruler)
+        strand = self._create_strand_frame(tree, control, path)
+        # the one number that sizes the whole molecule. It sits in no frame
+        # because both of the last two want it: the bases are as big as the
+        # tube they grow out of, so a circle of a tenth the radius is drawn as
+        # the same molecule a tenth the size rather than as a thin wire with
+        # full sized bases hanging off it.
+        bead = MathNode(tree, location=(25.0, 5.4), operation="MULTIPLY",
+                        inputs0=self.backbone_scale, inputs1=strand["Radius"],
+                        node_height=GRID, name="BeadScale", label="BeadScale")
+        tube = MathNode(tree, location=(26.0, 4.3), operation="MULTIPLY",
+                        inputs0=bead.std_out, inputs1=self.tube_fraction,
+                        node_height=GRID, name="TubeScale", label="TubeScale")
+        bases = self._create_bases_frame(tree, control, strand, tube.std_out)
+        backbone = self._create_strand_geometry_frame(tree, control, strand,
+                                                      bead.std_out,
+                                                      tube.std_out)
+
+        join = JoinGeometry(tree, location=(44.5, 7.4), node_height=GRID,
+                            name="JoinMolecule")
+        for piece in (backbone, bases):
+            tree.links.new(piece, join.geometry_in)
+        tree.links.new(join.geometry_out, self.group_outputs.inputs["Geometry"])
+        self.group_outputs.location = (46.4 * GRID, 6.8 * GRID)
+
+    # ------------------------------------------------------------------
+    def _create_control_frame(self, tree):
+        """``ControlFrame``: the five numbers the logo is made of.
+
+        ``Progress`` is the only one a scene touches. The other four say what
+        is being drawn rather than how much of it: how many circles, how big,
+        how finely the outline is sampled and how many bases each circle
+        carries.
+
+        :return: ``{name: node}``, keyed by the label the node carries.
+        """
+        at = _in_frame((-11.3, 7.0))
+        control = {
+            "Progress": InputInteger(tree, location=at(0.1, -0.1),
+                                     integer=self.progress, name="Progress",
+                                     label="Progress", node_height=GRID),
+            "PointCount": InputInteger(tree, location=at(0.1, -0.5),
+                                       integer=self.point_count,
+                                       name="PointCount", label="PointCount",
+                                       node_height=GRID),
+            "BasesPerCircle": InputInteger(tree, location=at(0.1, -0.8),
+                                           integer=self.bases_per_circle,
+                                           name="BasesPerCircle",
+                                           label="BasesPerCircle",
+                                           node_height=GRID),
+            "N": InputInteger(tree, location=at(0.1, -1.1), integer=self.n,
+                              name="N", label="N", node_height=GRID),
+            "Scale": InputValue(tree, location=at(0.1, -1.5), value=self.scale,
+                                name="Scale", label="Scale", node_height=GRID),
+        }
+
+        palette = [("Base%d" % index, color)
+                   for index, color in enumerate(self.base_colors)]
+        palette += [("Strand", self.strand_color),
+                    ("Molecule", self.molecule_color)]
+        for row, (node_name, color) in enumerate(palette):
+            control[node_name] = InputMaterial(
+                tree, location=at(0.1, -2.4 - 0.5 * row), material=color,
+                name=node_name, node_height=GRID, **self.kwargs)
+            self.materials.append(control[node_name].node.material)
+        control["Palette"] = CombineBundle(
+            tree, location=at(1.1, -2.9), name="Palette", node_height=GRID,
+            items=[(node_name, "MATERIAL", control[node_name].std_out)
+                   for node_name, _ in palette])
+
+        # Progress leaves the frame over a reroute, because two frames a long
+        # way apart both want it
+        control["ProgressOut"] = Reroute(tree, location=at(1.5, -0.3),
+                                         node_height=GRID,
+                                         ins=control["Progress"].std_out,
+                                         name="ProgressOut")
+
+        frame = Frame(tree, location=(-11.3, 7.0), label="ControlFrame",
+                      node_height=GRID)
+        frame.add(list(control.values()))
+        return control
+
+    # ------------------------------------------------------------------
+    def _create_logo_frame(self, tree, control):
+        """``CreateLogo Intrinsic Resolution``: the logo, drawn.
+
+        The outline is :func:`objects.logo.logo_curve` evaluated as a field over
+        ``PointCount`` points, which is what makes ``N`` a dial rather than a
+        decision taken at build time.
+
+        **The formula.** With ``t`` over ``[-pi, pi]`` and ``u = N t``, write
+        ``k = floor(|u| / pi)`` and ``s = (-1)^k``::
+
+            a = s cos|u| / 4 + N/4 - k/2        (the chain, before inverting)
+            b = sin(u) / 4  + 3/4
+            z = (a + i b) / (a^2 + b^2)         (1 / conj, which is inversion)
+
+        ``a + i b`` is a row of half circles of radius ``1/4`` centred at
+        ``c = (N/4 - k/2) + 3i/4``; ``k`` counts which one and ``s`` reflects
+        every other one so that the row is traversed in one stroke. The
+        inversion turns the row into the logo, and the result is halved so that
+        it lands in ``x`` in ``[-0.5, 0.5]`` and ``y`` in ``[0, 1]``.
+
+        **Radius and normal, both exactly.** Inversion takes circles to circles:
+        the circle through ``c`` of radius ``1/4`` goes to one of radius
+        ``0.25 / D`` centred at ``c / D``, where ``D = |c|^2 - 1/16`` comes to
+        ``cx^2 + 1/2``. So the arc a base stands on has a radius that can be
+        written down - and so has its centre, which is the whole point of doing
+        this here. The vector from the point to that centre is
+
+            ``4 D (c/D - z) = (4 cx - 4 D a/d, 3 - 4 D b/d)``
+
+        and it is a *unit* vector already, because the distance from a point on
+        a circle to its centre is the radius and the ``4 D`` cancels it. That
+        is the inward normal, exact, in two Math nodes' worth of arithmetic and
+        with no neighbouring point involved.
+
+        It replaced a finite difference of the strand's own tangents, which
+        needed a Sample Index into the strand, a subtraction, a normalise, a
+        clamp for the last base and a sign flip - six nodes to approximate
+        something the curve already knows. ``D`` is never zero (it is at least
+        a half), so there is no case to guard.
+
+        :return: ``{"geometry": ..., "Point": ..., "Radius": ..., "Normal": ...}``
+        """
+        at = _in_frame((-2.3, 2.2))
+        counter = Index(tree, location=(-3.6, 0.0), node_height=GRID,
+                        name="OutlineIndex", label="OutlineIndex")
+        # the point count is wanted here and again in DistanceToNextPoint
+        count = Reroute(tree, location=(-2.9, 1.4), node_height=GRID,
+                        ins=control["PointCount"].std_out, name="PointCountOut")
+
+        dense = Points(tree, location=at(0.1, -0.1), count=count.std_out,
+                       node_height=GRID, name="OutlinePoints",
+                       label="OutlinePoints")
+
+        (horizontal, vertical, other), _ = LOGO_PLANES[self.plane]
+        point = [None] * 3
+        point[horizontal] = "0.5,a,d,/,*,Scale,*,%r,+" % (self.shift[horizontal],)
+        point[vertical] = "0.5,b,d,/,*,Scale,*,%r,+" % (self.shift[vertical],)
+        point[other] = "%r" % (self.shift[other],)
+        normal = [None] * 3
+        normal[horizontal] = "4,cx,*,4,D,*,a,d,/,*,-"
+        normal[vertical] = "3,4,D,*,b,d,/,*,-"
+        normal[other] = "0"
+        # make_function scales y by 100 where every other node in this file
+        # uses 200, so its grid coordinate has to be doubled to land on the row
+        # the editor puts it on
+        spot = at(0.1, -1.2)
+        outline = make_function(
+            tree, location=(spot[0], 2.0 * spot[1]), name="LogoCurve",
+            hide=False,
+            inputs=["Index", "N", "Scale","PointCount"],
+            outputs=["Point", "Radius", "Normal"],
+            # Index and N are integers *only* - a name listed in both scalars
+            # and integers gets two group sockets of the same name
+            integers=["Index", "N"], vectors=["Point", "Normal"],
+            scalars=["Scale", "Radius", "t", "u", "au", "k", "s", "cx", "a",
+                     "b", "d", "D","PointCount"],
+            aux_functions={
+                "t": "Index,2,*,pi,*,PointCount,/,pi,-",
+                "u": "N,t,*",
+                "au": "u,abs",
+                "k": "au,%r,/,floor" % (pi,),
+                # (-1)^k without a power: 1 - 2 * (k mod 2)
+                "s": "1,2,k,2,%,*,-",
+                # the centre of the half circle this point is on, along the row
+                "cx": "N,4,/,0.5,k,*,-",
+                "a": "0.25,s,*,au,cos,*,cx,+",
+                "b": "0.25,u,sin,*,0.75,+",
+                "d": "a,a,*,b,b,*,+",
+                # |c|^2 - r^2, the factor inversion scales this circle by
+                "D": "cx,cx,*,0.5,+",
+            },
+            functions={
+                "Point": point,
+                "Radius": "0.125,D,/,Scale,*",
+                "Normal": normal,
+            })
+        tree.links.new(counter.std_out, outline.inputs["Index"])
+        tree.links.new(control["N"].std_out, outline.inputs["N"])
+        tree.links.new(control["Scale"].std_out, outline.inputs["Scale"])
+        tree.links.new(count.std_out,outline.inputs["PointCount"])
+
+        placed = SetPosition(tree, location=at(1.2, -0.3),
+                             geometry=dense.geometry_out,
+                             position=outline.outputs["Point"],
+                             node_height=GRID, name="DrawOutline",
+                             label="DrawOutline")
+        # the radius has to travel *on* the curve, since what reads it is a
+        # Sample Curve evaluating a field on the geometry it is sampling
+        carried = StoredNamedAttribute(tree, location=at(2.1, -0.3),
+                                       data_type="FLOAT", domain="POINT",
+                                       name="LogoRadius",
+                                       value=outline.outputs["Radius"],
+                                       node_height=GRID, label="CarryRadius")
+        tree.links.new(placed.geometry_out, carried.geometry_in)
+
+        frame = Frame(tree, location=(-2.3, 2.2), node_height=GRID,
+                      label="CreateLogo Intrinsic Resolution")
+        frame.add([dense, outline, placed, carried])
+        return {"geometry": carried.geometry_out, "index": counter.std_out,
+                "count": count.std_out, "Point": outline.outputs["Point"],
+                "Radius": outline.outputs["Radius"],
+                "Normal": outline.outputs["Normal"]}
+
+    # ------------------------------------------------------------------
+    def _create_distance_frame(self, tree, control, logo):
+        """``DistanceToNextPoint``: how far it is to the next sample.
+
+        Sample Index does *not* clamp - asked for one past the end it hands
+        back a zero vector, and the chord from the last point of the logo to
+        the origin would be worth a nonsense number of bases - so the index is
+        held at the last point, whose chord to itself is nothing.
+
+        :return: the float socket of the distance.
+        """
+        at = _in_frame((0.9, 0.2))
+        after = MathNode(tree, location=at(0.1, -0.2), operation="ADD",
+                         inputs0=logo["index"], inputs1=1.0, node_height=GRID,
+                         name="NextOutline", label="NextOutline")
+        last = MathNode(tree, location=at(1.0, -0.1), operation="MINIMUM",
+                        inputs0=after.std_out, inputs1=logo["count"],
+                        node_height=GRID, name="LastOutline",
+                        label="LastOutline")
+        here = Position(tree, location=at(1.6, -1.4), node_height=GRID,
+                        name="OutlinePosition", label="OutlinePosition")
+        ahead = SampleIndex(tree, location=at(2.6, -0.5),
+                            data_type="FLOAT_VECTOR", domain="POINT",
+                            geometry=logo["geometry"], value=here.std_out,
+                            index=last.std_out, node_height=GRID,
+                            name="PointAhead", label="PointAhead")
+        chord = VectorMath(tree, location=at(3.6, -0.9), operation="SUBTRACT",
+                           inputs0=ahead.std_out, inputs1=here.std_out,
+                           node_height=GRID, name="OutlineChord",
+                           label="OutlineChord")
+        segment = VectorMath(tree, location=at(4.5, -0.7), operation="LENGTH",
+                             inputs0=chord.std_out, node_height=GRID,
+                             name="SegmentLength", label="SegmentLength")
+
+        frame = Frame(tree, location=(0.9, 0.2), label="DistanceToNextPoint",
+                      node_height=GRID)
+        frame.add([after, last, here, ahead, chord, segment])
+        return segment.std_out
+
+    # ------------------------------------------------------------------
+    def _create_point_selection_frame(self, tree, control, logo, segment):
+        """``PointSelection``: the ruler that spaces the bases by curvature.
+
+        A base is entitled to one ``BasesPerCircle``-th of the way round the
+        circle it is standing on, so ``Separation = 2 pi r / BasesPerCircle``
+        and this stretch of outline is worth ``SegmentLength / Separation``
+        bases. Every circle then carries the same number however small it is,
+        which is the whole point: a fixed step gives the smallest circles of a
+        sixteen-link chain about one base each.
+
+        The running total is the one thing a field cannot do for itself, and
+        ``Accumulate Field`` is the node that can - ``Trailing``, which is the
+        sum *before* this point, so the first sits at 0 and the last at the
+        total. Laying that out along the x axis makes the ``Ruler``: a curve
+        whose arc length is the base number, so one Sample Curve by length
+        undoes the sum. The logo never becomes a curve at all; it rides along
+        as the value being sampled.
+
+        :return: dict with the ruler and how many bases a lap is.
+        """
+        at = _in_frame((4.1, 3.2))
+        radius = NamedAttribute(tree, location=at(0.1, -1.3), data_type="FLOAT",
+                                name="LogoRadius", node_height=GRID,
+                                label="LogoRadius")
+        turn = MathNode(tree, location=at(1.0, -0.8), operation="MULTIPLY",
+                        inputs0=radius.std_out, inputs1=2.0 * pi,
+                        node_height=GRID, name="Circumference",
+                        label="Circumference")
+        apart = MathNode(tree, location=at(1.7, -0.3), operation="DIVIDE",
+                         inputs0=turn.std_out,
+                         inputs1=control["BasesPerCircle"].std_out,
+                         node_height=GRID, name="Separation",
+                         label="Separation")
+        worth = MathNode(tree, location=at(2.8, -0.1), operation="DIVIDE",
+                         inputs0=segment, inputs1=apart.std_out,
+                         node_height=GRID, name="NecessarySteps",
+                         label="NecessarySteps")
+        walked = AccumulateField(tree, location=at(4.0, -0.1), data_type="FLOAT",
+                                 domain="POINT", value=worth.std_out,
+                                 node_height=GRID, name="WalkStations",
+                                 label="WalkStations")
+        ruler_point = CombineXYZ(tree, location=at(5.2, -0.8), node_height=GRID,
+                                 x=walked.trailing, name="RulerPoint",
+                                 label="RulerPoint")
+        stretched = SetPosition(tree, location=at(6.1, -0.6),
+                                geometry=logo["geometry"],
+                                position=ruler_point.std_out, node_height=GRID,
+                                name="PlaceRuler", label="PlaceRuler")
+        ruler = PointsToCurve(tree, location=at(7.1, -0.7), node_height=GRID,
+                              name="Ruler", label="Ruler")
+        tree.links.new(stretched.geometry_out, ruler.geometry_in)
+        tree.links.new(logo["index"], ruler.node.inputs["Weight"])
+        # how long a lap is, off the ruler's own length. The accumulator has a
+        # Total output that is the same number and cannot be used: it is a
+        # *field*, so read from a later frame it would re-run the sum over that
+        # frame's geometry. A Curve Length is one value for the whole curve.
+        stations = CurveLength(tree, location=at(8.1, -0.9),
+                               curve=ruler.geometry_out, node_height=GRID,
+                               name="TotalStations", label="TotalStations")
+
+        frame = Frame(tree, location=(4.1, 3.2), label="PointSelection",
+                      node_height=GRID)
+        frame.add([radius, turn, apart, worth, walked, ruler_point, stretched,
+                   ruler, stations])
+        return {"ruler": ruler.geometry_out, "radius": radius.std_out,
+                "stations": stations.std_out}
+
+    # ------------------------------------------------------------------
+    def _create_grow_frame(self, tree, control, logo, ruler):
+        """``GrowTheCurve``: which station each base is on, and what is there.
+
+        Base *i* sits at ``Progress - i``, wrapped into ``[0, TotalStations)``.
+        The wrap is what a closed track buys: the strand can be driven forwards
+        for ever and it laps the logo instead of piling up on the last point,
+        and the seam is invisible because the outline's last point is its first.
+
+        Three samples off the ruler at that one length - position, radius and
+        normal - and the molecule knows everything it needs.
+
+        :return: ``{"position": ..., "Radius": ..., "Normal": ...}`` per base.
+        """
+        at = _in_frame((10.8, 1.4))
+        carried = Reroute(tree, location=at(4.0, -1.7), node_height=GRID,
+                          ins=ruler["ruler"], name="RulerIn")
+        index = Index(tree, location=at(0.1, -3.0), node_height=GRID,
+                      name="BaseIndex", label="BaseIndex")
+        arc = MathNode(tree, location=at(1.1, -2.4), operation="SUBTRACT",
+                       inputs0=control["ProgressOut"].std_out,
+                       inputs1=index.std_out, node_height=GRID,
+                       name="ArcLength", label="ArcLength")
+        # Value, Max, Min - and Min has to be written out. Every socket of a
+        # Math node defaults to 0.5, so leaving it alone would wrap the track
+        # into [0.5, TotalStations) and lose the half station the seam is on.
+        lap = MathNode(tree, location=at(3.0, -1.8), operation="WRAP",
+                       inputs0=arc.std_out, inputs1=ruler["stations"],
+                       node_height=GRID, name="LapHere", label="LapHere")
+        lap.node.inputs[2].default_value = 0.0
+
+        samples = {}
+        for name, label, kind, value, spot in [
+                ("position", "SampleHere", "FLOAT_VECTOR", logo["Point"],
+                 (4.2, -0.1)),
+                ("Radius", "SampleRadius", "FLOAT", ruler["radius"],
+                 (4.3, -1.9)),
+                ("Normal", "SampleNormal", "FLOAT_VECTOR", logo["Normal"],
+                 (4.3, -3.5))]:
+            node = SampleCurve(tree, location=at(*spot), mode="LENGTH",
+                               data_type=kind, all_curves=True,
+                               node_height=GRID, name=label, label=label)
+            tree.links.new(carried.geometry_out, node.geometry_in)
+            tree.links.new(lap.std_out, node.node.inputs["Length"])
+            tree.links.new(value, node.node.inputs["Value"])
+            samples[name] = node
+
+        frame = Frame(tree, location=(10.8, 1.4), label="GrowTheCurve",
+                      node_height=GRID)
+        frame.add([carried, index, arc, lap] + list(samples.values()))
+        return {"position": samples["position"].value_out,
+                "Radius": samples["Radius"].value_out,
+                "Normal": samples["Normal"].value_out}
+
+    # ------------------------------------------------------------------
+    def _create_strand_frame(self, tree, control, path):
+        """``Strand``: ``Progress`` points, moved onto the logo.
+
+        The line exists only to carry the points in order - its own length and
+        direction are thrown away by the Set Position. How many there are is
+        ``Progress`` itself, so the strand gains a base for every station the
+        head passes and its tail never moves: one ramp draws the logo.
+
+        The radius and the normal are captured here rather than read again
+        downstream, so that the bases and the backbone are certain to be using
+        the same numbers as each other.
+
+        :return: dict with the geometry socket and the captured fields.
+        """
+        at = _in_frame((12.4, 7.7))
+        progress = Reroute(tree, location=(10.8, 4.0), node_height=GRID,
+                           ins=control["ProgressOut"].std_out,
+                           name="ProgressIn")
+        whole = MathNode(tree, location=at(0.1, -2.1), operation="ROUND",
+                         inputs0=progress.std_out, node_height=GRID,
+                         name="WholeStrides", label="WholeStrides")
+        with_head = MathNode(tree, location=at(0.9, -1.7), operation="ADD",
+                             inputs0=whole.std_out, inputs1=1.0,
+                             node_height=GRID, name="PlusTheHead",
+                             label="PlusTheHead")
+        capped = MathNode(tree, location=at(1.9, -2.1), operation="MINIMUM",
+                          inputs0=with_head.std_out, inputs1=progress.std_out,
+                          node_height=GRID, name="AtMostMaxBases",
+                          label="AtMostMaxBases")
+        # a strand of no bases is not a strand, and Resample Curve will not
+        # make a curve of nought points either
+        count = MathNode(tree, location=at(2.7, -1.8), operation="MAXIMUM",
+                         inputs0=capped.std_out, inputs1=1.0, node_height=GRID,
+                         name="BaseCount", label="BaseCount")
+
+        line = CurveLine(tree, location=at(2.7, -0.2), mode="DIRECTION",
+                         direction=[1.0, 0.0, 0.0], length=self.axis_length,
+                         node_height=GRID, name="Axis", label="Axis")
+        resample = ResampleCurve(tree, location=at(4.2, -0.2),
+                                 curve=line.geometry_out, mode="Count",
+                                 count=count.std_out, node_height=GRID,
+                                 name="OnePointPerBase",
+                                 label="OnePointPerBase")
+        axis = SetPosition(tree, location=at(5.7, -0.2),
+                           geometry=resample.geometry_out,
+                           position=path["position"], node_height=GRID,
+                           name="OntoTrack", label="OntoTrack")
+
+        index = Index(tree, location=at(9.5, -2.3), node_height=GRID,
+                      name="TurnIndex", label="TurnIndex")
+        capture = CaptureAttribute(
+            tree, location=at(11.2, -0.1), domain="POINT",
+            geometry=axis.geometry_out,
+            items=[("Normal", "FLOAT_VECTOR", path["Normal"]),
+                   ("Radius", "FLOAT", path["Radius"]),
+                   ("BaseIndex", "INT", index.std_out)],
+            node_height=GRID, name="CaptureSpoke", label="CaptureSpoke")
+
+        frame = Frame(tree, location=(12.4, 7.7), label="Strand",
+                      node_height=GRID)
+        frame.add([whole, with_head, capped, count, line, resample, axis,
+                   index, capture])
+        return {
+            "geometry": capture.geometry_out,
+            "Normal": capture["Normal"],
+            "Radius": capture["Radius"],
+            "BaseIndex": capture["BaseIndex"],
+        }
+    # ------------------------------------------------------------------
+    def _create_bases_frame(self, tree, control, strand, size):
+        """``Bases``: one base per point of the backbone, pointing inwards.
+
+        A base is a short chain of 2..5 atoms - spheres on a mesh line, with
+        the line itself swept to a tube for the bonds. How many atoms is what
+        distinguishes the four base types on screen.
+
+        Which type a base is comes from a random draw with the base's own index
+        as its id, not from its position: a strand that grows along the logo has
+        to keep the sequence it was dealt, and a sequence read off the curve
+        would be rewritten under the molecule as it moved.
+
+        The type and the size go into the zone as input items rather than being
+        read inside it, and that is not a matter of taste. Inside the zone the
+        type has to drive two Index Switches, and neither the number of atoms a
+        Mesh Line is built with nor a material is a field; a Named Attribute
+        read in here would have no geometry to be evaluated on and both
+        switches would quietly fall back to their first slot - one base type,
+        drawn four times in the same colour. A field has to be evaluated where
+        its geometry is, which is out here, once per element.
+
+        :param size: how big a base is - the same number the backbone is drawn
+            at, so that the molecule keeps its proportions on every circle.
+        :return: the geometry socket of all the bases.
+        """
+        at = _in_frame((27.1, 10.2))
+        draw = RandomValue(tree, location=at(0.1, -2.2), data_type="INT",
+                           min=0, max=len(self.BASE_ATOMS) - 1, seed=self.seed,
+                           node_height=GRID, name="WhichBase",
+                           label="WhichBase")
+        tree.links.new(strand["BaseIndex"], draw.node.inputs["ID"])
+
+        # the base's chain is built along +z and Align Rotation to Vector turns
+        # that onto the normal, which points at the centre of the circle this
+        # base is standing on
+        aim = AlignRotationToVector(tree, location=at(0.1, -3.7), axis="Z",
+                                    pivot_axis="AUTO", vector=strand["Normal"],
+                                    node_height=GRID, name="AimOutwards",
+                                    label="AimOutwards")
+
+        zone = ForEachZone(tree, location=at(3.1, -0.2), domain="POINT",
+                           node_width=10.5, geometry=strand["geometry"],
+                           node_height=GRID, name="ForEachBase",
+                           label="ForEachBase")
+        zone.add_socket("INT", "BaseType", value=draw.std_out, for_input=True)
+        zone.add_socket("ROTATION", "Rotation", value=aim.std_out,
+                        for_input=True)
+        zone.add_socket("FLOAT", "BaseSize", value=size, for_input=True)
+        zone.foreach_output.location = tuple(v * GRID for v in at(13.6, -0.2))
+        base_type = zone.foreach_input.outputs["BaseType"]
+
+        atoms = IndexSwitch(tree, location=at(6.1, -2.2), data_type="INT",
+                            index=base_type, node_height=GRID,
+                            name="AtomsPerBase", label="AtomsPerBase")
+        for _ in range(len(self.BASE_ATOMS) - 2):
+            atoms.new_item()
+        for slot, number in enumerate(self.BASE_ATOMS):
+            atoms.node.inputs[slot + 1].default_value = number
+
+        chain = MeshLine(tree, location=at(7.6, -2.2), mode="END_POINTS",
+                         count_mode="TOTAL", count=atoms.std_out,
+                         start_location=[0.0, 0.0, 0.0], node_height=GRID,
+                         name="BaseChain", label="BaseChain")
+        chain.node.inputs["Offset"].default_value = [0.0, 0.0, 1.0]
+        chain_out = Reroute(tree, location=at(8.6, -2.2), node_height=GRID,
+                            ins=chain.geometry_out, name="ChainOut",
+                            label="ChainOut")
+
+        atom = IcoSphere(tree, location=at(7.0, -0.7),
+                         radius=self.BASE_ATOM_RADIUS, subdivisions=2,
+                         node_height=GRID, name="Atom", label="Atom")
+        atom_instances = InstanceOnPoints(tree, location=at(9.6, -0.7),
+                                          points=chain_out.geometry_out,
+                                          instance=atom.geometry_out,
+                                          node_height=GRID, name="Atoms",
+                                          label="Atoms")
+
+        bonds = MeshToCurve(tree, location=at(9.6, -2.4),
+                            mesh=chain_out.geometry_out, node_height=GRID,
+                            name="Bonds", label="Bonds")
+        bond_profile = CurveCircle(tree, location=at(7.0, -3.7), mode="RADIUS",
+                                   resolution=16, radius=self.BASE_BOND_RADIUS,
+                                   node_height=GRID, name="BondProfile",
+                                   label="BondProfile")
+        bond_mesh = CurveToMesh(tree, location=at(11.1, -2.2),
+                                curve=bonds.geometry_out,
+                                profile_curve=bond_profile.geometry_out,
+                                fill_caps=False, node_height=GRID,
+                                name="BondMesh", label="BondMesh")
+
+        base = JoinGeometry(tree, location=at(12.1, -1.2), node_height=GRID,
+                            name="JoinBase", label="JoinBase")
+        for piece in (atom_instances.geometry_out, bond_mesh.geometry_out):
+            tree.links.new(piece, base.geometry_in)
+
+        # a material cannot be picked by a selection the way geometry can - Set
+        # Material takes one - so here the choice really is a switch
+        colors = SeparateBundle(
+            tree, location=at(4.0, -4.7), bundle=control["Palette"].std_out,
+            items=[("Base%d" % index, "MATERIAL")
+                   for index in range(len(self.BASE_ATOMS))],
+            node_height=GRID, name="BaseColors", label="BaseColors")
+        material = IndexSwitch(tree, location=at(6.1, -4.7),
+                               data_type="MATERIAL", index=base_type,
+                               node_height=GRID, name="BaseMaterial",
+                               label="BaseMaterial")
+        for index in range(len(self.BASE_ATOMS)):
+            material.add_item(socket=colors.out("Base%d" % index))
+
+        placed = InstanceOnPoints(tree, location=at(13.1, -0.2),
+                                  points=zone.element,
+                                  instance=base.geometry_out,
+                                  rotation=zone.foreach_input.outputs["Rotation"],
+                                  scale=zone.foreach_input.outputs["BaseSize"],
+                                  node_height=GRID, name="PlaceBase",
+                                  label="PlaceBase")
+        paint = SetMaterial(tree, location=at(14.1, -0.2),
+                            geometry=placed.geometry_out,
+                            material=material.std_out, node_height=GRID,
+                            name="PaintBase", label="PaintBase")
+        tree.links.new(paint.geometry_out,
+                       zone.foreach_output.inputs["Geometry"])
+
+        frame = Frame(tree, location=(27.1, 10.2), label="Bases",
+                      node_height=GRID)
+        frame.add([draw, aim, zone, atoms, chain, chain_out, atom,
+                   atom_instances, bonds, bond_profile, bond_mesh, base,
+                   colors, material, placed, paint])
+        return zone.geometry_out
+
+    # ------------------------------------------------------------------
+    def _create_strand_geometry_frame(self, tree, control, strand, bead, tube):
+        """``Strand Geometry``: the backbone as a solid tube.
+
+        The curve is swept to a tube for the sugar-phosphate backbone, and a
+        sphere is dropped on every point so that it reads as a chain of atoms
+        rather than a smooth pipe. Both are scaled by the local radius, so the
+        molecule thins with the circle it is wound round instead of swallowing
+        the bases where the chain gets small.
+
+        :param bead: scale of the spheres.
+        :param tube: scale of the swept profile.
+        :return: the geometry socket of the backbone.
+        """
+        at = _in_frame((26.3, 3.0))
+        curve = Reroute(tree, location=at(0.1, -1.1), node_height=GRID,
+                        ins=strand["geometry"], name="StrandIn",
+                        label="StrandIn")
+        colors = SeparateBundle(
+            tree, location=at(1.0, -1.1), bundle=control["Palette"].std_out,
+            items=[("Strand", "MATERIAL"), ("Molecule", "MATERIAL")],
+            node_height=GRID, name="BackboneColors", label="BackboneColors")
+
+        profile = CurveCircle(tree, location=at(0.8, -2.5), mode="RADIUS",
+                              resolution=16, radius=self.BACKBONE_RADIUS,
+                              node_height=GRID, name="BackboneProfile",
+                              label="BackboneProfile")
+        pipe = CurveToMesh(tree, location=at(3.5, -2.7),
+                           curve=curve.geometry_out,
+                           profile_curve=profile.geometry_out,
+                           fill_caps=False, node_height=GRID, name="Backbone",
+                           label="Backbone")
+        tree.links.new(tube, pipe.node.inputs["Scale"])
+        pipe_material = SetMaterial(tree, location=at(4.6, -2.6),
+                                    geometry=pipe.geometry_out,
+                                    material=colors.out("Strand"),
+                                    node_height=GRID, name="PaintBackbone",
+                                    label="PaintBackbone")
+
+        atom = UVSphere(tree, location=at(1.0, -0.1),
+                        radius=self.BACKBONE_SPHERE_RADIUS, segments=16,
+                        rings=8, node_height=GRID, name="BackboneAtom",
+                        label="BackboneAtom")
+        atoms = InstanceOnPoints(tree, location=at(3.1, -0.1),
+                                 points=curve.geometry_out,
+                                 instance=atom.geometry_out, scale=bead,
+                                 node_height=GRID, name="BackboneAtoms",
+                                 label="BackboneAtoms")
+        atom_material = SetMaterial(tree, location=at(4.6, -0.1),
+                                    geometry=atoms.geometry_out,
+                                    material=colors.out("Molecule"),
+                                    node_height=GRID, name="PaintAtoms",
+                                    label="PaintAtoms")
+
+        join = JoinGeometry(tree, location=at(6.1, -1.1), node_height=GRID,
+                            name="JoinBackbone", label="JoinBackbone")
+        for piece in (pipe_material.geometry_out, atom_material.geometry_out):
+            tree.links.new(piece, join.geometry_in)
+        smooth = SetShadeSmooth(tree, location=at(7.6, -1.1),
+                                geometry=join.geometry_out, node_height=GRID,
+                                name="SmoothBackbone", label="SmoothBackbone")
+
+        frame = Frame(tree, location=(26.3, 3.0), label="Strand Geometry",
+                      node_height=GRID)
+        frame.add([curve, colors, profile, pipe, pipe_material, atom, atoms,
+                   atom_material, join, smooth])
+        return smooth.geometry_out
 

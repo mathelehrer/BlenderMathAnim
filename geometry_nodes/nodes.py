@@ -1006,21 +1006,38 @@ class CurveLine(GreenNode):
                  mode="POINTS",
                  start=Vector(),
                  end=Vector([0, 0, 1]),
+                 direction=None,
+                 length=None,
                  **kwargs
                  ):
+        """
+        :param mode: "POINTS" (Start/End) or "DIRECTION" (Start/Direction/Length).
+            The mode decides which sockets the node carries, so ``end`` is only
+            written in "POINTS" mode and ``direction``/``length`` only in
+            "DIRECTION" mode.
+        """
         self.node = tree.nodes.new(type="GeometryNodeCurvePrimitiveLine")
         super().__init__(tree, location=location, **kwargs)
         self.node.mode = mode
         self.geometry_out = self.node.outputs["Curve"]
 
-        if isinstance(start, (list, Vector)):
-            self.node.inputs["Start"].default_value = start
+        def write(socket_name, value):
+            if value is None:
+                return
+            socket = self.node.inputs.get(socket_name)
+            if socket is None:
+                return
+            if isinstance(value, (int, float, list, Vector)):
+                socket.default_value = value
+            else:
+                self.tree.links.new(value, socket)
+
+        write("Start", start)
+        if mode == "DIRECTION":
+            write("Direction", direction)
+            write("Length", length)
         else:
-            self.tree.links.new(start, self.node.inputs["Start"])
-        if isinstance(end, (list, Vector)):
-            self.node.inputs["End"].default_value = end
-        else:
-            self.tree.links.new(end, self.node.inputs["End"])
+            write("End", end)
 
 
 class Quadrilateral(GreenNode):
@@ -1075,6 +1092,111 @@ class ResampleCurve(GreenNode):
             self.node.inputs["Count"].default_value = count
         else:
             self.tree.links.new(count, self.node.inputs["Count"])
+
+
+class SetCurveTilt(GreenNode):
+    def __init__(self, tree, location=(0, 0), curve=None, selection=None,
+                 tilt=0, **kwargs):
+        """
+        Rotate the profile of a curve about the curve itself. Feeding a tilt
+        that grows with the index turns a straight curve into a helix once it
+        is swept.
+        """
+        self.node = tree.nodes.new(type="GeometryNodeSetCurveTilt")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_in = self.node.inputs["Curve"]
+        self.geometry_out = self.node.outputs["Curve"]
+
+        if curve is not None:
+            self.tree.links.new(curve, self.geometry_in)
+        if selection is not None:
+            if isinstance(selection, bool):
+                self.node.inputs["Selection"].default_value = selection
+            else:
+                self.tree.links.new(selection, self.node.inputs["Selection"])
+        if tilt is not None:
+            if isinstance(tilt, (int, float)):
+                self.node.inputs["Tilt"].default_value = tilt
+            else:
+                self.tree.links.new(tilt, self.node.inputs["Tilt"])
+
+
+class SetCurveNormal(GreenNode):
+    def __init__(self, tree, location=(0, 0), curve=None, selection=None,
+                 mode="Minimum Twist", **kwargs):
+        """
+        Say how the curve's normal is carried along it.
+
+        :param mode: "Minimum Twist", "Z Up" or "Free". Minimum twist is the
+            one that survives a curve turning through the vertical - "Z Up"
+            degenerates there and the normal flips, which on a swept helix
+            shows up as the strands suddenly changing sides.
+        """
+        self.node = tree.nodes.new(type="GeometryNodeSetCurveNormal")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_in = self.node.inputs["Curve"]
+        self.geometry_out = self.node.outputs["Curve"]
+        self.node.inputs["Mode"].default_value = mode
+
+        if curve is not None:
+            self.tree.links.new(curve, self.geometry_in)
+        if selection is not None:
+            if isinstance(selection, bool):
+                self.node.inputs["Selection"].default_value = selection
+            else:
+                self.tree.links.new(selection, self.node.inputs["Selection"])
+
+
+class CurveLength(GreenNode):
+    """The arc length of a curve, as a single value.
+
+    Not a field: it is one number for the whole geometry, which is what makes
+    it useful for turning a length into a fraction of a lap - or a count of
+    however many things of a fixed size fit along it.
+    """
+
+    def __init__(self, tree, location=(0, 0), curve=None, **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeCurveLength")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_in = self.node.inputs["Curve"]
+        self.std_out = self.node.outputs["Length"]
+
+        if curve is not None:
+            self.tree.links.new(curve, self.geometry_in)
+
+
+class SetSplineCyclic(GreenNode):
+    def __init__(self, tree, location=(0, 0), curve=None, selection=None,
+                 cyclic=True, **kwargs):
+        """
+        Join the last point of every spline back to its first.
+
+        A curve built with ``Points to Curves`` is always open, so a closed
+        loop that came in as a ring of points is missing exactly one segment -
+        the one from the last point back to the first. This is what puts it
+        back, and it is also what makes ``Trim Curve`` treat the loop as one
+        continuous run of arc length rather than as a line with two ends.
+        """
+        self.node = tree.nodes.new(type="GeometryNodeSetSplineCyclic")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_in = self.node.inputs["Curve"]
+        self.geometry_out = self.node.outputs["Curve"]
+
+        if curve is not None:
+            self.tree.links.new(curve, self.geometry_in)
+        if selection is not None:
+            if isinstance(selection, bool):
+                self.node.inputs["Selection"].default_value = selection
+            else:
+                self.tree.links.new(selection, self.node.inputs["Selection"])
+        if isinstance(cyclic, bool):
+            self.node.inputs["Cyclic"].default_value = cyclic
+        else:
+            self.tree.links.new(cyclic, self.node.inputs["Cyclic"])
 
 
 class TrimCurve(GreenNode):
@@ -2374,6 +2496,64 @@ class DistributePointsOnFaces(GreenNode):
 
 # Attributes
 
+class CaptureAttribute(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 domain="POINT",
+                 geometry=None,
+                 items=None, **kwargs
+                 ):
+        """
+        Freeze one or more fields onto a geometry, so that they survive the
+        topology changes further down the line.
+
+        :param tree:
+        :param location:
+        :param domain: "POINT", "EDGE", "FACE", "CURVE", "INSTANCE", ...
+        :param geometry: socket for the geometry input
+        :param items: list of ``(name, data_type, value)``, one per captured
+            field. ``data_type`` is one of "FLOAT", "INT", "FLOAT_VECTOR",
+            "FLOAT_COLOR", "BOOLEAN", "QUATERNION", "FLOAT4X4". ``value`` is
+            the socket that is captured, or a constant, or None to leave the
+            input unconnected.
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="GeometryNodeCaptureAttribute")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.node.domain = domain
+        self.geometry_in = self.node.inputs["Geometry"]
+        self.geometry_out = self.node.outputs["Geometry"]
+
+        # one entry per captured field, keyed by the name blender ended up
+        # giving it - ``capture_items.new`` renames on a collision, and the
+        # sockets follow that name rather than the one that was asked for
+        self.captured = {}
+        for name, data_type, value in (items or []):
+            # the type is set after the fact rather than passed to ``new``:
+            # only a subset of the socket types is accepted there, while the
+            # item's ``data_type`` takes all of them
+            item = self.node.capture_items.new("FLOAT", name)
+            item.data_type = data_type
+            name = item.name
+            if value is not None:
+                if isinstance(value, (int, float, bool, Vector, list)):
+                    self.node.inputs[name].default_value = value
+                else:
+                    self.tree.links.new(value, self.node.inputs[name])
+            self.captured[name] = self.node.outputs[name]
+
+        if geometry is not None:
+            self.tree.links.new(geometry, self.geometry_in)
+
+        # the common case is a single captured field, so that one can be
+        # reached the same way as on any other blue node
+        if len(self.captured) == 1:
+            self.std_out = next(iter(self.captured.values()))
+
+    def __getitem__(self, name):
+        return self.captured[name]
+
+
 class StoredNamedAttribute(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  data_type="FLOAT",
@@ -2794,6 +2974,54 @@ class SampleIndex(GreenNode):
         self.std_out = self.node.outputs["Value"]
 
 
+class AccumulateField(GreenNode):
+    """A running total of a field over a domain - the one node that can do a
+    prefix sum.
+
+    Fields are evaluated element by element with no memory of the element
+    before, so anything that is "where the previous ones left off" - an arc
+    length, a cumulative count - cannot be written as one. This node is the
+    exception: it hands back the sum of everything up to an element
+    (``Leading``), up to and including it (``Trailing``), and over the whole
+    domain (``Total``).
+
+    :param data_type: "FLOAT", "INT", "FLOAT_VECTOR", "TRANSFORM"
+    :param domain: "POINT", "EDGE", "FACE", "CURVE", "INSTANCE"
+    :param value: the field being summed.
+    :param group_id: sums restart wherever this changes; leave it alone for one
+        running total over the whole domain.
+    """
+
+    def __init__(self, tree, location=(0, 0), data_type="FLOAT",
+                 domain="POINT", value=None, group_id=None, **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeAccumulateField")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.node.data_type = data_type
+        self.node.domain = domain
+
+        if value is not None:
+            if isinstance(value, (int, float, Vector, list)):
+                self.node.inputs["Value"].default_value = value
+            else:
+                tree.links.new(value, self.node.inputs["Value"])
+        if group_id is not None:
+            if isinstance(group_id, int):
+                self.node.inputs["Group ID"].default_value = group_id
+            else:
+                tree.links.new(group_id, self.node.inputs["Group ID"])
+
+        self.leading = self.node.outputs["Leading"]
+        self.trailing = self.node.outputs["Trailing"]
+        self.total = self.node.outputs["Total"]
+        #: ``Trailing`` is the sum of everything *before* this element, which is
+        #: the one a parametrisation wants - it starts at 0 and ends at
+        #: ``Total``. The names read the other way round to what one expects:
+        #: measured on a 2001 point curve, ``Leading`` already includes the
+        #: element's own value.
+        self.std_out = self.trailing
+
+
 class SampleNearestSurface(GreenNode):
     """
     Geometry node SampleNearestSurfac
@@ -3025,6 +3253,14 @@ class InputNormal(RedNode):
         super().__init__(tree, location=location, **kwargs)
 
         self.std_out = self.node.outputs["Normal"]
+
+
+class InputTangent(RedNode):
+    def __init__(self, tree, location=(0, 0), **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeInputTangent")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Tangent"]
 
 
 class InputMaterial(RedNode):

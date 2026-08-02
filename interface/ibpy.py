@@ -3712,7 +3712,7 @@ def make_mandelbrot_material(**kwargs):
     # for eevee
     material.use_screen_refraction = True
     # for cycles
-    material.cycles.displacement_method = 'DISPLACEMENT'
+    # material.cycles.displacement_method = 'DISPLACEMENT'
     material.use_nodes = True
     tree = material.node_tree
     nodes = material.node_tree.nodes
@@ -7128,8 +7128,9 @@ def set_to_first_shape(bob, begin_frame=0, transition_frames=0):
 def add_sub_division_surface_modifier(b_obj, level=2, adaptive_subdivision=False, dicing_rate=0.5, **kwargs):
     obj = get_obj(b_obj)
     if adaptive_subdivision:
-        obj.cycles.use_adaptive_subdivision = True
-        obj.cycles.dicing_rate = dicing_rate
+        pass
+        # obj.cycles.use_adaptive_subdivision = True
+        # obj.cycles.dicing_rate = dicing_rate
     modifier = obj.modifiers.new(name='smooth', type='SUBSURF')
     if modifier:
         modifier.render_levels = level
