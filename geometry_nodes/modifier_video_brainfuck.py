@@ -16,7 +16,7 @@ from geometry_nodes.nodes import Points, InputValue, InstanceOnPoints, JoinGeome
     IndexSwitch, CurveLine, ResampleCurve, InputTangent, CaptureAttribute, DuplicateElements, \
     RandomValue, AlignRotationToVector, IcoSphere, MeshToCurve, CurveCircle, CurveToMesh, UVSphere, SetShadeSmooth, \
     SampleCurve, PointsToCurve, SetCurveNormal, VectorRotate, MapRange, MixNode, AccumulateField, \
-    CurveLength
+    CurveLength, SeparateGeometry, InputRotation, MorphNode
 from interface.ibpy import Vector
 from objects.logo import logo_curve
 from utils.constants import DATA_DIR
@@ -480,12 +480,12 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
             palette[node_name] = InputMaterial(tree, location=(x, -4.4 - 0.4 * row),
                                                material=color, name=node_name,
                                                **self.kwargs)
-        rest =[("GlyphColor", self.glyph_color),
-                                            ("FrameColor", self.frame_color)]
+        rest = [("GlyphColor", self.glyph_color),
+                ("FrameColor", self.frame_color)]
         for offset, (node_name, color) in enumerate(rest):
             palette[node_name] = InputMaterial(
                 tree, location=(x, -4.4 - 0.4 * (len(self.cell_colors) + offset)),
-                material=color, name=node_name,hide=True, **self.kwargs)
+                material=color, name=node_name, hide=True, **self.kwargs)
         for source in palette.values():
             self.materials.append(source.node.material)
         control.update(palette)
@@ -2118,7 +2118,6 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         ("BracketClosedColor", "x14_color", "]"),
     )
 
-
     # how the code table is laid out: one entry every ``table_spacing`` along
     # x, the letter ``table_line_gap`` below its number, and a frame around it
     # that is ``table_margin`` times the extent of the whole row
@@ -2182,7 +2181,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         self.tape_files = tuple(self.TAPE_FILES if tape_files is None else tape_files)
         # the column the values stand in - whatever the header line of the file
         # says, so that the Named Attribute nodes read what Import CSV wrote
-        self.tape_columns = tuple(csv_column(os.path.join(DATA_DIR, file_name+".csv"))
+        self.tape_columns = tuple(csv_column(os.path.join(DATA_DIR, file_name + ".csv"))
                                   for file_name in self.tape_files)
         overrides = colors or {}
         self.cell_colors = tuple((node_name, overrides.get(node_name, color))
@@ -2215,7 +2214,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         out = self.group_outputs
         out.location = (38 * 200, -2 * 200)
         join = JoinGeometry(tree, location=(36, -4))
-        for piece in [cells, table]:#, simulated]:
+        for piece in [cells, table]:  #, simulated]:
             tree.links.new(piece, join.geometry_in)
         tree.links.new(join.geometry_out, out.inputs["Geometry"])
 
@@ -2305,7 +2304,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         # a different soup is a different file rather than a different graph.
         for row, (node_name, file_name) in enumerate(zip(self.TAPE_SOURCES, self.tape_files)):
             control[node_name] = ImportCSV(tree, location=(x, -12.6 - 1.2 * row),
-                                           path=os.path.join(DATA_DIR, file_name+".csv"),
+                                           path=os.path.join(DATA_DIR, file_name + ".csv"),
                                            name=node_name, label=file_name)
 
         frame = Frame(tree, location=(-24, 0.6), label="ControlParameter")
@@ -2358,12 +2357,11 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         # create two frames that are connected by the turing machine
         ends = []
         for i in range(2):
-
-            length = MathNode(tree, location=(-8, -3*i), operation="MULTIPLY",
+            length = MathNode(tree, location=(-8, -3 * i), operation="MULTIPLY",
                               inputs0=control["TapeSize"].std_out,
                               inputs1=control["CellSize"].std_out, name="TapeLength")
-            end = CombineXYZ(tree, location=(-7, -3*i), x=length.std_out, name="TapeEnd")
-            line = MeshLine(tree, location=(-6, 0.6-3*i), mode="END_POINTS",
+            end = CombineXYZ(tree, location=(-7, -3 * i), x=length.std_out, name="TapeEnd")
+            line = MeshLine(tree, location=(-6, 0.6 - 3 * i), mode="END_POINTS",
                             count=control["TapeSize"].std_out,
                             start_location=Vector([0, 0, 0]), end_location=end.std_out)
             # what the file holds for this cell. The column of the point cloud
@@ -2371,23 +2369,23 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
             # the index of the cell being written - a cell beyond the end of
             # the file gets a zero, so a short file simply leaves the rest of
             # the tape blank.
-            column = NamedAttribute(tree, location=(-6, -0.6-3*i), data_type="INT",
+            column = NamedAttribute(tree, location=(-6, -0.6 - 3 * i), data_type="INT",
                                     name=self.tape_columns[i], label="CsvColumn")
-            cell = Index(tree, location=(-6, -1.2-3*i), name="CellIndex", hide=True)
-            content = SampleIndex(tree, location=(-5.4, 0.6-3*i), data_type="INT",
+            cell = Index(tree, location=(-6, -1.2 - 3 * i), name="CellIndex", hide=True)
+            content = SampleIndex(tree, location=(-5.4, 0.6 - 3 * i), data_type="INT",
                                   domain="POINT", geometry=control[self.TAPE_SOURCES[i]].geometry_out,
                                   value=column.std_out, index=cell.std_out,
                                   label="ReadCell" + str(i))
             # the attribute has to exist from the first frame on, otherwise the
             # "Sample Index" in the automaton has nothing to read and the cells
             # have nothing to be coloured by.
-            values = StoredNamedAttribute(tree, location=(-4.6, 0.6-3*i), data_type="INT",
+            values = StoredNamedAttribute(tree, location=(-4.6, 0.6 - 3 * i), data_type="INT",
                                           domain="POINT", name="Value", value=content.std_out,
                                           label="LoadTape")
 
-            tape_kind = StoredNamedAttribute(tree, location=(-3.6, 0.6-3*i), data_type="INT",
-                                         domain="POINT", name="Tape", value=i,
-                                         label="TapeNumber")
+            tape_kind = StoredNamedAttribute(tree, location=(-3.6, 0.6 - 3 * i), data_type="INT",
+                                             domain="POINT", name="Tape", value=i,
+                                             label="TapeNumber")
             # Which cell of the whole memory this is: the two tapes are laid
             # end to end, so tape 1 starts at TapeSize. It is written down here
             # for two reasons. The point index only says it before the join,
@@ -2396,10 +2394,10 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
             # head is on" is picked out of the realized geometry by reading
             # this attribute back rather than by comparing Index.
             offset = [] if i == 0 else [
-                IntegerMath(tree, location=(-3.4, -0.4-3*i), operation="ADD",
+                IntegerMath(tree, location=(-3.4, -0.4 - 3 * i), operation="ADD",
                             inputs0=cell.std_out, inputs1=control["TapeSize"].std_out,
                             name="CellOnTape" + str(i), hide=True)]
-            number = StoredNamedAttribute(tree, location=(-3.0, 0.6-3*i), data_type="INT",
+            number = StoredNamedAttribute(tree, location=(-3.0, 0.6 - 3 * i), data_type="INT",
                                           domain="POINT", name="Cell",
                                           value=offset[0].std_out if offset else cell.std_out,
                                           label="CellNumber")
@@ -2609,27 +2607,28 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
 
         attr_tape = NamedAttribute(tree, location=(31, 1.6), data_type="INT", name="Tape")
 
-        tape_shift = make_function(tree,name="TapeShift",
-                    functions={
-                        "translation":["cell_width,cell_number,*,-2,/","0","0"],
-                        "offset":["0","0","-4,tape,*"]
-                    },inputs=["cell_width","cell_number","tape"],outputs=["translation","offset"],
-                    scalars=["cell_width","cell_number"],integers=["tape"],vectors=["translation","offset"],
-                                   hide=True,location=(34,1.6))
-        tree.links.new(control["CellSize"].std_out,tape_shift.inputs["cell_width"])
-        tree.links.new(control["TapeSize"].std_out,tape_shift.inputs["cell_number"])
-        tree.links.new(attr_tape.std_out,tape_shift.inputs["tape"])
+        tape_shift = make_function(tree, name="TapeShift",
+                                   functions={
+                                       "translation": ["cell_width,cell_number,*,-2,/", "0", "0"],
+                                       "offset": ["0", "0", "-4,tape,*"]
+                                   }, inputs=["cell_width", "cell_number", "tape"], outputs=["translation", "offset"],
+                                   scalars=["cell_width", "cell_number"], integers=["tape"],
+                                   vectors=["translation", "offset"],
+                                   hide=True, location=(34, 1.6))
+        tree.links.new(control["CellSize"].std_out, tape_shift.inputs["cell_width"])
+        tree.links.new(control["TapeSize"].std_out, tape_shift.inputs["cell_number"])
+        tree.links.new(attr_tape.std_out, tape_shift.inputs["tape"])
 
-        tilt = TransformGeometry(tree, location=(35, 2.6),translation=tape_shift.outputs["translation"],
+        tilt = TransformGeometry(tree, location=(35, 2.6), translation=tape_shift.outputs["translation"],
                                  rotation=[self.tape_tilt, 0, 0], name="LayTapeBack")
 
-        set_position = SetPosition(tree,location=(36,2),offset=tape_shift.outputs["offset"])
+        set_position = SetPosition(tree, location=(36, 2), offset=tape_shift.outputs["offset"])
 
-        create_geometry_line(tree, [joined, tilt,set_position])
+        create_geometry_line(tree, [joined, tilt, set_position])
 
         frame = Frame(tree, location=(25.6, 3.4), label="Cells")
         frame.add([quad, fill, instances, realize, value, here, holds, under,
-                   joined, tilt,set_position,attr_tape,tape_shift] + painters)
+                   joined, tilt, set_position, attr_tape, tape_shift] + painters)
         return set_position.geometry_out
 
     # ----------------------------------------------------------------
@@ -3139,7 +3138,6 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
                    wire, place, painted])
         return painted.geometry_out
 
-
     # ----------------------------------------------------------------
     def _create_cursor_frame(self, tree, control, counter, first, spacing, origin):
         """``CurrentDisplay``: the box that runs along the program strip.
@@ -3386,13 +3384,13 @@ class SoupWatcherModifier(GeometryNodesModifier):
     OPCODE_COLORS = BrainFuckExtendedModifier.OPCODE_COLORS
     OPERATORS = BFFNode.COMMANDS
     GLYPH_COLOR = "text"
-    TAPE_COLOR = "gray_4"
+    TAPE_COLOR = "gray_1"
 
     def __init__(self, data_file="soup_evolution_bytes.csv", max_snapshots=None,
-                cell_size=0.09, column_gap=0.4, row_spacing=0.13,
-                tape_tilt=0, glyph_size=0.85, stick_out=0.05, cell_square=0.9,
-                frames_per_snapshot=10, colors=None, name="SoupWatcher",
-                **kwargs):
+                 cell_size=0.09, column_gap=0.4, row_spacing=0.13,
+                 tape_tilt=0, glyph_size=0.85, stick_out=0.05, cell_square=0.9,
+                 frames_per_snapshot=10, colors=None, name="SoupWatcher",
+                 **kwargs):
         self.cell_size = cell_size
         self.column_gap = column_gap
         self.row_spacing = row_spacing
@@ -3651,7 +3649,7 @@ class SoupWatcherModifier(GeometryNodesModifier):
 
         frame = Frame(tree, location=(-8.2, -1.4), label="TapeBars")
         frame.add([index, layout, points, placed, span, end, cell_line, side, square,
-                  fill, cells, tapes, realize, painted])
+                   fill, cells, tapes, realize, painted])
         return painted.geometry_out
 
     # ----------------------------------------------------------------
@@ -3745,14 +3743,15 @@ class SoupWatcherModifier(GeometryNodesModifier):
 
         byte, byte_nodes = self._create_byte_lookup(tree, control, index.std_out,
                                                     snapshot_offset)
-        position = Position(tree, location=(-6, -9.6), hide=True)
+        position = Position(tree, location=(-7, -9.6), hide=True)
 
         zone = ForEachZone(tree, location=(-4, -8), domain="POINT", node_width=9,
                            geometry=placed.geometry_out)
         zone.add_socket(socket_type="INT", name="Byte",
                         value=byte.std_out, for_input=True)
+        glyph_shift = VectorMath(tree,location=(-6,-9.6),label="GlyphShift",inputs0=position.std_out,inputs1=Vector([0,0,0.1]),hide=True)
         zone.add_socket(socket_type="VECTOR", name="Location",
-                        value=position.std_out, for_input=True)
+                        value=glyph_shift.std_out, for_input=True)
 
         # the byte is this cell's character's ascii code (what the byte csv
         # stored); one Slice String into the ascii table turns it back into the
@@ -3767,7 +3766,7 @@ class SoupWatcherModifier(GeometryNodesModifier):
         # the same pattern applied to the ascii table instead of a tape
         custom_ops = {
             "in": {"type": FindInString, "inputs": ("String", "Search"),
-                  "output": "Count", "label": "in"},
+                   "output": "Count", "label": "in"},
         }
         socket_labels = [node_name for node_name, _, _ in self.opcode_colors]
         color_selection = make_function(
@@ -3808,13 +3807,13 @@ class SoupWatcherModifier(GeometryNodesModifier):
                                   items=control["OpColors"].items, name="OPColors")
         painters = ([SetMaterial(tree, location=(3, -8), material=control["GlyphColor"].std_out,
                                  name="PaintDefault")]
-                   + [SetMaterial(tree, location=(3, -8.4 - 0.3 * row),
-                                  selection=color_selection.outputs[node_name],
-                                  material=opcolors.out(node_name),
-                                  name="Paint" + node_name, hide=True)
-                      for row, node_name in enumerate(socket_labels)])
+                    + [SetMaterial(tree, location=(3, -8.4 - 0.3 * row),
+                                   selection=color_selection.outputs[node_name],
+                                   material=opcolors.out(node_name),
+                                   name="Paint" + node_name, hide=True)
+                       for row, node_name in enumerate(socket_labels)])
 
-        placed_glyph = TransformGeometry(tree, location=(4, -8),
+        placed_glyph = TransformGeometry(tree, location=(4, -8),rotation=Vector([pi/2,0,0]),
                                          translation=zone.foreach_input.outputs["Location"],
                                          name="PlaceGlyph")
         zone.create_geometry_line([realize, fill, stick_out] + painters + [placed_glyph],
@@ -3822,9 +3821,276 @@ class SoupWatcherModifier(GeometryNodesModifier):
 
         frame = Frame(tree, location=(-8.2, -7.4), label="Glyphs")
         frame.add([index, layout, points, placed, position, zone, letter,
-                  color_selection, glyph, size, curves, realize, fill, stick_out,
-                  opcolors, placed_glyph] + byte_nodes + painters)
+                   color_selection, glyph, size, curves, realize, fill, stick_out,
+                   opcolors, placed_glyph] + byte_nodes + painters)
         return zone.geometry_out
+
+
+class SoupWatcherModifierSingle(SoupWatcherModifier):
+    """The same snapshot of 100 tapes, stacked as **one** column instead of two.
+
+    Same data file, same snapshot clock, same cells and glyphs - the only
+    thing that changes is where a tape goes: with all
+    :attr:`TAPES_PER_SNAPSHOT` tapes in a single column, ``col`` is always 0
+    and the layout collapses to "tape *i* is the *i*-th row". ``column_gap``
+    is inherited but no longer reaches the geometry.
+
+    The point of the arrangement is that one tape can then be read. Two
+    columns of 50 have to share the frame width between them, which leaves
+    each tape half a screen wide and its 64 cells too small to make out; a
+    single column lets the near tape run the full width of the frame, with
+    the rest of the snapshot receding above it and the far end of the column
+    running off the top of the screen. Which of the 100 rows still fit is a
+    property of the shot, not of this graph - see
+    ``video_bff/scene_bff.py``'s ``soup_watcher``, which places the camera by
+    fitting the *first* row edge to edge and lets the rest fall where they
+    fall.
+
+    Because the tilt lives in the camera rather than in the geometry (the
+    default ``tape_tilt`` is 0 and the sheet is built flat in x-y), nothing
+    about the angle of the view is decided here either.
+    """
+
+    ROWS = SoupWatcherModifier.TAPES_PER_SNAPSHOT  # the whole snapshot, stacked
+    COLUMNS = 1
+    TAPES_PER_SNAPSHOT = ROWS * COLUMNS
+
+    def __init__(self, name="SoupWatcherSingle", **kwargs):
+        super().__init__(name=name, **kwargs)
+
+    @property
+    def tape_width(self):
+        """How wide one tape is, in the units the layout is built in.
+
+        The 64 cell *centres* span ``(TAPE - 1) * cell_size`` and each end
+        cell adds half its square, so the strip a camera has to frame is one
+        whole cell wider than the distance between the outermost centres.
+        """
+        return self.TAPE * self.cell_size
+
+    @property
+    def tape_center(self):
+        """The x a camera has to sit above to see a tape centred.
+
+        Cell 0 is at ``x = 0`` and cell 63 at ``x = 63 * cell_size``, so the
+        middle of the strip is half a cell to the left of half its width.
+        """
+        return (self.TAPE - 1) * self.cell_size / 2
+
+
+class SoupWatcherModifierSingleStarWars(SoupWatcherModifierSingle):
+    """The single-column soup, plus an end card that crawls out of it.
+
+    Everything :class:`SoupWatcherModifierSingle` builds, with two extra
+    dials for the scene to turn once the soup has been watched long enough:
+
+    ``Recede``
+        pushes the whole sheet of tapes away *along the line of sight*, so
+        it shrinks towards the middle of the frame and settles behind
+        whatever comes next without sliding sideways out of the shot. That
+        is what "the tapes shift to the background" means here.
+    ``CrawlDistance``
+        how far the end card has travelled up its own plane. At 0 the text
+        sits at the near edge of the tape sheet; the scene runs it from
+        somewhere below the bottom of the frame to well up the screen.
+
+    The card is the receding-title-crawl trick: a block of text lying in a
+    plane that is tilted **away** from the camera, so that moving it up the
+    plane also moves it away and perspective alone shrinks it towards a
+    vanishing point.
+
+    The tilt is measured from the tapes' own plane, and what matters is what
+    it leaves between the card and the line of sight. The shot's camera looks
+    down on the tapes at about 41 degrees, so the 15 this defaults to puts
+    the card some 26 degrees off the line of sight: compressed hard, with the
+    vanishing point landing within a whisker of the top edge of the frame.
+    Lay the card flat in the tapes' plane instead (``crawl_tilt=0``) and it
+    merely slides away without shrinking much; tilt it much further and the
+    vanishing point drops into the frame, where the lettering piles up on
+    itself and never leaves. A camera at a different angle wants a different
+    tilt - the two add up.
+
+    Because the card's plane sinks below the tapes as it recedes (that is
+    what tilting away *means*), the two would intersect if the sheet stayed
+    put - which is the other reason ``Recede`` exists, and why the scene
+    pushes the tapes back before the crawl arrives rather than after.
+
+    The text is set in ``crawl_font``, which has to be one of the fonts
+    ``perform.scene.initialize_blender`` loads. Of those, Arial Black is the
+    heavy grotesque closest in weight and feel to the lettering this kind of
+    crawl is usually set in.
+
+    :param crawl_text: the card, newlines and all - ``String to Curves``
+        breaks lines on ``\\n`` and centres them.
+    :param crawl_font: name of a loaded Blender font.
+    :param crawl_color: palette name for the lettering.
+    :param crawl_size: cap height of the lettering, in the same units as
+        ``cell_size``; the widest line has to fit the frame at the near end
+        of the crawl, which is what sets it.
+    :param crawl_tilt: how far the card's plane is tilted away from the
+        plane of the tapes, in radians.
+    :param crawl_lift: how far above the tapes the card starts, so that it
+        clears them at ``CrawlDistance = 0``.
+    :param line_spacing: multiples of the line height between the lines.
+    :param view_direction: the direction the camera looks, which is the
+        direction ``Recede`` pushes the tapes along. Only its direction is
+        used; the scene's tilt and this have to agree, which is why both
+        take the same three numbers.
+    """
+
+    CRAWL_TEXT = ("Computational Life Generator\n"
+                  "by Alex Borger\n"
+                  "https://alexborger.com/clr-computational-life-reactor")
+    CRAWL_FONT = "Arial Black"  # loaded by perform.scene.initialize_blender
+    CRAWL_COLOR = "example"
+
+    # the widest line of the default card is 20.6 units long set solid in
+    # Arial Black, and the frame is about 5.5 wide where the crawl starts
+    def __init__(self, crawl_text=None, crawl_font=None, crawl_color=None,
+                 crawl_size=0.25, crawl_tilt=15 * pi / 180, crawl_lift=0.35,
+                 line_spacing=1.6, view_direction=(0, 3.9, -3.4),
+                 name="SoupWatcherStarWars", **kwargs):
+        self.crawl_text = self.CRAWL_TEXT if crawl_text is None else crawl_text
+        self.crawl_font = crawl_font or self.CRAWL_FONT
+        self.crawl_color = crawl_color or self.CRAWL_COLOR
+        self.crawl_size = crawl_size
+        self.crawl_tilt = crawl_tilt
+        self.crawl_lift = crawl_lift
+        self.line_spacing = line_spacing
+        self.view_direction = Vector(view_direction).normalized()
+        super().__init__(name=name, **kwargs)
+
+    # ----------------------------------------------------------------
+    @property
+    def crawl_direction(self):
+        """Up the crawl: one unit of ``CrawlDistance`` as a world vector.
+
+        The tapes' own "away from the camera" is ``+y``; tilting the card's
+        plane back by ``crawl_tilt`` about x tips that direction downwards by
+        the same angle.
+        """
+        return Vector((0, math.cos(self.crawl_tilt), -math.sin(self.crawl_tilt)))
+
+    @property
+    def crawl_origin(self):
+        """Where the card sits at ``CrawlDistance = 0``.
+
+        Centred on the tape, level with its nearest row and ``crawl_lift``
+        above it - the hinge the whole crawl swings out of, and the frame
+        anything else riding the crawl (the screenshot, say) has to be
+        placed in.
+        """
+        return Vector((self.tape_center, 0, self.crawl_lift))
+
+    def crawl_position(self, distance):
+        """Where a thing riding the crawl at ``distance`` ends up."""
+        return self.crawl_origin + distance * self.crawl_direction
+
+    # ----------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._create_control_frame(tree)
+        offset = self._create_snapshot_offset(tree, control)
+        bars = self._create_tape_bars_frame(tree, control)
+        glyphs = self._create_glyphs_frame(tree, control, offset)
+
+        joined = JoinGeometry(tree, location=(10, 0))
+        tree.links.new(bars, joined.geometry_in)
+        tree.links.new(glyphs, joined.geometry_in)
+        tilt = TransformGeometry(tree, location=(11, 0), rotation=[self.tape_tilt, 0, 0],
+                                 name="TiltIntoView")
+        recede = self._create_recede_frame(tree)
+        create_geometry_line(tree, [joined, tilt, recede])
+
+        # the card is not tilted with the tapes and not pushed back with
+        # them either - it has its own plane and its own dial
+        crawl = self._create_crawl_frame(tree)
+
+        everything = JoinGeometry(tree, location=(15, 0))
+        tree.links.new(recede.geometry_out, everything.geometry_in)
+        tree.links.new(crawl, everything.geometry_in)
+
+        out = self.group_outputs
+        tree.links.new(everything.geometry_out, out.inputs["Geometry"])
+
+    # ----------------------------------------------------------------
+    def _create_recede_frame(self, tree):
+        """``Recede``: push the tapes away along the line of sight.
+
+        Along the *view* direction rather than simply backwards, because a
+        sheet that fills the frame edge to edge has to shrink towards the
+        middle of the frame to read as "further away" - pushing it along +y
+        instead would slide it up out of the top of the shot.
+
+        :return: the ``Transform Geometry`` the tapes leave through.
+        """
+        # only this node may carry "Recede" in its name: the scene looks its
+        # dials up by substring (``ibpy.get_geometry_node_from_modifier``) and
+        # would otherwise keyframe whichever of them the iteration reached first
+        amount = InputValue(tree, location=(11, 1.6), value=0, name="Recede", hide=True)
+        d = self.view_direction
+        push = make_function(
+            tree, name="PushOffset",
+            functions={"translation": ["%.6f,r,*" % d.x, "%.6f,r,*" % d.y,
+                                       "%.6f,r,*" % d.z]},
+            inputs=["r"], outputs=["translation"],
+            scalars=["r"], vectors=["translation"], hide=True, location=(12, 1.6))
+        tree.links.new(amount.std_out, push.inputs["r"])
+
+        recede = TransformGeometry(tree, location=(13, 0),
+                                   translation=push.outputs["translation"],
+                                   name="PushBack")
+        frame = Frame(tree, location=(10.8, 2.2), label="PushBack")
+        frame.add([amount, push, recede])
+        return recede
+
+    # ----------------------------------------------------------------
+    def _create_crawl_frame(self, tree):
+        """``Crawl``: the end card, lying in its own tilted plane.
+
+        One ``String to Curves`` for the whole card - it breaks the lines
+        itself and centres them - filled flat rather than extruded: the card
+        is a piece of lettering seen in perspective, not an object standing
+        in the scene, and anything sticking out of its plane would give that
+        away as it recedes.
+
+        :return: the geometry socket of the placed card.
+        """
+        color = InputMaterial(tree, location=(10, 4.6), material=self.crawl_color,
+                              name="CrawlColor", **self.kwargs, hide=True)
+        self.materials.append(color.node.material)
+
+        text = InputString(tree, location=(10, 4), string=self.crawl_text,
+                           name="CrawlText", label="crawl", hide=True)
+        curves = StringToCurves(tree, location=(11, 4), string=text.std_out,
+                                font=self.crawl_font, size=self.crawl_size,
+                                line_spacing=self.line_spacing,
+                                align_x="CENTER", align_y="MIDDLE")
+        realize = RealizeInstances(tree, location=(12, 4))
+        fill = FillCurve(tree, location=(13, 4), mode="N-gons")
+        painted = SetMaterial(tree, location=(14, 4), material=color.std_out,
+                              name="PaintCrawl")
+
+        distance = InputValue(tree, location=(10, 3.4), value=0,
+                              name="CrawlDistance", hide=True)
+        o, m = self.crawl_origin, self.crawl_direction
+        move = make_function(
+            tree, name="CrawlPosition",
+            functions={"translation": ["%.6f" % o.x,
+                                       "%.6f,s,%.6f,*,+" % (o.y, m.y),
+                                       "%.6f,s,%.6f,*,+" % (o.z, m.z)]},
+            inputs=["s"], outputs=["translation"],
+            scalars=["s"], vectors=["translation"], hide=True, location=(11, 3.4))
+        tree.links.new(distance.std_out, move.inputs["s"])
+
+        place = TransformGeometry(tree, location=(15, 4),
+                                  rotation=[-self.crawl_tilt, 0, 0],
+                                  translation=move.outputs["translation"],
+                                  name="PlaceCrawl")
+        create_geometry_line(tree, [curves, realize, fill, painted, place])
+
+        frame = Frame(tree, location=(9.8, 5.2), label="Crawl")
+        frame.add([color, text, curves, realize, fill, painted, distance, move, place])
+        return place.geometry_out
 
 
 # One grid unit is 200 px in both directions, so a half-integer coordinate is
@@ -3855,15 +4121,15 @@ GRID = 200
 
 DNA_TRACK_FILE = "dna_track"
 
-TRACK_X_IN = 40.0      # the track starts here, well off screen to the right
-TRACK_Z_UP = 1.6       # height of the incoming run, in the upper half
-TRACK_X_LOOP = 1.0     # where the roller-coaster loop sits
-TRACK_R1 = 2.7         # and how big it is
-TRACK_DEPTH = 4.5      # how far back in y a loop steps to clear its own entry
-TRACK_X_LEFT = -11.0   # how far left it gets before turning back
-TRACK_R2 = 2.8         # radius of the 180 degree turn that sends it back right
-TRACK_X_OUT = 30.0     # the track ends here, off screen to the right again
-TRACK_STEP = 0.08      # spacing of the samples written to the csv
+TRACK_X_IN = 40.0  # the track starts here, well off screen to the right
+TRACK_Z_UP = 1.6  # height of the incoming run, in the upper half
+TRACK_X_LOOP = 1.0  # where the roller-coaster loop sits
+TRACK_R1 = 2.7  # and how big it is
+TRACK_DEPTH = 4.5  # how far back in y a loop steps to clear its own entry
+TRACK_X_LEFT = -11.0  # how far left it gets before turning back
+TRACK_R2 = 2.8  # radius of the 180 degree turn that sends it back right
+TRACK_X_OUT = 30.0  # the track ends here, off screen to the right again
+TRACK_STEP = 0.08  # spacing of the samples written to the csv
 
 # Height of the last straight, and so of the fork: this is the one number in
 # the track that the *choreography* depends on rather than the composition.
@@ -3890,9 +4156,9 @@ TRACK_Z_MID = TRACK_Z_OUT + 2.0 * TRACK_R2
 # track here, for the same reason the scene reads ``marks`` rather than typing
 # arc lengths of its own: retuning the path cannot silently leave the gate
 # somewhere the molecule never reaches.
-TRACK_Y_WOUND = 6.0    # y at which the strands begin to come apart
-TRACK_Y_OPEN = 9.0     # y beyond which they are all the way apart
-TRACK_OPEN_RUN = 8.0   # how far along the last straight that takes
+TRACK_Y_WOUND = 6.0  # y at which the strands begin to come apart
+TRACK_Y_OPEN = 9.0  # y beyond which they are all the way apart
+TRACK_OPEN_RUN = 8.0  # how far along the last straight that takes
 
 
 def _smoothstep(u):
@@ -4032,6 +4298,215 @@ def write_dna_track(path):
         for x, y, z in points:
             file.write("%.5f,%.5f,%.5f\n" % (x, y, z))
     return total, marks
+
+
+class MorphModifier(GeometryNodesModifier):
+    """One shape's points slid onto another's - a picture frame into an arrow.
+
+    A port of ``video_bff/tmp.xml``, the tree authored in the Blender editor.
+    Three frames of nodes, the same three the editor shows:
+
+    ``Object 1``
+        the shape morphed *from*: a rectangle swept along a small circle
+        (``Curve to Mesh``), which makes a tube bent into a picture frame,
+        stood upright and moved off to the left.
+    ``Object 2``
+        the shape morphed *to*: a cone on top of a cylinder that has been
+        dropped by half its length, joined into an arrow pointing up.
+    ``Morphing``
+        the blend itself: the straight line between the two shapes,
+        ``(1 - t) * here + t * there``, with ``t`` the ``MorphParameter``
+        value node. Animating that from 0 to 1 in the scene is the whole
+        animation.
+
+    The two shape frames are the editor's tree node for node; the third is
+    the one deliberate difference. What the editor draws as six loose nodes
+    (``Position``, ``Index``, ``Sample Index``, two scales, an add and a
+    ``Set Position``) is one :class:`~geometry_nodes.nodes.MorphNode` group
+    here, because that blend is not specific to frames and arrows and reads
+    better as a node than as a diagram. The geometry it produces is identical
+    - the group holds exactly those nodes - so the only thing lost is the
+    view of them from outside, and a click on the group brings that back.
+
+    Two things follow from doing it by index rather than by any kind of
+    matching, and both are the node tree's own doing rather than choices
+    made here:
+
+    - the point that ends up at the arrow's tip is whichever point of the
+      frame happens to share the tip's index, so the frame turns itself
+      inside out on the way rather than folding neatly;
+    - the two shapes do not have the same number of points (the frame's tube
+      has more), and an index past the end of the arrow does not clamp - it
+      samples as the zero vector - so the frame's surplus points all collapse
+      onto the world origin. The morph therefore arrives at an arrow *plus* a
+      knot of geometry at ``(0, 0, 0)``, which is right at the foot of the
+      arrow and so easy to mistake for part of it. Give the profile circle
+      fewer segments, or the cone and cylinder more, if the counts should
+      meet - see :meth:`point_counts`, which reports both.
+
+    :param frame_width: width of the rectangle.
+    :param frame_height: height of the rectangle.
+    :param frame_thickness: radius of the circle swept along it.
+    :param frame_resolution: segments of that circle.
+    :param frame_location: where the frame sits before it morphs.
+    :param arrow_head_radius: radius of the cone's base.
+    :param arrow_head_length: length of the cone.
+    :param arrow_shaft_radius: radius of the cylinder.
+    :param arrow_shaft_length: length of the cylinder.
+    :param arrow_resolution: vertices around both of them.
+    :param morph: starting value of ``MorphParameter``.
+    :param color: palette name for the morphing shape, or ``None`` for the
+        tree exactly as the editor has it. The xml carries no ``Set
+        Material`` node, and a material sitting in the *object's* slot does
+        not reach geometry that nodes create - the evaluated mesh brings its
+        own (empty) material list - so a shape built entirely out of
+        primitives like this one renders in blender's default grey until the
+        graph itself paints it. Naming a colour here adds that one node.
+    """
+
+    def __init__(self, frame_width=2.0, frame_height=2.0, frame_thickness=0.1,
+                 frame_resolution=32, frame_location=(-5.3, 0, 0),
+                 arrow_head_radius=0.5, arrow_head_length=1.0,
+                 arrow_shaft_radius=0.15, arrow_shaft_length=1.0,
+                 arrow_resolution=32, morph=0.0, color=None,
+                 name="Morph", **kwargs):
+        self.color = color
+        self.frame_width = frame_width
+        self.frame_height = frame_height
+        self.frame_thickness = frame_thickness
+        self.frame_resolution = frame_resolution
+        self.frame_location = Vector(frame_location)
+        self.arrow_head_radius = arrow_head_radius
+        self.arrow_head_length = arrow_head_length
+        self.arrow_shaft_radius = arrow_shaft_radius
+        self.arrow_shaft_length = arrow_shaft_length
+        self.arrow_resolution = arrow_resolution
+        self.morph = morph
+        self.kwargs = kwargs
+        super().__init__(name=name, automatic_layout=False)
+
+    # ----------------------------------------------------------------
+    def point_counts(self):
+        """``(frame, arrow)`` point counts, which the morph maps index to index.
+
+        Worked out the way blender builds the two, so that the mismatch the
+        class docstring warns about can be seen without opening the editor:
+        a closed curve of four corners swept along a circle of ``n``
+        segments carries ``4 * n`` points, while the arrow is a cone (a ring,
+        a tip and the centre of its fan-filled base) plus a cylinder (two
+        rings and two fan centres).
+        """
+        frame = 4 * self.frame_resolution
+        cone = self.arrow_resolution + 2
+        cylinder = 2 * self.arrow_resolution + 2
+        return frame, cone + cylinder
+
+    # ----------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        source = self._create_frame_frame(tree)
+        target = self._create_arrow_frame(tree)
+        morphed = self._create_morphing_frame(tree, source, target)
+
+        joined = JoinGeometry(tree, location=(11, -1.2))
+        tree.links.new(morphed, joined.geometry_in)
+
+        out = self.group_outputs.inputs["Geometry"]
+        if self.color is None:
+            tree.links.new(joined.geometry_out, out)
+        else:
+            material = InputMaterial(tree, location=(11.6, -1.9), material=self.color,
+                                     name="MorphColor", **self.kwargs, hide=True)
+            self.materials.append(material.node.material)
+            painted = SetMaterial(tree, location=(11.8, -1.2),
+                                  material=material.std_out, name="PaintMorph")
+            create_geometry_line(tree, [joined, painted])
+            tree.links.new(painted.geometry_out, out)
+
+    # ----------------------------------------------------------------
+    def _create_frame_frame(self, tree):
+        """``Object 1``: a rectangle swept along a circle, stood upright.
+
+        :return: the geometry socket of the frame, where it starts out.
+        """
+        rectangle = Quadrilateral(tree, location=(0.1, -0.3), mode="RECTANGLE",
+                                  width=self.frame_width, height=self.frame_height,
+                                  name="FrameRectangle")
+        profile = CurveCircle(tree, location=(0.1, -0.9), mode="RADIUS",
+                              resolution=self.frame_resolution,
+                              radius=self.frame_thickness, name="FrameProfile")
+        tube = CurveToMesh(tree, location=(1.0, -0.1), curve=rectangle.geometry_out,
+                           profile_curve=profile.geometry_out, fill_caps=False,
+                           name="FrameTube")
+        # upright and off to the left: the rectangle is built lying in x-y and
+        # the shot looks along +y, so without the quarter turn it would be
+        # seen edge on
+        placed = TransformGeometry(tree, location=(1.9, -0.3),
+                                   translation=self.frame_location,
+                                   rotation=[pi / 2, 0, 0], name="PlaceFrame")
+        tree.links.new(tube.geometry_out, placed.geometry_in)
+
+        node_frame = Frame(tree, location=(-2.1, 0.9), label="Object 1")
+        node_frame.add([rectangle, profile, tube, placed])
+        return placed.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_arrow_frame(self, tree):
+        """``Object 2``: a cone sitting on a cylinder, joined into an arrow.
+
+        The cylinder is dropped by half its length so that its top meets the
+        cone's base at the origin; the cone is left where it is built, which
+        is why the arrow points up out of the origin rather than being
+        centred on it.
+
+        :return: the geometry socket of the arrow.
+        """
+        head = ConeMesh(tree, location=(0.1, -0.1), vertices=self.arrow_resolution,
+                        radius_top=0, radius_bottom=self.arrow_head_radius,
+                        depth=self.arrow_head_length, name="ArrowHead")
+        shaft = CylinderMesh(tree, location=(0.1, -1.7), vertices=self.arrow_resolution,
+                             radius=self.arrow_shaft_radius,
+                             depth=self.arrow_shaft_length, name="ArrowShaft")
+        dropped = TransformGeometry(tree, location=(1.0, -1.2),
+                                    translation=[0, 0, -self.arrow_shaft_length / 2],
+                                    name="DropShaft")
+        tree.links.new(shaft.geometry_out, dropped.geometry_in)
+
+        # head first, then shaft: the join fixes the point order the morph
+        # then reads by index, so swapping these swaps which part of the
+        # frame ends up as the tip
+        arrow = JoinGeometry(tree, location=(2.2, -0.8), name="Arrow")
+        tree.links.new(head.geometry_out, arrow.geometry_in)
+        tree.links.new(dropped.geometry_out, arrow.geometry_in)
+
+        node_frame = Frame(tree, location=(-2.1, -1.1), label="Object 2")
+        node_frame.add([head, shaft, dropped, arrow])
+        return arrow.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_morphing_frame(self, tree, source, target):
+        """``Morphing``: walk every point of ``source`` towards ``target``.
+
+        The six nodes the editor's ``Morphing`` frame holds live in
+        :class:`MorphNode` now, so what is left here is the value that drives
+        them. It is still a ``Value`` node called ``MorphParameter`` rather
+        than the group's own socket default, because that is what the scene
+        keyframes - a socket on a group node can be animated too, but the
+        ``Value`` node is what ``ibpy.get_geometry_node_from_modifier`` finds
+        by name.
+
+        :param source: geometry whose points are moved.
+        :param target: geometry sampled, by index, for where to move them to.
+        :return: the geometry socket of the morphed source.
+        """
+        parameter = InputValue(tree, location=(3.0, -2.6), value=self.morph,
+                               name="MorphParameter")
+        morph = MorphNode(tree, location=(3.8, -0.2), geometry1=source,
+                          geometry2=target, morph_parameter=parameter.std_out,
+                          name="Morph")
+
+        node_frame = Frame(tree, location=(4.5, -0.5), label="Morphing")
+        node_frame.add([parameter, morph])
+        return morph.geometry_out
 
 
 class DNAModifier(GeometryNodesModifier):
@@ -4232,9 +4707,9 @@ class DNAModifier(GeometryNodesModifier):
         # dial the two are equal and the gate has nothing to do, which is why
         # the first seventeen seconds need no keyframes of their own.
         for row, (twin, value) in enumerate([
-                ("DefaultTiltLength", self.tilt_length),
-                ("DefaultStrandSeparation", self.strand_separation),
-                ("DefaultBaseSize", self.base_size)]):
+            ("DefaultTiltLength", self.tilt_length),
+            ("DefaultStrandSeparation", self.strand_separation),
+            ("DefaultBaseSize", self.base_size)]):
             control[twin] = InputValue(tree, location=(x - 1.5, -1.5 - 0.5 * row),
                                        value=value, name=twin, node_height=GRID)
 
@@ -4522,8 +4997,8 @@ class DNAModifier(GeometryNodesModifier):
         # with, the open one on the values the scene dials.
         branches = []
         for row, (label, tilt, apart) in enumerate([
-                ("Wound", "DefaultTiltLength", "DefaultStrandSeparation"),
-                ("Open", "TiltLength", "StrandSeparation")]):
+            ("Wound", "DefaultTiltLength", "DefaultStrandSeparation"),
+            ("Open", "TiltLength", "StrandSeparation")]):
             twist = MathNode(tree, location=(24.5, -4.0 - 1.5 * row),
                              operation="DIVIDE",
                              inputs0=capture_pair["PairIndex"],
@@ -5528,7 +6003,7 @@ class RNAGridModifier(GeometryNodesModifier):
         decimal = ValueToString(tree, location=(-12.4, -6.2), data_type="INT",
                                 value=number, name="Decimal", hide=True)
         curves = StringToCurves(tree, location=(-11.3, -6.2),
-                                string=decimal.std_out, size=2*self.glyph_size,
+                                string=decimal.std_out, size=2 * self.glyph_size,
                                 align_x="CENTER", align_y="MIDDLE",
                                 name="DecimalCurves")
         realize = RealizeInstances(tree, location=(-10.2, -6.2))
@@ -5818,7 +6293,7 @@ class RNALogoModifier(GeometryNodesModifier):
     def __init__(self, n=16, scale=12.0, progress=275, point_count=2000,
                  bases_per_circle=17, axis_length=120.0, shift=(0.0, 0.0, 0.0),
                  plane="xy", backbone_scale=1.1, tube_fraction=0.5,
-                 base_colors=None, strand_color="gray_4",
+                 base_colors=None, strand_color="gray_4", strand_scale=1,
                  molecule_color="gray_7", seed=4, name="RNALogo", **kwargs):
         self.n = n
         self.scale = scale
@@ -5832,6 +6307,7 @@ class RNALogoModifier(GeometryNodesModifier):
         self.tube_fraction = tube_fraction
         self.base_colors = tuple(base_colors or self.BASE_COLORS)
         self.strand_color = strand_color
+        self.strand_scale = strand_scale
         self.molecule_color = molecule_color
         self.seed = seed
         self.kwargs = kwargs
@@ -5863,16 +6339,9 @@ class RNALogoModifier(GeometryNodesModifier):
         # tube they grow out of, so a circle of a tenth the radius is drawn as
         # the same molecule a tenth the size rather than as a thin wire with
         # full sized bases hanging off it.
-        bead = MathNode(tree, location=(25.0, 5.4), operation="MULTIPLY",
-                        inputs0=self.backbone_scale, inputs1=strand["Radius"],
-                        node_height=GRID, name="BeadScale", label="BeadScale")
-        tube = MathNode(tree, location=(26.0, 4.3), operation="MULTIPLY",
-                        inputs0=bead.std_out, inputs1=self.tube_fraction,
-                        node_height=GRID, name="TubeScale", label="TubeScale")
-        bases = self._create_bases_frame(tree, control, strand, tube.std_out)
-        backbone = self._create_strand_geometry_frame(tree, control, strand,
-                                                      bead.std_out,
-                                                      tube.std_out)
+
+        bases = self._create_bases_frame(tree, control, strand)
+        backbone = self._create_strand_geometry_frame(tree, control, strand)
 
         join = JoinGeometry(tree, location=(44.5, 7.4), node_height=GRID,
                             name="JoinMolecule")
@@ -5894,8 +6363,8 @@ class RNALogoModifier(GeometryNodesModifier):
         """
         at = _in_frame((-11.3, 7.0))
         control = {
-            "Progress": InputInteger(tree, location=at(0.1, -0.1),
-                                     integer=self.progress, name="Progress",
+            "Progress": InputValue(tree, location=at(0.1, -0.1),
+                                     value=self.progress, name="Progress",
                                      label="Progress", node_height=GRID),
             "PointCount": InputInteger(tree, location=at(0.1, -0.5),
                                        integer=self.point_count,
@@ -5910,6 +6379,8 @@ class RNALogoModifier(GeometryNodesModifier):
                               name="N", label="N", node_height=GRID),
             "Scale": InputValue(tree, location=at(0.1, -1.5), value=self.scale,
                                 name="Scale", label="Scale", node_height=GRID),
+            "StrandScale": InputValue(tree, location=at(0.1, -2.1), value=self.strand_scale, name="StrandScale",
+                                      label="StrandScale", node_height=GRID),
         }
 
         palette = [("Base%d" % index, color)
@@ -6008,13 +6479,13 @@ class RNALogoModifier(GeometryNodesModifier):
         outline = make_function(
             tree, location=(spot[0], 2.0 * spot[1]), name="LogoCurve",
             hide=False,
-            inputs=["Index", "N", "Scale","PointCount"],
+            inputs=["Index", "N", "Scale", "PointCount"],
             outputs=["Point", "Radius", "Normal"],
             # Index and N are integers *only* - a name listed in both scalars
             # and integers gets two group sockets of the same name
             integers=["Index", "N"], vectors=["Point", "Normal"],
             scalars=["Scale", "Radius", "t", "u", "au", "k", "s", "cx", "a",
-                     "b", "d", "D","PointCount"],
+                     "b", "d", "D", "PointCount"],
             aux_functions={
                 "t": "Index,2,*,pi,*,PointCount,/,pi,-",
                 "u": "N,t,*",
@@ -6038,7 +6509,7 @@ class RNALogoModifier(GeometryNodesModifier):
         tree.links.new(counter.std_out, outline.inputs["Index"])
         tree.links.new(control["N"].std_out, outline.inputs["N"])
         tree.links.new(control["Scale"].std_out, outline.inputs["Scale"])
-        tree.links.new(count.std_out,outline.inputs["PointCount"])
+        tree.links.new(count.std_out, outline.inputs["PointCount"])
 
         placed = SetPosition(tree, location=at(1.2, -0.3),
                              geometry=dense.geometry_out,
@@ -6202,12 +6673,12 @@ class RNALogoModifier(GeometryNodesModifier):
 
         samples = {}
         for name, label, kind, value, spot in [
-                ("position", "SampleHere", "FLOAT_VECTOR", logo["Point"],
-                 (4.2, -0.1)),
-                ("Radius", "SampleRadius", "FLOAT", ruler["radius"],
-                 (4.3, -1.9)),
-                ("Normal", "SampleNormal", "FLOAT_VECTOR", logo["Normal"],
-                 (4.3, -3.5))]:
+            ("position", "SampleHere", "FLOAT_VECTOR", logo["Point"],
+             (4.2, -0.1)),
+            ("Radius", "SampleRadius", "FLOAT", ruler["radius"],
+             (4.3, -1.9)),
+            ("Normal", "SampleNormal", "FLOAT_VECTOR", logo["Normal"],
+             (4.3, -3.5))]:
             node = SampleCurve(tree, location=at(*spot), mode="LENGTH",
                                data_type=kind, all_curves=True,
                                node_height=GRID, name=label, label=label)
@@ -6239,32 +6710,15 @@ class RNALogoModifier(GeometryNodesModifier):
         :return: dict with the geometry socket and the captured fields.
         """
         at = _in_frame((12.4, 7.7))
-        progress = Reroute(tree, location=(10.8, 4.0), node_height=GRID,
-                           ins=control["ProgressOut"].std_out,
-                           name="ProgressIn")
-        whole = MathNode(tree, location=at(0.1, -2.1), operation="ROUND",
-                         inputs0=progress.std_out, node_height=GRID,
-                         name="WholeStrides", label="WholeStrides")
-        with_head = MathNode(tree, location=at(0.9, -1.7), operation="ADD",
-                             inputs0=whole.std_out, inputs1=1.0,
-                             node_height=GRID, name="PlusTheHead",
-                             label="PlusTheHead")
-        capped = MathNode(tree, location=at(1.9, -2.1), operation="MINIMUM",
-                          inputs0=with_head.std_out, inputs1=progress.std_out,
-                          node_height=GRID, name="AtMostMaxBases",
-                          label="AtMostMaxBases")
         # a strand of no bases is not a strand, and Resample Curve will not
         # make a curve of nought points either
-        count = MathNode(tree, location=at(2.7, -1.8), operation="MAXIMUM",
-                         inputs0=capped.std_out, inputs1=1.0, node_height=GRID,
-                         name="BaseCount", label="BaseCount")
 
         line = CurveLine(tree, location=at(2.7, -0.2), mode="DIRECTION",
                          direction=[1.0, 0.0, 0.0], length=self.axis_length,
                          node_height=GRID, name="Axis", label="Axis")
         resample = ResampleCurve(tree, location=at(4.2, -0.2),
                                  curve=line.geometry_out, mode="Count",
-                                 count=count.std_out, node_height=GRID,
+                                 count=control["ProgressOut"].std_out, node_height=GRID,
                                  name="OnePointPerBase",
                                  label="OnePointPerBase")
         axis = SetPosition(tree, location=at(5.7, -0.2),
@@ -6272,10 +6726,10 @@ class RNALogoModifier(GeometryNodesModifier):
                            position=path["position"], node_height=GRID,
                            name="OntoTrack", label="OntoTrack")
 
-        index = Index(tree, location=at(9.5, -2.3), node_height=GRID,
+        index = Index(tree, location=at(5.7, -2.3), node_height=GRID,
                       name="TurnIndex", label="TurnIndex")
         capture = CaptureAttribute(
-            tree, location=at(11.2, -0.1), domain="POINT",
+            tree, location=at(6.7, -0.1), domain="POINT",
             geometry=axis.geometry_out,
             items=[("Normal", "FLOAT_VECTOR", path["Normal"]),
                    ("Radius", "FLOAT", path["Radius"]),
@@ -6284,7 +6738,7 @@ class RNALogoModifier(GeometryNodesModifier):
 
         frame = Frame(tree, location=(12.4, 7.7), label="Strand",
                       node_height=GRID)
-        frame.add([whole, with_head, capped, count, line, resample, axis,
+        frame.add([line, resample, axis,
                    index, capture])
         return {
             "geometry": capture.geometry_out,
@@ -6292,8 +6746,10 @@ class RNALogoModifier(GeometryNodesModifier):
             "Radius": capture["Radius"],
             "BaseIndex": capture["BaseIndex"],
         }
+
     # ------------------------------------------------------------------
-    def _create_bases_frame(self, tree, control, strand, size):
+
+    def _create_bases_frame(self, tree, control, strand):
         """``Bases``: one base per point of the backbone, pointing inwards.
 
         A base is a short chain of 2..5 atoms - spheres on a mesh line, with
@@ -6330,8 +6786,12 @@ class RNALogoModifier(GeometryNodesModifier):
         # base is standing on
         aim = AlignRotationToVector(tree, location=at(0.1, -3.7), axis="Z",
                                     pivot_axis="AUTO", vector=strand["Normal"],
-                                    node_height=GRID, name="AimOutwards",
-                                    label="AimOutwards")
+                                    node_height=GRID, name="AimInwards",
+                                    label="AimInwards")
+
+        half_radius = MathNode(tree, operation="MULTIPLY", loaction=at(0.1, -4.7), inputs0=strand["Radius"],
+                               inputs1=0.5,
+                               label="HalfRadius")
 
         zone = ForEachZone(tree, location=at(3.1, -0.2), domain="POINT",
                            node_width=10.5, geometry=strand["geometry"],
@@ -6340,7 +6800,7 @@ class RNALogoModifier(GeometryNodesModifier):
         zone.add_socket("INT", "BaseType", value=draw.std_out, for_input=True)
         zone.add_socket("ROTATION", "Rotation", value=aim.std_out,
                         for_input=True)
-        zone.add_socket("FLOAT", "BaseSize", value=size, for_input=True)
+        zone.add_socket("FLOAT", "BaseSize", value=half_radius.std_out, for_input=True)
         zone.foreach_output.location = tuple(v * GRID for v in at(13.6, -0.2))
         base_type = zone.foreach_input.outputs["BaseType"]
 
@@ -6420,11 +6880,11 @@ class RNALogoModifier(GeometryNodesModifier):
                       node_height=GRID)
         frame.add([draw, aim, zone, atoms, chain, chain_out, atom,
                    atom_instances, bonds, bond_profile, bond_mesh, base,
-                   colors, material, placed, paint])
+                   colors, material, placed, paint, half_radius])
         return zone.geometry_out
 
     # ------------------------------------------------------------------
-    def _create_strand_geometry_frame(self, tree, control, strand, bead, tube):
+    def _create_strand_geometry_frame(self, tree, control, strand):
         """``Strand Geometry``: the backbone as a solid tube.
 
         The curve is swept to a tube for the sugar-phosphate backbone, and a
@@ -6441,6 +6901,11 @@ class RNALogoModifier(GeometryNodesModifier):
         curve = Reroute(tree, location=at(0.1, -1.1), node_height=GRID,
                         ins=strand["geometry"], name="StrandIn",
                         label="StrandIn")
+
+        strand_scale = MathNode(tree, operation="MULTIPLY", location=at(0.1, -4.7),
+                                inputs0=control["StrandScale"].std_out,
+                                inputs1=strand["Radius"], label="StrandScale")
+
         colors = SeparateBundle(
             tree, location=at(1.0, -1.1), bundle=control["Palette"].std_out,
             items=[("Strand", "MATERIAL"), ("Molecule", "MATERIAL")],
@@ -6455,7 +6920,7 @@ class RNALogoModifier(GeometryNodesModifier):
                            profile_curve=profile.geometry_out,
                            fill_caps=False, node_height=GRID, name="Backbone",
                            label="Backbone")
-        tree.links.new(tube, pipe.node.inputs["Scale"])
+        tree.links.new(strand_scale.std_out, pipe.node.inputs["Scale"])
         pipe_material = SetMaterial(tree, location=at(4.6, -2.6),
                                     geometry=pipe.geometry_out,
                                     material=colors.out("Strand"),
@@ -6468,7 +6933,7 @@ class RNALogoModifier(GeometryNodesModifier):
                         label="BackboneAtom")
         atoms = InstanceOnPoints(tree, location=at(3.1, -0.1),
                                  points=curve.geometry_out,
-                                 instance=atom.geometry_out, scale=bead,
+                                 instance=atom.geometry_out, scale=strand_scale.std_out,
                                  node_height=GRID, name="BackboneAtoms",
                                  label="BackboneAtoms")
         atom_material = SetMaterial(tree, location=at(4.6, -0.1),
@@ -6488,6 +6953,548 @@ class RNALogoModifier(GeometryNodesModifier):
         frame = Frame(tree, location=(26.3, 3.0), label="Strand Geometry",
                       node_height=GRID)
         frame.add([curve, colors, profile, pipe, pipe_material, atom, atoms,
-                   atom_material, join, smooth])
+                   atom_material, join, smooth, strand_scale])
         return smooth.geometry_out
 
+
+class RNACircleModifier(GeometryNodesModifier):
+    """A single strand of RNA wound once round a circle.
+
+    :class:`RNALogoModifier` grows a strand along the logo; this grows the same
+    molecule along the simplest closed track there is. The two share everything
+    downstream of the backbone - the ``Bases`` and ``Strand Geometry`` frames
+    are the same nodes wired the same way - and differ only in how a point of
+    the backbone learns where it is, which way it faces and how sharply the
+    track turns under it.
+
+    On the logo those three came out of a ``Sample Curve`` on a ruler built by
+    an ``Accumulate Field``, because the track's curvature varies and a base has
+    to be given the share of arc length its own circle is entitled to. Here the
+    curvature is one number, so all three collapse to arithmetic:
+
+    ``Position``
+        base *i* sits at ``Radius * (cos t, 0, sin t)`` with
+        ``t = 2 pi i / (BasesPerCircle - 1)`` - a circle in the x-z plane, the
+        plane the flat scenes of this video are built in.
+    ``Radius``
+        ``Radius``. The radius of curvature of a circle is the circle's radius,
+        so the number that sizes the molecule on the logo is a constant here -
+        the wiring is :class:`RNALogoModifier`'s, and it still means what it
+        says.
+    ``Normal``
+        ``cross(tangent, y)``, which on this circle comes to ``-(cos t, 0, sin t)``:
+        the inward radius, exactly, and already a unit vector. It is scaled by
+        ``Radius`` before it is captured, which changes nothing - Align Rotation
+        to Vector only reads the direction - and keeps it the same length as the
+        radius it stands for.
+
+    Three frames, then, rather than seven:
+
+    ``ControlFrame``
+        Four numbers and the palette. ``Progress`` is the whole of the
+        choreography, as on the logo: it is how many bases have been laid down.
+    ``Strand``
+        The circle, and how much of it exists. A line resampled to
+        ``BasesPerCircle`` points, moved onto the circle by the arithmetic
+        above, cut down to the points before the head by a Separate Geometry,
+        and the radius, the normal and the base number captured onto what is
+        left.
+    ``Bases`` and ``Strand Geometry``
+        A base per point, aimed down the normal, and the backbone swept to a
+        tube - :class:`RNALogoModifier`'s two frames, unchanged.
+
+    **The seam.** The angle steps by ``2 pi / (BasesPerCircle - 1)``, so the
+    last point of the strand lands exactly on the first: a full lap that closes
+    to the last bit, at the price of one base drawn twice where the ends meet.
+    That is what makes ``Progress`` safe to ramp all the way to
+    ``BasesPerCircle`` - the strand arrives back where it started rather than
+    stopping short of itself.
+
+    :param progress: how many bases have been laid down, counting from the one
+        at angle zero. Animate this and the ring draws itself. Points from
+        ``Progress`` on are separated away rather than scaled to nothing, so
+        the ones that are not there yet cost nothing.
+    :param bases_per_circle: bases in a whole lap - both the number of points
+        the backbone is resampled to and the number the angle is divided into.
+    :param scale: the radius of the circle, and, through ``Radius``, the size
+        of the molecule riding on it.
+    :param strand_scale: backbone thickness per unit of radius. The swept tube
+        and the beads on it are both drawn at ``strand_scale * Radius``.
+    :param base_colors: the four base materials, in ``BaseType`` order.
+    :param strand_color: material of the swept backbone.
+    :param molecule_color: material of the spheres sitting on the backbone.
+    :param seed: which strand of RNA this is. Changing it deals the bases again.
+    """
+
+    #: the two purines and the two pyrimidines, drawn with as many atoms as
+    #: :class:`DNAModifier` draws them with
+    BASE_ATOMS = DNAModifier.BASE_ATOMS
+    BASE_NAMES = RNALogoModifier.BASE_NAMES
+    #: three of DNA's four base colours and one that is not - DNA's fourth base
+    #: is thymine, RNA's is uracil
+    BASE_COLORS = RNALogoModifier.BASE_COLORS
+
+    BACKBONE_RADIUS = DNAModifier.BACKBONE_RADIUS
+    BACKBONE_SPHERE_RADIUS = DNAModifier.BACKBONE_SPHERE_RADIUS
+    BASE_BOND_RADIUS = DNAModifier.BASE_BOND_RADIUS
+    BASE_ATOM_RADIUS = DNAModifier.BASE_ATOM_RADIUS
+
+    def __init__(self, progress=18, bases_per_circle=18, radius=1.0, scale=1,
+                 strand_scale=1.0, base_colors=None, strand_color="gray_4",
+                 molecule_color="gray_7", seed=4, name="RNACircle", **kwargs):
+        self.progress = progress
+        self.bases_per_circle = bases_per_circle
+        self.scale = scale
+        self.radius = radius
+        self.strand_scale = strand_scale
+        self.base_colors = tuple(base_colors or self.BASE_COLORS)
+        self.strand_color = strand_color
+        self.molecule_color = molecule_color
+        self.seed = seed
+        self.kwargs = kwargs
+
+        super().__init__(name=name, automatic_layout=False)
+
+    # ------------------------------------------------------------------
+    def bases_for_whole_circle(self):
+        """How many bases a whole lap takes - what to ramp ``Progress`` to.
+
+        The counterpart of :meth:`RNALogoModifier.bases_for_whole_logo`, and
+        here it is simply the dial itself: the circle is divided into
+        ``BasesPerCircle`` stations and there is exactly one base on each.
+        """
+        return self.bases_per_circle
+
+    # ------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._create_control_frame(tree)
+        strand = self._create_strand_frame(tree, control)
+        bases = self._create_bases_frame(tree, control, strand)
+        backbone = self._create_strand_geometry_frame(tree, control, strand)
+
+        join = JoinGeometry(tree, location=(45.3, 7.4), node_height=GRID,
+                            name="JoinMolecule")
+        for piece in (backbone, bases):
+            tree.links.new(piece, join.geometry_in)
+
+        transform_geometry = TransformGeometry(tree, location=(46.3, 7.4), translation=control["Translation"].std_out,
+                                               rotation=control["Rotation"].std_out, name="FinalTransform")
+        create_geometry_line(tree, [join, transform_geometry], out=self.group_outputs.inputs["Geometry"])
+
+        self.group_outputs.location = (47.2 * GRID, 6.8 * GRID)
+
+    # ------------------------------------------------------------------
+    def _create_control_frame(self, tree):
+        """``ControlFrame``: the four numbers the ring is made of.
+
+        ``Progress`` is the only one a scene touches. ``BasesPerCircle`` says
+        how finely the lap is divided, ``Radius`` how big it is, and
+        ``StrandScale`` how fat the backbone is drawn.
+
+        :return: ``{name: node}``, keyed by the label the node carries.
+        """
+        at = _in_frame((10.5, 3.7))
+        control = {
+            "Translation": InputVector(tree, location=at(0.1, 0.5), name="Translation", label="Translation", hide=True,
+                                       vector=Vector()),
+            "Rotation": InputRotation(tree, location=at(0.1, 1.1), name="Rotation", label="Rotation", hide=True,
+                                      rotation=Vector()),
+            "Scale": InputValue(tree, location=at(0.1, 1.6), name="Scale", label="Scale", hide=True, value=self.scale),
+            "Progress": InputInteger(tree, location=at(0.1, -0.1),
+                                     integer=self.progress, name="Progress",
+                                     label="Progress", node_height=GRID),
+            "BasesPerCircle": InputInteger(tree, location=at(0.1, -0.5),
+                                           integer=self.bases_per_circle,
+                                           name="BasesPerCircle",
+                                           label="BasesPerCircle",
+                                           node_height=GRID),
+            "Radius": InputValue(tree, location=at(0.1, -0.8), value=self.radius,
+                                 name="Radius", label="Radius", node_height=GRID),
+            "StrandScale": InputValue(tree, location=at(0.1, -1.1),
+                                      value=self.strand_scale,
+                                      name="StrandScale", label="StrandScale",
+                                      node_height=GRID),
+        }
+
+        # the multiplier of a SCALE goes in through ``float_input``: it is the
+        # node's fourth socket, ``Scale``, not its second ``Vector`` - and
+        # ``inputs1`` writes that second Vector, which SCALE disables and the
+        # editor therefore does not even draw
+        trans_scale = VectorMath(tree, location=at(1.1, 0.5), operation="SCALE", inputs0=control["Translation"].std_out,
+                                 float_input=control["Scale"].std_out, hide=True)
+
+        palette = [("Base%d" % index, color)
+                   for index, color in enumerate(self.base_colors)]
+        palette += [("Strand", self.strand_color),
+                    ("Molecule", self.molecule_color)]
+        for row, (node_name, color) in enumerate(palette):
+            control[node_name] = InputMaterial(
+                tree, location=at(0.1, -2.4 - 0.5 * row), material=color,
+                name=node_name, node_height=GRID, **self.kwargs)
+            self.materials.append(control[node_name].node.material)
+        control["Palette"] = CombineBundle(
+            tree, location=at(1.1, -2.9), name="Palette", node_height=GRID,
+            items=[(node_name, "MATERIAL", control[node_name].std_out)
+                   for node_name, _ in palette])
+
+        frame = Frame(tree, location=(10.5, 3.7), label="ControlFrame",
+                      node_height=GRID)
+        frame.add(list(control.values()) + [trans_scale])
+        control["Translation"] = trans_scale
+        return control
+
+    # ------------------------------------------------------------------
+    def _create_strand_frame(self, tree, control):
+        """``Strand``: the circle, and how much of it there is so far.
+
+        A ``Curve Line`` resampled to ``BasesPerCircle`` points - the line's own
+        endpoints are thrown away by the Set Position and only its point order
+        survives - laid onto ``Radius * (cos t, 0, sin t)``. The two chains of
+        Math nodes that build ``t`` are the same expression twice, once for the
+        cosine and once for the sine, since a Math node has one output.
+
+        The four nodes that count the stations sit *outside* the frame: the
+        divisor and the index are read by both chains, and there is nothing
+        about them that belongs to one side of the circle.
+
+        Separate Geometry then keeps the points with ``Index < Progress``.
+        Building the head this way rather than by scaling the tail to nothing
+        means the bases beyond it are never built, and it is what lets the last
+        node of the frame capture onto the strand that actually exists.
+
+        The capture is the reason this frame ends where it does. Downstream the
+        backbone becomes a tube and the bases become instances - two topology
+        changes - and a field read after either of them would be evaluated on
+        the wrong geometry, so the normal, the radius and the base's number are
+        frozen onto the points here, once.
+
+        :return: dict with the geometry socket and the three captured fields.
+        """
+        at = _in_frame((15.6, 8.6))
+
+        # how many steps a lap is divided into. One less than the number of
+        # points, so that the last point lands on the first
+        divisions = MathNode(tree, location=(12.5, 6.3), operation="SUBTRACT",
+                             inputs0=control["BasesPerCircle"].std_out,
+                             inputs1=1.0, node_height=GRID, name="Divisions",
+                             label="Divisions")
+        station = Index(tree, location=(14.6, 6.3), node_height=GRID,
+                        name="CircleIndex", label="CircleIndex")
+
+        line = CurveLine(tree, location=(14.8, 10.4), mode="POINTS",
+                         start=Vector([0.0, 0.0, 0.0]),
+                         end=Vector([0.0, 0.0, 1.0]), node_height=GRID,
+                         name="Axis", label="Axis")
+        resample = ResampleCurve(tree, location=(16.0, 10.1), mode="Count",
+                                 curve=line.geometry_out,
+                                 count=control["BasesPerCircle"].std_out,
+                                 node_height=GRID, name="OnePointPerBase",
+                                 label="OnePointPerBase")
+
+        # ``Radius`` is read four times in this frame. The two multiplies that
+        # size the circle take it over a reroute; the normal and the capture
+        # read the dial itself
+        radius = Reroute(tree, location=at(2.8, -2.5), node_height=GRID,
+                         ins=control["Radius"].std_out, name="RadiusOut",
+                         label="RadiusOut")
+
+        # x = Radius * cos(2 pi i / divisions)
+        turn_x = MathNode(tree, location=at(0.1, -1.2), operation="MULTIPLY",
+                          inputs0=station.std_out, inputs1=2.0 * pi,
+                          node_height=GRID, name="FullTurnX", label="FullTurnX")
+        angle_x = MathNode(tree, location=at(1.0, -1.1), operation="DIVIDE",
+                           inputs0=turn_x.std_out, inputs1=divisions.std_out,
+                           node_height=GRID, name="AngleX", label="AngleX")
+        cosine = MathNode(tree, location=at(1.9, -1.1), operation="COSINE",
+                          inputs0=angle_x.std_out, node_height=GRID,
+                          name="CosAngle", label="CosAngle")
+        circle_x = MathNode(tree, location=at(3.0, -1.0), operation="MULTIPLY",
+                            inputs0=cosine.std_out, inputs1=radius.std_out,
+                            node_height=GRID, name="CircleX", label="CircleX")
+
+        # z = Radius * sin(2 pi i / divisions), the same expression again
+        turn_z = MathNode(tree, location=at(0.1, -1.9), operation="MULTIPLY",
+                          inputs0=station.std_out, inputs1=2.0 * pi,
+                          node_height=GRID, name="FullTurnZ", label="FullTurnZ")
+        angle_z = MathNode(tree, location=at(1.0, -1.8), operation="DIVIDE",
+                           inputs0=turn_z.std_out, inputs1=divisions.std_out,
+                           node_height=GRID, name="AngleZ", label="AngleZ")
+        sine = MathNode(tree, location=at(1.9, -1.9), operation="SINE",
+                        inputs0=angle_z.std_out, node_height=GRID,
+                        name="SinAngle", label="SinAngle")
+        circle_z = MathNode(tree, location=at(3.0, -1.9), operation="MULTIPLY",
+                            inputs0=sine.std_out, inputs1=radius.std_out,
+                            node_height=GRID, name="CircleZ", label="CircleZ")
+
+        # the circle lies in x-z, facing a camera that looks along +y, like the
+        # rest of the flat scenes of this video
+        point = CombineXYZ(tree, location=at(4.7, -1.5), x=circle_x.std_out,
+                           z=circle_z.std_out, node_height=GRID,
+                           name="CirclePoint", label="CirclePoint")
+        ring = SetPosition(tree, location=at(5.6, -1.0),
+                           geometry=resample.geometry_out,
+                           position=point.std_out, node_height=GRID,
+                           name="OntoCircle", label="OntoCircle")
+
+        grow_index = Index(tree, location=at(3.5, -3.7), node_height=GRID,
+                           name="GrowIndex", label="GrowIndex")
+        grown = CompareNode(tree, location=at(5.3, -3.4), data_type="INT",
+                            operation="LESS_THAN", inputs0=grow_index.std_out,
+                            inputs1=control["Progress"].std_out,
+                            node_height=GRID, name="Grown", label="Grown")
+        head = SeparateGeometry(tree, location=at(6.8, -2.9), domain="POINT",
+                                selection=grown.std_out, node_height=GRID,
+                                name="GrowStrand", label="GrowStrand")
+        # SeparateGeometry takes a `geometry` keyword but does not wire it
+        tree.links.new(ring.geometry_out, head.geometry_in)
+
+        # the inward radius of the circle, which is where a base has to point.
+        # Curve Tangent is already a unit vector and so is the cross product of
+        # two perpendicular ones, so there is nothing to normalise
+        tangent = InputTangent(tree, location=at(5.7, -0.1), node_height=GRID,
+                               name="Tangent", label="Tangent")
+        plane = InputVector(tree, location=at(5.4, -0.4),
+                            vector=Vector([0.0, 1.0, 0.0]), node_height=GRID,
+                            name="PlaneNormal", label="PlaneNormal")
+        spoke = VectorMath(tree, location=at(6.6, -0.8),
+                           operation="CROSS_PRODUCT", inputs0=tangent.std_out,
+                           inputs1=plane.std_out, node_height=GRID,
+                           name="InwardSpoke", label="InwardSpoke")
+        normal = VectorMath(tree, location=at(7.4, -1.1), operation="SCALE",
+                            inputs0=spoke.std_out,
+                            float_input=control["Radius"].std_out,
+                            node_height=GRID, name="InwardNormal",
+                            label="InwardNormal")
+
+        index = Index(tree, location=at(6.8, -3.7), node_height=GRID,
+                      name="TurnIndex", label="TurnIndex")
+        capture = CaptureAttribute(
+            tree, location=at(8.9, -1.3), domain="POINT",
+            geometry=head.geometry_out,
+            items=[("Normal", "FLOAT_VECTOR", normal.std_out),
+                   # the radius of curvature of a circle is its own radius
+                   ("Radius", "FLOAT", control["Radius"].std_out),
+                   ("BaseIndex", "INT", index.std_out)],
+            node_height=GRID, name="CaptureSpoke", label="CaptureSpoke")
+
+        frame = Frame(tree, location=(15.6, 8.6), label="Strand",
+                      node_height=GRID)
+        frame.add([radius, turn_x, angle_x, cosine, circle_x, turn_z, angle_z,
+                   sine, circle_z, point, ring, grow_index, grown, head,
+                   tangent, plane, spoke, normal, index, capture])
+        return {
+            "geometry": capture.geometry_out,
+            "Normal": capture["Normal"],
+            "Radius": capture["Radius"],
+            "BaseIndex": capture["BaseIndex"],
+        }
+
+    # ------------------------------------------------------------------
+    def _create_bases_frame(self, tree, control, strand):
+        """``Bases``: one base per point of the backbone, pointing inwards.
+
+        :class:`RNALogoModifier`'s frame, node for node. A base is a short chain
+        of 2..5 atoms - spheres on a mesh line, with the line itself swept to a
+        tube for the bonds - and how many atoms is what tells the four base
+        types apart on screen.
+
+        Which type a base is comes from a random draw with the base's own index
+        as its id rather than from where it is, so that a strand that grows
+        keeps the sequence it was dealt instead of having it rewritten
+        underneath as it moves.
+
+        The type and the size go into the zone as input items rather than being
+        read inside it, and that is not a matter of taste. Inside the zone the
+        type has to drive two Index Switches, and neither the number of atoms a
+        Mesh Line is built with nor a material is a field; a field read in there
+        would have no geometry to be evaluated on and both switches would
+        quietly fall back to their first slot - one base type, drawn four times
+        in the same colour.
+
+        :return: the geometry socket of all the bases.
+        """
+        at = _in_frame((27.9, 10.2))
+        draw = RandomValue(tree, location=at(0.1, -2.2), data_type="INT",
+                           min=0, max=len(self.BASE_ATOMS) - 1, seed=self.seed,
+                           node_height=GRID, name="WhichBase",
+                           label="WhichBase")
+        tree.links.new(strand["BaseIndex"], draw.node.inputs["ID"])
+
+        # the base's chain is built along +z and Align Rotation to Vector turns
+        # that onto the normal, which points at the centre of the circle
+        aim = AlignRotationToVector(tree, location=at(0.1, -3.7), axis="Z",
+                                    pivot_axis="AUTO", vector=strand["Normal"],
+                                    node_height=GRID, name="AimInwards",
+                                    label="AimInwards")
+
+        half_radius = MathNode(tree, location=at(0.2, -4.8),
+                               operation="MULTIPLY", inputs0=strand["Radius"],
+                               inputs1=0.5, node_height=GRID,
+                               name="HalfRadius", label="HalfRadius")
+
+        zone = ForEachZone(tree, location=at(3.1, -0.2), domain="POINT",
+                           node_width=10.5, geometry=strand["geometry"],
+                           node_height=GRID, name="ForEachBase",
+                           label="ForEachBase")
+        zone.add_socket("INT", "BaseType", value=draw.std_out, for_input=True)
+        zone.add_socket("ROTATION", "Rotation", value=aim.std_out,
+                        for_input=True)
+        zone.add_socket("FLOAT", "BaseSize", value=half_radius.std_out,
+                        for_input=True)
+        zone.foreach_output.location = tuple(v * GRID for v in at(13.6, -0.2))
+        base_type = zone.foreach_input.outputs["BaseType"]
+
+        atoms = IndexSwitch(tree, location=at(6.1, -2.2), data_type="INT",
+                            index=base_type, node_height=GRID,
+                            name="AtomsPerBase", label="AtomsPerBase")
+        for _ in range(len(self.BASE_ATOMS) - 2):
+            atoms.new_item()
+        for slot, number in enumerate(self.BASE_ATOMS):
+            atoms.node.inputs[slot + 1].default_value = number
+
+        chain = MeshLine(tree, location=at(7.6, -2.2), mode="END_POINTS",
+                         count_mode="TOTAL", count=atoms.std_out,
+                         start_location=[0.0, 0.0, 0.0], node_height=GRID,
+                         name="BaseChain", label="BaseChain")
+        chain.node.inputs["Offset"].default_value = [0.0, 0.0, 1.0]
+        chain_out = Reroute(tree, location=at(8.6, -2.2), node_height=GRID,
+                            ins=chain.geometry_out, name="ChainOut",
+                            label="ChainOut")
+
+        atom = IcoSphere(tree, location=at(6.1, -0.7),
+                         radius=self.BASE_ATOM_RADIUS, subdivisions=2,
+                         node_height=GRID, name="Atom", label="Atom")
+        atom_instances = InstanceOnPoints(tree, location=at(9.6, -0.7),
+                                          points=chain_out.geometry_out,
+                                          instance=atom.geometry_out,
+                                          node_height=GRID, name="Atoms",
+                                          label="Atoms")
+
+        bonds = MeshToCurve(tree, location=at(9.6, -2.4),
+                            mesh=chain_out.geometry_out, node_height=GRID,
+                            name="Bonds", label="Bonds")
+        bond_profile = CurveCircle(tree, location=at(6.1, -3.7), mode="RADIUS",
+                                   resolution=16, radius=self.BASE_BOND_RADIUS,
+                                   node_height=GRID, name="BondProfile",
+                                   label="BondProfile")
+        bond_mesh = CurveToMesh(tree, location=at(11.1, -2.2),
+                                curve=bonds.geometry_out,
+                                profile_curve=bond_profile.geometry_out,
+                                fill_caps=False, node_height=GRID,
+                                name="BondMesh", label="BondMesh")
+
+        base = JoinGeometry(tree, location=at(12.1, -1.2), node_height=GRID,
+                            name="JoinBase", label="JoinBase")
+        for piece in (atom_instances.geometry_out, bond_mesh.geometry_out):
+            tree.links.new(piece, base.geometry_in)
+
+        # a material cannot be picked by a selection the way geometry can - Set
+        # Material takes one - so here the choice really is a switch
+        colors = SeparateBundle(
+            tree, location=at(3.1, -4.7), bundle=control["Palette"].std_out,
+            items=[("Base%d" % index, "MATERIAL")
+                   for index in range(len(self.BASE_ATOMS))],
+            node_height=GRID, name="BaseColors", label="BaseColors")
+        material = IndexSwitch(tree, location=at(6.1, -4.7),
+                               data_type="MATERIAL", index=base_type,
+                               node_height=GRID, name="BaseMaterial",
+                               label="BaseMaterial")
+        for index in range(len(self.BASE_ATOMS)):
+            material.add_item(socket=colors.out("Base%d" % index))
+
+        placed = InstanceOnPoints(tree, location=at(13.1, -0.2),
+                                  points=zone.element,
+                                  instance=base.geometry_out,
+                                  rotation=zone.foreach_input.outputs["Rotation"],
+                                  scale=zone.foreach_input.outputs["BaseSize"],
+                                  node_height=GRID, name="PlaceBase",
+                                  label="PlaceBase")
+        paint = SetMaterial(tree, location=at(14.1, -0.2),
+                            geometry=placed.geometry_out,
+                            material=material.std_out, node_height=GRID,
+                            name="PaintBase", label="PaintBase")
+        tree.links.new(paint.geometry_out,
+                       zone.foreach_output.inputs["Geometry"])
+
+        frame = Frame(tree, location=(27.9, 10.2), label="Bases",
+                      node_height=GRID)
+        frame.add([draw, aim, half_radius, zone, atoms, chain, chain_out, atom,
+                   atom_instances, bonds, bond_profile, bond_mesh, base,
+                   colors, material, placed, paint])
+        return zone.geometry_out
+
+    # ------------------------------------------------------------------
+    def _create_strand_geometry_frame(self, tree, control, strand):
+        """``Strand Geometry``: the backbone as a solid tube.
+
+        :class:`RNALogoModifier`'s frame again. The curve is swept to a tube for
+        the sugar-phosphate backbone, and a sphere is dropped on every point so
+        that it reads as a chain of atoms rather than a smooth pipe. Both are
+        drawn at ``StrandScale * Radius``, which on a circle is one number for
+        the whole strand - the same expression that made the molecule thin with
+        the logo's smaller circles simply holds still here.
+
+        :return: the geometry socket of the backbone.
+        """
+        at = _in_frame((27.1, 3.9))
+        curve = Reroute(tree, location=at(0.3, -1.1), node_height=GRID,
+                        ins=strand["geometry"], name="StrandIn",
+                        label="StrandIn")
+
+        # labelled after the dial it multiplies, but not *named* after it - two
+        # nodes of one name is one node called ``StrandScale.001``
+        strand_scale = MathNode(tree, location=at(0.3, -3.9),
+                                operation="MULTIPLY",
+                                inputs0=control["StrandScale"].std_out,
+                                inputs1=strand["Radius"], node_height=GRID,
+                                name="BackboneScale", label="StrandScale")
+
+        colors = SeparateBundle(
+            tree, location=at(0.3, -1.7), bundle=control["Palette"].std_out,
+            items=[("Strand", "MATERIAL"), ("Molecule", "MATERIAL")],
+            node_height=GRID, name="BackboneColors", label="BackboneColors")
+
+        profile = CurveCircle(tree, location=at(0.1, -2.5), mode="RADIUS",
+                              resolution=16, radius=self.BACKBONE_RADIUS,
+                              node_height=GRID, name="BackboneProfile",
+                              label="BackboneProfile")
+        pipe = CurveToMesh(tree, location=at(3.4, -2.4),
+                           curve=curve.geometry_out,
+                           profile_curve=profile.geometry_out,
+                           fill_caps=False, node_height=GRID, name="Backbone",
+                           label="Backbone")
+        tree.links.new(strand_scale.std_out, pipe.node.inputs["Scale"])
+        pipe_material = SetMaterial(tree, location=at(4.8, -2.6),
+                                    geometry=pipe.geometry_out,
+                                    material=colors.out("Strand"),
+                                    node_height=GRID, name="PaintBackbone",
+                                    label="PaintBackbone")
+
+        atom = UVSphere(tree, location=at(0.3, -0.1),
+                        radius=self.BACKBONE_SPHERE_RADIUS, segments=16,
+                        rings=8, node_height=GRID, name="BackboneAtom",
+                        label="BackboneAtom")
+        atoms = InstanceOnPoints(tree, location=at(3.3, -0.1),
+                                 points=curve.geometry_out,
+                                 instance=atom.geometry_out,
+                                 scale=strand_scale.std_out, node_height=GRID,
+                                 name="BackboneAtoms", label="BackboneAtoms")
+        atom_material = SetMaterial(tree, location=at(4.8, -0.1),
+                                    geometry=atoms.geometry_out,
+                                    material=colors.out("Molecule"),
+                                    node_height=GRID, name="PaintAtoms",
+                                    label="PaintAtoms")
+
+        join = JoinGeometry(tree, location=at(6.3, -1.1), node_height=GRID,
+                            name="JoinBackbone", label="JoinBackbone")
+        for piece in (pipe_material.geometry_out, atom_material.geometry_out):
+            tree.links.new(piece, join.geometry_in)
+        smooth = SetShadeSmooth(tree, location=at(7.8, -1.1),
+                                geometry=join.geometry_out, node_height=GRID,
+                                name="SmoothBackbone", label="SmoothBackbone")
+
+        frame = Frame(tree, location=(27.1, 3.9), label="Strand Geometry",
+                      node_height=GRID)
+        frame.add([curve, strand_scale, colors, profile, pipe, pipe_material,
+                   atom, atoms, atom_material, join, smooth])
+        return smooth.geometry_out

@@ -2775,8 +2775,10 @@ def change_mixer(mixer, begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME 
         begin_frame = begin_time * FRAME_RATE
     else:
         begin_time = begin_frame / FRAME_RATE
-    if transition_time:
-        transition_frames = transition_time * FRAME_RATE
+    # a transition_time of 0 means "snap" - tested against None so that it is
+    # not mistaken for "not given" and ramped over DEFAULT_ANIMATION_TIME
+    if transition_time is not None:
+        transition_frames = np.maximum(1, transition_time * FRAME_RATE)
     else:
         transition_time = transition_frames / FRAME_RATE
 
@@ -2893,8 +2895,10 @@ def change_default_vector(slot, from_value=None, to_value=Vector(), begin_time=N
         begin_frame = begin_time * FRAME_RATE
     else:
         begin_time = begin_frame / FRAME_RATE
-    if transition_time:
-        transition_frames = transition_time * FRAME_RATE
+    # a transition_time of 0 means "snap" - tested against None so that it is
+    # not mistaken for "not given" and ramped over DEFAULT_ANIMATION_TIME
+    if transition_time is not None:
+        transition_frames = np.maximum(1, transition_time * FRAME_RATE)
     else:
         transition_time = transition_frames / FRAME_RATE
     if from_value is not None:
@@ -2907,20 +2911,22 @@ def change_default_vector(slot, from_value=None, to_value=Vector(), begin_time=N
 
 
 def change_default_rotation(slot, from_value, to_value,
-                            begin_time=None, transition_time=None, data_path="default_value",
+                            begin_time=None, transition_time=None, data_path="rotation_euler",
                             begin_frame=0, transition_frames=DEFAULT_ANIMATION_TIME * FRAME_RATE):
     if begin_time:
         begin_frame = begin_time * FRAME_RATE
     else:
         begin_time = begin_frame / FRAME_RATE
-    if transition_time:
-        transition_frames = transition_time * FRAME_RATE
+    # a transition_time of 0 means "snap" - tested against None so that it is
+    # not mistaken for "not given" and ramped over DEFAULT_ANIMATION_TIME
+    if transition_time is not None:
+        transition_frames = np.maximum(1, transition_time * FRAME_RATE)
     else:
         transition_time = transition_frames / FRAME_RATE
     if from_value is not None:
-        slot.default_value = from_value
+        slot.rotation_euler = from_value
         insert_keyframe(slot, data_path, begin_frame)
-    slot.default_value = to_value
+    slot.rotation_euler = to_value
     insert_keyframe(slot, data_path, begin_frame + transition_frames)
 
     return begin_time + transition_time
@@ -2932,8 +2938,10 @@ def change_value(value, from_value, to_value, begin_time=None, transition_time=N
         begin_frame = begin_time * FRAME_RATE
     else:
         begin_time = begin_frame / FRAME_RATE
-    if transition_time:
-        transition_frames = transition_time * FRAME_RATE
+    # a transition_time of 0 means "snap" - tested against None so that it is
+    # not mistaken for "not given" and ramped over DEFAULT_ANIMATION_TIME
+    if transition_time is not None:
+        transition_frames = np.maximum(1, transition_time * FRAME_RATE)
     else:
         transition_time = transition_frames / FRAME_RATE
     if from_value is not None:

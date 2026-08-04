@@ -2271,6 +2271,9 @@ class SeparateGeometry(GreenNode):
         if selection:
             self.tree.links.new(selection, self.node.inputs["Selection"])
 
+        if geometry:
+            self.tree.links.new(geometry,self.node.inputs["Geometry"])
+
 
 class GeometryToInstance(GreenNode):
     def __init__(self, tree, location=(0, 0),
@@ -4227,9 +4230,15 @@ class VectorMath(BlueNode):
         """
         :param tree:
         :param location:
-        :param operation: "AND","OR",...
-        :param inputs0:
-        :param inputs1:
+        :param operation: "ADD", "SUBTRACT", "SCALE", "CROSS_PRODUCT", ...
+        :param inputs0: the first vector.
+        :param inputs1: the second operand. For every operation but ``SCALE``
+            that is the node's second ``Vector`` socket; ``SCALE`` has no
+            second vector, so there it is taken to mean the ``Scale`` float,
+            the same socket as ``float_input``.
+        :param float_input: the ``Scale`` socket by name - what ``SCALE``
+            multiplies its vector by, and what ``REFRACT`` reads its index of
+            refraction from.
         :param kwargs:
         """
         self.node = tree.nodes.new(type="ShaderNodeVectorMath")
@@ -4246,11 +4255,29 @@ class VectorMath(BlueNode):
             self.node.inputs[0].default_value = inputs0
         else:
             tree.links.new(inputs0, self.node.inputs[0])
-        if isinstance(inputs1, (Vector, list)):
+
+        if operation == "SCALE":
+            # ``SCALE`` takes one vector and a float, and that float is the
+            # node's *fourth* socket, ``Scale``. Its second ``Vector`` socket
+            # is disabled by the operation, so a factor written there is
+            # dropped - and dropped silently, since blender converts a float
+            # to a vector without complaint and does not draw a noodle into a
+            # disabled socket, which makes the node look unwired in the editor
+            # while it quietly scales by one. So a factor arriving as
+            # ``inputs1`` is sent where it belongs. The default ``Vector()``
+            # means "not given" and is left alone.
+            if isinstance(inputs1, (int, float)):
+                self.node.inputs["Scale"].default_value = inputs1
+            elif not isinstance(inputs1, (Vector, list)):
+                tree.links.new(inputs1, self.node.inputs["Scale"])
+        elif isinstance(inputs1, (Vector, list)):
             self.node.inputs[1].default_value = inputs1
         else:
             tree.links.new(inputs1, self.node.inputs[1])
-        if float_input:
+
+        # tested against None rather than for truthiness, so that a scale of
+        # zero is written rather than quietly skipped
+        if float_input is not None:
             if isinstance(float_input, (float, int)):
                 self.node.inputs["Scale"].default_value = float_input
             else:
@@ -5365,6 +5392,96 @@ class BevelNode(NodeGroup):
         create_geometry_line(tree, [set_pos, iop, realize_instance, convex_hull],
                              out=self.group_outputs.inputs["Bevelled Geometry"],
                              ins=self.group_inputs.outputs["Points"])
+
+
+class MorphNode(NodeGroup):
+    """Slide every point of one geometry onto the matching point of another.
+
+    ``Geometry 1`` comes out with its points moved along the straight line
+    towards ``Geometry 2``: at ``Morph Parameter`` 0 it is untouched, at 1 it
+    is standing on the second geometry's points, and in between it is the
+    weighted mean ``(1 - t) * here + t * there``.
+
+    "Matching" means *by index*, which is the only pairing a geometry node
+    can make without being told more: point 7 of the first goes to point 7 of
+    the second. Two consequences worth knowing before using it:
+
+    - Nothing about the two shapes has to agree, but nothing sensible is
+      guaranteed either. Which point ends up where is decided by the order
+      blender happened to build the geometries in, so the surface of the
+      first can fold through itself on the way even when the destination is
+      exactly right.
+    - If the first geometry has *more* points than the second, the surplus
+      points collapse onto the **world origin**: an index past the end of a
+      geometry does not clamp, it samples as the zero vector. That is a knot
+      of geometry at ``(0, 0, 0)`` rather than anything near the target
+      shape, so counts that do not match are worth noticing.
+
+    Only the first geometry survives - this moves points, it does not join
+    anything. Feed the second one to a ``Join Geometry`` alongside if both
+    should be on screen.
+
+    Example:
+        >>> morph = MorphNode(tree, geometry1=frame.geometry_out,
+        ...                   geometry2=arrow.geometry_out,
+        ...                   morph_parameter=parameter.std_out)
+
+    :param geometry1: geometry whose points are moved.
+    :param geometry2: geometry sampled for where to move them to.
+    :param morph_parameter: a float socket, or a plain number to leave it at.
+    """
+
+    def __init__(self, tree, geometry1=None, geometry2=None, morph_parameter=0,
+                 **kwargs):
+        self.name = get_from_kwargs(kwargs, "name", "MorphNode")
+        super().__init__(tree,
+                         inputs={"Geometry 1": "GEOMETRY", "Geometry 2": "GEOMETRY",
+                                 "Morph Parameter": "FLOAT"},
+                         outputs={"Geometry": "GEOMETRY"},
+                         auto_layout=True, name=self.name, **kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_in = self.node.inputs["Geometry 1"]
+        self.geometry_out = self.node.outputs["Geometry"]
+        self.std_out = self.geometry_out
+
+        for socket, value in (("Geometry 1", geometry1), ("Geometry 2", geometry2),
+                              ("Morph Parameter", morph_parameter)):
+            if value is None:
+                continue
+            if isinstance(value, (bool, int, float)):
+                self.node.inputs[socket].default_value = value
+            else:
+                tree.links.new(value, self.node.inputs[socket])
+
+    def fill_group_with_node(self, tree, **kwargs):
+        parameter = self.group_inputs.outputs["Morph Parameter"]
+        position = Position(tree)
+        index = Index(tree)
+
+        # 1 - t. Subtraction is not symmetric and the constant belongs on top
+        rest = MathNode(tree, operation="SUBTRACT", inputs0=1.0, inputs1=parameter,
+                        name="OneMinusMorph")
+        stay = VectorMath(tree, operation="SCALE", inputs0=position.std_out,
+                          float_input=rest.std_out, name="WeightedHere")
+
+        # `Position` in the Value socket is evaluated on the *sampled*
+        # geometry, so this reads where the second geometry keeps the point
+        # that shares this one's index
+        sampled = SampleIndex(tree, data_type="FLOAT_VECTOR", domain="POINT",
+                              geometry=self.group_inputs.outputs["Geometry 2"],
+                              value=position.std_out, index=index.std_out,
+                              name="TargetPosition")
+        go = VectorMath(tree, operation="SCALE", inputs0=sampled.std_out,
+                        float_input=parameter, name="WeightedThere")
+        blend = VectorMath(tree, operation="ADD", inputs0=stay.std_out,
+                           inputs1=go.std_out, name="Blend")
+
+        moved = SetPosition(tree, geometry=self.group_inputs.outputs["Geometry 1"],
+                            position=blend.std_out, name="Morph")
+        tree.links.new(moved.geometry_out, self.group_outputs.inputs["Geometry"])
 
 
 class ComplexMathNode(NodeGroup):

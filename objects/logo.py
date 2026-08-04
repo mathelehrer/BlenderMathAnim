@@ -277,7 +277,7 @@ class GeometryLogo(BObject):
                               silent=silent,linked=linked,nice_alpha=nice_alpha,children=children,**kwargs)
 
 class LogoFromInstances(BObject):
-    def __init__(self, details=2, instance_red=Sphere, instance_green=Sphere, instance_blue=Sphere,
+    def __init__(self, details=2, instance_red=Sphere, instance_green=Sphere, instance_blue=Sphere,mode="XY",
                  kwargs_red={"color":"important"},kwargs_green={"color":"joker"},kwargs_blue={"color":"drawing"}, **kwargs):
         """
         Create a logo with custom instances
@@ -300,28 +300,41 @@ class LogoFromInstances(BObject):
         if isinstance(self.scale,float):
             self.scale = [self.scale]*3
 
-        for i in range(0, details + 1):
-            den = 2 + i * i
-            r = 1 / den
-            x = 2 * i / den
-            y = 3 / den
-            self.red_instances.append(instance_red(location=[x, y, 0],
-                                             name='red_' + str(i),**kwargs_red,scale=[r]*3))
-
-            if i > 0:
+        if instance_red:
+            for i in range(0, details + 1):
                 den = 2 + i * i
                 r = 1 / den
-                x = -2 * i / den
+                x = 2 * i / den
                 y = 3 / den
-                self.red_instances.append(instance_red(location=[x, y, 0],
-                                                       name='red_-' + str(i), **kwargs_red, scale=[r] * 3))
+                if mode == "XY":
+                    location = [x,y,0]
+                else:
+                    location = [x,0,y]
+                self.red_instances.append(instance_red(location=location,
+                                                 name='red_' + str(i),**kwargs_red,scale=[r]*3))
+
+                if i > 0:
+                    den = 2 + i * i
+                    r = 1 / den
+                    x = -2 * i / den
+                    y = 3 / den
+                    if mode == "XY":
+                        location = [x,y,0]
+                    else:
+                        location = [x,0,y]
+                    self.red_instances.append(instance_red(location=location,
+                                                           name='red_-' + str(i), **kwargs_red, scale=[r] * 3))
 
         for i in range(1, details + 1):
             den = 6 + 4 * i * (i - 1)
             r = 1 / den
             x = (8 * i - 4) / den
             y = 9 / den
-            self.green_instances.append(instance_green(location=[x, y, 0],
+            if mode == "XY":
+                location = [x, y, 0]
+            else:
+                location = [x, 0, y]
+            self.green_instances.append(instance_green(location=location,
                                                    name='green_' + str(i), **kwargs_green, scale=[r] * 3))
 
             j = i - 1
@@ -329,7 +342,11 @@ class LogoFromInstances(BObject):
             r = 1 / den
             x = (-8 * j - 4) / den
             y = 9 / den
-            self.green_instances.append(instance_green( location=[x, y, 0],
+            if mode == "XY":
+                location = [x, y, 0]
+            else:
+                location = [x, 0, y]
+            self.green_instances.append(instance_green(location=location,
                                                    name='green_-' + str(i), **kwargs_green, scale=[r] * 3))
 
         for i in range(1, details + 1):
@@ -337,14 +354,22 @@ class LogoFromInstances(BObject):
             r = 1 / den
             x = (8 * i - 4) / den
             y = 15 / den
-            self.blue_instances.append(instance_blue( location=[x, y, 0],
+            if mode == "XY":
+                location = [x, y, 0]
+            else:
+                location = [x, 0, y]
+            self.blue_instances.append(instance_blue(location=location,
                                                    name='blue_' + str(i), **kwargs_blue, scale=[r] * 3))
             j = i - 1
             den = 15 + 4 * j * (j + 1)
             r = 1 / den
             x = (-8 * j - 4) / den
             y = 15 / den
-            self.blue_instances.append(instance_blue( location=[x, y, 0],
+            if mode == "XY":
+                location = [x, y, 0]
+            else:
+                location = [x, 0, y]
+            self.blue_instances.append(instance_blue(location=location,
                                                      name='blue_-' + str(i), **kwargs_blue, scale=[r] * 3))
 
         special_instances = get_from_kwargs(kwargs,"special_instances",None)
@@ -367,7 +392,6 @@ class LogoFromInstances(BObject):
     def get_blue_instances(self):
         return self.blue_instances
 
-
     def copy_location_and_scale(self,source,target):
         target.ref_obj.location=source.ref_obj.location
         target.ref_obj.scale=source.ref_obj.scale
@@ -385,17 +409,18 @@ class LogoFromInstances(BObject):
             self.blue_instances[index]=self.copy_location_and_scale(old_instance, instance)
 
 
-    def appear(self,begin_time=0,
+    def appear(self,children=True,begin_time=0,
                transition_time=DEFAULT_ANIMATION_TIME,
                **kwargs):
-        super().appear(begin_time=begin_time,transition_time=transition_time)
-        for child in self.b_children:
-            child.appear(begin_time=begin_time, transition_time=transition_time)
+        super().appear(begin_time=begin_time,transition_time=transition_time,children=children)
+        if children:
+            for child in self.b_children:
+                child.appear(begin_time=begin_time, transition_time=transition_time)
         return begin_time + transition_time
 
     def grow(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
-        self.appear(begin_time=begin_time,transition_time=0)
-        super().grow(scale=self.scale, begin_time=begin_time,transition_time=0)
+        self.appear(begin_time=begin_time,transition_time=0,children=False)
+        super().grow(scale=self.scale, begin_time=begin_time,transition_time=0,children=False)
         for child in self.b_children:
             child.grow(scale=child.intrinsic_scale, begin_time=begin_time, transition_time=transition_time)
         return begin_time+transition_time

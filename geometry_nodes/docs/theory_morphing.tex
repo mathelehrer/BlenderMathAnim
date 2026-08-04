@@ -1,0 +1,393 @@
+% =====================================================================
+%  Shape morphing: theory, algorithms, and what MorphNode can do about it
+%  Build:  pdflatex theory_morphing.tex   (run twice for the ToC)
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!55!black,
+    urlcolor=blue!55!black,
+    citecolor=blue!55!black,
+    pdftitle={Shape morphing for MorphNode},
+    pdfauthor={BlenderMathAnim}
+}
+
+\newcommand{\src}{S_1}
+\newcommand{\dst}{S_2}
+\newcommand{\node}[1]{\texttt{#1}}
+
+\title{Shape Morphing in Geometry Nodes\\
+       \large Theory, standard algorithms, and a plan for \node{MorphNode}}
+\author{BlenderMathAnim --- \node{geometry\_nodes/nodes.py}}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\bigskip
+
+% =====================================================================
+\section{The problem, concretely}
+% =====================================================================
+
+\node{MorphNode} currently computes, for every point $p_i$ of the source
+geometry $\src$,
+\begin{equation}
+  x_i(t) \;=\; (1-t)\,p_i \;+\; t\,q_i ,
+  \qquad
+  q_i \;=\; \text{position of point $i$ of } \dst ,
+  \label{eq:naive}
+\end{equation}
+with $t$ the \node{Morph Parameter}. Two independent things are wrong with
+it, and they are worth separating because they have different fixes.
+
+\paragraph{Vertex counts.}
+The pairing $i \mapsto i$ is only defined when
+$N = |\src| \le M = |\dst|$. Blender's \node{Sample Index} does \emph{not}
+clamp an out-of-range index: it returns the zero vector, so every surplus
+source point is sent to the world origin. Measured on a $114$-point UV
+sphere morphed into an $8$-point cube: $106$ points land on exactly
+$(0,0,0)$. In the picture-frame-into-arrow example of
+\node{MorphModifier} the frame carries $4\times 32 = 128$ points and the
+arrow $100$, so $28$ points collapse into a knot --- and because the arrow
+happens to stand \emph{at} the origin, the knot hides at its foot and reads
+as part of the shape.
+
+\paragraph{Edges and faces.}
+Worse, and independent of the counts: the index of a point is its position
+in a storage array, not a property of the surface. Point $7$ of a swept
+rectangle has nothing to do with point $7$ of a cone. Formula
+\eqref{eq:naive} therefore transports the source's connectivity along
+essentially random trajectories, and the surface folds through itself on the
+way. The target's edges and faces never enter the computation at all: what
+comes out at $t=1$ is the source's mesh with the target's point positions,
+which is only the target if the two meshes were compatible to begin with.
+
+The literature calls these the \emph{correspondence problem} and the
+\emph{interpolation} (or \emph{vertex path}) \emph{problem}, and treats them
+separately~\cite{alexa2002,lazarus1998}. Everything below follows that split.
+
+% =====================================================================
+\section{The correspondence problem}
+% =====================================================================
+
+The goal is a bijection $\varphi:\src\to\dst$ between the two surfaces,
+together with a mesh that represents both --- a \emph{supermesh} whose
+connectivity is valid for the source \emph{and} the target. Given that, the
+morph is a per-vertex interpolation and the edges and faces take care of
+themselves.
+
+\subsection{Map both shapes to a common domain}
+
+The dominant family. Both surfaces are parameterised over one domain,
+correspondence is composition through it, and the supermesh is the overlay
+of the two parameterisations.
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Sphere as domain (genus $0$).} Kent, Carlson and
+    Parent~\cite{kent1992} project two star-shaped polyhedra onto a common
+    sphere, merge the two projected topologies into one, and interpolate.
+    This is the original recipe and still the clearest one to implement.
+  \item \textbf{Harmonic and barycentric maps.} For meshes with boundary,
+    fix the boundary to a convex polygon and solve a linear system for the
+    interior; Tutte's theorem guarantees the embedding is
+    valid~\cite{tutte1963}, and Floater's weights give a smooth, shape
+    preserving version~\cite{floater1997}. Kanai, Suzuki and Kimura use
+    harmonic maps for metamorphosis of arbitrary triangular
+    meshes~\cite{kanai2000}.
+  \item \textbf{Base domains and consistent parameterisation.} Cut both
+    meshes into matching patches over a common coarse base mesh: multi
+    resolution analysis of arbitrary meshes~\cite{eck1995}, consistent mesh
+    parameterisations~\cite{praun2001}, cross-parameterisation and
+    compatible remeshing~\cite{kraevoy2004}, inter-surface
+    mapping~\cite{schreiner2004}. These handle higher genus and let the user
+    pin feature correspondences (nose to nose, tip to tip).
+\end{itemize}
+
+\subsection{Skip the mesh entirely}
+
+If the shapes are represented as functions rather than triangles, no
+correspondence is needed: interpolate the \emph{representation}.
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Implicit functions.} Blend the defining scalar fields and
+    re-extract the surface~\cite{turk1999}.
+  \item \textbf{Distance fields.} Interpolate signed distance fields, with
+    a warp to keep features aligned~\cite{cohenor1998}.
+  \item \textbf{Optimal transport.} Treat both shapes as measures and
+    follow the Wasserstein geodesic; convolutional Wasserstein distances
+    make this practical on geometric domains~\cite{solomon2015}. This is
+    the principled answer to ``which point goes where'' when the two point
+    sets differ in size, since transport plans are not required to be
+    bijections.
+\end{itemize}
+
+Topology changes (a torus becoming a ball) come for free here and are
+essentially impossible in the mesh-based family.
+
+\subsection{Discrete matching heuristics}
+
+Cheap approximations that do not build a supermesh, which is the class the
+node can realistically use:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Rigid pre-alignment.} Centre both shapes (and optionally
+    normalise scale and principal axes) before matching. This is the
+    initialisation step of ICP~\cite{besl1992}; without it every geometric
+    matching criterion is dominated by where the two objects happen to sit.
+  \item \textbf{Nearest-point projection.} Send each source point to the
+    closest point of the target surface. Fast, order-independent, and
+    surjective onto nothing in particular: it is many-to-one, so it is a
+    shrink-wrap rather than a bijection. It respects geometry, which is
+    exactly what index pairing does not.
+  \item \textbf{Optimal assignment.} With equal counts, choose the
+    permutation minimising $\sum_i \|p_i - q_{\sigma(i)}\|^2$ --- the
+    assignment problem, solvable in $O(n^3)$ by the Hungarian
+    method~\cite{kuhn1955}. This is the discrete cousin of optimal
+    transport and removes the twisting that nearest-point matching leaves
+    behind, at the price of a global solve.
+\end{itemize}
+
+% =====================================================================
+\section{The interpolation problem}
+% =====================================================================
+
+Given corresponding points, formula \eqref{eq:naive} moves each along a
+straight line. That is the naive choice and it is visibly wrong for large
+deformations: a rotating limb shrinks towards the centre of rotation,
+because the straight line between two points of a rotating rigid body cuts
+the chord instead of following the arc. Standard alternatives:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Intrinsic interpolation (2D).} Interpolate edge lengths and
+    turning angles instead of coordinates and reconstruct the
+    polygon~\cite{sederberg1992,sederberg1993}.
+  \item \textbf{As-rigid-as-possible interpolation.} Interpolate the affine
+    map of each triangle by splitting it into rotation and stretch, and
+    solve a least-squares problem for the vertex positions that best agrees
+    with all of them~\cite{alexa2000}. The same machinery underlies ARAP
+    surface modelling~\cite{sorkine2007}.
+  \item \textbf{Gradient-domain / Poisson blending.} Interpolate the
+    deformation gradients and integrate.
+\end{itemize}
+
+All three need a global linear solve per frame, which puts them out of
+reach of a pure geometry-node graph.
+
+% =====================================================================
+\section{What is feasible inside geometry nodes}
+% =====================================================================
+
+A geometry-node graph evaluates \emph{fields}: one expression per element,
+with no ordering, no iteration to convergence, and no way to build new
+connectivity beyond what the fixed operators provide. That rules a lot out.
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Method} & \textbf{Needs} & \textbf{In geometry nodes?} \\
+\midrule
+Index pairing               & nothing                    & yes (today) \\
+Index rescaling             & two counts                 & yes \\
+Centroid / scale alignment  & attribute statistics       & yes \\
+Nearest-point projection    & spatial query              & yes (\node{Geometry Proximity}) \\
+Curve arc-length pairing    & resampling                 & yes (curves only) \\
+Optimal assignment          & global $O(n^3)$ solve      & no \\
+Spherical parameterisation  & iterative relaxation       & no (needs Python) \\
+Supermesh construction      & topology surgery           & no (needs Python) \\
+ARAP interpolation          & linear solve per frame     & no (needs Python) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The three rows marked ``yes'' that are not already there are what the plan
+below implements. The rest belong in a Python pre-pass that writes a
+compatible pair of meshes once, after which the existing node interpolates
+them correctly --- see \S\ref{sec:roadmap}.
+
+% =====================================================================
+\section{Implemented plan}
+% =====================================================================
+
+Three steps, in the order the graph applies them. Each is a frame in the
+node group.
+
+\subsection*{Step 1 --- index rescaling (frame \node{Index Pairing})}
+
+Replace $i \mapsto i$ with the monotone map
+\begin{equation}
+  j(i) \;=\;
+  \operatorname{round}\!\left( i \cdot \frac{M-1}{\,N-1\,} \right),
+  \qquad N=|\src|,\; M=|\dst| ,
+  \label{eq:rescale}
+\end{equation}
+clamped to $[0, M-1]$, with $j=0$ when $N \le 1$. The point counts come from
+\node{Domain Size} on both inputs, so the map adapts to whatever is plugged
+in.
+
+\emph{What it fixes:} the index is never out of range, so nothing is ever
+sent to the origin --- the count mismatch stops being a crash-like artefact
+and becomes a mere loss of resolution. When $N > M$ several source points
+share a destination; when $N < M$ the source samples the target evenly
+rather than only its first $N$ points.
+\emph{What it does not fix:} the pairing is still storage order.
+
+\subsection*{Step 2 --- centroid alignment (frame \node{Alignment})}
+
+With
+\[
+  c_k \;=\; \frac{1}{|S_k|}\sum_{p \in S_k} p
+  \qquad (\text{\node{Attribute Statistic}, mean of \node{Position}}),
+\]
+correspondence is computed between the \emph{centred} shapes
+$\src - c_1$ and $\dst - c_2$, and the destination is mapped back by $+c_2$.
+
+Note that for a \emph{linear} blend of an \emph{index} pairing this is a
+no-op: $(1-t)(p-c_1) + t(q-c_2)$ plus the interpolated centroid
+$(1-t)c_1+tc_2$ is exactly $(1-t)p+tq$. It matters only because Step 3
+matches by distance, and distance is meaningless while the two shapes sit
+metres apart. It is the translation-only case of the rigid pre-registration
+that every geometric matcher assumes~\cite{besl1992}.
+
+\subsection*{Step 3 --- nearest-surface pairing (frame \node{Nearest Pairing})}
+
+Pair by geometry instead of by index:
+\begin{equation}
+  \varphi(p) \;=\;
+  c_2 \;+\; \operatorname*{arg\,min}_{y \,\in\, \dst - c_2}
+  \bigl\| (p - c_1) - y \bigr\| ,
+  \label{eq:proximity}
+\end{equation}
+evaluated by \node{Geometry Proximity} against the centred target, with
+\node{Target Element} $=$ \node{Faces} so the destination may lie anywhere
+on the target surface rather than only on its vertices.
+
+\emph{What it fixes:} the destination of a point now depends on where the
+point \emph{is}, not on when it was created. Neighbouring source points get
+neighbouring destinations, so the source's edges and faces stay coherent
+instead of tangling, and the count question disappears entirely --- a
+continuous surface has a nearest point for every source point whatever the
+two resolutions are.
+\emph{What it does not fix:} the map is many-to-one. At $t=1$ the source is
+shrink-wrapped onto the target: the silhouette is right and the surface lies
+on the target, but concavities the projection cannot see stay uncovered, and
+the source's connectivity, not the target's, is what survives.
+
+A \node{Match Nearest} boolean switches between \eqref{eq:rescale} and
+\eqref{eq:proximity}; the blend \eqref{eq:naive} is unchanged behind it.
+
+% =====================================================================
+\section{Roadmap}\label{sec:roadmap}
+% =====================================================================
+
+In increasing order of work:
+
+\begin{enumerate}[leftmargin=1.6em]
+  \item \textbf{Arc-length pairing for curve-like shapes.} Convert both
+    shapes to curves and \node{Resample Curve} to a common count. Both
+    problems vanish at once: equal counts, and index order becomes arc
+    length, which \emph{is} geometric. Cheap, and enough for outline
+    morphs (letters, silhouettes, the picture frame of
+    \node{MorphModifier}).
+  \item \textbf{Python supermesh pass.} Parameterise both meshes over a
+    sphere~\cite{kent1992} or a common base
+    domain~\cite{praun2001,kraevoy2004}, overlay the two, and emit a single
+    mesh with two position attributes. The node then interpolates two
+    attributes of one mesh, which is correct by construction --- and
+    \node{MorphNode} needs no change at all.
+  \item \textbf{Better trajectories.} Once the supermesh exists, replace the
+    straight line by an as-rigid-as-possible path~\cite{alexa2000}; a
+    per-frame least-squares solve, so again Python.
+\end{enumerate}
+
+% =====================================================================
+\begin{thebibliography}{99}
+\small
+
+\bibitem{alexa2000} M.~Alexa, D.~Cohen-Or, D.~Levin.
+  \emph{As-rigid-as-possible shape interpolation}. SIGGRAPH, 2000.
+
+\bibitem{alexa2002} M.~Alexa.
+  \emph{Recent advances in mesh morphing}. Computer Graphics Forum 21(2), 2002.
+
+\bibitem{besl1992} P.~J.~Besl, N.~D.~McKay.
+  \emph{A method for registration of 3-D shapes}. IEEE Transactions on
+  Pattern Analysis and Machine Intelligence 14(2), 1992.
+
+\bibitem{cohenor1998} D.~Cohen-Or, D.~Levin, A.~Solomovici.
+  \emph{Three-dimensional distance field metamorphosis}. ACM Transactions on
+  Graphics 17(2), 1998.
+
+\bibitem{eck1995} M.~Eck, T.~DeRose, T.~Duchamp, H.~Hoppe, M.~Lounsbery,
+  W.~Stuetzle. \emph{Multiresolution analysis of arbitrary meshes}.
+  SIGGRAPH, 1995.
+
+\bibitem{floater1997} M.~S.~Floater.
+  \emph{Parametrization and smooth approximation of surface triangulations}.
+  Computer Aided Geometric Design 14(3), 1997.
+
+\bibitem{kanai2000} T.~Kanai, H.~Suzuki, F.~Kimura.
+  \emph{Metamorphosis of arbitrary triangular meshes}. IEEE Computer
+  Graphics and Applications 20(2), 2000.
+
+\bibitem{kent1992} J.~R.~Kent, W.~E.~Carlson, R.~E.~Parent.
+  \emph{Shape transformation for polyhedral objects}. SIGGRAPH, 1992.
+
+\bibitem{kraevoy2004} V.~Kraevoy, A.~Sheffer.
+  \emph{Cross-parameterization and compatible remeshing of 3D models}.
+  ACM Transactions on Graphics (SIGGRAPH), 2004.
+
+\bibitem{kuhn1955} H.~W.~Kuhn.
+  \emph{The Hungarian method for the assignment problem}. Naval Research
+  Logistics Quarterly 2, 1955.
+
+\bibitem{lazarus1998} F.~Lazarus, A.~Verroust.
+  \emph{Three-dimensional metamorphosis: a survey}. The Visual Computer
+  14(8--9), 1998.
+
+\bibitem{praun2001} E.~Praun, W.~Sweldens, P.~Schr\"oder.
+  \emph{Consistent mesh parameterizations}. SIGGRAPH, 2001.
+
+\bibitem{schreiner2004} J.~Schreiner, A.~Asirvatham, E.~Praun, H.~Hoppe.
+  \emph{Inter-surface mapping}. ACM Transactions on Graphics (SIGGRAPH), 2004.
+
+\bibitem{sederberg1992} T.~W.~Sederberg, E.~Greenwood.
+  \emph{A physically based approach to 2-D shape blending}. SIGGRAPH, 1992.
+
+\bibitem{sederberg1993} T.~W.~Sederberg, P.~Gao, G.~Wang, H.~Mu.
+  \emph{2-D shape blending: an intrinsic solution to the vertex path
+  problem}. SIGGRAPH, 1993.
+
+\bibitem{solomon2015} J.~Solomon, F.~de~Goes, G.~Peyr\'e, M.~Cuturi,
+  A.~Butscher, A.~Nguyen, T.~Du, L.~Guibas.
+  \emph{Convolutional Wasserstein distances: efficient optimal
+  transportation on geometric domains}. ACM Transactions on Graphics
+  (SIGGRAPH), 2015.
+
+\bibitem{sorkine2007} O.~Sorkine, M.~Alexa.
+  \emph{As-rigid-as-possible surface modeling}. Symposium on Geometry
+  Processing, 2007.
+
+\bibitem{turk1999} G.~Turk, J.~F.~O'Brien.
+  \emph{Shape transformation using variational implicit functions}.
+  SIGGRAPH, 1999.
+
+\bibitem{tutte1963} W.~T.~Tutte.
+  \emph{How to draw a graph}. Proceedings of the London Mathematical
+  Society, 1963.
+
+\end{thebibliography}
+
+\end{document}

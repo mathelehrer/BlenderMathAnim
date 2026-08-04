@@ -894,7 +894,7 @@ class BObject(object):
         ibpy.rename(self, name)
 
     def grow(self, scale=None, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, modus='from_center', pivot=None,
-             initial_scale=0, alpha=1):
+             initial_scale=0, alpha=1,children=True):
         """
         grow an object from 0 to
         :param scale: the final scale
@@ -905,7 +905,7 @@ class BObject(object):
         """
 
         if not self.appeared:
-            self.appear(alpha=alpha, begin_time=0, transition_time=0)
+            self.appear(alpha=alpha, begin_time=0, transition_time=0,chidren=children)
         if pivot:
             ibpy.set_pivot(self, pivot)
         if scale is None:
