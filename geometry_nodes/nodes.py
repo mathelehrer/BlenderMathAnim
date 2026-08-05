@@ -1122,6 +1122,66 @@ class SetCurveTilt(GreenNode):
                 self.tree.links.new(tilt, self.node.inputs["Tilt"])
 
 
+class SetCurveRadius(GreenNode):
+    """Write the per-point radius a curve carries.
+
+    ``Curve to Mesh`` multiplies its profile by this, so a curve whose radius
+    varies along its length sweeps out a shape that thickens and thins - a
+    cone is a straight line whose radius falls to zero, and a solid of
+    revolution in general is exactly a curve plus a radius.
+    """
+
+    def __init__(self, tree, location=(0, 0), curve=None, selection=None,
+                 radius=1.0, **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeSetCurveRadius")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_in = self.node.inputs["Curve"]
+        self.geometry_out = self.node.outputs["Curve"]
+
+        if curve is not None:
+            self.tree.links.new(curve, self.geometry_in)
+        if selection is not None:
+            if isinstance(selection, bool):
+                self.node.inputs["Selection"].default_value = selection
+            else:
+                self.tree.links.new(selection, self.node.inputs["Selection"])
+        if radius is not None:
+            if isinstance(radius, (int, float)):
+                self.node.inputs["Radius"].default_value = radius
+            else:
+                self.tree.links.new(radius, self.node.inputs["Radius"])
+
+
+class InputRadius(RedNode):
+    """The radius of the point being evaluated - the field :class:`SetCurveRadius` writes."""
+
+    def __init__(self, tree, location=(0, 0), **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeInputRadius")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs["Radius"]
+
+
+class SplineParameter(RedNode):
+    """How far along its spline a point sits.
+
+    ``Factor`` runs 0 to 1 over each spline and is the natural coordinate for
+    anything that varies along a curve; ``Length`` is the same thing in world
+    units and ``Index`` the point's number within its own spline (not the
+    geometry's, which is what :class:`Index` gives).
+    """
+
+    def __init__(self, tree, location=(0, 0), std_out="Factor", **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeSplineParameter")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs[std_out]
+        self.factor = self.node.outputs["Factor"]
+        self.length = self.node.outputs["Length"]
+        self.point_index = self.node.outputs["Index"]
+
+
 class SetCurveNormal(GreenNode):
     def __init__(self, tree, location=(0, 0), curve=None, selection=None,
                  mode="Minimum Twist", **kwargs):
@@ -1572,6 +1632,7 @@ class CurveToMesh(GreenNode):
                  curve=None,
                  profile_curve=None,
                  fill_caps=True,
+                 scale=None,
                  **kwargs):
         """
 
@@ -1579,6 +1640,12 @@ class CurveToMesh(GreenNode):
         :param location:
         :param curve:
         :param profile_curve:
+        :param scale: how much the profile is scaled at each point of the
+            curve. A field, so a curve that carries a radius sweeps out a
+            shape that thickens and thins - feed it :class:`InputRadius`.
+            Blender 5 scales by this socket alone; the curve's own radius
+            attribute no longer reaches the profile by itself, which is why
+            a varying radius looks ignored until this is wired.
         :param kwargs:
         """
         self.node = tree.nodes.new(type="GeometryNodeCurveToMesh")
@@ -1592,6 +1659,11 @@ class CurveToMesh(GreenNode):
             self.tree.links.new(curve, self.node.inputs["Curve"])
         if profile_curve:
             self.tree.links.new(profile_curve, self.node.inputs["Profile Curve"])
+        if scale is not None and "Scale" in self.node.inputs:
+            if isinstance(scale, (int, float)):
+                self.node.inputs["Scale"].default_value = scale
+            else:
+                self.tree.links.new(scale, self.node.inputs["Scale"])
 
 
 # String operations
@@ -5395,27 +5467,49 @@ class BevelNode(NodeGroup):
 
 
 class MorphNode(NodeGroup):
-    """Slide every point of one geometry onto the matching point of another.
+    """Slide every point of one geometry onto a matching point of another.
 
-    ``Geometry 1`` comes out with its points moved along the straight line
+    ``Geometry 1`` comes out with its points moved along straight lines
     towards ``Geometry 2``: at ``Morph Parameter`` 0 it is untouched, at 1 it
-    is standing on the second geometry's points, and in between it is the
-    weighted mean ``(1 - t) * here + t * there``.
+    stands on the second geometry, and in between it is the weighted mean
+    ``(1 - t) * here + t * there``.
 
-    "Matching" means *by index*, which is the only pairing a geometry node
-    can make without being told more: point 7 of the first goes to point 7 of
-    the second. Two consequences worth knowing before using it:
+    The interesting half is *which* point of the target a point is aiming at.
+    Shape interpolation splits into a correspondence problem and a
+    trajectory problem, and only the second one is easy; ``docs/
+    theory_morphing.tex`` surveys the literature on the first and derives
+    what is implementable in a node graph at all. Two pairings are built in:
 
-    - Nothing about the two shapes has to agree, but nothing sensible is
-      guaranteed either. Which point ends up where is decided by the order
-      blender happened to build the geometries in, so the surface of the
-      first can fold through itself on the way even when the destination is
-      exactly right.
-    - If the first geometry has *more* points than the second, the surplus
-      points collapse onto the **world origin**: an index past the end of a
-      geometry does not clamp, it samples as the zero vector. That is a knot
-      of geometry at ``(0, 0, 0)`` rather than anything near the target
-      shape, so counts that do not match are worth noticing.
+    ``Match Nearest`` **off** - *rescaled index pairing*
+        Point ``i`` of ``N`` aims at point ``round(i * (M-1)/(N-1))`` of
+        ``M``, so the whole of the target is covered whatever the two counts
+        are. Plain ``i -> i`` (what this node used to do) breaks in two ways
+        that this fixes: past the end of the target an index does not clamp
+        but samples as the *zero vector*, which drops every surplus point on
+        the world origin; and below the end, only the target's first ``N``
+        points are ever used.
+    ``Match Nearest`` **on** (the default) - *nearest-surface pairing*
+        Each point aims at the closest point of the target *surface*
+        instead. The destination then depends on where a point is rather
+        than on when blender happened to create it, so neighbouring points
+        get neighbouring destinations and the source's edges and faces stay
+        coherent instead of tangling. The counts stop mattering altogether.
+        The price is that the map is many-to-one: at ``t = 1`` the source is
+        shrink-wrapped onto the target rather than in bijection with it, and
+        pockets the projection cannot see stay uncovered.
+
+    Both pairings are computed with the two shapes moved onto a common
+    centroid, since a distance-based match between shapes that sit metres
+    apart measures mostly the gap. The destination is moved back onto the
+    real target afterwards, so the morph still travels.
+
+    What neither pairing can solve: the surviving connectivity is always the
+    source's. Making the target's edges and faces appear needs a mesh both
+    shapes can be written on - a supermesh - which is topology surgery no
+    field can do. That is ``geometry_nodes/supermesh.py``, a pre-pass that
+    remeshes both shapes onto one sphere tessellation; feed its two outputs
+    here with ``Match Nearest`` off and index pairing becomes exactly right,
+    because point i of the one is point i of the other.
 
     Only the first geometry survives - this moves points, it does not join
     anything. Feed the second one to a ``Join Geometry`` alongside if both
@@ -5427,18 +5521,24 @@ class MorphNode(NodeGroup):
         ...                   morph_parameter=parameter.std_out)
 
     :param geometry1: geometry whose points are moved.
-    :param geometry2: geometry sampled for where to move them to.
+    :param geometry2: geometry the destinations are taken from.
     :param morph_parameter: a float socket, or a plain number to leave it at.
+    :param match_nearest: initial value of the ``Match Nearest`` socket.
+    :param target_element: what the nearest-point search may land on -
+        ``'POINTS'``, ``'EDGES'`` or ``'FACES'``. Faces is the useful one for
+        meshes (the destination may be anywhere on a face); points falls back
+        to the target's vertices, which is what a point cloud has.
     """
 
     def __init__(self, tree, geometry1=None, geometry2=None, morph_parameter=0,
-                 **kwargs):
+                 match_nearest=True, target_element="FACES", **kwargs):
         self.name = get_from_kwargs(kwargs, "name", "MorphNode")
+        self.target_element = target_element
         super().__init__(tree,
                          inputs={"Geometry 1": "GEOMETRY", "Geometry 2": "GEOMETRY",
-                                 "Morph Parameter": "FLOAT"},
+                                 "Morph Parameter": "FLOAT", "Match Nearest": "BOOLEAN"},
                          outputs={"Geometry": "GEOMETRY"},
-                         auto_layout=True, name=self.name, **kwargs)
+                         auto_layout=False, name=self.name, **kwargs)
 
         self.inputs = self.node.inputs
         self.outputs = self.node.outputs
@@ -5448,7 +5548,8 @@ class MorphNode(NodeGroup):
         self.std_out = self.geometry_out
 
         for socket, value in (("Geometry 1", geometry1), ("Geometry 2", geometry2),
-                              ("Morph Parameter", morph_parameter)):
+                              ("Morph Parameter", morph_parameter),
+                              ("Match Nearest", match_nearest)):
             if value is None:
                 continue
             if isinstance(value, (bool, int, float)):
@@ -5456,32 +5557,347 @@ class MorphNode(NodeGroup):
             else:
                 tree.links.new(value, self.node.inputs[socket])
 
+    # ----------------------------------------------------------------
     def fill_group_with_node(self, tree, **kwargs):
-        parameter = self.group_inputs.outputs["Morph Parameter"]
-        position = Position(tree)
-        index = Index(tree)
+        source = self.group_inputs.outputs["Geometry 1"]
+        target = self.group_inputs.outputs["Geometry 2"]
 
-        # 1 - t. Subtraction is not symmetric and the constant belongs on top
-        rest = MathNode(tree, operation="SUBTRACT", inputs0=1.0, inputs1=parameter,
-                        name="OneMinusMorph")
-        stay = VectorMath(tree, operation="SCALE", inputs0=position.std_out,
-                          float_input=rest.std_out, name="WeightedHere")
+        # the four frames sit far apart on purpose: each is a step of the
+        # algorithm and they are read left to right, alignment first
+        counts, centroids, centred_target = self._alignment_frame(tree, source, target)
+        by_index = self._index_pairing_frame(tree, target, counts)
+        by_nearest = self._nearest_pairing_frame(tree, centred_target, centroids)
+        moved = self._blend_frame(tree, source, by_index, by_nearest)
+
+        tree.links.new(moved.geometry_out, self.group_outputs.inputs["Geometry"])
+        self.group_inputs.location = (-700, -250)
+        self.group_outputs.location = (3700, -150)
+
+    # ----------------------------------------------------------------
+    def _alignment_frame(self, tree, source, target):
+        """``Alignment``: how big the two shapes are and where they sit.
+
+        Counts for the index pairing, centroids for the nearest pairing, and
+        a copy of the target moved onto the origin for the search to run
+        against - a nearest-point match between shapes that do not overlap
+        measures the distance between them and little else.
+
+        :return: ``((n_source, n_target), (c_source, c_target), centred_target)``
+        """
+        n_source = DomainSize(tree, location=(0, -1), geometry=source,
+                              component="MESH", name="SourceSize")
+        n_target = DomainSize(tree, location=(0, -2.4), geometry=target,
+                              component="MESH", name="TargetSize")
+
+        source_position = Position(tree, location=(-1.6, -3.8), name="SourcePosition")
+        target_position = Position(tree, location=(-1.6, -5.2), name="TargetPositionField")
+        c_source = AttributeStatistic(tree, location=(0, -3.8), geometry=source,
+                                      data_type="FLOAT_VECTOR", domain="POINT",
+                                      attribute=source_position.std_out,
+                                      std_out="Mean", name="SourceCentroid")
+        c_target = AttributeStatistic(tree, location=(0, -5.2), geometry=target,
+                                      data_type="FLOAT_VECTOR", domain="POINT",
+                                      attribute=target_position.std_out,
+                                      std_out="Mean", name="TargetCentroid")
+
+        back = VectorMath(tree, location=(1.5, -5.2), operation="SCALE",
+                          inputs0=c_target.std_out, float_input=-1.0,
+                          name="MinusTargetCentroid")
+        centred = TransformGeometry(tree, location=(2.6, -5.2), geometry=target,
+                                    translation=back.std_out, name="CentredTarget")
+
+        # frames are placed at the origin so that a child keeps the location
+        # it was built with: blender reads a child's location relative to its
+        # parent, and a frame put anywhere else would slide its whole contents
+        frame = Frame(tree, label="Alignment")
+        frame.add([source_position, target_position, n_source, n_target,
+                   c_source, c_target, back, centred])
+        return ((n_source, n_target), (c_source, c_target), centred.geometry_out)
+
+    # ----------------------------------------------------------------
+    def _index_pairing_frame(self, tree, target, counts):
+        """``Index Pairing``: point *i* of *N* aims at point *i(M-1)/(N-1)*.
+
+        The rescaling is what keeps the index in range: sampling past the end
+        of a geometry yields the zero vector rather than the last point, so
+        an unscaled index sends every surplus point to the origin. Rounding
+        the stretched index also spreads the source over the whole target
+        when the target is the bigger of the two.
+
+        :return: the sampled destination, as a vector socket.
+        """
+        n_source, n_target = counts
+        index = Index(tree, location=(6, -0.6), name="SourceIndex")
+        rescale = make_function(
+            tree, name="RescaleIndex", location=(7.1, -1.2), hide=True,
+            functions={
+                # round(i * (m - 1) / max(n - 1, 1)), clamped into [0, m - 1]
+                "j": "i,m,1,-,*,n,1,-,1,max,/,round,m,1,-,min,0,max"
+            },
+            inputs=["i", "n", "m"], outputs=["j"], integers=["i", "n", "m", "j"])
+        tree.links.new(index.std_out, rescale.inputs["i"])
+        tree.links.new(n_source.node.outputs["Point Count"], rescale.inputs["n"])
+        tree.links.new(n_target.node.outputs["Point Count"], rescale.inputs["m"])
 
         # `Position` in the Value socket is evaluated on the *sampled*
-        # geometry, so this reads where the second geometry keeps the point
-        # that shares this one's index
-        sampled = SampleIndex(tree, data_type="FLOAT_VECTOR", domain="POINT",
-                              geometry=self.group_inputs.outputs["Geometry 2"],
-                              value=position.std_out, index=index.std_out,
-                              name="TargetPosition")
-        go = VectorMath(tree, operation="SCALE", inputs0=sampled.std_out,
-                        float_input=parameter, name="WeightedThere")
-        blend = VectorMath(tree, operation="ADD", inputs0=stay.std_out,
-                           inputs1=go.std_out, name="Blend")
+        # geometry, so this reads where the target keeps its point j
+        target_position = Position(tree, location=(6, -2.2), name="TargetPointPosition")
+        sampled = SampleIndex(tree, location=(8.6, -1.2), data_type="FLOAT_VECTOR",
+                              domain="POINT", geometry=target,
+                              value=target_position.std_out,
+                              index=rescale.outputs["j"], name="PointAtIndex")
 
-        moved = SetPosition(tree, geometry=self.group_inputs.outputs["Geometry 1"],
+        frame = Frame(tree, label="Index Pairing")
+        frame.add([index, rescale, target_position, sampled])
+        return sampled.std_out
+
+    # ----------------------------------------------------------------
+    def _nearest_pairing_frame(self, tree, centred_target, centroids):
+        """``Nearest Pairing``: aim at the closest point of the target surface.
+
+        The search runs in the common frame - the source point moved by minus
+        its own centroid, against the target moved onto the origin - and the
+        answer is moved back onto the real target afterwards. Distance is the
+        only thing this pairing knows, so both shapes have to be in the same
+        place for it to mean anything.
+
+        :return: the projected destination, as a vector socket.
+        """
+        c_source, c_target = centroids
+        position = Position(tree, location=(6, -6.4), name="MorphedPosition")
+        centred_point = VectorMath(tree, location=(7.1, -6.4), operation="SUBTRACT",
+                                   inputs0=position.std_out, inputs1=c_source.std_out,
+                                   name="CentredPoint")
+        nearest = GeometryProximity(tree, location=(8.3, -6.4),
+                                    geometry=centred_target,
+                                    sample_position=centred_point.std_out,
+                                    target_element=self.target_element,
+                                    name="NearestOnTarget")
+        world = VectorMath(tree, location=(9.6, -6.4), operation="ADD",
+                           inputs0=nearest.std_out, inputs1=c_target.std_out,
+                           name="BackOntoTarget")
+
+        frame = Frame(tree, label="Nearest Pairing")
+        frame.add([position, centred_point, nearest, world])
+        return world.std_out
+
+    # ----------------------------------------------------------------
+    def _blend_frame(self, tree, source, by_index, by_nearest):
+        """``Blend``: pick a destination and walk towards it.
+
+        :return: the ``Set Position`` node the group's geometry leaves by.
+        """
+        parameter = self.group_inputs.outputs["Morph Parameter"]
+        destination = Switch(tree, location=(12.4, -3.2), input_type="VECTOR",
+                             switch=self.group_inputs.outputs["Match Nearest"],
+                             false=by_index, true=by_nearest, name="Destination")
+
+        here = Position(tree, location=(12.4, -1), name="HerePosition")
+        # 1 - t. Subtraction is not symmetric and the constant belongs on top
+        rest = MathNode(tree, location=(12.4, -4.6), operation="SUBTRACT",
+                        inputs0=1.0, inputs1=parameter, name="OneMinusMorph")
+        stay = VectorMath(tree, location=(14, -1), operation="SCALE",
+                          inputs0=here.std_out, float_input=rest.std_out,
+                          name="WeightedHere")
+        go = VectorMath(tree, location=(14, -3.2), operation="SCALE",
+                        inputs0=destination.std_out, float_input=parameter,
+                        name="WeightedThere")
+        blend = VectorMath(tree, location=(15.4, -2), operation="ADD",
+                           inputs0=stay.std_out, inputs1=go.std_out, name="Blend")
+        moved = SetPosition(tree, location=(16.8, -1), geometry=source,
                             position=blend.std_out, name="Morph")
-        tree.links.new(moved.geometry_out, self.group_outputs.inputs["Geometry"])
+
+        frame = Frame(tree, label="Blend")
+        frame.add([destination, here, rest, stay, go, blend, moved])
+        return moved
+
+
+class MorphNode2(NodeGroup):
+    """Morph two *sweeps*: the path and the thickness together.
+
+    Where :class:`MorphNode` hunts for a correspondence between two finished
+    surfaces, this changes the representation first. Both shapes arrive as
+    curves carrying a radius, and a curve plus a radius sweeps out a solid -
+    so the morph is a blend of two things that a graph can blend exactly:
+
+        p(s, t) = (1-t) * p_1(s) + t * p_2(s)
+        r(s, t) = (1-t) * r_1(s) + t * r_2(s)
+
+    with ``s`` the fraction of the way along each curve. ``Resample Curve``
+    puts the same number of points on both by arc length, so ``s`` means the
+    same thing on either side and the pairing is geometric rather than an
+    accident of storage. Nothing can tangle, because nothing is being
+    matched: the two shapes are two sets of numbers over one parameter.
+
+    That is enough to turn a picture frame into an arrow. Cut the frame open
+    and it is a curve of constant radius; an arrow is a straight curve whose
+    radius holds at the shaft, jumps out to the barbs and falls to zero at
+    the tip. The morph straightens the loop and grows the point at the same
+    time, and the result is a genuine solid of revolution rather than the
+    flat outline that matching the two as surfaces gives.
+
+    Two things follow from the representation:
+
+    - **The cut is real.** A closed loop resampled to ``Samples`` points and
+      then swept as an open curve leaves a gap of one sample spacing where
+      the ends meet. ``Close Loop`` sweeps it closed instead, which is right
+      while the shape still *is* a loop and wrong the moment it is not - the
+      seam is the price of a shape that has two ends becoming one that does
+      not.
+    - **The profile is a circle here.** Sweeping any other cross-section is
+      a matter of feeding a different curve to ``Curve to Mesh``; a square
+      profile would make the same morph out of bars rather than tubes.
+
+    Example:
+        >>> morph = MorphNode2(tree, curve1=frame.geometry_out,
+        ...                    curve2=axis.geometry_out,
+        ...                    morph_parameter=parameter.std_out, samples=128)
+
+    :param curve1: the curve morphed from, carrying its own radius.
+    :param curve2: the curve morphed to, likewise.
+    :param morph_parameter: a float socket, or a plain number.
+    :param samples: points both curves are resampled to.
+    :param profile_resolution: segments of the circle that is swept.
+    :param close_loop: sweep the blended curve closed rather than cut open.
+    :param fill_caps: cap the ends of the tube, so a cut loop reads as two
+        flat ends rather than as an open pipe.
+    """
+
+    def __init__(self, tree, curve1=None, curve2=None, morph_parameter=0,
+                 samples=128, profile_resolution=16, close_loop=False,
+                 fill_caps=True, **kwargs):
+        self.name = get_from_kwargs(kwargs, "name", "MorphNode2")
+        self.profile_resolution = profile_resolution
+        self.fill_caps = fill_caps
+        super().__init__(tree,
+                         inputs={"Curve 1": "GEOMETRY", "Curve 2": "GEOMETRY",
+                                 "Morph Parameter": "FLOAT", "Samples": "INT",
+                                 "Close Loop": "BOOLEAN"},
+                         outputs={"Mesh": "GEOMETRY", "Curve": "GEOMETRY"},
+                         auto_layout=False, name=self.name, **kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+
+        self.geometry_in = self.node.inputs["Curve 1"]
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.std_out = self.geometry_out
+        self.curve_out = self.node.outputs["Curve"]
+
+        for socket, value in (("Curve 1", curve1), ("Curve 2", curve2),
+                              ("Morph Parameter", morph_parameter),
+                              ("Samples", samples), ("Close Loop", close_loop)):
+            if value is None:
+                continue
+            if isinstance(value, (bool, int, float)):
+                self.node.inputs[socket].default_value = value
+            else:
+                tree.links.new(value, self.node.inputs[socket])
+
+    # ----------------------------------------------------------------
+    def fill_group_with_node(self, tree, **kwargs):
+        samples = self.group_inputs.outputs["Samples"]
+        blended = self._blend_frame(tree, samples)
+        mesh = self._sweep_frame(tree, blended)
+
+        tree.links.new(mesh.geometry_out, self.group_outputs.inputs["Mesh"])
+        tree.links.new(blended.geometry_out, self.group_outputs.inputs["Curve"])
+        self.group_inputs.location = (-700, -250)
+        self.group_outputs.location = (3000, -150)
+
+    # ----------------------------------------------------------------
+    def _blend_frame(self, tree, samples):
+        """``Blend``: one curve, walked from the first shape to the second.
+
+        Both inputs are resampled to the same count first, which is what
+        makes index *i* mean "the same fraction along" on both sides. The
+        second curve is then read at that index - its position *and* its
+        radius, since the thickness is half the shape.
+
+        :return: the ``Set Curve Radius`` node the blended curve leaves by.
+        """
+        parameter = self.group_inputs.outputs["Morph Parameter"]
+        here = ResampleCurve(tree, location=(0, -1), mode="Count",
+                             curve=self.group_inputs.outputs["Curve 1"],
+                             count=samples, name="ResampleHere")
+        there = ResampleCurve(tree, location=(0, -3), mode="Count",
+                              curve=self.group_inputs.outputs["Curve 2"],
+                              count=samples, name="ResampleThere")
+
+        index = Index(tree, location=(1.6, -4.4), name="SampleAt")
+        position = Position(tree, location=(1.6, -2.2), name="HerePosition")
+        radius = InputRadius(tree, location=(1.6, -5), name="HereRadius")
+
+        # the second curve's position and radius at this very index
+        target_position = SampleIndex(tree, location=(3, -3),
+                                      data_type="FLOAT_VECTOR", domain="POINT",
+                                      geometry=there.geometry_out,
+                                      value=Position(tree, location=(1.6, -3.6),
+                                                     name="TherePosition").std_out,
+                                      index=index.std_out, name="TherePoint")
+        target_radius = SampleIndex(tree, location=(3, -5), data_type="FLOAT",
+                                    domain="POINT", geometry=there.geometry_out,
+                                    value=InputRadius(tree, location=(1.6, -5.6),
+                                                      name="ThereRadius").std_out,
+                                    index=index.std_out, name="ThereRadiusAt")
+
+        walk = make_function(
+            tree, name="WalkBoth", location=(4.6, -3), hide=True,
+            functions={
+                "position": "here_pos,1,t,-,scale,there_pos,t,scale,add",
+                "radius": "here_r,1,t,-,*,there_r,t,*,+",
+            },
+            inputs=["here_pos", "there_pos", "here_r", "there_r", "t"],
+            outputs=["position", "radius"],
+            vectors=["here_pos", "there_pos", "position"],
+            scalars=["here_r", "there_r", "t", "radius"])
+        tree.links.new(position.std_out, walk.inputs["here_pos"])
+        tree.links.new(target_position.std_out, walk.inputs["there_pos"])
+        tree.links.new(radius.std_out, walk.inputs["here_r"])
+        tree.links.new(target_radius.std_out, walk.inputs["there_r"])
+        tree.links.new(parameter, walk.inputs["t"])
+
+        moved = SetPosition(tree, location=(6, -1), geometry=here.geometry_out,
+                            position=walk.outputs["position"], name="BlendPosition")
+        thick = SetCurveRadius(tree, location=(7.4, -1), curve=moved.geometry_out,
+                               radius=walk.outputs["radius"], name="BlendRadius")
+
+        frame = Frame(tree, label="Blend")
+        frame.add([here, there, index, position, radius, target_position,
+                   target_radius, walk, moved, thick])
+        for node in tree.nodes:
+            if node.name in ("TherePosition", "ThereRadius"):
+                node.parent = frame.node
+        return thick
+
+    # ----------------------------------------------------------------
+    def _sweep_frame(self, tree, blended):
+        """``Sweep``: run a circle along the blended curve.
+
+        ``Curve to Mesh`` scales its profile by the curve's own radius, so
+        the varying thickness needs no extra machinery - it is already on the
+        curve by the time it gets here.
+
+        :return: the ``Curve to Mesh`` node.
+        """
+        cyclic = SetSplineCyclic(tree, location=(12, -1),
+                                 cyclic=self.group_inputs.outputs["Close Loop"],
+                                 name="CutOrClose")
+        tree.links.new(blended.geometry_out, cyclic.geometry_in)
+
+        profile = CurveCircle(tree, location=(12, -3), mode="RADIUS", radius=1.0,
+                              resolution=self.profile_resolution, name="Profile")
+        # the profile is a unit circle and the curve's own radius is what
+        # sizes it, point by point - that is where the arrow's shape lives
+        radius = InputRadius(tree, location=(12, -4.4), name="BlendedRadius")
+        mesh = CurveToMesh(tree, location=(13.6, -1), curve=cyclic.geometry_out,
+                           profile_curve=profile.geometry_out,
+                           fill_caps=self.fill_caps, scale=radius.std_out,
+                           name="Sweep")
+
+        frame = Frame(tree, label="Sweep")
+        frame.add([cyclic, profile, radius, mesh])
+        return mesh
 
 
 class ComplexMathNode(NodeGroup):

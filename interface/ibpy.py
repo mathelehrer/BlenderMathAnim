@@ -1446,7 +1446,7 @@ def camera_follow(target, initial_value, final_value, begin_time=0,
 # meshes
 
 
-def camera_alignment_euler(bob, camera_location, ):
+def camera_alignment_euler(bob, camera_location, mode="Z_DEFAULT"):
     """
     calculate the Euler angle that is needed to align an object to the camera perspective
     """
@@ -1458,8 +1458,11 @@ def camera_alignment_euler(bob, camera_location, ):
     direction = to_vector(camera_location) - own_location
     direction.normalize()
 
-    # no rotation would be needed, when the camera direction was (0,0,1)
-    return direction.to_track_quat('Z', 'Y').to_euler()
+    if mode=="Z_DEFAULT":
+        return direction.to_track_quat('Z', 'Y').to_euler()
+        # no rotation would be needed, when the camera direction was (0,0,1)
+    elif mode=="Y_DEFAULT":
+        return direction.to_track_quat('Y', 'X').to_euler()
 
 
 def camera_alignment_quaternion(bob, camera_location, default=(0, 0, 1)):
@@ -2422,6 +2425,14 @@ def get_material(material, **kwargs):
             material = make_iteration_material(**kwargs)
         elif material == 'hue':
             material = make_hue_material(**kwargs)
+        elif material == 'BaseMixing':
+            # imported here rather than at the top: appearance.textures imports
+            # this module, so a module-level import would close the circle
+            from appearance.textures import base_mixing
+            # a 'name' in kwargs is the name of the *node* that asked for the
+            # material - the material keeps the name it is known by here
+            material = base_mixing(**{key: value for key, value in kwargs.items()
+                                      if key != "name"})
         else:
             if material not in bpy.data.materials:
                 # return default drawing material

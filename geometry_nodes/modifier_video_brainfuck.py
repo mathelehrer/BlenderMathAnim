@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 
+from appearance.textures import DNA_BASE_COLORS, RNA_BASE_COLORS
 from geometry_nodes.geometry_nodes_modifier import GeometryNodesModifier
 from geometry_nodes.nodes import Points, InputValue, InstanceOnPoints, JoinGeometry, \
     create_geometry_line, RealizeInstances, Position, make_function, Index, SetMaterial, \
@@ -16,7 +17,9 @@ from geometry_nodes.nodes import Points, InputValue, InstanceOnPoints, JoinGeome
     IndexSwitch, CurveLine, ResampleCurve, InputTangent, CaptureAttribute, DuplicateElements, \
     RandomValue, AlignRotationToVector, IcoSphere, MeshToCurve, CurveCircle, CurveToMesh, UVSphere, SetShadeSmooth, \
     SampleCurve, PointsToCurve, SetCurveNormal, VectorRotate, MapRange, MixNode, AccumulateField, \
-    CurveLength, SeparateGeometry, InputRotation, MorphNode
+    CurveLength, SeparateGeometry, InputRotation, MorphNode, SetSplineCyclic, \
+    Grid, GeometryToInstance, RotateInstances, DeleteGeometry, \
+    MorphNode2, SetCurveRadius, SplineParameter
 from interface.ibpy import Vector
 from objects.logo import logo_curve
 from utils.constants import DATA_DIR
@@ -55,6 +58,89 @@ def csv_column(path, default="Value"):
           + "'. Import CSV takes the first line as the header, so this value "
             "will not appear on the tape. Add a header line to the file.")
     return header
+
+
+# ---------------------------------------------------------------------------
+# The instruction palette
+# ---------------------------------------------------------------------------
+# One colour per brainfuck instruction, and the only place in this file they
+# are written down. Every modifier that draws an instruction paints it from
+# here - the tape of the soup watcher, the ascii table of the extended machine,
+# the program strip of the simple one - so a "<" is the same colour in every
+# scene of the video, and the viewer can carry what a colour means from one
+# shot to the next.
+#
+# The families are those of ``brainfuck/bff/bff_trace.py``: the two head moves
+# share a colour and so do the two head0 moves, since which of a pair it is
+# matters less than that it is a move at all; the two arithmetic instructions
+# are deliberately *not* a pair, being the two a viewer has to tell apart most
+# often; input and output go together, and so do the two brackets.
+#
+# The first element of each entry is the name of the ``Input Material`` node
+# that carries the colour, so any of them can be swapped or animated through
+# ``ibpy.get_geometry_node_from_modifier(modifier, "LessColor")``, and the
+# ``colors=`` argument of every modifier here overrides one by that name.
+INSTRUCTION_COLORS = (
+    # node name,             colour,           character
+    ("LessColor", "joker", "<"),
+    ("MoreColor", "joker", ">"),
+    ("CurlyBraceOpenColor", "custom1", "{"),
+    ("CurlyBraceClosedColor", "custom1", "}"),
+    ("PlusColor", "important", "+"),
+    ("MinusColor", "orange", "-"),
+    ("DotColor", "some_logo_blue", "."),
+    ("CommaColor", "some_logo_blue", ","),
+    ("BracketOpenColor", "x14_color", "["),
+    ("BracketClosedColor", "x14_color", "]"),
+)
+
+
+def instruction_selector(tree, letter, colors, location=(0, 0), commands=None,
+                         name="ColorSelector"):
+    """One boolean per entry of *colors*: is *letter* the instruction it paints?
+
+    The test every modifier in this file needs before it can paint a character
+    from :data:`INSTRUCTION_COLORS`, in one node. ``in`` is ``Find in String``'s
+    count of the character inside the set of that colour - note the order, set
+    first and character second - so it is 1 exactly when the character is one
+    of them, and a boolean socket reads any non-zero as true. Writing it this
+    way round is what lets one formula serve an entry that covers a single
+    character and one that covers a pair.
+
+    The characters go into the formula in **single quotes**, and both of the
+    jobs the quotes do matter: they keep ``<`` and ``>`` from being read as
+    ``LESS_THAN`` and ``GREATER_THAN``, and they keep ``,`` from being read as
+    the separator between two tokens - see ``split_rpn`` in
+    ``geometry_nodes/nodes.py``.
+
+    :param letter: string socket holding the character to test.
+    :param colors: the palette, as ``(node name, colour, characters)`` triples.
+    :param commands: optional string socket holding every character that is an
+        instruction. Given one, the node gets an extra ``IsOperator`` output,
+        true for a character that is any of them - what a caller needs to draw
+        nothing at all for a byte that is not an instruction.
+    :return: the group node, one boolean output per entry of *colors*, named
+        after it.
+    """
+    labels = [node_name for node_name, _, _ in colors]
+    functions = {node_name: "'%s',letter,in" % characters
+                 for node_name, _, characters in colors}
+    inputs = ["letter"]
+    if commands is not None:
+        functions["IsOperator"] = "commands,letter,in,0,>"
+        inputs.append("commands")
+        labels = labels + ["IsOperator"]
+
+    selector = make_function(
+        tree, name=name, location=location, hide=True,
+        custom_ops={"in": {"type": FindInString, "inputs": ("String", "Search"),
+                           "output": "Count", "label": "in"}},
+        functions=functions, inputs=inputs, outputs=labels,
+        strings=inputs, booleans=labels)
+    tree.links.new(letter, selector.inputs["letter"])
+    if commands is not None:
+        tree.links.new(commands, selector.inputs["commands"])
+    return selector
 
 
 class BrainFuckSimpleModifier(GeometryNodesModifier):
@@ -170,9 +256,11 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         instruction the counter points at. The program does not move - the
         machine moves over it, which is how a program is normally read and
         makes a loop visible as the box running back and crossing the same
-        instructions again. Each column is coloured by what has become of it,
-        so that what is dark behind the box is what has run for the last time
-        and what is not is waiting for the next turn of its loop.
+        instructions again. Each column is coloured first by which instruction
+        it is - from :data:`INSTRUCTION_COLORS`, the palette shared by every
+        modifier in this file - and then by what has become of it, so that what
+        is dark behind the box is what has run for the last time and what is
+        not is waiting for the next turn of its loop.
 
     ``SimulatedGeometry``
         the printed string in its box, the strip, and the head marker under the
@@ -195,8 +283,9 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         ``CellSize``
     :param display_height: height of the two read-out boxes
     :param colors: optional ``{node name: colour name}`` overriding
-        :attr:`CELL_COLORS` and :attr:`PROGRAM_COLORS`, and the two entries
-        ``GlyphColor`` and ``FrameColor``
+        :attr:`CELL_COLORS`, :attr:`PROGRAM_COLORS`, any instruction of
+        :data:`INSTRUCTION_COLORS`, and the two entries ``GlyphColor`` and
+        ``FrameColor``
     """
 
     # "HELLO" as 8, 5, 12, 12, 15 - see the class docstring. Cell 0 is raised
@@ -246,13 +335,21 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
     GLYPH_COLOR = "text"  # the numbers on the cells and all the text
     FRAME_COLOR = "gray_2"  # the boxes around the displays and the code table
 
-    # Colour of an instruction in the program strip by what has become of it.
-    # The instruction being executed is painted in ``PointerColor``, the same
-    # colour as the head marker, so the two read as one thing.
-    #
-    # Applied in this order, each overriding the last: the fall-back is "has
-    # not run yet", then "has run", then "has run but is inside a loop that is
-    # still open, so it will run again".
+    # what an instruction of the program strip is painted, before anything has
+    # happened to it: the shared palette, so that a "<" here is the "<" of
+    # every other scene
+    OPCODE_COLORS = INSTRUCTION_COLORS
+
+    # ... and what becomes of that colour once the machine has been past.
+    # Applied in this order, each overriding the last and all of them
+    # overriding the instruction's own colour: "has run", then "has run but is
+    # inside a loop that is still open, so it will run again". The instruction
+    # being executed is painted last of all, in ``PointerColor``, the same
+    # colour as the head marker, so that the two read as one thing.
+    PROGRAM_COLORS = (
+        ("DoneColor", "gray_2"),  # run, and not coming back
+        ("WaitingColor", "example"),  # waiting for the next turn of its loop
+    )
 
     # ascii codes of the seven instructions
     DOT, PLUS, MINUS, LEFT, RIGHT = ord("."), ord("+"), ord("-"), ord("<"), ord(">")
@@ -304,6 +401,11 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         overrides = colors or {}
         self.cell_colors = tuple((node_name, overrides.get(node_name, color))
                                  for node_name, color in self.CELL_COLORS)
+        self.opcode_colors = tuple(
+            (node_name, overrides.get(node_name, color), characters)
+            for node_name, color, characters in self.OPCODE_COLORS)
+        self.program_colors = tuple((node_name, overrides.get(node_name, color))
+                                    for node_name, color in self.PROGRAM_COLORS)
         self.glyph_color = overrides.get("GlyphColor", self.GLYPH_COLOR)
         self.frame_color = overrides.get("FrameColor", self.FRAME_COLOR)
         self.kwargs = kwargs
@@ -473,18 +575,21 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
                                      name="CodeTable"),
         }
 
-        # one Input Material node per colour of a cell, plus the two that
-        # everything else is drawn in
+        # one Input Material node per colour of a cell, then one per
+        # instruction, then what has become of an instruction, then the two
+        # that everything else is drawn in
         palette = {}
-        for row, (node_name, color) in enumerate(self.cell_colors):
+        rows = ([(node_name, color) for node_name, color in self.cell_colors]
+                + [(node_name, color) for node_name, color, _ in self.opcode_colors])
+        for row, (node_name, color) in enumerate(rows):
             palette[node_name] = InputMaterial(tree, location=(x, -4.4 - 0.4 * row),
                                                material=color, name=node_name,
                                                **self.kwargs)
-        rest = [("GlyphColor", self.glyph_color),
-                ("FrameColor", self.frame_color)]
+        rest = list(self.program_colors) + [("GlyphColor", self.glyph_color),
+                                            ("FrameColor", self.frame_color)]
         for offset, (node_name, color) in enumerate(rest):
             palette[node_name] = InputMaterial(
-                tree, location=(x, -4.4 - 0.4 * (len(self.cell_colors) + offset)),
+                tree, location=(x, -4.4 - 0.4 * (len(rows) + offset)),
                 material=color, name=node_name, hide=True, **self.kwargs)
         for source in palette.values():
             self.materials.append(source.node.material)
@@ -1110,12 +1215,16 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         Columns are of one width whatever stands in them, so the strip is a
         ruler and the box's position is the program counter to scale.
 
-        Each instruction is painted by what has become of it - see
-        :attr:`PROGRAM_COLORS`. The one worth the trouble is ``WaitingColor``:
-        an instruction that has run but sits inside a loop that is still open
-        will run again, and :meth:`_loop_starts` says which those are. What is
-        left in ``DoneColor`` is what has run for the last time, so the strip
-        goes dark behind the box only where the machine is never coming back.
+        Each instruction is painted first by *what it is* - its colour from
+        :data:`INSTRUCTION_COLORS`, the palette every scene of the video shares,
+        so that the ``<`` of this strip is the ``<`` of the soup watcher's tape
+        - and then by *what has become of it*, see :attr:`PROGRAM_COLORS`. The
+        second one worth the trouble is ``WaitingColor``: an instruction that
+        has run but sits inside a loop that is still open will run again, and
+        :meth:`_loop_starts` says which those are. What is left in
+        ``DoneColor`` is what has run for the last time, so the strip goes dark
+        behind the box only where the machine is never coming back - and what
+        is still in its own colour ahead of the box is what has not run yet.
 
         The box marks the instruction *about to* run, not the one just run -
         the tape beside it is the state that instruction is about to act on,
@@ -1206,12 +1315,24 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
                           data_type="INT", inputs0=column, inputs1=counter,
                           name="IsCurrent", hide=True)
 
-        selections = (None, done.std_out, waits.std_out)
-        painters = [SetMaterial(tree, location=(27 + step, -22.2), selection=selection,
+        # what the instruction is, before what has become of it: one Set
+        # Material per entry of the shared palette, each selecting on "this
+        # column holds one of my characters"
+        which = instruction_selector(tree, letter.std_out, self.opcode_colors,
+                                     location=(26, -24.6), name="ColorSelector")
+        painters = [SetMaterial(tree, location=(27, -22.2 - 0.3 * row),
+                                selection=which.outputs[node_name],
                                 material=control[node_name].std_out,
-                                name="Paint" + node_name)
-                    for step, ((node_name, _), selection)
-                    in enumerate(zip(self.program_colors, selections))]
+                                name="Paint" + node_name, hide=True)
+                    for row, (node_name, _, _) in enumerate(self.opcode_colors)]
+
+        # ... and then what has become of it, which overrides it
+        selections = (done.std_out, waits.std_out)
+        painters += [SetMaterial(tree, location=(28 + step, -22.2), selection=selection,
+                                 material=control[node_name].std_out,
+                                 name="Paint" + node_name)
+                     for step, ((node_name, _), selection)
+                     in enumerate(zip(self.program_colors, selections))]
         painters.append(SetMaterial(tree, location=(30, -22.2), selection=now.std_out,
                                     material=control["PointerColor"].std_out,
                                     name="PaintCurrentInstruction"))
@@ -1225,7 +1346,7 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
 
         frame = Frame(tree, location=(16.6, -20.6), label="ProgramStrip")
         frame.add([size, origin, half, edge, spacing, first, glyph, entry, encoded,
-                   opened, inside, zone, letter, curves, realize, fill,
+                   opened, inside, zone, letter, which, curves, realize, fill,
                    along, across, at, place, done, after, within, waits, now,
                    grown] + painters)
 
@@ -2053,8 +2174,9 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         ``CellSize``
     :param display_height: height of a read-out box
     :param colors: optional ``{node name: colour name}`` overriding
-        :attr:`CELL_COLORS` and :attr:`PROGRAM_COLORS`, and the two entries
-        ``GlyphColor`` and ``FrameColor``
+        :attr:`CELL_COLORS`, :attr:`PROGRAM_COLORS`, any instruction of
+        :data:`INSTRUCTION_COLORS`, and the two entries ``GlyphColor`` and
+        ``FrameColor``
     :param tape_files: one csv file per tape, resolved against ``DATA_DIR``;
         their contents are the tape, and so the program
     """
@@ -2099,24 +2221,10 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         ("WaitingColor", "example"),  # waiting for the next turn of its loop
     )
 
-    # Colour of the instructions in the ascii table, and the colour everything
-    # else in it is drawn in. The families are those of bff_trace.py, and match
-    # ExtendedBrainFuckTapeModifier so that a tape drawn by that class and this
-    # table can be shown together.
-
-    OPCODE_COLORS = (
-        # node name,        colour,             characters
-        ("LessColor", "joker", "<"),
-        ("MoreColor", "joker", ">"),
-        ("CurlyBraceOpenColor", "custom1", "{"),
-        ("CurlyBraceClosedColor", "custom1", "}"),
-        ("PlusColor", "important", "+"),
-        ("MinusColor", "orange", "-"),
-        ("DotColor", "some_logo_blue", "."),
-        ("CommaColor", "some_logo_blue", ","),
-        ("BracketOpenColor", "x14_color", "["),
-        ("BracketClosedColor", "x14_color", "]"),
-    )
+    # Colour of the instructions in the ascii table: the shared palette, so
+    # that a tape drawn by another class and this table can be shown together
+    # and an instruction is the same colour in both.
+    OPCODE_COLORS = INSTRUCTION_COLORS
 
     # how the code table is laid out: one entry every ``table_spacing`` along
     # x, the letter ``table_line_gap`` below its number, and a frame around it
@@ -3036,33 +3144,15 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
 
         # One boolean per colour of :attr:`OPCODE_COLORS`, saying whether this
         # entry of the table is one of the characters that colour stands for -
-        # which is what the chain of Set Material below selects on. Both lists
-        # are built from opcode_colors in one comprehension so that they cannot
-        # drift apart: two of its entries cover a *pair* of characters, so a
-        # hand-written list of ten labels pairs up with the eight colours
-        # wrongly and silently.
-        #
-        # The characters are in *single quotes*, and both of the jobs the
-        # quotes do matter here. They keep "<" and ">" from being read as
-        # LESS_THAN and GREATER_THAN, and they keep the "," from being read as
-        # the separator between two tokens - see split_rpn in
-        # geometry_nodes/nodes.py.
-        #
-        # "in" is Find in String's count of the entry inside the character set
-        # of that colour - note the order, set first and letter second - so it
-        # is 1 exactly when the entry is one of them, and a boolean socket
-        # reads any non-zero as true. Writing it this way round is what lets
-        # one formula serve both a single character and a pair.
+        # which is what the chain of Set Material below selects on. The labels
+        # are built from opcode_colors in the same comprehension the selector
+        # is, so that they cannot drift apart: two of its entries cover a
+        # *pair* of characters, and a hand-written list of ten labels pairs up
+        # with the eight colours wrongly and silently.
         socket_labels = [node_name for node_name, _, _ in self.opcode_colors]
-        color_selection = make_function(tree, name="ColorSelector", custom_ops=custom_ops,
-                                        functions={
-                                            node_name: "'%s',letter,in" % character
-                                            for node_name, _, character
-                                            in self.opcode_colors
-                                        }, inputs=["letter"], outputs=socket_labels,
-                                        strings=["letter"], booleans=socket_labels,
-                                        hide=True, location=(-5, 14))
-        tree.links.new(letter.std_out, color_selection.inputs["letter"])
+        color_selection = instruction_selector(tree, letter.std_out,
+                                               self.opcode_colors,
+                                               location=(-5, 14))
 
         selections = [color_selection.outputs[label] for label in socket_labels]
 
@@ -3366,7 +3456,7 @@ class SoupWatcherModifier(GeometryNodesModifier):
     :param frames_per_snapshot: how many frames a block of 100 tapes stays
         on screen before the next one takes its place
     :param colors: optional ``{node name: colour name}`` overriding the
-        colour of an instruction (see ``BrainFuckExtendedModifier.OPCODE_COLORS``),
+        colour of an instruction (see :data:`INSTRUCTION_COLORS`),
         or the two entries ``GlyphColor`` (an instruction's default colour,
         never actually seen - every glyph on screen is one of the ten and so
         always overridden by its own colour, but it is the fall-back that
@@ -3381,7 +3471,7 @@ class SoupWatcherModifier(GeometryNodesModifier):
     # the ten instructions and their colours - the same list
     # BrainFuckExtendedModifier colours its own tapes and code table with, so
     # a soup tape and a running machine's tape read as the same alphabet
-    OPCODE_COLORS = BrainFuckExtendedModifier.OPCODE_COLORS
+    OPCODE_COLORS = INSTRUCTION_COLORS
     OPERATORS = BFFNode.COMMANDS
     GLYPH_COLOR = "text"
     TAPE_COLOR = "gray_1"
@@ -3761,25 +3851,12 @@ class SoupWatcherModifier(GeometryNodesModifier):
                              position=zone.foreach_input.outputs["Byte"],
                              length=1, name="Letter")
 
-        # "in" is Find in String's count of the letter inside a character
-        # set - see BrainFuckExtendedModifier._create_code_table_frame for
-        # the same pattern applied to the ascii table instead of a tape
-        custom_ops = {
-            "in": {"type": FindInString, "inputs": ("String", "Search"),
-                   "output": "Count", "label": "in"},
-        }
+        # one boolean per colour of the shared palette, plus the one that says
+        # the byte is an instruction at all - see instruction_selector
         socket_labels = [node_name for node_name, _, _ in self.opcode_colors]
-        color_selection = make_function(
-            tree, name="ColorSelector", custom_ops=custom_ops,
-            functions=dict(
-                {node_name: "'%s',letter,in" % character
-                 for node_name, _, character in self.opcode_colors},
-                IsOperator="commands,letter,in,0,>"),
-            inputs=["letter", "commands"], outputs=socket_labels + ["IsOperator"],
-            strings=["letter", "commands"], booleans=socket_labels + ["IsOperator"],
-            hide=True, location=(-3, -9.4))
-        tree.links.new(letter.std_out, color_selection.inputs["letter"])
-        tree.links.new(control["Operators"].std_out, color_selection.inputs["commands"])
+        color_selection = instruction_selector(
+            tree, letter.std_out, self.opcode_colors, location=(-3, -9.4),
+            commands=control["Operators"].std_out)
         is_operator = color_selection.outputs["IsOperator"]
 
         # a cell that is not one of the ten instructions gets the empty
@@ -4328,21 +4405,19 @@ class MorphModifier(GeometryNodesModifier):
     - the group holds exactly those nodes - so the only thing lost is the
     view of them from outside, and a click on the group brings that back.
 
-    Two things follow from doing it by index rather than by any kind of
-    matching, and both are the node tree's own doing rather than choices
-    made here:
+    Two things follow from pairing the two shapes by index, which is what
+    ``match_nearest=False`` asks :class:`~geometry_nodes.nodes.MorphNode` for
+    and what the editor's tree did:
 
     - the point that ends up at the arrow's tip is whichever point of the
       frame happens to share the tip's index, so the frame turns itself
       inside out on the way rather than folding neatly;
-    - the two shapes do not have the same number of points (the frame's tube
-      has more), and an index past the end of the arrow does not clamp - it
-      samples as the zero vector - so the frame's surplus points all collapse
-      onto the world origin. The morph therefore arrives at an arrow *plus* a
-      knot of geometry at ``(0, 0, 0)``, which is right at the foot of the
-      arrow and so easy to mistake for part of it. Give the profile circle
-      fewer segments, or the cone and cylinder more, if the counts should
-      meet - see :meth:`point_counts`, which reports both.
+    - the two shapes do not have the same number of points: the frame's tube
+      carries 128, the arrow 100 (see :meth:`point_counts`). ``MorphNode``
+      rescales the index so the mismatch costs resolution rather than
+      correctness - several frame points share an arrow point - but it cannot
+      invent the points that would make the pairing a bijection. Matching the
+      counts exactly (``frame_resolution=25``) tightens the result.
 
     :param frame_width: width of the rectangle.
     :param frame_height: height of the rectangle.
@@ -4355,6 +4430,9 @@ class MorphModifier(GeometryNodesModifier):
     :param arrow_shaft_length: length of the cylinder.
     :param arrow_resolution: vertices around both of them.
     :param morph: starting value of ``MorphParameter``.
+    :param match_nearest: which pairing :class:`~geometry_nodes.nodes.MorphNode`
+        uses - nearest point on the target surface, or the rescaled index.
+        The two differ sharply on this pair of shapes; see the scene.
     :param color: palette name for the morphing shape, or ``None`` for the
         tree exactly as the editor has it. The xml carries no ``Set
         Material`` node, and a material sitting in the *object's* slot does
@@ -4368,9 +4446,10 @@ class MorphModifier(GeometryNodesModifier):
                  frame_resolution=32, frame_location=(-5.3, 0, 0),
                  arrow_head_radius=0.5, arrow_head_length=1.0,
                  arrow_shaft_radius=0.15, arrow_shaft_length=1.0,
-                 arrow_resolution=32, morph=0.0, color=None,
+                 arrow_resolution=32, morph=0.0, color=None, match_nearest=True,
                  name="Morph", **kwargs):
         self.color = color
+        self.match_nearest = match_nearest
         self.frame_width = frame_width
         self.frame_height = frame_height
         self.frame_thickness = frame_thickness
@@ -4502,11 +4581,388 @@ class MorphModifier(GeometryNodesModifier):
                                name="MorphParameter")
         morph = MorphNode(tree, location=(3.8, -0.2), geometry1=source,
                           geometry2=target, morph_parameter=parameter.std_out,
-                          name="Morph")
+                          match_nearest=self.match_nearest, name="Morph")
 
         node_frame = Frame(tree, location=(4.5, -0.5), label="Morphing")
         node_frame.add([parameter, morph])
         return morph.geometry_out
+
+
+class OutlineMorphModifier(GeometryNodesModifier):
+    """The frame and the arrow again, this time as shapes that can morph.
+
+    :class:`MorphModifier` is the editor's tree ported faithfully, and it is
+    the reason ``docs/theory_morphing.tex`` exists: a tube bent into a
+    rectangle and a solid cone on a cylinder have neither the same number of
+    points nor the same topology, so no correspondence between them is any
+    good, and both of ``MorphNode``'s pairings can only pick which way it
+    looks wrong.
+
+    The theory's own first answer is not a better pairing but *compatible
+    shapes*, and for outlines it costs nothing: both are built as closed
+    curves, both are resampled to the same number of points, and both are
+    swept along the same profile circle. That makes the two meshes the same
+    mesh twice over - equal counts, equal connectivity, and index *i* the
+    same fraction of the way around each outline - so plain index pairing is
+    exactly right and the morph is a clean interpolation with no folding,
+    no knot, and no shrink-wrap.
+
+    The arrow is its own silhouette here: the outline a cone standing on a
+    cylinder actually shows to a camera looking at it side on. That is the
+    price - it is a flat tube like the frame, not a solid - and it is what
+    makes the two shapes the same kind of thing, which is the whole point.
+    For two *solids*, the equivalent move is the sphere remeshing of
+    ``geometry_nodes/supermesh.py``.
+
+    ``Resample Curve`` samples by arc length, so the correspondence is
+    geometric rather than an accident of storage: point *i* sits at the same
+    fraction of the way around each outline. Both curves also have to run
+    the same way round, or the loop would turn inside out on the way; the
+    arrow's outline is written to match the rectangle's winding.
+
+    :param samples: points each outline is resampled to. Corners are cut by
+        up to half the sample spacing, so this is a sharpness dial.
+    :param profile_resolution: segments of the circle both outlines are
+        swept along.
+    :param thickness: radius of that circle.
+    :param frame_width: width of the rectangle.
+    :param frame_height: height of the rectangle.
+    :param frame_location: where the frame waits before it morphs.
+    :param head_radius: half the width of the arrow's barbs.
+    :param head_length: length of its head.
+    :param shaft_radius: half the width of its shaft.
+    :param shaft_length: how far the shaft reaches below the head's base.
+    :param morph: starting value of ``MorphParameter``.
+    :param color: palette name, or ``None`` to leave the geometry unpainted.
+    """
+
+    def __init__(self, samples=128, profile_resolution=32, thickness=0.1,
+                 frame_width=2.0, frame_height=2.0, frame_location=(-5.3, 0, 0),
+                 head_radius=0.5, head_length=1.0, shaft_radius=0.15,
+                 shaft_length=1.0, morph=0.0, color=None,
+                 name="OutlineMorph", **kwargs):
+        self.samples = samples
+        self.profile_resolution = profile_resolution
+        self.thickness = thickness
+        self.frame_width = frame_width
+        self.frame_height = frame_height
+        self.frame_location = Vector(frame_location)
+        self.head_radius = head_radius
+        self.head_length = head_length
+        self.shaft_radius = shaft_radius
+        self.shaft_length = shaft_length
+        self.morph = morph
+        self.color = color
+        self.kwargs = kwargs
+        super().__init__(name=name, automatic_layout=False)
+
+    # ----------------------------------------------------------------
+    @property
+    def arrow_outline(self):
+        """The arrow's silhouette as a closed polygon, in the build plane.
+
+        Seven corners, starting at the tip and running down the left barb,
+        round the foot of the shaft and back up the right barb. Both the
+        starting corner and the direction are chosen, not arbitrary:
+
+        - ``Resample Curve`` numbers its samples from the curve's first
+          control point, so the corner named first here is the one the
+          rectangle's own first corner - its top right - will travel to.
+          Starting at the tip is what makes the morph read as a corner
+          reaching out and becoming the point of the arrow.
+        - The winding has to match the rectangle's, which runs the positive
+          way round. Reverse this list and every point would be paired with
+          one on the far side of the loop, so the tube would turn itself
+          inside out on the way across - the signed area of the two outlines
+          is the thing to check if that ever looks wrong.
+
+        The numbers are the ones the solid arrow of :class:`MorphModifier` is
+        built from, so the two are the same arrow seen two ways: the cone
+        spans ``+-head_length/2`` and the shaft hangs from the cone's base
+        down to ``-shaft_length``.
+        """
+        r, R = self.shaft_radius, self.head_radius
+        tip, base = self.head_length / 2, -self.head_length / 2
+        foot = -self.shaft_length
+        return [(0, tip), (-R, base), (-r, base), (-r, foot),
+                (r, foot), (r, base), (R, base)]
+
+    @property
+    def point_count(self):
+        """Points in either swept outline - they agree, which is the point."""
+        return self.samples * self.profile_resolution
+
+    # ----------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        profile = CurveCircle(tree, location=(0, -8), mode="RADIUS",
+                              resolution=self.profile_resolution,
+                              radius=self.thickness, name="SweepProfile")
+        frame = Frame(tree, label="Profile")
+        frame.add([profile])
+
+        source = self._create_frame_frame(tree, profile)
+        target = self._create_arrow_frame(tree, profile)
+        morphed = self._create_morphing_frame(tree, source, target)
+
+        out = self.group_outputs.inputs["Geometry"]
+        if self.color is None:
+            tree.links.new(morphed, out)
+        else:
+            material = InputMaterial(tree, location=(17, -3), material=self.color,
+                                     name="MorphColor", **self.kwargs, hide=True)
+            self.materials.append(material.node.material)
+            painted = SetMaterial(tree, location=(17, -1.4),
+                                  material=material.std_out, name="PaintMorph")
+            tree.links.new(morphed, painted.geometry_in)
+            tree.links.new(painted.geometry_out, out)
+
+    # ----------------------------------------------------------------
+    def _sweep(self, tree, curve, profile, x, label):
+        """Resample a closed outline to ``samples`` points and sweep it.
+
+        The two calls to this are what make the shapes compatible: same
+        count, same profile, same order of operations, so the two meshes
+        come out with the same connectivity and the same point count.
+        """
+        resampled = ResampleCurve(tree, location=(x, -2), mode="Count",
+                                  curve=curve, count=self.samples,
+                                  name=label + "Samples")
+        tube = CurveToMesh(tree, location=(x + 1.2, -2), curve=resampled.geometry_out,
+                           profile_curve=profile.geometry_out, fill_caps=False,
+                           name=label + "Tube")
+        return resampled, tube
+
+    # ----------------------------------------------------------------
+    def _create_frame_frame(self, tree, profile):
+        """``Outline 1``: the rectangle, resampled and swept."""
+        rectangle = Quadrilateral(tree, location=(0, -2), mode="RECTANGLE",
+                                  width=self.frame_width, height=self.frame_height,
+                                  name="FrameRectangle")
+        resampled, tube = self._sweep(tree, rectangle.geometry_out, profile,
+                                      1.4, "Frame")
+        placed = TransformGeometry(tree, location=(3.8, -2),
+                                   geometry=tube.geometry_out,
+                                   translation=self.frame_location,
+                                   rotation=[pi / 2, 0, 0], name="PlaceFrame")
+
+        node_frame = Frame(tree, label="Outline 1")
+        node_frame.add([rectangle, resampled, tube, placed])
+        return placed.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_arrow_frame(self, tree, profile):
+        """``Outline 2``: the arrow's silhouette, resampled and swept.
+
+        A point cloud of seven corners, ordered by an ``Index Switch``, joined
+        into one curve and closed. Blender has no "polygon from a list of
+        points" node, and this is the shortest way to say it that keeps the
+        corner coordinates visible in the editor.
+        """
+        corners = [InputVector(tree, location=(0, -4.4 - 0.3 * i),
+                               value=Vector((x, y, 0)), name="Corner%d" % i,
+                               hide=True)
+                   for i, (x, y) in enumerate(self.arrow_outline)]
+        index = Index(tree, location=(0, -4.1), hide=True)
+        pick = IndexSwitch(tree, location=(1.4, -4.4), data_type="VECTOR",
+                           index=index.std_out, name="CornerAt")
+        for corner in corners:
+            pick.add_item(socket=corner.std_out)
+
+        points = Points(tree, location=(1.4, -3.4), count=len(corners),
+                        name="ArrowCorners")
+        placed_points = SetPosition(tree, location=(2.6, -3.4),
+                                    geometry=points.geometry_out,
+                                    position=pick.std_out, name="PlaceCorners")
+        polygon = PointsToCurve(tree, location=(3.6, -3.4), name="ArrowOutline")
+        tree.links.new(placed_points.geometry_out, polygon.geometry_in)
+        closed = SetSplineCyclic(tree, location=(4.6, -3.4), cyclic=True,
+                                 name="CloseArrow")
+        tree.links.new(polygon.geometry_out, closed.geometry_in)
+
+        resampled, tube = self._sweep(tree, closed.geometry_out, profile,
+                                      5.8, "Arrow")
+        # the arrow is built lying in the same plane as the rectangle and
+        # stood up the same way, so the two shapes differ only in outline
+        placed = TransformGeometry(tree, location=(8.2, -2),
+                                   geometry=tube.geometry_out,
+                                   rotation=[pi / 2, 0, 0], name="PlaceArrow")
+
+        node_frame = Frame(tree, label="Outline 2")
+        node_frame.add(corners + [index, pick, points, placed_points, polygon,
+                                  closed, resampled, tube, placed])
+        return placed.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_morphing_frame(self, tree, source, target):
+        """``Morphing``: index pairing, which is exact for compatible shapes."""
+        parameter = InputValue(tree, location=(12, -3.4), value=self.morph,
+                               name="MorphParameter")
+        morph = MorphNode(tree, location=(13.4, -1.4), geometry1=source,
+                          geometry2=target, morph_parameter=parameter.std_out,
+                          match_nearest=False, name="Morph")
+
+        node_frame = Frame(tree, label="Morphing")
+        node_frame.add([parameter, morph])
+        return morph.geometry_out
+
+
+class TubeMorphModifier(GeometryNodesModifier):
+    """The frame unrolled into an arrow, by way of :class:`MorphNode2`.
+
+    A third answer to the same problem, and the one that gives a *solid*
+    arrow back. Both shapes are written as a curve carrying a radius:
+
+    ``Curve 1``
+        the frame - a rectangle of constant radius, which swept is the tube
+        it always was.
+    ``Curve 2``
+        the arrow's axis - a straight segment from the foot of the shaft to
+        the tip, whose radius holds at ``shaft_radius``, jumps out to
+        ``head_radius`` where the barbs are and falls to zero at the point.
+        Swept, that is a cylinder with a cone on it: an arrow is a solid of
+        revolution, so a curve and a radius is all it takes to say so.
+
+    :class:`MorphNode2` then blends the two paths and the two radius
+    profiles at once, so the loop straightens while the thickness grows. The
+    frame is cut open to do it - a loop has two ends once you cut it, an axis
+    has two ends already, and that is what makes the two the same kind of
+    object. The gap this leaves is one sample spacing wide (``8/samples`` of
+    a unit here) and shows as a notch in the frame before the morph starts;
+    ``close_loop=True`` sweeps it shut at the price of a bridge across the
+    arrow at the other end.
+
+    Compared with the two other modifiers over the same pair of shapes:
+    :class:`MorphModifier` is the editor's tree, which has no correspondence
+    worth the name; :class:`OutlineMorphModifier` makes both shapes flat
+    outlines, which morphs cleanly but cannot be solid; this one keeps the
+    arrow solid, at the price of the cut and of a mid-morph shape that is a
+    thickening curl rather than anything you could name.
+
+    :param samples: points along both curves - the arrow's radius profile is
+        built at this resolution too, so it also sets how sharp the barbs are.
+    :param profile_resolution: segments of the swept circle.
+    :param thickness: the frame's tube radius.
+    :param close_loop: sweep the blend closed instead of cutting it open.
+    """
+
+    def __init__(self, samples=128, profile_resolution=16, thickness=0.1,
+                 frame_width=2.0, frame_height=2.0, frame_location=(-5.3, 0, 0),
+                 head_radius=0.5, head_length=1.0, shaft_radius=0.15,
+                 shaft_length=1.0, morph=0.0, color=None, close_loop=False,
+                 name="TubeMorph", **kwargs):
+        self.samples = samples
+        self.profile_resolution = profile_resolution
+        self.thickness = thickness
+        self.frame_width = frame_width
+        self.frame_height = frame_height
+        self.frame_location = Vector(frame_location)
+        self.head_radius = head_radius
+        self.head_length = head_length
+        self.shaft_radius = shaft_radius
+        self.shaft_length = shaft_length
+        self.morph = morph
+        self.color = color
+        self.close_loop = close_loop
+        self.kwargs = kwargs
+        super().__init__(name=name, automatic_layout=False)
+
+    # ----------------------------------------------------------------
+    @property
+    def axis_ends(self):
+        """``(foot, tip)`` of the arrow's axis, matching the solid arrow.
+
+        The cone spans ``+-head_length/2`` and the shaft hangs from its base
+        down to ``-shaft_length``, which is where :class:`MorphModifier`
+        leaves them.
+        """
+        return -self.shaft_length, self.head_length / 2
+
+    @property
+    def barb_fraction(self):
+        """Where along the axis the shaft stops and the head begins, in 0..1."""
+        foot, tip = self.axis_ends
+        return (-self.head_length / 2 - foot) / (tip - foot)
+
+    # ----------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        source = self._create_frame_frame(tree)
+        target = self._create_axis_frame(tree)
+
+        parameter = InputValue(tree, location=(8, -6), value=self.morph,
+                               name="MorphParameter")
+        morph = MorphNode2(tree, location=(9.4, -2), curve1=source, curve2=target,
+                           morph_parameter=parameter.std_out, samples=self.samples,
+                           profile_resolution=self.profile_resolution,
+                           close_loop=self.close_loop, name="Morph")
+        node_frame = Frame(tree, label="Morphing")
+        node_frame.add([parameter, morph])
+
+        out = self.group_outputs.inputs["Geometry"]
+        if self.color is None:
+            tree.links.new(morph.geometry_out, out)
+        else:
+            material = InputMaterial(tree, location=(13, -4), material=self.color,
+                                     name="MorphColor", **self.kwargs, hide=True)
+            self.materials.append(material.node.material)
+            painted = SetMaterial(tree, location=(13, -2),
+                                  material=material.std_out, name="PaintMorph")
+            tree.links.new(morph.geometry_out, painted.geometry_in)
+            tree.links.new(painted.geometry_out, out)
+
+    # ----------------------------------------------------------------
+    def _create_frame_frame(self, tree):
+        """``Curve 1``: the rectangle, at constant radius, stood upright."""
+        rectangle = Quadrilateral(tree, location=(0, -1), mode="RECTANGLE",
+                                  width=self.frame_width, height=self.frame_height,
+                                  name="FrameRectangle")
+        thick = SetCurveRadius(tree, location=(1.4, -1), curve=rectangle.geometry_out,
+                               radius=self.thickness, name="FrameThickness")
+        placed = TransformGeometry(tree, location=(2.8, -1),
+                                   geometry=thick.geometry_out,
+                                   translation=self.frame_location,
+                                   rotation=[pi / 2, 0, 0], name="PlaceFrame")
+
+        node_frame = Frame(tree, label="Curve 1 - the frame")
+        node_frame.add([rectangle, thick, placed])
+        return placed.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_axis_frame(self, tree):
+        """``Curve 2``: the arrow's axis, with the arrow written as a radius.
+
+        The line is resampled *before* the radius is written, because a
+        profile is only as detailed as the points that carry it: set on the
+        two ends of a bare segment, it could only ever be a straight taper.
+        """
+        foot, tip = self.axis_ends
+        line = CurveLine(tree, location=(0, -4), start=Vector((0, 0, foot)),
+                         end=Vector((0, 0, tip)), name="ArrowAxis")
+        sampled = ResampleCurve(tree, location=(1.4, -4), mode="Count",
+                                curve=line.geometry_out, count=self.samples,
+                                name="AxisSamples")
+
+        factor = SplineParameter(tree, location=(1.4, -5.4), std_out="Factor",
+                                 name="AlongAxis")
+        profile = make_function(
+            tree, name="ArrowRadius", location=(2.8, -5.4), hide=True,
+            aux_functions={
+                # 1 while the shaft lasts, 0 once the head starts
+                "shaft": "u,%.6f,<" % self.barb_fraction,
+                # the head is a straight taper from the barbs to nothing
+                "head": "1,u,-,%.6f,/,%.6f,*" % (1 - self.barb_fraction,
+                                                 self.head_radius),
+            },
+            functions={"radius": "shaft,%.6f,*,1,shaft,-,head,*,+" % self.shaft_radius},
+            inputs=["u"], outputs=["radius"],
+            scalars=["u", "shaft", "head", "radius"])
+        tree.links.new(factor.std_out, profile.inputs["u"])
+
+        shaped = SetCurveRadius(tree, location=(4.2, -4), curve=sampled.geometry_out,
+                                radius=profile.outputs["radius"], name="ArrowProfile")
+
+        node_frame = Frame(tree, label="Curve 2 - the arrow")
+        node_frame.add([line, sampled, factor, profile, shaped])
+        return shaped.geometry_out
 
 
 class DNAModifier(GeometryNodesModifier):
@@ -4608,7 +5064,9 @@ class DNAModifier(GeometryNodesModifier):
     # two pyrimidines, so that a pair is always one long and one short.
     BASE_ATOMS = (4, 5, 2, 3)
 
-    BASE_COLORS = ("custom1", "joker", "important", "drawing")
+    #: the palette of appearance.textures, which the BaseMixing material mixes
+    #: too - one place for the colours of the molecule
+    BASE_COLORS = DNA_BASE_COLORS
 
     def __init__(self, pairs=200, spacing=0.34, head_offset=0.0,
                  tilt_length=1.6899462938308716, strand_separation=1.5,
@@ -5510,7 +5968,7 @@ class RNAGridModifier(GeometryNodesModifier):
 
     #: three of DNA's four base colours, and one that is not: DNA's fourth base
     #: is thymine, RNA's is uracil, so the fourth colour has to go
-    BASE_COLORS = DNAModifier.BASE_COLORS[:3] + ("example",)
+    BASE_COLORS = RNA_BASE_COLORS
 
     #: the backbone is DNA's, to the millimetre
     BACKBONE_RADIUS = DNAModifier.BACKBONE_RADIUS
@@ -6283,7 +6741,7 @@ class RNALogoModifier(GeometryNodesModifier):
     BASE_NAMES = ("A", "G", "C", "U")
     #: three of DNA's four base colours and one that is not - DNA's fourth base
     #: is thymine, RNA's is uracil
-    BASE_COLORS = DNAModifier.BASE_COLORS[:3] + ("example",)
+    BASE_COLORS = RNA_BASE_COLORS
 
     BACKBONE_RADIUS = DNAModifier.BACKBONE_RADIUS
     BACKBONE_SPHERE_RADIUS = DNAModifier.BACKBONE_SPHERE_RADIUS
@@ -7498,3 +7956,475 @@ class RNACircleModifier(GeometryNodesModifier):
         frame.add([curve, strand_scale, colors, profile, pipe, pipe_material,
                    atom, atoms, atom_material, join, smooth])
         return smooth.geometry_out
+
+
+class MovingTapeModifier(GeometryNodesModifier):
+    """A tape of random bytes travelling through the shot, clipped at its edges.
+
+    The port of ``video_bff/tmp.xml`` as the editor holds it now - the tree
+    that took the place of the morphing one behind :class:`MorphModifier`. It
+    draws the soup's tape the way the paper writes it down: a strip of square
+    cells, one byte on each, sliding past the camera from left to right and
+    vanishing at both sides of the frame.
+
+    Four frames of nodes, the four the editor shows:
+
+    ``ControlFrame``
+        every constant: the two dimensions of the tape, the three numbers of
+        the motion, the two edges it is cut off at, the offset that lifts a
+        number clear of its cell, and the two materials.
+    ``TapeCellInstantiation``
+        one cell: a ``Grid`` of ``TapeSize`` square, turned into an instance so
+        that it can be tilted as a whole, and dropped onto every point of the
+        tape.
+    ``NumberGeneration``
+        the byte written on that cell: ``Value to String`` into ``String to
+        Curves``, filled, moved onto the cell, extruded to give the digits some
+        thickness and stood upright.
+    ``TapeCutoff``
+        the two comparisons that say whether a point has left the shot.
+
+    **The tape.** A ``Mesh Line`` of ``TapeLength`` points from the origin to
+    ``tape_span`` along x, so the cells sit ``tape_span / (TapeLength - 1)``
+    apart - a hair over one unit for the defaults, which is what leaves a gap
+    between cells 0.9 wide. The bytes are not read from anywhere: a ``Random
+    Value`` in ``0…max_value`` draws one per point - its ``ID`` socket is left
+    alone and falls back to the index - so every cell holds a different byte
+    and holds the same one on every frame.
+
+    **The motion.** Everything downstream of ``Scene Time`` is one straight
+    line::
+
+        x(t) = travel_distance * max(t - start_time, 0) / transition_time
+               - travel_distance / 2
+
+    - the tape starts half its travel to the left and moves right at
+    ``travel_distance / transition_time``. Only the *lower* end is held: past
+    ``start_time + transition_time`` the tape keeps going rather than stopping,
+    which for the defaults it may, since it has left the frame long before
+    (see :meth:`crossing_times`). The editor writes that out as six loose
+    ``Math`` nodes and a ``Combine XYZ``; here it is one ``make_function``
+    node, ``TapeShift``, holding the formula as it is written above. The whole
+    animation is that one line, so a scene has nothing to keyframe - and
+    nothing to keyframe is a problem of its own for ``render_with_skips``; see
+    ``BffScene.moving_tape``.
+
+    **The digits stand up.** ``Rotate Instances`` turns them by a quarter turn
+    and nothing else, so they are upright however far the cells beneath them
+    are laid back - ``cell_tilt`` tilts the tape alone. That is what lets the
+    shot be taken head-on: the numbers face the camera squarely and the tape is
+    the only thing in the frame that leans.
+
+    **The clipping.** ``Delete Geometry`` throws away every *realized* point
+    whose x lies outside ``[left_cutoff, right_cutoff]``. It runs after the for
+    each zone rather than before, so it cuts the finished cells and digits and
+    not the tape's points: a cell straddling the edge is chopped in half rather
+    than kept or dropped whole. Put the two cutoffs just outside what the
+    camera sees and the tape simply is not there beyond them - which is what
+    keeps a hundred cells, most of them off screen, from being drawn.
+
+    **The colour of a digit.** ``NumberMaterial`` is ``BaseMixing``, which
+    ``appearance.textures.base_mixing`` builds: a voronoi texture quantized to
+    the four colours the RNA bases are painted in. It varies along the
+    ``CellSeed`` attribute the digits carry, and that is what the seed of
+    ``NumberGeneration`` is for. Naming ``number_color`` a palette colour
+    instead gives every digit the same one and leaves the attribute unread.
+
+    :param tape_length: number of cells.
+    :param tape_span: how far along x those cells are spread. Their spacing is
+        this divided by ``tape_length - 1``.
+    :param tape_size: width and height of one cell - the ``TapeSize`` value
+        node of the editor's control frame.
+    :param cell_tilt: angle the cells are laid back by, so that a camera
+        looking along +y sees a face rather than an edge.
+    :param number_size: height of the digits.
+    :param number_offset: where the digits sit relative to their cell.
+    :param number_depth: how far the digits are extruded.
+    :param max_value: largest byte a cell can hold.
+    :param seed: the ``Random Value`` seed - change it for a different tape.
+    :param start_time: seconds before the tape starts moving.
+    :param transition_time: seconds the tape takes for its whole travel. This
+        is the dial that decides whether the bytes can be read on the way past.
+    :param travel_distance: how far it travels, centred on the origin.
+    :param left_cutoff: x below which nothing is drawn.
+    :param right_cutoff: x above which nothing is drawn.
+    :param tape_color: palette name for the cells.
+    :param number_color: what the digits are drawn in - a palette name, or
+        ``"BaseMixing"``, the material ``appearance.textures.base_mixing``
+        builds out of a voronoi texture and the four colours the RNA bases are
+        painted in. That is the default, and it is an argument rather than a
+        decoration: a byte of the soup wearing the colours of the molecule says
+        the two are the same stuff.
+    :param number_seed: name of the attribute the digits carry their seed in -
+        the cell's index plus the digit's place in the number, which is what
+        gives the ``1`` and the ``7`` of a ``117`` different colours. ``None``
+        drops the two nodes that work it out, for a material that has no use
+        for it.
+    """
+
+    # Where the four frames of the editor sit. Everything inside one of them is
+    # placed through _in_frame(<origin>), which is what turns the relative
+    # coordinates an exported xml gives for a framed node back into the
+    # absolute ones this file writes - see the note on _in_frame itself.
+    CONTROL_FRAME = (-10.3, 5.0)
+    CELL_FRAME = (-0.2, 5.4)
+    NUMBER_FRAME = (-2.8, 3.6)
+    CUTOFF_FRAME = (5.3, 1.8)
+
+    def __init__(self, tape_length=100, tape_span=100.0, tape_size=0.9,
+                 cell_tilt=0.31066858768463135, number_size=0.5,
+                 number_offset=(0, 0, 0.3), number_depth=0.1,
+                 max_value=255, seed=0,
+                 start_time=1.0, transition_time=20.0, travel_distance=229.0,
+                 left_cutoff=-14.0, right_cutoff=14.0,
+                 tape_color="gray_1", number_color="BaseMixing",
+                 number_seed="CellSeed",
+                 name="MovingTape", **kwargs):
+        self.tape_length = tape_length
+        self.tape_span = tape_span
+        self.tape_size = tape_size
+        self.cell_tilt = cell_tilt
+        self.number_size = number_size
+        self.number_offset = Vector(number_offset)
+        self.number_depth = number_depth
+        self.max_value = max_value
+        self.seed = seed
+        self.start_time = start_time
+        self.transition_time = transition_time
+        self.travel_distance = travel_distance
+        self.left_cutoff = left_cutoff
+        self.right_cutoff = right_cutoff
+        self.tape_color = tape_color
+        self.number_color = number_color
+        self.number_seed = number_seed
+        self.kwargs = kwargs
+        super().__init__(name=name, automatic_layout=False)
+
+    # ----------------------------------------------------------------
+    def crossing_times(self):
+        """When the tape reaches the frame and when the last of it has left.
+
+        The tape is a segment of length ``tape_span`` whose left end is at
+        ``travel_distance * (t - start_time) / transition_time -
+        travel_distance / 2``; it has something to show while its right end is
+        past ``left_cutoff`` and its left end has not passed ``right_cutoff``.
+        Both are worth knowing for a shot that should not open on an empty
+        frame or hold on one - and they are not ``start_time`` and
+        ``start_time + transition_time``: with the exported numbers the tape
+        crosses in a little over half its travel and spends the rest of it off
+        screen to the right.
+
+        :return: ``(enter, leave)`` in seconds.
+        """
+        speed = self.travel_distance / self.transition_time
+        start = -0.5 * self.travel_distance
+        enter = self.start_time + (self.left_cutoff - self.tape_span - start) / speed
+        leave = self.start_time + (self.right_cutoff - start) / speed
+        # the tape may already reach into the frame at t = start_time, and it
+        # does not move before then
+        return max(enter, self.start_time), leave
+
+    # ----------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._create_control_frame(tree)
+        tape = self._create_tape(tree, control)
+
+        # one turn per cell: Value to String needs a single value, and a string
+        # is not a field - the same reason the machine's own cells are numbered
+        # inside a zone (see BrainFuckSimpleModifier._create_cell_values)
+        zone = ForEachZone(tree, location=(-4.0, 3.6), domain="POINT",
+                           node_width=11.8, node_height=GRID, geometry=tape)
+        zone.foreach_output.location = (7.8 * GRID, 3.8 * GRID)
+        values = RandomValue(tree, location=(-5.0, 2.6), data_type="INT",
+                             min=0, max=self.max_value, seed=self.seed,
+                             node_height=GRID, name="CellValue")
+        zone.add_socket(socket_type="INT", name="Value", value=values.std_out,
+                        for_input=True)
+        # the editor's zone carries two more input items that nothing inside it
+        # reads; they are kept so that the tree round-trips
+        zone.add_socket(socket_type="INT", name="Index")
+        zone.add_socket(socket_type="VECTOR", name="Position")
+
+        cells = self._create_cell_frame(tree, control, zone)
+        painted = SetMaterial(tree, location=(4.0, 4.6), geometry=cells,
+                              material=control["TapeMaterial"].std_out,
+                              node_height=GRID, name="PaintTape")
+        numbers = self._create_number_frame(tree, control, zone)
+
+        joined = JoinGeometry(tree, location=(6.8, 3.8), node_height=GRID,
+                              name="JoinCell")
+        tree.links.new(painted.geometry_out, joined.geometry_in)
+        tree.links.new(numbers, joined.geometry_in)
+        tree.links.new(joined.geometry_out, zone.foreach_output.inputs["Geometry"])
+
+        # realizing before the cut is what makes the cut a cut: the delete then
+        # works on the points of the cells and digits themselves
+        realize = RealizeInstances(tree, location=(9.2, 3.4),
+                                   geometry=zone.geometry_out, node_height=GRID,
+                                   name="RealizeTape")
+        cut = DeleteGeometry(tree, location=(10.9, 2.9), domain="POINT", mode="ALL",
+                             geometry=realize.geometry_out,
+                             selection=self._create_cutoff_frame(tree, control),
+                             node_height=GRID, name="CutOffTape")
+
+        self.group_outputs.location = (11.9 * GRID, 2.8 * GRID)
+        tree.links.new(cut.geometry_out, self.group_outputs.inputs["Geometry"])
+
+    # ----------------------------------------------------------------
+    def _create_control_frame(self, tree):
+        """``ControlFrame``: every constant of the tape and of its motion.
+
+        :return: ``{name: node}``, so that the frames downstream can pick the
+            parameter they need by the name it carries in the editor.
+        """
+        at = _in_frame(self.CONTROL_FRAME)
+        control = {
+            "TapeSize": InputValue(tree, location=at(0.1, -0.1), value=self.tape_size,
+                                   node_height=GRID, name="TapeSize"),
+            "TapeLength": InputInteger(tree, location=at(0.1, -0.7),
+                                       integer=self.tape_length,
+                                       node_height=GRID, name="TapeLength"),
+            "StartTime": InputValue(tree, location=at(0.1, -1.1), value=self.start_time,
+                                    node_height=GRID, name="StartTime"),
+            "TransitionTime": InputValue(tree, location=at(0.1, -1.6),
+                                         value=self.transition_time,
+                                         node_height=GRID, name="TransitionTime"),
+            "TravelDistance": InputValue(tree, location=at(0.1, -2.2),
+                                         value=self.travel_distance,
+                                         node_height=GRID, name="TravelDistance"),
+            "TapeMaterial": InputMaterial(tree, location=at(0.2, -3.5),
+                                          material=self.tape_color,
+                                          node_height=GRID, name="TapeMaterial",
+                                          **self.kwargs),
+            # the seed goes with the colour: a material that varies over the
+            # geometry - BaseMixing - varies along this attribute, and one that
+            # does not (a palette name) has no use for it and drops it
+            "NumberMaterial": InputMaterial(tree, location=at(0.2, -3.9),
+                                            material=self.number_color,
+                                            node_height=GRID, name="NumberMaterial",
+                                            **dict(self.kwargs,
+                                                   attribute=self.number_seed)),
+            "LeftCutoff": InputValue(tree, location=at(0.2, -4.5), value=self.left_cutoff,
+                                     node_height=GRID, name="LeftCutoff"),
+            "RightCutoff": InputValue(tree, location=at(0.2, -4.9), value=self.right_cutoff,
+                                      node_height=GRID, name="RightCutoff"),
+            "NumberOffset": InputVector(tree, location=at(0.1, -5.4),
+                                        vector=self.number_offset,
+                                        node_height=GRID, name="NumberOffset"),
+        }
+        for source in ("TapeMaterial", "NumberMaterial"):
+            self.materials.append(control[source].node.material)
+
+        frame = Frame(tree, location=self.CONTROL_FRAME, label="ControlFrame",
+                      node_height=GRID)
+        frame.add(list(control.values()))
+        return control
+
+    # ----------------------------------------------------------------
+    def _create_tape(self, tree, control):
+        """The row of points the cells are dropped onto, where it is right now.
+
+        :return: the geometry socket of the moved tape.
+        """
+        line = MeshLine(tree, location=(-5.8, 3.9), mode="END_POINTS", hide=True,
+                        count=control["TapeLength"].std_out,
+                        start_location=Vector([0, 0, 0]),
+                        end_location=Vector([self.tape_span, 0, 0]),
+                        node_height=GRID, name="Tape")
+        move = SetPosition(tree, location=(-4.8, 4.0), geometry=line.geometry_out,
+                           offset=self._create_motion(tree, control),
+                           node_height=GRID, name="MoveTape")
+        return move.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_motion(self, tree, control):
+        """How far the tape has travelled by now, as a vector along x.
+
+        The editor spells this out as six loose nodes between the control
+        frame and the tape - a subtract, a maximum, a divide, two multiplies
+        and an add, into a ``Combine XYZ``. It is one formula and it is
+        written as one here, which also settles the trap in the middle of that
+        chain: ``Maximum`` has to be given a second operand of *zero*, and zero
+        is exactly the value the wrappers read as "not given" and leave at
+        blender's default of 0.5.
+
+        :return: the vector socket to offset the tape by.
+        """
+        clock = SceneTime(tree, location=(-8.8, 3.2), std_out="Seconds",
+                          node_height=GRID, name="Clock")
+        shift = make_function(tree, name="TapeShift",
+                              functions={
+                                  "shift": ["time,start,-,0,max,transition,/,"
+                                            "distance,*,distance,2,/,-", "0", "0"],
+                              },
+                              inputs=["time", "start", "transition", "distance"],
+                              outputs=["shift"],
+                              scalars=["time", "start", "transition", "distance"],
+                              vectors=["shift"], hide=True)
+        # make_function scales y by 100 rather than by the 200 everything else
+        # in this class uses, so its own location argument cannot be used
+        shift.location = (-6.4 * GRID, 3.2 * GRID)
+        tree.links.new(clock.std_out, shift.inputs["time"])
+        tree.links.new(control["StartTime"].std_out, shift.inputs["start"])
+        tree.links.new(control["TransitionTime"].std_out, shift.inputs["transition"])
+        tree.links.new(control["TravelDistance"].std_out, shift.inputs["distance"])
+        return shift.outputs["shift"]
+
+    # ----------------------------------------------------------------
+    def _create_cell_frame(self, tree, control, zone):
+        """``TapeCellInstantiation``: one square cell on every point of the tape.
+
+        The cell is turned into an instance *before* it is tilted, so that
+        ``Rotate Instances`` turns the whole square about the tape rather than
+        each of its points about itself - the grid has a hundred of them and a
+        field would tilt them one by one into nothing.
+
+        :return: the geometry socket of the cells.
+        """
+        at = _in_frame(self.CELL_FRAME)
+        # the reroute is the editor's, and it sits outside the frame: one value
+        # feeding both sides of the square
+        route = Reroute(tree, location=(-1.0, 4.2), ins=control["TapeSize"].std_out,
+                        node_height=GRID, name="TapeSizeRoute")
+        cell = Grid(tree, location=at(0.1, -0.3), size_x=route.std_out,
+                    size_y=route.std_out, vertices_x=10, vertices_y=10,
+                    node_height=GRID, name="TapeCell")
+        instance = GeometryToInstance(tree, location=at(0.9, -0.2), hide=True,
+                                      node_height=GRID, name="CellInstance")
+        tree.links.new(cell.geometry_out, instance.geometry_in)
+        tilt = RotateInstances(tree, location=at(1.9, -0.3), hide=True,
+                               instances=instance.geometry_out,
+                               rotation=[self.cell_tilt, 0, 0], local_space=False,
+                               node_height=GRID, name="TiltCell")
+        cells = InstanceOnPoints(tree, location=at(3.1, -0.1), points=zone.element,
+                                 instance=tilt.geometry_out, node_height=GRID,
+                                 name="CellsOnTape")
+
+        frame = Frame(tree, location=self.CELL_FRAME,
+                      label="TapeCellInstantiation", node_height=GRID)
+        frame.add([cell, instance, tilt, cells])
+        return cells.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_number_frame(self, tree, control, zone):
+        """``NumberGeneration``: the byte of this cell, written on it.
+
+        ``Sample Index`` is what puts the digits on the cell: inside the outer
+        zone ``Element`` is the single point being worked on, so reading its
+        ``Position`` at index 0 - plus ``NumberOffset``, which lifts the digits
+        off the face - is where this cell is. The digits are built at the
+        origin and moved there, rather than being instanced onto the point,
+        because they have to be filled and extruded first.
+
+        **A zone of its own for the glyphs.** ``String to Curves`` hands back
+        one *instance* per character, and everything from ``Fill Curve`` on is
+        wrapped in a second for each zone that walks them one at a time, on the
+        ``INSTANCE`` domain. That is what lets the ``1`` and the ``7`` of a
+        ``117`` be told apart: the seed the ``BaseMixing`` material picks its
+        colour from is the cell's index *plus the glyph's*, so the digits of one
+        number are consecutive seeds rather than one seed shared, and each
+        digit comes out in a base colour of its own.
+
+        What the seed must not be is a position. The tape travels, so a colour
+        that depends on where a digit *is* changes about ten times a second on
+        the way past; an index changes never.
+
+        :return: the geometry socket of the digits.
+        """
+        at = _in_frame(self.NUMBER_FRAME)
+        digits = ValueToString(tree, location=at(0.2, -1.1), data_type="INT",
+                               value=zone.foreach_input.outputs["Value"],
+                               node_height=GRID, name="CellDigits")
+        curves = StringToCurves(tree, location=at(1.0, -0.6),
+                                string=digits.std_out, size=self.number_size,
+                                align_x="CENTER", align_y="MIDDLE",
+                                pivot_mode="MIDPOINT", node_height=GRID,
+                                name="NumberCurves")
+
+        # one turn per character of the number
+        glyphs = ForEachZone(tree, location=at(2.2, -0.3), domain="INSTANCE",
+                             node_width=6.6, node_height=GRID,
+                             geometry=curves.geometry_out)
+        glyphs.foreach_output.location = (at(8.8, -0.2)[0] * GRID,
+                                          at(8.8, -0.2)[1] * GRID)
+
+        fill = FillCurve(tree, location=at(3.2, -0.8), mode="Triangles",
+                         curve=glyphs.element, node_height=GRID,
+                         name="FillNumber")
+
+        where = Position(tree, location=at(0.1, -2.0), node_height=GRID,
+                         name="CellPosition")
+        raised = VectorMath(tree, location=at(1.2, -1.9), operation="ADD",
+                            inputs0=where.std_out,
+                            inputs1=control["NumberOffset"].std_out,
+                            node_height=GRID, name="NumberPlacement")
+        sample = SampleIndex(tree, location=at(2.1, -1.6), hide=True,
+                             data_type="FLOAT_VECTOR", domain="POINT",
+                             geometry=zone.element, value=raised.std_out,
+                             node_height=GRID, name="SampleCellPosition")
+        placed = SetPosition(tree, location=at(4.2, -0.5), geometry=fill.geometry_out,
+                             offset=sample.std_out, node_height=GRID,
+                             name="PlaceNumber")
+        thick = ExtrudeMesh(tree, location=at(5.2, -0.4), mode="FACES",
+                            mesh=placed.geometry_out, offset_scale=self.number_depth,
+                            node_height=GRID, name="ThickenNumber")
+        # a quarter turn about x, and only that: the digits stand upright out
+        # of the tape's plane whatever the cells under them are tilted by
+        upright = RotateInstances(tree, location=at(6.1, -0.5),
+                                  instances=thick.geometry_out,
+                                  rotation=[pi / 2, 0, 0], node_height=GRID,
+                                  name="StandNumberUp")
+        painted = SetMaterial(tree, location=at(7.0, -0.5),
+                              geometry=upright.geometry_out,
+                              material=control["NumberMaterial"].std_out,
+                              node_height=GRID, name="PaintNumber")
+
+        last = painted
+        pieces = [digits, curves, glyphs, fill, where, raised, sample, placed,
+                  thick, upright, painted]
+        if self.number_seed:
+            # which colour of the four this digit wears: the cell it belongs to,
+            # offset by its place in the number
+            seed = MathNode(tree, location=at(6.9, -1.3), operation="ADD",
+                            inputs0=zone.index, inputs1=glyphs.index,
+                            node_height=GRID, name="SeedIndex", label="")
+            last = StoredNamedAttribute(tree, location=at(7.9, -0.3),
+                                        data_type="FLOAT", domain="POINT",
+                                        name=self.number_seed, value=seed.std_out,
+                                        node_height=GRID, label="SeedNumber")
+            tree.links.new(painted.geometry_out, last.geometry_in)
+            pieces += [seed, last]
+        tree.links.new(last.geometry_out, glyphs.foreach_output.inputs["Geometry"])
+
+        frame = Frame(tree, location=self.NUMBER_FRAME, label="NumberGeneration",
+                      node_height=GRID, mute=True)
+        frame.add(pieces)
+        return glyphs.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_cutoff_frame(self, tree, control):
+        """``TapeCutoff``: is this point outside the shot?
+
+        :return: the boolean socket to delete by.
+        """
+        at = _in_frame(self.CUTOFF_FRAME)
+        where = Position(tree, location=at(0.1, -0.7), node_height=GRID,
+                         name="TapePosition")
+        along = SeparateXYZ(tree, location=at(1.0, -0.4), vector=where.std_out,
+                            node_height=GRID, name="TapeX")
+        left = CompareNode(tree, location=at(1.9, -0.1), operation="LESS_THAN",
+                           data_type="FLOAT", inputs0=along.x,
+                           inputs1=control["LeftCutoff"].std_out,
+                           node_height=GRID, name="BeyondLeft")
+        right = CompareNode(tree, location=at(2.0, -1.0), operation="GREATER_THAN",
+                            data_type="FLOAT", inputs0=along.x,
+                            inputs1=control["RightCutoff"].std_out,
+                            node_height=GRID, name="BeyondRight")
+        gone = BooleanMath(tree, location=at(2.9, -0.5), operation="OR",
+                           inputs0=left.std_out, inputs1=right.std_out,
+                           node_height=GRID, name="OffScreen")
+
+        frame = Frame(tree, location=self.CUTOFF_FRAME, label="TapeCutoff",
+                      node_height=GRID)
+        frame.add([where, along, left, right, gone])
+        return gone.std_out

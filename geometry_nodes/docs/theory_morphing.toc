@@ -1,0 +1,14 @@
+\contentsline {section}{\numberline {1}The problem, concretely}{1}{section.1}%
+\contentsline {paragraph}{Vertex counts.}{1}{section*.2}%
+\contentsline {paragraph}{Edges and faces.}{1}{section*.3}%
+\contentsline {section}{\numberline {2}The correspondence problem}{2}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Map both shapes to a common domain}{2}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Skip the mesh entirely}{2}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Discrete matching heuristics}{2}{subsection.2.3}%
+\contentsline {section}{\numberline {3}The interpolation problem}{3}{section.3}%
+\contentsline {section}{\numberline {4}What is feasible inside geometry nodes}{3}{section.4}%
+\contentsline {section}{\numberline {5}Implemented plan}{3}{section.5}%
+\contentsline {section}{\numberline {6}The supermesh pass}{4}{section.6}%
+\contentsline {paragraph}{Assumptions, and how they are reported.}{5}{section*.7}%
+\contentsline {paragraph}{Verified.}{5}{section*.8}%
+\contentsline {section}{\numberline {7}Roadmap}{5}{section.7}%

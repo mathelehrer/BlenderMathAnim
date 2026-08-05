@@ -24,7 +24,7 @@ from shader_nodes.shader_nodes import (Mapping, AttributeNode, HueSaturationValu
                                        Displacement, ShaderNode, MixShader,
                                        TextureCoordinate, ColorRamp, ShaderFrame,
                                        ShaderRepeatZone, BrightContrast, RGB, PrincipledBSDF, OnRightNode, CombineXYZ,
-                                       IfNode, Mix)
+                                       IfNode, Mix, VoronoiTexture)
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
@@ -1402,6 +1402,97 @@ def pie_checker_material(colors=['drawing', 'joker'], name='PieChecker', **kwarg
     mixer.inputs[2].default_value = get_color_from_name(colors[1])
     mixer.location = (-200, 200)
     links.new(mixer.outputs[0], bsdf.inputs['Base Color'])
+    return mat
+
+
+# The four bases, in the colours the molecules of video_bff are painted in:
+# adenine, cytosine, guanine and then thymine for DNA, uracil for RNA. Written
+# down here rather than in the modifiers that draw them, because a *material*
+# needs them too - see base_mixing - and appearance cannot import from
+# geometry_nodes without closing a circle.
+DNA_BASE_COLORS = ("custom1", "joker", "important", "drawing")
+RNA_BASE_COLORS = DNA_BASE_COLORS[:3] + ("example",)
+
+
+def base_mixing(name="BaseMixing", colors=None, scale=8.3, randomness=1.0,
+                attribute=None, **kwargs):
+    """The four base colours of the RNA, thrown over a surface in patches.
+
+    A voronoi texture cuts space into cells and hands each one a random colour;
+    a colour ramp with no interpolation quantizes that to the four colours the
+    RNA modifiers paint their bases in, so what the surface ends up wearing is
+    those four in flat, irregular patches. Geometry drawn in it is stamped out
+    of the same material the molecule is made of, which is the point: on the
+    tape of ``MovingTapeModifier`` it says, without a word of commentary, that
+    the bytes rolling past are the same stuff as the bases.
+
+    Without an ``attribute`` the pattern lies in the *object's* space rather
+    than in the geometry's. For a surface that stays put that is invisible; for
+    one that travels - the tape does, at some 11 units a second - the geometry
+    slides through the pattern instead of carrying it, and with cells about a
+    unit wide every digit changes colour about ten times a second. That is a
+    flicker, not a mosaic. So anything moving should name an ``attribute`` that
+    is constant per element: the texture then runs along *that* rather than
+    along space, and each element keeps the colour its value picked.
+
+    :param name: the name of the material, and of its datablock.
+    :param colors: palette names, one per base. The default is
+        :data:`RNA_BASE_COLORS`; pass :data:`DNA_BASE_COLORS` for the molecule
+        with thymine in it.
+    :param scale: cells per unit - low numbers give big patches.
+    :param randomness: 0 puts the cell centres on a regular grid, 1 scatters
+        them as far as they go.
+    :param attribute: name of a geometry attribute to drive the pattern with
+        instead of the object coordinate. A per-element value (a cell index,
+        say) gives every element one colour of its own and keeps it there
+        however far the element travels.
+    :param kwargs: passed to ``customize_material`` - ``emission`` above all,
+        since these scenes are lit by their own glow.
+    :return: the material.
+    """
+    colors = list(colors or RNA_BASE_COLORS)
+
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+    mat.name = name
+    tree = mat.node_tree
+    nodes = tree.nodes
+    links = tree.links
+
+    customize_material(mat, **kwargs)
+    bsdf = nodes.get("Principled BSDF")
+
+    if attribute is None:
+        # three dimensions of object space: patches of colour lying in the
+        # world, which geometry takes on wherever it happens to be
+        source = TextureCoordinate(tree, location=(-6, 0), std_out='Object',
+                                   name="Where")
+        cells = VoronoiTexture(tree, location=(-5, 0), vector=source.std_out,
+                               scale=scale, randomness=randomness,
+                               std_out="Color", name="Cells")
+    else:
+        # one dimension, along the attribute: a colour per *value* of it, and
+        # so a colour that belongs to the element rather than to the place
+        source = AttributeNode(tree, location=(-6, 0), attribute_name=attribute,
+                               attribute_type="GEOMETRY", name="Where")
+        cells = VoronoiTexture(tree, location=(-5, 0), dimensions='3D',
+                               w=source.fac_out, scale=scale,
+                               randomness=randomness, std_out="Color",
+                               name="Cells")
+    # Color is a random colour per cell, so any one of its channels is a random
+    # *number* per cell - which is what has to be quantized to pick a base. Its
+    # own three channels would pick three different bases for the same cell.
+    pick = SeparateXYZ(tree, location=(-4, 0), vector=cells.std_out, name="Pick")
+
+    # no interpolation: a stop every 1/n, so the ramp is a lookup table rather
+    # than a gradient and every patch is one of the four colours exactly
+    ramp = ColorRamp(tree, location=(-3, 0), factor=pick.std_out_x, name="Bases",
+                     values=[i / len(colors) for i in range(len(colors))],
+                     colors=[list(get_color_from_name(color)) for color in colors],
+                     interpolation="CONSTANT")
+
+    links.new(ramp.std_out, bsdf.inputs["Base Color"])
+    links.new(ramp.std_out, bsdf.inputs[EMISSION])
     return mat
 
 

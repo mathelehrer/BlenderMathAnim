@@ -567,6 +567,58 @@ class NoiseTexture(ShaderNode):
             self.node.inputs['Detail'].default_value = detail
 
 
+class VoronoiTexture(ShaderNode):
+    """``ShaderNodeTexVoronoi``: space cut into cells around scattered points.
+
+    The two outputs that get used are very different things. ``Distance`` is
+    how far the shaded point is from its cell's centre - a smooth field, good
+    for cracks and bubbles - while ``Color`` is a *random colour per cell*,
+    constant across the cell and jumping at its border. Anything that should
+    look like a mosaic of flat patches reads ``Color``, and anything that has
+    to turn that into a number - which base a patch is, say - takes one channel
+    of it, since each channel is its own random value in [0, 1) per cell.
+
+    :param dimensions: '1D', '2D', '3D' or '4D'. In 1D and 4D the node grows a
+        ``W`` input, which is what makes an animated or attribute-driven
+        pattern possible.
+    :param feature: 'F1' (the nearest point, the usual one), 'SMOOTH_F1',
+        'F2', 'DISTANCE_TO_EDGE' or 'N_SPHERE_RADIUS'.
+    :param randomness: 0 leaves the points on a regular grid, 1 scatters them
+        as far as they go.
+    """
+
+    def __init__(self, tree, location=(0, 0), dimensions='3D', feature='F1',
+                 distance='EUCLIDEAN', std_out="Color", vector=None,
+                 scale=5, randomness=1, w=None, **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeTexVoronoi")
+        self.node.voronoi_dimensions = dimensions
+        self.node.feature = feature
+        self.node.distance = distance
+
+        super().__init__(tree, location, **kwargs)
+
+        self.std_out = self.node.outputs[std_out]
+        self.color_out = self.node.outputs["Color"]
+        self.distance_out = self.node.outputs["Distance"]
+
+        if vector is not None:
+            self.tree.links.new(vector, self.node.inputs["Vector"])
+        if w is not None:
+            if isinstance(w, (int, float)):
+                self.node.inputs["W"].default_value = w
+            else:
+                if dimensions=='1D':
+                    self.tree.links.new(w, self.node.inputs["W"])
+                else:
+                    self.tree.links.new(w,self.node.inputs["Vector"])
+
+        for socket, value in (("Scale", scale), ("Randomness", randomness)):
+            if isinstance(value, (int, float)):
+                self.node.inputs[socket].default_value = value
+            else:
+                self.tree.links.new(value, self.node.inputs[socket])
+
+
 class MixNode(ShaderNode):
     def __init__(self, tree, location, data_type='FLOAT', factor=0, caseA=0, caseB=0, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeMix")

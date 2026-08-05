@@ -289,10 +289,74 @@ A \node{Match Nearest} boolean switches between \eqref{eq:rescale} and
 \eqref{eq:proximity}; the blend \eqref{eq:naive} is unchanged behind it.
 
 % =====================================================================
-\section{Roadmap}\label{sec:roadmap}
+\section{The supermesh pass}\label{sec:supermesh}
 % =====================================================================
 
-In increasing order of work:
+Implemented in \node{geometry\_nodes/supermesh.py}. Everything above is a
+compromise forced by the graph; this is the thing that actually solves the
+problem, by refusing to pair anything at all.
+
+Both shapes are written over one spherical domain, following Kent, Carlson
+and Parent~\cite{kent1992}, and \emph{the domain's own triangulation becomes
+the shared connectivity}. Where they merge the two projected topologies into
+an exact overlay --- every vertex of both, plus every edge-edge crossing ---
+the pass resamples instead: an icosphere is tessellated once at a chosen
+subdivision level, and each of its directions $d$ is traced onto both
+surfaces,
+\begin{equation}
+  p_A(d) = c_A + t_A(d)\, d ,
+  \qquad
+  p_B(d) = c_B + t_B(d)\, d ,
+  \label{eq:trace}
+\end{equation}
+with $t$ found by M\"oller--Trumbore intersection against every triangle,
+vectorised and chunked. The \emph{farthest} hit is kept, so a ray leaving a
+cone that stands on a cylinder lands on the outside of the pair rather than
+on the seam between them.
+
+The trade is explicit. The overlay is exact and its output resolution is a
+consequence of the inputs; resampling loses whatever falls between two
+directions, but cannot produce degenerate triangles, needs no spherical
+polygon clipping, and makes the resolution a parameter --- 642 points at
+subdivision 3, 2562 at 4, whatever the inputs carry.
+
+What comes out is two vertex arrays over one face array. Feeding them to
+\node{MorphNode} as \node{Geometry 1} and \node{Geometry 2} with
+\node{Match Nearest} \emph{off} makes index pairing exactly right, because
+point $i$ of the one \emph{is} point $i$ of the other; the node needs no
+change. Alternatively one mesh carries the other's positions as a point
+attribute, and a \node{Named Attribute} node reads the destination with no
+sampling at all.
+
+\paragraph{Assumptions, and how they are reported.}
+Equation~\eqref{eq:trace} assumes each shape is star-shaped about its centre
+$c$ (the mean of its vertices unless the caller says otherwise) and of genus
+$0$. Neither is checked and forbidden; both are measured and reported:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item directions that meet no triangle are counted as \emph{misses} and
+    fall back to the surface point lying most nearly that way, which keeps
+    the map total;
+  \item the Euler characteristic $V - E + F$ of each input is computed, since
+    $\chi \ne 2$ means no spherical parameterisation exists at all.
+\end{itemize}
+
+A torus of revolution run against a cube reports $510$ of $642$ directions
+missed and $\chi = 0$, i.e.\ genus~$1$ --- which is the honest answer for the
+picture frame of \node{MorphModifier}, and the reason that particular morph
+needs a base domain with a handle rather than a
+sphere~\cite{praun2001,kraevoy2004,schreiner2004}.
+
+\paragraph{Verified.} A $24\times12$ UV sphere against a $20$-sided cone
+gives $642$ points and $1280$ faces with no misses and $\chi = 2$ for both;
+the geometry the node evaluates agrees with $(1-t)\,p_A + t\,p_B$ to
+$1.2\times10^{-7}$ at $t = 0, \tfrac14, \tfrac12, \tfrac34, 1$, with the face
+count constant throughout --- which is what ``the connectivity is the same at
+every value of the morph'' means in practice.
+
+% =====================================================================
+\section{Roadmap}\label{sec:roadmap}
+% =====================================================================
 
 \begin{enumerate}[leftmargin=1.6em]
   \item \textbf{Arc-length pairing for curve-like shapes.} Convert both
@@ -300,15 +364,13 @@ In increasing order of work:
     problems vanish at once: equal counts, and index order becomes arc
     length, which \emph{is} geometric. Cheap, and enough for outline
     morphs (letters, silhouettes, the picture frame of
-    \node{MorphModifier}).
-  \item \textbf{Python supermesh pass.} Parameterise both meshes over a
-    sphere~\cite{kent1992} or a common base
-    domain~\cite{praun2001,kraevoy2004}, overlay the two, and emit a single
-    mesh with two position attributes. The node then interpolates two
-    attributes of one mesh, which is correct by construction --- and
-    \node{MorphNode} needs no change at all.
-  \item \textbf{Better trajectories.} Once the supermesh exists, replace the
-    straight line by an as-rigid-as-possible path~\cite{alexa2000}; a
+    \node{MorphModifier}, which the sphere cannot take).
+  \item \textbf{Higher genus and feature control.} Replace the sphere of
+    \S\ref{sec:supermesh} by a common base domain with the right handles,
+    and let the caller pin correspondences (tip to tip)
+    ~\cite{praun2001,kraevoy2004,schreiner2004}.
+  \item \textbf{Better trajectories.} With the supermesh in place, replace
+    the straight line by an as-rigid-as-possible path~\cite{alexa2000}; a
     per-frame least-squares solve, so again Python.
 \end{enumerate}
 
