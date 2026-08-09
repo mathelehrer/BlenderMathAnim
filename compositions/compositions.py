@@ -2,6 +2,7 @@ import bpy
 
 from appearance.textures import get_color
 from interface.interface_constants import blender_version
+from mathutils import Vector
 from utils.constants import DEFAULT_ANIMATION_TIME
 from utils.kwargs import get_from_kwargs
 from utils.utils import de_capitalize
@@ -118,7 +119,7 @@ def create_star_glow_composition():
     return glare
 
 
-def create_glow_composition(threshold=1,type='BLOOM',size=4):
+def create_glow_composition(threshold=1,type='BLOOM',size=4,**kwargs):
     """
     create after render image processing
     :return:
@@ -153,11 +154,14 @@ def create_glow_composition(threshold=1,type='BLOOM',size=4):
         glare.threshold =threshold
         set_alpha.mode = "REPLACE_ALPHA"
     else:
+        glare.inputs["Threshold"].default_value=threshold
 
         glare.inputs["Type"].default_value=de_capitalize(type)
         glare.inputs["Quality"].default_value="High"
         glare.inputs["Size"].default_value=size
         set_alpha.inputs["Type"].default_value="Replace Alpha"
+        tint = get_from_kwargs(kwargs,"tint",Vector([1,1,1,1]))
+        glare.inputs["Tint"].default_value=tint
 
     links.new(layers.outputs["Image"],glare.inputs["Image"])
 

@@ -1320,7 +1320,7 @@ def camera_zoom(lens=50, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
 
 
 def camera_move(shift, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME, verbose=False):
-    if isinstance(shift, list):
+    if isinstance(shift, (list,tuple)):
         shift = Vector(shift)
     cam = get_camera()
     start_frame = begin_time * FRAME_RATE
@@ -2648,6 +2648,8 @@ def set_vertex_colors(bob, colors):
 
 def change_alpha_of_material(mat, from_value=0, to_value=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
     nodes = mat.node_tree.nodes
+    # check for AlphaFactor
+
     if "Principled BSDF" in nodes:
         return change_default_value(nodes["Principled BSDF"].inputs['Alpha'], from_value=from_value, to_value=to_value,
                                     begin_time=begin_time, transition_time=transition_time)

@@ -12,7 +12,9 @@ from utils.utils import to_vector
 pi = np.pi
 
 class BQuadrilateral(BObject):
-    def __init__(self, vertices,name="Quadrilateral",resolution=100,geo_rotation=None, **kwargs):
+    def __init__(self, vertices,name="Quadrilateral",
+                 resolution=100,geo_rotation=None,thickness=1,
+                 **kwargs):
         """Create a rectangular quadrilateral driven by a geometry-nodes modifier.
 
         Implemented as a unit cube hosting a :class:`QuadModifier`. The
@@ -50,6 +52,7 @@ class BQuadrilateral(BObject):
                                     normal = normal,
                                     geo_location=center,
                                     resolution=resolution,
+                                         thickness=thickness,
                                     **kwargs)
 
         cube.add_mesh_modifier(type="NODES", node_modifier=self.quad_modifier)

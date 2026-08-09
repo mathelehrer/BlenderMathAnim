@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 
-from appearance.textures import DNA_BASE_COLORS, RNA_BASE_COLORS
+from appearance.textures import DNA_BASE_COLORS, RNA_BASE_COLORS, get_texture
 from geometry_nodes.geometry_nodes_modifier import GeometryNodesModifier
 from geometry_nodes.nodes import Points, InputValue, InstanceOnPoints, JoinGeometry, \
     create_geometry_line, RealizeInstances, Position, make_function, Index, SetMaterial, \
@@ -19,10 +19,11 @@ from geometry_nodes.nodes import Points, InputValue, InstanceOnPoints, JoinGeome
     SampleCurve, PointsToCurve, SetCurveNormal, VectorRotate, MapRange, MixNode, AccumulateField, \
     CurveLength, SeparateGeometry, InputRotation, MorphNode, SetSplineCyclic, \
     Grid, GeometryToInstance, RotateInstances, DeleteGeometry, \
-    MorphNode2, SetCurveRadius, SplineParameter
+    MorphNode2, SetCurveRadius, SplineParameter, AttributeStatistic, \
+    TranslateInstances, ScaleInstances, MeshToCurve
 from interface.ibpy import Vector
 from objects.logo import logo_curve
-from utils.constants import DATA_DIR
+from utils.constants import DATA_DIR, FRAME_RATE
 from utils.kwargs import get_from_kwargs
 
 pi = math.pi
@@ -217,7 +218,13 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
     ``ControlParameter``, ``Variables``
         the constants - among them the program and its jump table - and the
         four state seeds (``Counter``, ``Output``, ``PointerPosition``,
-        ``Step``).
+        ``Step``). Both frames hand out what they hold as a single bundle.
+        Sizes, positions, the two dozen materials and the program itself are
+        wanted all over the graph, and as one wire each they came to
+        fifty-seven lines crossing every frame between here and there. Now
+        each frame downstream takes the one wire and opens it with a
+        ``Separate Bundle`` naming just the entries it uses - :meth:`_unpack`
+        - which is also the readable list of what that frame depends on.
 
     ``Tape``
         a ``Mesh Line`` of ``TapeSize`` points with ``Value = 0`` on every
@@ -234,6 +241,17 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         instruction takes effect exactly once however many frames it is on
         screen for. It also works out where the counter goes next, which for
         five of the seven instructions is simply one on.
+
+    Arithmetic that ran through a chain of ``Math`` nodes is written as a
+    formula instead, in one :func:`~geometry_nodes.nodes.make_function` node
+    per chain - the clock, the head, the jump condition, where a column of the
+    strip stands. A chain of five nodes says what each step does and leaves
+    the reader to work out what the whole is for; the formula says the whole
+    and needs a comment for the steps. Its variables are named for what they
+    are, so ``head,right,+,left,-,size,1,-,min,0,max`` reads as the sentence
+    the head obeys. Careful with those names: a variable spelled like one of
+    the operator tokens of the formula language is read as the *operator* -
+    see the ``end`` of the clock below.
 
     ``Cells``, ``CellValues``
         the tape as it looks: one square per cell, coloured by whether the cell
@@ -330,8 +348,10 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
     CELL_COLORS = (
         ("ZeroColor", "gray_1"),  # nothing in it yet
         ("ValueColor", "drawing"),  # holds a value
-        ("PointerColor", "important"),  # the cell the head is on
+        ("CurrentColor", "green"),  # the cell the head is on
     )
+
+    POINTER_COLOR = "joker"
     GLYPH_COLOR = "text"  # the numbers on the cells and all the text
     FRAME_COLOR = "gray_2"  # the boxes around the displays and the code table
 
@@ -361,6 +381,16 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
     # lookup in Char To Ascii only covers codes 32 to 126, and 0 is a null
     # byte rather than a character in the first place.
     JUMP_ORIGIN = ord("0")
+
+    # What a bundle item of each kind of control parameter is called. Blender
+    # spells the type of a socket and the type of a bundle item the same way
+    # everywhere except for floats, where the socket is a "VALUE" - and an
+    # item of the wrong type is not an error, it is an item that silently goes
+    # missing, so the two names are mapped here rather than written out at
+    # every Separate Bundle. See :meth:`_unpack`.
+    BUNDLE_TYPES = {"VALUE": "FLOAT", "INT": "INT", "VECTOR": "VECTOR",
+                    "STRING": "STRING", "MATERIAL": "MATERIAL",
+                    "BOOLEAN": "BOOLEAN", "RGBA": "RGBA"}
 
     # how the code table is laid out: one entry every ``table_spacing`` along
     # x, the letter ``table_line_gap`` below its number, and a frame around it
@@ -535,22 +565,23 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         tape = self._create_tape_frame(tree, control)
         run = self._create_run_program_frame(tree, control, variables, tape)
 
-        cells = self._create_cells_frame(tree, control, run)
+        cells = self._create_cells_frame(tree, control, variables, run)
         table = self._create_code_table_frame(tree, control)
         displays = [
             self._create_display_frame(tree, control, "InputDisplay",
-                                       control["InputDisplaySize"],
-                                       control["InputPosition"], location=(26, -21)),
+                                       "InputDisplaySize", "InputPosition",
+                                       location=(26, -21), control_at=(27, -19.0)),
             self._create_display_frame(tree, control, "OutputDisplay",
-                                       control["OutputDisplaySize"],
-                                       control["OutputPosition"], location=(26, -24)),
+                                       "OutputDisplaySize", "OutputPosition",
+                                       location=(26, -24), control_at=(30, -24)),
         ]
         simulated = self._create_simulated_geometry_frame(tree, control, variables, run)
 
         out = self.group_outputs
         out.location = (38 * 200, -2 * 200)
         join = JoinGeometry(tree, location=(36, -4))
-        for piece in [cells, table, simulated] + displays:
+        extra = self._extra_geometry(tree, control, variables, run)
+        for piece in [cells, table, simulated] + displays + extra:
             tree.links.new(piece, join.geometry_in)
         tree.links.new(join.geometry_out, out.inputs["Geometry"])
 
@@ -558,8 +589,13 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
     def _create_control_frame(self, tree):
         """``ControlParameter``: every constant of the machine.
 
+        The parameters leave the frame as a single bundle rather than as one
+        wire each - see the :meth:`_bundle` at the end of the method, and
+        :meth:`_unpack`, which is how every frame downstream gets at them.
+
         :return: ``{name: node}``, so that the frames downstream can pick the
-            parameter they need by the name it carries in the editor.
+            parameter they need by the name it carries in the editor, plus
+            ``Bundle``, the one node that carries all of them at once.
         """
         x = -23.8
         control = {
@@ -585,7 +621,8 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
             palette[node_name] = InputMaterial(tree, location=(x, -4.4 - 0.4 * row),
                                                material=color, name=node_name,
                                                **self.kwargs)
-        rest = list(self.program_colors) + [("GlyphColor", self.glyph_color),
+        rest = list(self.program_colors) + [("PointerColor", self.POINTER_COLOR),
+                                            ("GlyphColor", self.glyph_color),
                                             ("FrameColor", self.frame_color)]
         for offset, (node_name, color) in enumerate(rest):
             palette[node_name] = InputMaterial(
@@ -618,7 +655,8 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         below = -3.0 - self.display_height - self.display_gap
         for row, (node_name, value) in enumerate((
                 ("InputPosition", [middle, 0, -3.0]),
-                ("OutputPosition", [middle, 0, below]))):
+                ("OutputPosition", [middle, 0, below]),
+                ("TapePosition", [0, 0, 0]))):
             control[node_name] = InputVector(tree, location=(x, -8.6 - 0.8 * row),
                                              vector=Vector(value), name=node_name)
         # where the code table starts - its entries grow to the right from
@@ -632,13 +670,135 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
                                                vector=Vector([0, 0, -0.9 * self.cell_size]),
                                                name="PointerOffset")
 
+        # Everything above leaves this frame as one bundle. It used to leave
+        # as forty-seven separate wires, every one of them running most of the
+        # width of the graph and crossing everything in between - ten of them
+        # for the colours of the instructions alone. Now each frame takes the
+        # one wire and says in a Separate Bundle of its own what it is
+        # unpacking, which doubles as a list of what that frame depends on;
+        # see :meth:`_bundle` and :meth:`_unpack`.
+        #
+        # The Input nodes stay where they are: the bundle gathers them rather
+        # than replacing them, so every parameter is still a node of its own
+        # to find by name with ``ibpy.get_geometry_node_from_modifier`` and to
+        # keyframe. Adding one here is enough to make it available everywhere.
+        # anything a subclass wants handed out with the rest, before the
+        # bundle is tied - see BrainFuckTransitionModifier._more_control
+        self._more_control(tree, control, x)
+        self._bundle(tree, control, location=(x + 1.6, 0), name="Control")
+
+        for node in control.values():
+            node.hide = True
+
         frame = Frame(tree, location=(-24, 0.6), label="ControlParameter")
         frame.add(list(control.values()))
         return control
 
     # ----------------------------------------------------------------
+    def _bundle(self, tree, group, location=(0, 0), name="Bundle"):
+        """Tie everything in *group* into one bundle, and put that in there too.
+
+        :param group: the ``{name: node}`` of a frame that has to hand things
+            to the rest of the graph, as :meth:`_create_control_frame` and
+            :meth:`_create_variables_frame` build them. The bundle joins it
+            under ``Bundle``, which is where :meth:`_unpack` looks for it.
+        :return: the ``Combine Bundle`` node.
+        """
+        # the items are read off before the bundle joins the group, or it
+        # would be asked to carry itself
+        items = [(node_name, self.BUNDLE_TYPES[node.std_out.type], node.std_out)
+                 for node_name, node in group.items()]
+        group["Bundle"] = CombineBundle(tree, location=location, name=name,
+                                        items=items)
+        return group["Bundle"]
+
+    # ----------------------------------------------------------------
+    def _unpack(self, tree, group, *names, location=(0, 0), name="BundleIn"):
+        """The entries *names* of *group*, taken back out of its bundle.
+
+        What a frame calls instead of reaching across the graph for each thing
+        it needs. The types are read off the nodes the bundle was built from
+        rather than written out here, since a Separate Bundle that asks for
+        the wrong type does not fail - it hands out a default and the graph
+        goes quietly wrong.
+
+        :return: the ``Separate Bundle`` node. Its sockets come out by name:
+            ``dials.out("CellSize")``.
+        """
+        items = [(entry, self.BUNDLE_TYPES[group[entry].std_out.type])
+                 for entry in names]
+        return SeparateBundle(tree, location=location, name=name,
+                              bundle=group["Bundle"].std_out, items=items)
+
+    # ----------------------------------------------------------------
+    def _more_control(self, tree, control, x):
+        """Control parameters of a subclass, added before the bundle is tied.
+
+        Nothing here. A subclass puts its own ``Input`` nodes into *control*
+        and they travel with the others - see
+        :meth:`BrainFuckTransitionModifier._more_control`.
+
+        :param x: the column the control frame is written in.
+        """
+        return
+
+    # ----------------------------------------------------------------
+    def _tape_stand(self, tree, control, position, location=(0, 0),
+                    name="TapeStand"):
+        """Where the tape stands, and the markers that point at it with it.
+
+        ``TapePosition`` itself, here. :class:`BrainFuckTransitionModifier`
+        adds a drift to it, which is how the whole tape steps down out of the
+        way of the ascii table coming in.
+
+        :return: the vector socket to place the tape by, and the nodes that
+            made it - none here.
+        """
+        return position, []
+
+    # ----------------------------------------------------------------
+    def _output_string(self, tree, control, text):
+        """What the output display reads. What the machine printed, here.
+
+        :class:`BrainFuckTransitionModifier` empties it once the same string
+        has arrived on the tape, which is what leaves the display an empty
+        frame for the morph.
+        """
+        return text
+
+    # ----------------------------------------------------------------
+    def _extra_geometry(self, tree, control, variables, run):
+        """Whatever else a subclass draws, to be joined with the machine.
+
+        :return: a list of geometry sockets - empty here.
+        """
+        return []
+
+    # ----------------------------------------------------------------
+    def _tape_in_zone(self, tree, control, sim_in):
+        """The tape the automaton reads and writes, inside the simulation zone.
+
+        Here it is simply the zone's own state: the tape is seeded once from
+        the ``Tape`` frame and handed from one frame to the next, which is
+        what keeps the cell values alive - and what fixes the shape of the
+        tape at the frame the simulation started.
+        :class:`BrainFuckTransitionModifier` rebuilds it instead.
+
+        :return: the geometry socket, and the nodes that made it - none here.
+        """
+        return sim_in.outputs["Geometry"], []
+
+    # ----------------------------------------------------------------
     def _create_variables_frame(self, tree):
-        """``Variables``: the program, its jump table and the four state seeds."""
+        """``Variables``: the program, its jump table and the four state seeds.
+
+        These leave the frame as one bundle too - see
+        :meth:`_create_control_frame` for why, and :meth:`_unpack` for how
+        they are taken out again.
+
+        :return: ``{name: node}`` plus ``Bundle``, the node that carries all
+            of them at once.
+        """
         x = -15.8
         variables = {
             # the program is a constant, not a state item: the machine walks a
@@ -664,6 +824,13 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
             # first instruction is executed rather than skipped
             "Step": InputInteger(tree, location=(x, -4.8), integer=-1, name="Step"),
         }
+        # None of these is read where it stands. The program is read twice by
+        # the machine and twice more by the strip that draws it, away at the
+        # right of the graph; the jump table only in the automaton, the loop
+        # table only in the strip, and the four seeds by the simulation zone
+        # - ten wires, and every one of them a long one.
+        self._bundle(tree, variables, location=(x + 1.6, 0), name="Variables")
+
         frame = Frame(tree, location=(-16, 0.6), label="Variables")
         frame.add(list(variables.values()))
         return variables
@@ -674,13 +841,19 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
 
         :return: the geometry socket of the initial tape.
         """
-        length = MathNode(tree, location=(-8, 0), operation="MULTIPLY",
-                          inputs0=control["TapeSize"].std_out,
-                          inputs1=control["CellSize"].std_out, name="TapeLength")
-        end = CombineXYZ(tree, location=(-7, 0), x=length.std_out, name="TapeEnd")
+        dials = self._unpack(tree, control, "TapeSize", "CellSize",
+                             location=(-8.6, 0.6), name="TapeControl")
+        end = make_function(tree, name="EndPosition",
+                            functions={
+                                "end": "e_x,tapeSize,cellSize,*,scale"
+                            }, inputs=["tapePosition", "tapeSize", "cellSize"], outputs=["end"],
+                            scalars=["cellSize"], integers=["tapeSize"], vectors=["end"], hide=True, location=(-7, 0))
+        tree.links.new(dials.out("TapeSize"), end.inputs["tapeSize"])
+        tree.links.new(dials.out("CellSize"), end.inputs["cellSize"])
+
         line = MeshLine(tree, location=(-6, 0.6), mode="END_POINTS",
-                        count=control["TapeSize"].std_out,
-                        start_location=Vector([0, 0, 0]), end_location=end.std_out)
+                        count=dials.out("TapeSize"),
+                        start_location=Vector(), end_location=end.outputs["end"])
         # every cell starts empty. The attribute has to exist from the first
         # frame on, otherwise the "Sample Index" in the automaton has nothing
         # to read and the cells have nothing to be coloured by.
@@ -689,7 +862,7 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
                                      label="ClearTape")
         create_geometry_line(tree, [line, zeros])
         frame = Frame(tree, location=(-8.2, 1.4), label="Tape")
-        frame.add([length, end, line, zeros])
+        frame.add([dials, end, line, zeros])
         return zeros.geometry_out
 
     # ----------------------------------------------------------------
@@ -698,81 +871,102 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
 
         :return: ``{name: socket}`` of the state as it leaves the zone.
         """
+        dials = self._unpack(tree, control, "StartTime", "StepDuration",
+                             location=(0.4, 6.4), name="RunControl")
+        source = self._unpack(tree, variables, "Input", "Output", "Pointer",
+                              "Counter", "Step", location=(0.4, 4.4),
+                              name="RunVariables")
         zone = Simulation(tree, location=(2, 5), node_width=20, geometry=tape)
         sim_in, sim_out = zone.simulation_input, zone.simulation_output
         for socket_type, socket_name, initial in (
-                ("FLOAT", "StartTime", control["StartTime"].std_out),
-                ("INT", "Step", variables["Step"].std_out),
-                ("INT", "PointerPosition", variables["Pointer"].std_out),
-                ("INT", "Counter", variables["Counter"].std_out),
-                ("STRING", "Output", variables["Output"].std_out),
+                ("FLOAT", "StartTime", dials.out("StartTime")),
+                ("INT", "Step", source.out("Step")),
+                ("INT", "PointerPosition", source.out("Pointer")),
+                ("INT", "Counter", source.out("Counter")),
+                ("STRING", "Output", source.out("Output")),
                 ("FLOAT", "Time", 0.0)):
             zone.add_socket(socket_type=socket_type, name=socket_name, value=initial)
 
-        # --- the clock -------------------------------------------------
-        # the zone's own Delta Time rather than the scene clock, so that the
-        # machine keeps its own time and a state item is all that is needed
-        time = MathNode(tree, location=(3.2, 6.4), operation="ADD",
-                        inputs0=sim_in.outputs["Delta Time"],
-                        inputs1=sim_in.outputs["Time"], name="Clock")
-        since = MathNode(tree, location=(4.4, 6.4), operation="SUBTRACT",
-                         inputs0=time.std_out, inputs1=sim_in.outputs["StartTime"],
-                         name="SinceStart")
-        scaled = MathNode(tree, location=(5.6, 6.4), operation="DIVIDE",
-                          inputs0=since.std_out,
-                          inputs1=control["StepDuration"].std_out, name="InSteps")
-        # -1 while the machine is still waiting, so that the first real step
-        # (index 0) is an increase and fires the first instruction
-        waiting = MathNode(tree, location=(6.8, 6.4), operation="MAXIMUM",
-                           inputs0=scaled.std_out, inputs1=-1.0, name="NotBeforeStart")
-        # FLOOR, not TRUNC: truncation rounds towards zero, so the whole last
-        # step_duration before StartTime would already come out as step 0 and
-        # fire the first instruction early
-        step = MathNode(tree, location=(8.0, 6.4), operation="FLOOR",
-                        inputs0=waiting.std_out, name="StepIndex")
-        # An instruction is executed on the one frame where the step index goes
-        # up, never on the frames in between - otherwise a single "+" would
-        # count once per rendered frame. Comparing against the *previous* index
-        # rather than using the difference as a count also means that a
-        # step_duration shorter than a frame degrades to one instruction per
-        # frame instead of skipping instructions.
-        advance = CompareNode(tree, location=(9.2, 6.4), operation="GREATER_THAN",
-                              data_type="INT", inputs0=step.std_out,
-                              inputs1=sim_in.outputs["Step"], name="Advance")
-
         # --- the instruction under the counter --------------------------
-        program = variables["Input"].std_out
+        program = source.out("Input")
         current = SliceString(tree, location=(3.2, 4.6), string=program,
                               position=sim_in.outputs["Counter"], length=1,
                               name="Instruction")
         opcode = CharToAscii(tree, location=(4.4, 4.6), char=current.std_out)
         length = StringLength(tree, location=(3.2, 3.6), string=program,
                               name="ProgramLength")
-        # the clock keeps going after the last instruction, so without this the
-        # machine would go on "executing" the empty slice past the end of the
-        # program: the head would stay put but the read-out would blank and the
-        # tape would keep being rewritten. Halting when the counter runs off
-        # the end leaves the finished state up.
-        running = CompareNode(tree, location=(4.4, 3.6), operation="LESS_THAN",
-                              data_type="INT", inputs0=sim_in.outputs["Counter"],
-                              inputs1=length.std_out, name="NotHalted")
-        fire = BooleanMath(tree, location=(10.4, 6.4), operation="AND",
-                           inputs0=advance.std_out, inputs1=running.std_out,
-                           name="ExecuteNow")
+        # --- the clock ---------------------------------------------------
+        # The whole of the machine's sense of time, in one node:
+        #
+        # ``clock``
+        #     the zone's own Delta Time added to what it carried in, rather
+        #     than the scene clock - so the machine keeps its own time and a
+        #     state item is all that is needed.
+        # ``index``
+        #     which step the clock has reached. ``max`` at -1 keeps it there
+        #     while the machine is still waiting, so that the first real step
+        #     (index 0) is an increase and fires the first instruction.
+        #     ``floor``, not truncation: truncation rounds towards zero, so
+        #     the whole last StepDuration before StartTime would already come
+        #     out as step 0 and fire the first instruction early.
+        # ``Fire``
+        #     an instruction is executed on the one frame where the step index
+        #     goes up, never on the frames in between - otherwise a single "+"
+        #     would count once per rendered frame. Comparing against the
+        #     *previous* index rather than using the difference as a count
+        #     also means that a step_duration shorter than a frame degrades to
+        #     one instruction per frame instead of skipping instructions.
+        #
+        #     ...and the counter has to be still inside the program. The clock
+        #     keeps going after the last instruction, so without that the
+        #     machine would go on "executing" the empty slice past the end of
+        #     it: the head would stay put but the read-out would blank and the
+        #     tape would keep being rewritten. Halting when the counter runs
+        #     off the end leaves the finished state up.
+        # ``end`` rather than ``length`` for the length of the program: a
+        # variable named after one of make_function's own operator tokens
+        # (see OPERATORS in ibpy) is read as the operator, and ``length`` is
+        # the length of a *vector* - which builds without complaint and
+        # compares the wrong thing.
+        clock = make_function(
+            tree, name="Clock", location=(6.4, 6.4), hide=False,
+            aux_functions={"clock": "delta,time,+",
+                           "index": "clock,start,-,duration,/,-1,max,floor"},
+            functions={"Time": "clock", "Step": "index",
+                       "Fire": "index,old,>,counter,end,<,and"},
+            inputs=["delta", "time", "start", "duration", "old", "counter",
+                    "end"],
+            outputs=["Time", "Step", "Fire"],
+            scalars=["delta", "time", "start", "duration", "Time",
+                     "clock", "index"],
+            integers=["old", "counter", "end", "Step"],
+            booleans=["Fire"])
+        for socket, socket_name in (
+                (sim_in.outputs["Delta Time"], "delta"),
+                (sim_in.outputs["Time"], "time"),
+                (sim_in.outputs["StartTime"], "start"),
+                (dials.out("StepDuration"), "duration"),
+                (sim_in.outputs["Step"], "old"),
+                (sim_in.outputs["Counter"], "counter"),
+                (length.std_out, "end")):
+            tree.links.new(socket, clock.inputs[socket_name])
+        time, step, fire = (clock.outputs["Time"], clock.outputs["Step"],
+                            clock.outputs["Fire"])
 
         # --- the reroutes that carry the decoded step into the automaton ---
         code_in = Reroute(tree, location=(11.6, 4.6), ins=opcode.std_out, name="Opcode")
-        fire_in = Reroute(tree, location=(11.6, 4.2), ins=fire.std_out, name="Fire")
+        fire_in = Reroute(tree, location=(11.6, 4.2), ins=fire, name="Fire")
         head_in = Reroute(tree, location=(11.6, 3.8),
                           ins=sim_in.outputs["PointerPosition"], name="Head")
         step_in = Reroute(tree, location=(11.6, 3.4), ins=sim_in.outputs["Counter"],
                           name="Counter")
 
+        tape_in, rebuilt = self._tape_in_zone(tree, control, sim_in)
         pointer, tape_out, output, counter = self._create_automaton_frame(
             tree, control, variables, sim_in, code_in.std_out, fire_in.std_out,
-            head_in.std_out, step_in.std_out)
+            head_in.std_out, step_in.std_out, tape_in)
 
-        for socket, name in ((time.std_out, "Time"), (step.std_out, "Step"),
+        for socket, name in ((time, "Time"), (step, "Step"),
                              (sim_in.outputs["StartTime"], "StartTime"),
                              (counter, "Counter"),
                              (pointer, "PointerPosition"), (output, "Output")):
@@ -781,26 +975,35 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         tree.links.new(tape_out, sim_out.inputs["Geometry"])
 
         frame = Frame(tree, location=(1.6, 7.4), label="RunProgram")
-        frame.add([zone, time, since, scaled, waiting, step, advance, running, fire,
-                   current, opcode, length,
-                   code_in, fire_in, head_in, step_in])
+        frame.add([dials, source, zone, clock, current, opcode, length,
+                   code_in, fire_in, head_in, step_in] + rebuilt)
         return {name: sim_out.outputs[name] for name in
                 ("Geometry", "Step", "PointerPosition", "Counter", "Output")}
 
     # ----------------------------------------------------------------
     def _create_automaton_frame(self, tree, control, variables, sim_in, opcode,
-                                fire, head, counter):
+                                fire, head, counter, tape_in):
         """``Automaton``: what the seven instructions do.
 
         Every instruction is one ``Compare`` against its ascii code, ``AND``-ed
         with *fire* - "a new step has just begun". Without that ``AND`` an
         instruction would take effect once per rendered frame instead of once.
+        Four of them are decoded by :func:`decodes` into a node of their own,
+        because what they do with the answer is a node too; the other three -
+        ".", "[" and "]" - are decoded inside the formula that acts on them,
+        which is where their ``AND`` with *fire* has gone.
 
         :param counter: the program counter as the frame starts
+        :param tape_in: the tape to read the cell values from and write them
+            back to - see :meth:`_tape_in_zone`
         :return: ``(pointer, tape, output, counter)`` sockets for the state to
             be written back into the simulation.
         """
-        built = []
+        dials = self._unpack(tree, control, "TapeSize", "CodeTable",
+                             location=(12.4, -5.4), name="AutomatonControl")
+        source = self._unpack(tree, variables, "Jumps", location=(12.4, -6.8),
+                              name="AutomatonVariables")
+        built = [dials, source]
 
         def keep(node):
             built.append(node)
@@ -823,23 +1026,19 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         # --- the head --------------------------------------------------
         right = step_of(decodes(self.RIGHT, 3.2, "Right"), 3.2, "StepRight")
         left = step_of(decodes(self.LEFT, 2.4, "Left"), 2.4, "StepLeft")
-        forward = keep(IntegerMath(tree, location=(16.0, 2.8), operation="ADD",
-                                   inputs0=head, inputs1=right, name="HeadRight"))
-        backward = keep(IntegerMath(tree, location=(17.0, 2.8), operation="SUBTRACT",
-                                    inputs0=forward.std_out, inputs1=left,
-                                    name="HeadLeft"))
-        # the tape does not wrap and it does not grow, so the head is kept on
-        # it - without this a program with one ">" too many would write into a
-        # cell that is not drawn and silently do nothing visible
-        last = keep(IntegerMath(tree, location=(16.0, 2.0), operation="SUBTRACT",
-                                inputs0=control["TapeSize"].std_out, inputs1=1,
-                                name="LastCell"))
-        capped = keep(IntegerMath(tree, location=(18.0, 2.8), operation="MINIMUM",
-                                  inputs0=backward.std_out, inputs1=last.std_out,
-                                  name="NotPastTheEnd"))
-        pointer = keep(IntegerMath(tree, location=(19.0, 2.8), operation="MAXIMUM",
-                                   inputs0=capped.std_out, inputs1=0,
-                                   name="NotBeforeStart"))
+        # one step right, one step left, and the tape does not wrap and does
+        # not grow - so the head is kept on it. Without the min and the max a
+        # program with one ">" too many would write into a cell that is not
+        # drawn and silently do nothing visible.
+        pointer = keep(make_function(
+            tree, name="MoveHead", location=(17.0, 2.8), hide=False,
+            functions={"Head": "head,right,+,left,-,size,1,-,min,0,max"},
+            inputs=["head", "right", "left", "size"], outputs=["Head"],
+            integers=["head", "right", "left", "size", "Head"]))
+        for socket, socket_name in ((head, "head"), (right, "right"),
+                                    (left, "left"),
+                                    (dials.out("TapeSize"), "size")):
+            tree.links.new(socket, pointer.inputs[socket_name])
 
         # --- the cell under the head ------------------------------------
         # this is where the values live: an integer attribute of the tape
@@ -847,7 +1046,7 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         stored = NamedAttribute(tree, location=(12.4, 0.2), data_type="INT",
                                 name="Value")
         cell = SampleIndex(tree, location=(13.6, 0.2), data_type="INT", domain="POINT",
-                           geometry=sim_in.outputs["Geometry"], value=stored.std_out,
+                           geometry=tape_in, value=stored.std_out,
                            index=head, name="CellUnderHead")
         plus = step_of(decodes(self.PLUS, 1.2, "Plus"), 1.2, "Increment")
         minus = step_of(decodes(self.MINUS, 0.4, "Minus"), 0.4, "Decrement")
@@ -865,26 +1064,31 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
                                     domain="POINT", name="Value",
                                     selection=selection.std_out, value=lowered.std_out,
                                     label="WriteCell")
-        tree.links.new(sim_in.outputs["Geometry"], tape.geometry_in)
+        tree.links.new(tape_in, tape.geometry_in)
 
         # --- printing ---------------------------------------------------
         # the point of the exercise: the cell value indexes into the code
         # table, so 8 prints H. The table is 1-based, hence the -1.
-        place = IntegerMath(tree, location=(13.6, 4.8), operation="SUBTRACT",
-                            inputs0=cell.std_out, inputs1=1, name="TableIndex")
-        letter = SliceString(tree, location=(14.8, 4.8), string=control["CodeTable"].std_out,
-                             position=place.std_out, length=1, name="Letter")
-        # an empty cell has no letter; without this "." on a zero cell would
-        # print an A, because slicing at -1 clamps to the front of the table
-        holds = CompareNode(tree, location=(13.6, 5.6), operation="GREATER_THAN",
-                            data_type="INT", inputs0=cell.std_out, inputs1=0,
-                            name="CellHoldsALetter", hide=True)
-        prints = BooleanMath(tree, location=(14.8, 5.6), operation="AND",
-                             inputs0=decodes(self.DOT, 6.4, "Dot"), inputs1=holds.std_out,
-                             name="DoPrint", hide=True)
+        # ``Index`` is where in the table to look, 1-based, hence the -1.
+        # ``Print`` is whether to look at all: only on the frame a "." is
+        # executed, and only if the cell holds something. Without the second
+        # half a "." on a zero cell would print an A, because slicing at -1
+        # clamps to the front of the table.
+        prints = make_function(
+            tree, name="Print", location=(13.6, 5.6), hide=False,
+            functions={"Print": "opcode,%d,=,fire,and,cell,0,>,and" % self.DOT,
+                       "Index": "cell,1,-"},
+            inputs=["opcode", "fire", "cell"], outputs=["Print", "Index"],
+            integers=["opcode", "cell", "Index"], booleans=["fire", "Print"])
+        for socket, socket_name in ((opcode, "opcode"), (fire, "fire"),
+                                    (cell.std_out, "cell")):
+            tree.links.new(socket, prints.inputs[socket_name])
+        letter = SliceString(tree, location=(14.8, 4.8), string=dials.out("CodeTable"),
+                             position=prints.outputs["Index"], length=1,
+                             name="Letter")
         printed = Switch(tree, location=(16.0, 5.6), input_type="STRING",
-                         switch=prints.std_out, false="", true=letter.std_out,
-                         name="Printed")
+                         switch=prints.outputs["Print"], false="",
+                         true=letter.std_out, name="Printed")
         # The empty string of a step that does not print appends nothing, so
         # the join can run unconditionally. The order of the two links matters
         # and is the reverse of the order they are made in: blender puts the
@@ -901,28 +1105,25 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         # next instruction or jumps to the destination the table holds for it.
         # "[" leaves the loop when the cell has run down to zero, "]" goes
         # round again while it has not.
-        empty = CompareNode(tree, location=(14.8, -1.6), operation="EQUAL",
-                            data_type="INT", inputs0=cell.std_out, inputs1=0,
-                            name="CellIsEmpty", hide=True)
-        filled = CompareNode(tree, location=(14.8, -2.4), operation="NOT_EQUAL",
-                             data_type="INT", inputs0=cell.std_out, inputs1=0,
-                             name="CellIsNotEmpty", hide=True)
-        skips = BooleanMath(tree, location=(16.0, -1.6), operation="AND",
-                            inputs0=decodes(self.OPEN, -1.6, "Open"),
-                            inputs1=empty.std_out, name="SkipLoop", hide=True)
-        repeats = BooleanMath(tree, location=(16.0, -2.4), operation="AND",
-                              inputs0=decodes(self.CLOSE, -2.4, "Close"),
-                              inputs1=filled.std_out, name="RepeatLoop", hide=True)
-        jumping = BooleanMath(tree, location=(17.0, -2.0), operation="OR",
-                              inputs0=skips.std_out, inputs1=repeats.std_out,
-                              name="TakeJump", hide=True)
+        jumping = make_function(
+            tree, name="TakeJump", location=(15.0, -2.0), hide=False,
+            aux_functions={"open": "opcode,%d,=,fire,and" % self.OPEN,
+                           "close": "opcode,%d,=,fire,and" % self.CLOSE,
+                           "empty": "cell,0,="},
+            functions={"Jump": "open,empty,and,close,empty,not,and,or"},
+            inputs=["opcode", "fire", "cell"], outputs=["Jump"],
+            integers=["opcode", "cell"], booleans=["fire", "Jump"],
+            scalars=["open", "close", "empty"])
+        for socket, socket_name in ((opcode, "opcode"), (fire, "fire"),
+                                    (cell.std_out, "cell")):
+            tree.links.new(socket, jumping.inputs[socket_name])
 
         # the destination is not searched for: it was worked out in python when
         # the graph was built and baked into a string with one character per
         # instruction, so reading it is the same slice-and-decode the
         # instruction itself goes through
         entry = SliceString(tree, location=(12.4, -3.4),
-                            string=variables["Jumps"].std_out, position=counter,
+                            string=source.out("Jumps"), position=counter,
                             length=1, name="JumpEntry")
         encoded = CharToAscii(tree, location=(13.6, -3.4), char=entry.std_out,
                               name="JumpCode")
@@ -932,7 +1133,7 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         onward = IntegerMath(tree, location=(14.8, -4.2), operation="ADD",
                              inputs0=counter, inputs1=1, name="NextInstruction")
         jumped = Switch(tree, location=(18.0, -3.4), input_type="INT",
-                        switch=jumping.std_out, false=onward.std_out,
+                        switch=jumping.outputs["Jump"], false=onward.std_out,
                         true=target.std_out, name="CounterAfterStep")
         # on the frames in between two steps, and after the program has ended,
         # the counter stays where it is
@@ -942,13 +1143,13 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
 
         frame = Frame(tree, location=(12.0, 7.0), label="Automaton")
         frame.add(built + [stored, cell, raised, lowered, here, selection, tape,
-                           place, letter, holds, prints, printed, output,
-                           empty, filled, skips, repeats, jumping,
+                           prints, letter, printed, output, jumping,
                            entry, encoded, target, onward, jumped, moved])
-        return pointer.std_out, tape.geometry_out, output.std_out, moved.std_out
+        return (pointer.outputs["Head"], tape.geometry_out, output.std_out,
+                moved.std_out)
 
     # ----------------------------------------------------------------
-    def _create_cells_frame(self, tree, control, run):
+    def _create_cells_frame(self, tree, control, variables, run):
         """``Cells``: the tape as it looks, coloured by what is in it.
 
         A filled square is instanced onto every tape point and the instances
@@ -962,9 +1163,12 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         :return: the geometry socket of the finished tape.
         """
         tape = run["Geometry"]
+        dials = self._unpack(tree, control, "CellSize", "TapePosition",
+                             *[node_name for node_name, _ in self.cell_colors],
+                             location=(25, 2.6), name="CellsControl")
         quad = Quadrilateral(tree, location=(26, 2), mode="RECTANGLE",
-                             width=control["CellSize"].std_out,
-                             height=control["CellSize"].std_out)
+                             width=dials.out("CellSize"),
+                             height=dials.out("CellSize"))
         fill = FillCurve(tree, location=(27, 2), mode="N-gons")
         create_geometry_line(tree, [quad, fill])
         instances = InstanceOnPoints(tree, location=(28, 2.6), points=tape,
@@ -983,13 +1187,13 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         selections = (None, holds.std_out, under.std_out)
 
         painters = [SetMaterial(tree, location=(30 + column, 2.6), selection=selection,
-                                material=control[node_name].std_out,
+                                material=dials.out(node_name),
                                 name="Paint" + node_name)
                     for column, ((node_name, _), selection)
                     in enumerate(zip(self.cell_colors, selections))]
         create_geometry_line(tree, [instances, realize] + painters)
 
-        numbers = self._create_cell_values(tree, control, tape)
+        numbers = self._create_cell_values(tree, control, variables, run)
         joined = JoinGeometry(tree, location=(34, 2.6))
         tree.links.new(painters[-1].geometry_out, joined.geometry_in)
         tree.links.new(numbers, joined.geometry_in)
@@ -997,21 +1201,30 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         # edge-on. Laying it back brings the faces of the cells into view; the
         # numbers are pre-turned by the complement of this angle in
         # _create_cell_values, so that they come out upright.
-        tilt = TransformGeometry(tree, location=(35, 2.6),
+        stand, drift = self._tape_stand(tree, control, dials.out("TapePosition"),
+                                        location=(34, 3.4), name="CellsStand")
+        tilt = TransformGeometry(tree, location=(35, 2.6), translation=stand,
                                  rotation=[self.tape_tilt, 0, 0], name="LayTapeBack")
         create_geometry_line(tree, [joined, tilt])
 
         frame = Frame(tree, location=(25.6, 3.4), label="Cells")
-        frame.add([quad, fill, instances, realize, value, here, holds, under,
-                   joined, tilt] + painters)
+        frame.add([dials, quad, fill, instances, realize, value, here, holds, under,
+                   joined, tilt] + painters + drift)
         return tilt.geometry_out
 
     # ----------------------------------------------------------------
-    def _create_cell_values(self, tree, control, tape):
+    def _create_cell_values(self, tree, control, variables, run):
         """``CellValues``: the number every cell holds, written on it.
 
+        :param variables: unused here, and *run* only for its geometry; the
+            transition machine writes the program and what the machine printed
+            onto the cells and needs both - see
+            :meth:`BrainFuckTransitionModifier._create_cell_values`.
         :return: the geometry socket of the numbers.
         """
+        tape = run["Geometry"]
+        dials = self._unpack(tree, control, "CellSize", "GlyphColor",
+                             location=(25, -1.4), name="ValuesControl")
         value = NamedAttribute(tree, location=(26, -2), data_type="INT", name="Value")
         position = Position(tree, location=(26, -2.6))
         zone = ForEachZone(tree, location=(27, -1.4), domain="POINT", node_width=6,
@@ -1024,14 +1237,14 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         digits = ValueToString(tree, location=(28, -0.8), data_type="INT",
                                value=zone.foreach_input.outputs["Value"], name="CellValue")
         size = MathNode(tree, location=(28, -2.4), operation="MULTIPLY",
-                        inputs0=control["CellSize"].std_out, inputs1=self.glyph_size,
+                        inputs0=dials.out("CellSize"), inputs1=self.glyph_size,
                         name="NumberSize")
         curves = StringToCurves(tree, location=(29, -1.4), string=digits.std_out,
                                 size=size.std_out, align_x="CENTER", align_y="BOTTOM")
         realize = RealizeInstances(tree, location=(30, -1.4))
         fill = FillCurve(tree, location=(31, -1.4), mode="N-gons")
         painted = SetMaterial(tree, location=(32, -1.4),
-                              material=control["GlyphColor"].std_out, name="PaintNumber")
+                              material=dials.out("GlyphColor"), name="PaintNumber")
         # the whole tape is laid back by tape_tilt further downstream, so a
         # number turned by the complement of that angle ends up standing
         # upright on a cell that is itself leaning away from the camera
@@ -1043,8 +1256,8 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
                                   ins=curves.geometry_out)
 
         frame = Frame(tree, location=(25.6, -0.6), label="CellValues")
-        frame.add([value, position, zone, digits, size, curves, realize, fill,
-                   painted, placed])
+        frame.add([dials, value, position, zone, digits, size, curves, realize,
+                   fill, painted, placed])
         return zone.geometry_out
 
     # ----------------------------------------------------------------
@@ -1059,29 +1272,31 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
 
         :return: the geometry socket of the table.
         """
-        table = control["CodeTable"]
-        size = StringLength(tree, location=(-14.4, 16.6), string=table.std_out,
+        dials = self._unpack(tree, control, "CodeTable", "TablePosition",
+                             "GlyphColor", location=(-15.4, 17.8),
+                             name="TableControl")
+        table = dials.out("CodeTable")
+        size = StringLength(tree, location=(-14.4, 16.6), string=table,
                             name="TableLength")
         zone = RepeatZone(tree, location=(-13, 16), node_width=8,
                           iterations=size.std_out)
 
-        origin = SeparateXYZ(tree, location=(-12, 17.4),
-                             vector=control["TablePosition"].std_out)
-        column = MathNode(tree, location=(-12, 15.4), operation="MULTIPLY",
-                          inputs0=zone.iteration, inputs1=self.table_spacing,
-                          name="Column")
-        across = MathNode(tree, location=(-11, 17.4), operation="ADD",
-                          inputs0=origin.x, inputs1=column.std_out, name="AtColumn")
-        # the number sits on the line of TablePosition, the letter one line below
-        number_at = CombineXYZ(tree, location=(-9.5, 17.4), x=across.std_out,
-                               y=origin.y, z=origin.z, name="NumberPosition")
-        below = MathNode(tree, location=(-10.5, 16.2), operation="SUBTRACT",
-                         inputs0=origin.z, inputs1=self.table_line_gap,
-                         name="LetterLine")
-        letter_at = CombineXYZ(tree, location=(-9.5, 16.2), x=across.std_out,
-                               y=origin.y, z=below.std_out, name="LetterPosition")
+        # entry *n* stands ``table_spacing`` further right than entry *n-1*,
+        # with the number on the line of TablePosition and the letter one
+        # ``table_line_gap`` below it
+        places = make_function(
+            tree, name="EntryPosition", location=(-11, 17.4), hide=False,
+            aux_functions={"across": "origin_x,column,%s,*,+" % self.table_spacing},
+            functions={"NumberAt": ["across", "origin_y", "origin_z"],
+                       "LetterAt": ["across", "origin_y",
+                                    "origin_z,%s,-" % self.table_line_gap]},
+            inputs=["origin", "column"], outputs=["NumberAt", "LetterAt"],
+            vectors=["origin", "NumberAt", "LetterAt"], scalars=["across"],
+            integers=["column"])
+        tree.links.new(dials.out("TablePosition"), places.inputs["origin"])
+        tree.links.new(zone.iteration, places.inputs["column"])
 
-        letter = SliceString(tree, location=(-12, 14.6), string=table.std_out,
+        letter = SliceString(tree, location=(-12, 14.6), string=table,
                              position=zone.iteration, length=1, name="Letter")
         letter_curves = StringToCurves(tree, location=(-11, 14.6), string=letter.std_out,
                                        size=self.table_glyph_size, align_x="CENTER",
@@ -1096,8 +1311,9 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
                                        align_y="MIDDLE", hide=True)
 
         entries, ends = [], []
-        for curves, position, row, label in ((number_curves, number_at, 17.4, "Number"),
-                                             (letter_curves, letter_at, 14.6, "Letter")):
+        for curves, position, row, label in (
+                (number_curves, places.outputs["NumberAt"], 17.4, "Number"),
+                (letter_curves, places.outputs["LetterAt"], 14.6, "Letter")):
             # String to Curves hands out instances of outlines; realizing and
             # filling them turns them into the solid letter that is drawn
             realize = RealizeInstances(tree, location=(-8, row))
@@ -1106,7 +1322,7 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
             # moved with Transform Geometry - Set Position would need it to be
             # an instance first and would then have to be realized again
             place = TransformGeometry(tree, location=(-6, row),
-                                      translation=position.std_out,
+                                      translation=position,
                                       rotation=[pi / 2, 0, 0], name="Place" + label)
             create_geometry_line(tree, [realize, fill, place], ins=curves.geometry_out)
             entries += [realize, fill, place]
@@ -1125,79 +1341,100 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         tree.links.new(zone.geometry_out, joined.geometry_in)
         tree.links.new(box, joined.geometry_in)
         painted = SetMaterial(tree, location=(-1, 16),
-                              material=control["GlyphColor"].std_out, name="PaintTable")
+                              material=dials.out("GlyphColor"), name="PaintTable")
         create_geometry_line(tree, [joined, painted])
 
         frame = Frame(tree, location=(-14.6, 18.4), label="CodeTable")
-        frame.add([size, zone, origin, column, across, number_at, below, letter_at,
-                   letter, letter_curves, rank, number, number_curves, pair, grown,
-                   joined, painted] + entries)
+        frame.add([dials, size, zone, places, letter, letter_curves, rank,
+                   number, number_curves, pair, grown, joined, painted] + entries)
         return painted.geometry_out
 
     # ----------------------------------------------------------------
-    def _create_table_frame(self, tree, control, table):
+    def _create_table_frame(self, tree, control, table, location=(-3, 14.6),
+                            label="TableFrame"):
         """The rectangle around the code table, sized from what it contains.
 
+        :param location: where the nodes go in the editor. The transition
+            machine draws a second table and needs a second box, somewhere
+            else on the sheet.
         :return: the geometry socket of the rectangle.
         """
-        bounds = BoundingBox(tree, location=(-3, 14.6), geometry=table)
-        extent = VectorMath(tree, location=(-2, 15.2), operation="SUBTRACT",
-                            inputs0=bounds.max_out, inputs1=bounds.min_out,
-                            name="TableExtent")
-        margin = VectorMath(tree, location=(-1, 15.2), operation="SCALE",
-                            inputs0=extent.std_out, float_input=self.table_margin,
-                            name="WithMargin")
-        sides = SeparateXYZ(tree, location=(0, 15.2), vector=margin.std_out)
-        middle = VectorMath(tree, location=(-2, 13.8), operation="ADD",
-                            inputs0=bounds.min_out, inputs1=bounds.max_out,
-                            name="TableCorners")
-        centre = VectorMath(tree, location=(-1, 13.8), operation="SCALE",
-                            inputs0=middle.std_out, float_input=0.5, name="TableCentre")
+        x0, y0 = location
+
+        def at(dx, dy):
+            return x0 + dx, y0 + dy
+
+        dials = self._unpack(tree, control, "FrameColor", location=at(7, -1.6),
+                             name=label + "Control")
+        bounds = BoundingBox(tree, location=at(0, 0), geometry=table)
         # the table stands in the x-z plane, so its width and height are the x
-        # and z of the bounding box, while the rectangle is born in x-y
-        box = Quadrilateral(tree, location=(1, 14.6), mode="RECTANGLE",
-                            width=sides.x, height=sides.z)
+        # and z of the bounding box - grown by ``table_margin`` so the frame
+        # stands off the lettering - and the middle of the box is where the
+        # rectangle goes. ``low`` and ``high`` rather than min and max: those
+        # two are operator tokens of the formula language.
+        sides = make_function(
+            tree, name=label + "Box", location=at(2, 0), hide=False,
+            functions={"Width": "high_x,low_x,-,%s,*" % self.table_margin,
+                       "Height": "high_z,low_z,-,%s,*" % self.table_margin,
+                       "Centre": ["low_x,high_x,+,0.5,*", "low_y,high_y,+,0.5,*",
+                                  "low_z,high_z,+,0.5,*"]},
+            inputs=["low", "high"], outputs=["Width", "Height", "Centre"],
+            vectors=["low", "high", "Centre"], scalars=["Width", "Height"])
+        tree.links.new(bounds.min_out, sides.inputs["low"])
+        tree.links.new(bounds.max_out, sides.inputs["high"])
+        box = Quadrilateral(tree, location=at(4, 0), mode="RECTANGLE",
+                            width=sides.outputs["Width"],
+                            height=sides.outputs["Height"])
         # a bare curve renders as a hair thin enough to disappear, so the
         # rectangle is given a body before it is drawn
-        wire = CurveWireFrame(tree, location=(2, 14.6), radius=self.frame_radius,
+        wire = CurveWireFrame(tree, location=at(5, 0), radius=self.frame_radius,
                               resolution=4, geometry=box.geometry_out)
-        place = TransformGeometry(tree, location=(3, 14.6), translation=centre.std_out,
-                                  rotation=[pi / 2, 0, 0], name="PlaceTableFrame")
-        painted = SetMaterial(tree, location=(4, 14.6),
-                              material=control["FrameColor"].std_out,
-                              name="PaintTableFrame")
+        place = TransformGeometry(tree, location=at(6, 0),
+                                  translation=sides.outputs["Centre"],
+                                  rotation=[pi / 2, 0, 0], name="Place" + label)
+        painted = SetMaterial(tree, location=at(7, 0),
+                              material=dials.out("FrameColor"),
+                              name="Paint" + label)
         create_geometry_line(tree, [wire, place, painted])
 
-        frame = Frame(tree, location=(-4.4, 15.8), label="TableFrame")
-        frame.add([bounds, extent, margin, sides, middle, centre, box,
-                   wire, place, painted])
+        frame = Frame(tree, location=at(-1.4, 1.2), label=label)
+        frame.add([dials, bounds, sides, box, wire, place, painted])
         return painted.geometry_out
 
     # ----------------------------------------------------------------
-    def _create_display_frame(self, tree, control, label, width, position, location):
+    def _create_display_frame(self, tree, control, label, width, position,
+                              location, control_at):
         """One of the three framed boxes below the tape.
 
-        :param width: the ``Value`` node holding the width of the box
-        :param position: the ``Vector`` node holding the middle of the box
+        :param width: the name of the control parameter holding the width of
+            the box
+        :param position: the name of the one holding the middle of it
         :param location: where the frame goes in the node editor
+        :param control_at: where its Separate Bundle goes. The program strip is
+            drawn across the same patch of the editor as the two displays and
+            leaves no one offset from *location* that is clear for both.
         :return: the geometry socket of the box.
         """
         x, y = location
-        box = Quadrilateral(tree, location=(x, y), mode="RECTANGLE",
-                            width=width.std_out, height=self.display_height)
+        dials = self._unpack(tree, control, width, position, "FrameColor",
+                             location=control_at, name=label + "Control")
+        box = Quadrilateral(tree, location=(x - 1, y), mode="RECTANGLE",
+                            width=dials.out(width), height=self.display_height)
         # a bare curve renders as a hair thin enough to disappear, so the
         # rectangle is given a body before it is drawn
+        increase_resolution = ResampleCurve(tree, location=(x, y), count=1000, curve=box.geometry_out)
         wire = CurveWireFrame(tree, location=(x + 1, y), radius=self.frame_radius,
-                              resolution=4, geometry=box.geometry_out)
-        place = TransformGeometry(tree, location=(x + 2, y), translation=position.std_out,
+                              resolution=4, geometry=increase_resolution.geometry_out)
+        place = TransformGeometry(tree, location=(x + 2, y),
+                                  translation=dials.out(position),
                                   rotation=[pi / 2, 0, 0], name="Place" + label)
         painted = SetMaterial(tree, location=(x + 3, y),
-                              material=control["FrameColor"].std_out,
+                              material=dials.out("FrameColor"),
                               name="Paint" + label)
         create_geometry_line(tree, [place, painted], ins=wire.geometry_out)
 
         frame = Frame(tree, location=(x - 0.4, y + 0.8), label=label)
-        frame.add([box, wire, place, painted])
+        frame.add([dials, box, wire, place, painted])
         return painted.geometry_out
 
     # ----------------------------------------------------------------
@@ -1232,48 +1469,45 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
 
         :return: the geometry socket of the strip and of the box on it.
         """
-        program = variables["Input"].std_out
+        source = self._unpack(tree, variables, "Input", "Loops",
+                              location=(16, -21.4), name="StripVariables")
+        program = source.out("Input")
         counter = run["Counter"]
+        # the strip is the hungriest frame of the graph: where the display it
+        # is written across stands, and thirteen colours - one per instruction,
+        # two for what has become of one, and the colour of the head
+        dials = self._unpack(tree, control, "InputPosition", "InputDisplaySize",
+                             *[node_name for node_name, _, _ in self.opcode_colors],
+                             *[node_name for node_name, _ in self.program_colors],
+                             "CurrentColor", location=(17, -25.0),
+                             name="StripControl")
         size = StringLength(tree, location=(17, -21.4), string=program,
                             name="StripLength")
 
         # --- where the strip sits ---------------------------------------
-        origin = SeparateXYZ(tree, location=(17, -22.2),
-                             vector=control["InputPosition"].std_out)
-        half = MathNode(tree, location=(18, -22.2), operation="MULTIPLY",
-                        inputs0=control["InputDisplaySize"].std_out, inputs1=0.5,
-                        name="HalfDisplay")
-        edge = MathNode(tree, location=(19, -22.2), operation="SUBTRACT",
-                        inputs0=origin.x, inputs1=half.std_out, name="DisplayLeftEdge")
         # A column per instruction, plus one at each end. The first is the
         # margin that keeps column 0 clear of the left edge; the second is
         # where the counter ends up when the program has run out, and the box
         # that marks it needs somewhere to park that is still inside the
-        # display rather than astride its right edge.
-        spacing = MathNode(tree, location=(18, -23), operation="DIVIDE",
-                           inputs0=control["InputDisplaySize"].std_out,
-                           inputs1=len(self.program) + 2, name="StripSpacing")
-        first = MathNode(tree, location=(20, -22.2), operation="ADD",
-                         inputs0=edge.std_out, inputs1=spacing.std_out,
-                         name="FirstColumn")
-        glyph = MathNode(tree, location=(19, -23), operation="MULTIPLY",
-                         inputs0=spacing.std_out, inputs1=self.strip_glyph_size,
-                         name="StripGlyphSize")
+        # display rather than astride its right edge. ``First`` is the middle
+        # of column 0, one such gap in from the left edge of the display.
+        ruler = make_function(
+            tree, name="StripLayout", location=(19.4, -22.2), hide=False,
+            aux_functions={"gap": "width,%d,/" % (len(self.program) + 2)},
+            functions={"First": "place_x,width,0.5,*,-,gap,+", "Spacing": "gap",
+                       "Glyph": "gap,%s,*" % self.strip_glyph_size},
+            inputs=["place", "width"], outputs=["First", "Spacing", "Glyph"],
+            vectors=["place"],
+            scalars=["width", "gap", "First", "Spacing", "Glyph"])
+        tree.links.new(dials.out("InputPosition"), ruler.inputs["place"])
+        tree.links.new(dials.out("InputDisplaySize"), ruler.inputs["width"])
+        first, spacing = ruler.outputs["First"], ruler.outputs["Spacing"]
 
         # --- which loop is open where the counter stands -----------------
-        entry = SliceString(tree, location=(17, -23.8), string=variables["Loops"].std_out,
+        entry = SliceString(tree, location=(17, -23.8), string=source.out("Loops"),
                             position=counter, length=1, name="LoopEntry")
         encoded = CharToAscii(tree, location=(18, -23.8), char=entry.std_out,
                               name="LoopCode")
-        opened = IntegerMath(tree, location=(19, -23.8), operation="SUBTRACT",
-                             inputs0=encoded.std_out, inputs1=self.JUMP_ORIGIN,
-                             name="OpenLoop")
-        # 1-based, so 0 means the counter is not inside a loop at all and
-        # nothing is waiting
-        inside = CompareNode(tree, location=(20, -23.8), operation="GREATER_THAN",
-                             data_type="INT", inputs0=opened.std_out, inputs1=0,
-                             name="InsideALoop", hide=True)
-
         # --- one column per instruction ----------------------------------
         zone = RepeatZone(tree, location=(21, -21.4), node_width=9,
                           iterations=size.std_out)
@@ -1281,39 +1515,50 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         letter = SliceString(tree, location=(22, -22.2), string=program,
                              position=column, length=1, name="StripLetter")
         curves = StringToCurves(tree, location=(23, -22.2), string=letter.std_out,
-                                size=glyph.std_out, align_x="CENTER",
+                                size=ruler.outputs["Glyph"], align_x="CENTER",
                                 align_y="MIDDLE", hide=True)
         realize = RealizeInstances(tree, location=(24, -22.2))
         fill = FillCurve(tree, location=(25, -22.2), mode="N-gons")
         # column n stands n spacings in from the first one, and stays there
-        along = MathNode(tree, location=(23, -21.4), operation="MULTIPLY",
-                         inputs0=column, inputs1=spacing.std_out,
-                         name="StripOffset")
-        across = MathNode(tree, location=(24, -21.4), operation="ADD",
-                          inputs0=first.std_out, inputs1=along.std_out,
-                          name="ColumnPosition")
-        at = CombineXYZ(tree, location=(25, -21.4), x=across.std_out, y=origin.y,
-                        z=origin.z, name="StripPlace")
-        place = TransformGeometry(tree, location=(26, -22.2), translation=at.std_out,
+        at = make_function(
+            tree, name="ColumnPlace", location=(23.6, -20.8), hide=False,
+            functions={"At": ["first,column,spacing,*,+", "place_y", "place_z"]},
+            inputs=["first", "spacing", "column", "place"], outputs=["At"],
+            scalars=["first", "spacing"], integers=["column"],
+            vectors=["place", "At"])
+        for socket, socket_name in ((first, "first"), (spacing, "spacing"),
+                                    (column, "column"),
+                                    (dials.out("InputPosition"), "place")):
+            tree.links.new(socket, at.inputs[socket_name])
+        place = TransformGeometry(tree, location=(26, -22.2),
+                                  translation=at.outputs["At"],
                                   rotation=[pi / 2, 0, 0], name="PlaceColumn")
 
-        done = CompareNode(tree, location=(22, -24.6), operation="LESS_THAN",
-                           data_type="INT", inputs0=column, inputs1=counter,
-                           name="HasRun", hide=True)
-        # the "[" itself is not re-executed - "]" jumps back to the instruction
-        # after it - so the block that is waiting starts one column further on
-        after = CompareNode(tree, location=(22, -25.4), operation="GREATER_EQUAL",
-                            data_type="INT", inputs0=column, inputs1=opened.std_out,
-                            name="InTheBody", hide=True)
-        within = BooleanMath(tree, location=(23, -25.4), operation="AND",
-                             inputs0=inside.std_out, inputs1=after.std_out,
-                             name="InAnOpenLoop", hide=True)
-        waits = BooleanMath(tree, location=(24, -25.4), operation="AND",
-                            inputs0=within.std_out, inputs1=done.std_out,
-                            name="WillRunAgain", hide=True)
-        now = CompareNode(tree, location=(22, -26.2), operation="EQUAL",
-                          data_type="INT", inputs0=column, inputs1=counter,
-                          name="IsCurrent", hide=True)
+        # What has become of this column, from the loop table read above:
+        #
+        # ``opened``
+        #     the outermost ``[`` still open where the counter stands, 1-based,
+        #     so 0 means it is not inside a loop at all and nothing is waiting.
+        # ``Waits``
+        #     this column has run and is inside that loop, so it will run
+        #     again. The "[" itself is not re-executed - "]" jumps back to the
+        #     instruction after it - so the block that is waiting starts one
+        #     column further on, which is what ``column >= opened`` says.
+        state = make_function(
+            tree, name="ColumnState", location=(23, -25.4), hide=False,
+            aux_functions={"opened": "code,%d,-" % self.JUMP_ORIGIN,
+                           "done": "column,counter,<"},
+            functions={"Done": "done", "Now": "column,counter,=",
+                       "Waits": "opened,0,>,column,opened,<,not,and,done,and"},
+            inputs=["code", "column", "counter"],
+            outputs=["Done", "Waits", "Now"],
+            integers=["code", "column", "counter"], scalars=["opened", "done"],
+            booleans=["Done", "Waits", "Now"])
+        for socket, socket_name in ((encoded.std_out, "code"), (column, "column"),
+                                    (counter, "counter")):
+            tree.links.new(socket, state.inputs[socket_name])
+        done, waits, now = (state.outputs["Done"], state.outputs["Waits"],
+                            state.outputs["Now"])
 
         # what the instruction is, before what has become of it: one Set
         # Material per entry of the shared palette, each selecting on "this
@@ -1322,19 +1567,19 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
                                      location=(26, -24.6), name="ColorSelector")
         painters = [SetMaterial(tree, location=(27, -22.2 - 0.3 * row),
                                 selection=which.outputs[node_name],
-                                material=control[node_name].std_out,
+                                material=dials.out(node_name),
                                 name="Paint" + node_name, hide=True)
                     for row, (node_name, _, _) in enumerate(self.opcode_colors)]
 
         # ... and then what has become of it, which overrides it
-        selections = (done.std_out, waits.std_out)
+        selections = (done, waits)
         painters += [SetMaterial(tree, location=(28 + step, -22.2), selection=selection,
-                                 material=control[node_name].std_out,
+                                 material=dials.out(node_name),
                                  name="Paint" + node_name)
                      for step, ((node_name, _), selection)
                      in enumerate(zip(self.program_colors, selections))]
-        painters.append(SetMaterial(tree, location=(30, -22.2), selection=now.std_out,
-                                    material=control["PointerColor"].std_out,
+        painters.append(SetMaterial(tree, location=(30, -22.2), selection=now,
+                                    material=dials.out("CurrentColor"),
                                     name="PaintCurrentInstruction"))
         create_geometry_line(tree, [realize, fill, place] + painters,
                              ins=curves.geometry_out)
@@ -1345,13 +1590,12 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         tree.links.new(grown.geometry_out, zone.repeat_output.inputs["Geometry"])
 
         frame = Frame(tree, location=(16.6, -20.6), label="ProgramStrip")
-        frame.add([size, origin, half, edge, spacing, first, glyph, entry, encoded,
-                   opened, inside, zone, letter, which, curves, realize, fill,
-                   along, across, at, place, done, after, within, waits, now,
+        frame.add([dials, source, size, ruler, entry, encoded, zone, letter,
+                   which, curves, realize, fill, at, place, state,
                    grown] + painters)
 
         cursor = self._create_cursor_frame(tree, control, counter, first, spacing,
-                                           origin)
+                                           dials.out("InputPosition"))
         both = JoinGeometry(tree, location=(33, -22.2))
         for piece in (zone.geometry_out, cursor):
             tree.links.new(piece, both.geometry_in)
@@ -1359,7 +1603,7 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         return both.geometry_out
 
     # ----------------------------------------------------------------
-    def _create_cursor_frame(self, tree, control, counter, first, spacing, origin):
+    def _create_cursor_frame(self, tree, control, counter, first, spacing, place):
         """``CurrentDisplay``: the box that runs along the program strip.
 
         The same framed rectangle the read-outs are drawn with, sized to a
@@ -1372,34 +1616,41 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         :param counter: the program counter
         :param first: x of column 0 of the strip
         :param spacing: width of one column
+        :param place: the middle of the display the strip is written across
         :return: the geometry socket of the box.
         """
-        along = MathNode(tree, location=(21, -27.4), operation="MULTIPLY",
-                         inputs0=counter, inputs1=spacing.std_out,
-                         name="CursorOffset")
-        across = MathNode(tree, location=(22, -27.4), operation="ADD",
-                          inputs0=first.std_out, inputs1=along.std_out,
-                          name="CursorPosition")
-        at = CombineXYZ(tree, location=(23, -27.4), x=across.std_out, y=origin.y,
-                        z=origin.z, name="CursorPlace")
-        wide = MathNode(tree, location=(21, -28.2), operation="MULTIPLY",
-                        inputs0=spacing.std_out, inputs1=self.cursor_width,
-                        name="CursorWidth")
+        dials = self._unpack(tree, control, "CurrentColor", location=(21, -30.0),
+                             name="CursorControl")
+        # the box stands where the counter points, which is column 0 plus so
+        # many columns along, and is a little wider than a column so that it
+        # stands around the instruction rather than on it
+        at = make_function(
+            tree, name="CursorPlace", location=(22, -27.8), hide=False,
+            functions={"At": ["first,counter,spacing,*,+", "place_y", "place_z"],
+                       "Wide": "spacing,%s,*" % self.cursor_width},
+            inputs=["first", "spacing", "counter", "place"],
+            outputs=["At", "Wide"],
+            scalars=["first", "spacing", "Wide"], integers=["counter"],
+            vectors=["place", "At"])
+        for socket, socket_name in ((first, "first"), (spacing, "spacing"),
+                                    (counter, "counter"), (place, "place")):
+            tree.links.new(socket, at.inputs[socket_name])
         box = Quadrilateral(tree, location=(24, -28.2), mode="RECTANGLE",
-                            width=wide.std_out,
+                            width=at.outputs["Wide"],
                             height=self.cursor_height * self.display_height)
         # a bare curve renders as a hair thin enough to disappear
         wire = CurveWireFrame(tree, location=(25, -28.2), radius=self.frame_radius,
                               resolution=4, geometry=box.geometry_out)
-        place = TransformGeometry(tree, location=(26, -28.2), translation=at.std_out,
-                                  rotation=[pi / 2, 0, 0], name="PlaceCursor")
+        put = TransformGeometry(tree, location=(26, -28.2),
+                                translation=at.outputs["At"],
+                                rotation=[pi / 2, 0, 0], name="PlaceCursor")
         painted = SetMaterial(tree, location=(27, -28.2),
-                              material=control["PointerColor"].std_out,
+                              material=dials.out("CurrentColor"),
                               name="PaintCursor")
-        create_geometry_line(tree, [place, painted], ins=wire.geometry_out)
+        create_geometry_line(tree, [put, painted], ins=wire.geometry_out)
 
         frame = Frame(tree, location=(20.6, -26.6), label="CurrentDisplay")
-        frame.add([along, across, at, wide, box, wire, place, painted])
+        frame.add([dials, at, box, wire, put, painted])
         return painted.geometry_out
 
     # ----------------------------------------------------------------
@@ -1414,7 +1665,11 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         :return: the geometry socket.
         """
         label, y = "OutputText", -8
-        box_width, position = control["OutputDisplaySize"], control["OutputPosition"]
+        dials = self._unpack(tree, control, "OutputDisplaySize", "OutputPosition",
+                             "PointerOffset", "TapePosition", "PointerColor",
+                             "GlyphColor", location=(26, -11.6),
+                             name="SimulatedControl")
+        box_width, position = dials.out("OutputDisplaySize"), dials.out("OutputPosition")
         # Plain text centred on the origin, *not* String to Curves' own
         # SCALE_TO_FIT: a text box hangs off the origin rather than surrounding
         # it, and where inside the box the text ends up moves with how far it
@@ -1422,38 +1677,40 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         # letter one sits in the middle of. Centred text is in the same place
         # whatever it says, and the fitting is done below, where it can be
         # measured.
-        curves = StringToCurves(tree, location=(26, y), string=run["Output"],
+        printed_text = self._output_string(tree, control, run["Output"])
+        curves = StringToCurves(tree, location=(26, y), string=printed_text,
                                 size=0.6 * self.display_height, align_x="CENTER",
                                 align_y="MIDDLE", name=label, hide=True)
         realize = RealizeInstances(tree, location=(27, y))
         fill = FillCurve(tree, location=(28, y), mode="N-gons")
-        # how much wider than its box the text came out
+        # how much wider than its box the text came out, as the scale that
+        # brings it back inside:
+        #
+        # ``wide``
+        #     the width of what was drawn. An empty string has no geometry and
+        #     hence no width, and the guard keeps the division finite - the
+        #     ``min`` below then leaves it alone at scale 1.
+        # ``factor``
+        #     only ever shrink: a short output should not be blown up to the
+        #     full width of its box.
         bounds = BoundingBox(tree, location=(29, y - 1.4))
-        extent = VectorMath(tree, location=(30, y - 1.4), operation="SUBTRACT",
-                            inputs0=bounds.max_out, inputs1=bounds.min_out,
-                            name="Extent" + label)
-        across = SeparateXYZ(tree, location=(31, y - 1.4), vector=extent.std_out)
-        # an empty string has no geometry and hence no width; the guard keeps
-        # the division finite, and the MINIMUM below then leaves it alone at
-        # scale 1
-        wide = MathNode(tree, location=(32, y - 1.4), operation="MAXIMUM",
-                        inputs0=across.x, inputs1=1e-3, name="Width" + label)
-        ratio = MathNode(tree, location=(33, y - 1.4), operation="DIVIDE",
-                         inputs0=box_width.std_out, inputs1=wide.std_out,
-                         name="Ratio" + label)
-        # only ever shrink: a short output should not be blown up to the full
-        # width of its box
-        factor = MathNode(tree, location=(34, y - 1.4), operation="MINIMUM",
-                          inputs0=ratio.std_out, inputs1=1.0, name="Fit" + label)
-        scale = CombineXYZ(tree, location=(35, y - 1.4), x=factor.std_out,
-                           y=factor.std_out, z=factor.std_out, name="Scale" + label)
-        place = TransformGeometry(tree, location=(29, y), translation=position.std_out,
-                                  rotation=[pi / 2, 0, 0], scale=scale.std_out,
-                                  name="Place" + label)
+        fit = make_function(
+            tree, name="Fit" + label, location=(32, y - 1.4), hide=False,
+            aux_functions={"wide": "high_x,low_x,-,0.001,max",
+                           "factor": "box,wide,/,1,min"},
+            functions={"Scale": ["factor", "factor", "factor"]},
+            inputs=["low", "high", "box"], outputs=["Scale"],
+            vectors=["low", "high", "Scale"],
+            scalars=["box", "wide", "factor"])
+        for socket, socket_name in ((bounds.min_out, "low"), (bounds.max_out, "high"),
+                                    (box_width, "box")):
+            tree.links.new(socket, fit.inputs[socket_name])
+        place = TransformGeometry(tree, location=(29, y), translation=position,
+                                  rotation=[pi / 2, 0, 0],
+                                  scale=fit.outputs["Scale"], name="Place" + label)
         create_geometry_line(tree, [realize, fill, place], ins=curves.geometry_out)
         tree.links.new(fill.geometry_out, bounds.geometry_in)
-        pieces = [curves, realize, fill, bounds, extent, across, wide, ratio,
-                  factor, scale, place]
+        pieces = [curves, realize, fill, bounds, fit, place]
         written = [place]
 
         # --- the head marker -------------------------------------------
@@ -1464,11 +1721,21 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         spot = SampleIndex(tree, location=(27, -14), data_type="FLOAT_VECTOR",
                            domain="POINT", geometry=run["Geometry"], value=at.std_out,
                            index=run["PointerPosition"], name="CellPosition")
-        along = SeparateXYZ(tree, location=(28, -14), vector=spot.std_out)
-        drop = SeparateXYZ(tree, location=(28, -14.8),
-                           vector=control["PointerOffset"].std_out)
-        under = CombineXYZ(tree, location=(29, -14), x=along.x, y=drop.y, z=drop.z,
-                           name="MarkerPosition")
+        # under the cell the head is on: its x, and the y and z of the offset
+        # that hangs the marker below the tape - plus ``TapePosition``, which
+        # is what moves the cells (it rides on ``LayTapeBack``), and the
+        # marker stands under one of them
+        under = make_function(
+            tree, name="MarkerPosition", location=(28.4, -14), hide=False,
+            functions={"Under": ["spot_x,shift_x,+", "drop_y,shift_y,+",
+                                 "drop_z,shift_z,+"]},
+            inputs=["spot", "drop", "shift"], outputs=["Under"],
+            vectors=["spot", "drop", "shift", "Under"])
+        stand, drift = self._tape_stand(tree, control, dials.out("TapePosition"),
+                                        location=(26.8, -12.4), name="MarkerStand")
+        tree.links.new(spot.std_out, under.inputs["spot"])
+        tree.links.new(dials.out("PointerOffset"), under.inputs["drop"])
+        tree.links.new(stand, under.inputs["shift"])
         # an arrow pointing up at the cell, short enough to stay in the gap
         # between the tape and the read-outs below it
         tip = ConeMesh(tree, location=(26, -16), vertices=32, radius_top=0,
@@ -1482,10 +1749,11 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         marker = JoinGeometry(tree, location=(28, -16))
         tree.links.new(tip.geometry_out, marker.geometry_in)
         tree.links.new(lowered.geometry_out, marker.geometry_in)
-        put = TransformGeometry(tree, location=(29, -16), translation=under.std_out,
+        put = TransformGeometry(tree, location=(29, -16),
+                                translation=under.outputs["Under"],
                                 name="PlaceMarker")
         painted = SetMaterial(tree, location=(30, -16),
-                              material=control["PointerColor"].std_out,
+                              material=dials.out("PointerColor"),
                               name="PaintMarker")
         create_geometry_line(tree, [marker, put, painted])
 
@@ -1496,7 +1764,7 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         for piece in written:
             tree.links.new(piece.geometry_out, lettering.geometry_in)
         text = SetMaterial(tree, location=(34, -10),
-                           material=control["GlyphColor"].std_out, name="PaintText")
+                           material=dials.out("GlyphColor"), name="PaintText")
         create_geometry_line(tree, [lettering, text])
 
         # the strip carries its own colours, one per instruction, so it joins
@@ -1507,9 +1775,1197 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
             tree.links.new(piece, joined.geometry_in)
 
         frame = Frame(tree, location=(25.6, -7.2), label="SimulatedGeometry")
-        frame.add(pieces + [at, spot, along, drop, under, tip, stem, lowered,
-                            marker, put, painted, lettering, text, joined])
+        frame.add(pieces + [dials, at, spot, under, tip, stem, lowered,
+                            marker, put, painted, lettering, text,
+                            joined] + drift)
         return joined.geometry_out
+
+
+class BrainFuckTransitionModifier(BrainFuckSimpleModifier):
+    """The same machine, with a tape that can change size while it runs.
+
+    :class:`BrainFuckSimpleModifier` seeds its tape into the simulation zone
+    once and hands it from frame to frame, which is what keeps the cell values
+    alive from one instruction to the next. The price is that the *shape* of
+    the tape is settled on the frame the simulation starts: ``TapeSize`` and
+    ``CellSize`` are read by a ``Mesh Line`` standing in front of the zone,
+    and the zone never looks at it again. Animating them after that does
+    nothing - or worse than nothing, since ``CellSize`` also sizes the squares
+    of the ``Cells`` frame, which are drawn outside the zone and do follow: the
+    cells shrink while their spacing stays where it was.
+
+    This machine rebuilds the tape inside the zone instead, once per frame -
+    see :meth:`_tape_in_zone`. A fresh ``Mesh Line`` at the current
+    ``TapeSize`` and ``CellSize``, with the value of every cell carried over
+    from the tape of the frame before, by index; a cell that was not there
+    before starts at zero. So the tape can grow, shrink and re-space while the
+    machine runs and what is written on it survives, which is what the
+    ``bf_to_bff`` transition needs: five fat cells opening out into sixty-four
+    thin ones without the machine stopping to do it.
+
+    Everything else is the simple machine, deliberately. The code table, the
+    two read-outs and the program strip are laid out in python from the
+    ``tape_size`` and ``cell_size`` the modifier was *built* with, and they
+    stay where they were built - so a tape that has grown past them is moved
+    back inside the picture with ``TapePosition``, which rides on
+    ``LayTapeBack`` at the end of the ``Cells`` frame and on the head marker
+    with it. That is out beyond the zone, where an animated value still has an
+    effect.
+
+    Two things to know before animating it:
+
+    - The values are carried over **by index**, so cell *n* keeps what it
+      holds only as long as it is still cell *n*. A tape that shrinks past the
+      head drops what was beyond the new end, which is what shrinking a tape
+      means. Growing never loses anything.
+    - ``TapeSize`` is read on the frame the simulation starts as well as on
+      every frame after it, so a growth that begins at the same moment the
+      machine does starts from wherever the interpolation has reached on the
+      first frame, not from the value at frame zero.
+    **The copy of the program, and the letters going onto the tape.** The
+    shot ends by turning the program into data, which is the whole of the
+    difference between brainfuck and BFF: there the tape *is* the program.
+    Three things happen in order, and each has its own parameter so the scene
+    can place it in time:
+
+    ``CopyProgramTime``
+        a second copy of the program strip appears - the same instructions in
+        the same colours, drawn by ``CopyOfProgramStrip``. Until then it is
+        deleted rather than hidden, so it costs nothing.
+    ``ProgramShift``, ``ShrinkFontSize``, ``ShrinkSpacing``
+        the copy is moved and squeezed until it stands over the tape at the
+        pitch of the cells. The two shrink factors ride inside
+        ``StripLayout2``, the copy's own layout formula.
+    ``SwitchLetterTime``, ``LetterDuration``
+        from then on one letter per ``LetterDuration`` leaves the copy and
+        appears on the cell below it, left to right - see
+        :meth:`_letters_landed`. A cell that has been written to shows the
+        instruction instead of its number; a column that has been written
+        away is gone from the copy. When the last one has landed the tape
+        reads as the program, which is where the next scene starts.
+
+    The cell *values* are not touched by this - what changes is what is drawn
+    on them. Writing the ascii codes into the tape as well would be a
+    ``Store Named Attribute`` inside the zone, and would have to wait until
+    the machine has stopped.
+
+    :param copy_program_time: seconds before the copy of the program appears
+    :param switch_letter_time: seconds before its first letter lands on the
+        tape
+    :param letter_duration: seconds between one letter landing and the next
+    """
+
+    #: how far past the edges of the input display the wipe of
+    #: :meth:`_program_wipe` starts and finishes, so that the frame around the
+    #: display goes with what is inside it rather than a moment later
+    WIPE_MARGIN = 0.2
+
+    #: the arrow the output display turns into, as
+    #: :class:`~geometry_nodes.nodes.MorphNode2` wants it: a curve and a
+    #: radius. ``SAMPLES`` is what both shapes are resampled to, so it also
+    #: sets how sharp the barbs come out and how wide the notch is where the
+    #: frame is cut open to be a curve with two ends.
+    ARROW_SAMPLES = 192
+    ARROW_PROFILE = 16
+    ARROW_SHAFT_RADIUS = 0.17
+    ARROW_HEAD_RADIUS = 0.34
+    ARROW_SHAFT_LENGTH = 0.5
+    ARROW_HEAD_LENGTH = 0.5
+    #: how far the point of the arrow floats above the cell it marks
+    ARROW_GAP = 0.5
+    #: what the display is painted once it is on its way to being an arrow
+    ARROW_COLOR = "custom1"
+
+    #: the last transform: the alphabet of the simple machine leaves to the
+    #: right and the ascii table of the extended one comes in from the left,
+    #: while the tape and the two arrows that point at it step down out of the
+    #: way. Far enough that both tables are off the edge of the shot, which is
+    #: about 26 units wide at the camera the scene sets up.
+    TABLE_SLIDE = 30.0
+    TAPE_DROP = -3
+
+    #: the ascii table the extended machine reads, as this shot draws it: the
+    #: printable characters over their codes, wrapped into bands of
+    #: ``ASCII_WIDTH``. The ten instructions are drawn ``ASCII_COMMAND_SCALE``
+    #: times the size of the rest and in their own colours, which is the whole
+    #: point of showing it - the alphabet that is being left behind had
+    #: twenty-six letters and no instructions in it.
+    ASCII_FIRST, ASCII_LAST = 32, 126
+    ASCII_WIDTH = 32
+    ASCII_SPACING = 0.58
+    ASCII_GLYPH = 0.26
+    ASCII_COMMAND_SCALE = 1.9
+    ASCII_LINE_GAP = 0.5
+    ASCII_BAND_GAP = 0.45
+    #: where the top line of codes stands. The grid hangs down from here, and
+    #: three bands of it have to finish above the arrow on the dropped tape.
+    ASCII_TOP = 3.6
+
+    def __init__(self, copy_program_time=5.0, switch_letter_time=7.0,
+                 letter_duration=0.1, program_disappear_time=10.0,
+                 program_disappear_duration=1.0, output_offset=32,
+                 output_disappear_time=12.0, output_move_duration=1.5,
+                 output_recolor_time=13.0,
+                 output_morph_time=14.0, output_morph_duration=2.0,
+                 replace_code_table=18.0, replace_code_table_duration=1.0,
+                 **kwargs):
+        self.copy_program_time = copy_program_time
+        self.switch_letter_time = switch_letter_time
+        self.letter_duration = letter_duration
+        self.program_disappear_time = program_disappear_time
+        self.program_disappear_duration = program_disappear_duration
+        self.output_offset = output_offset
+        self.output_disappear_time = output_disappear_time
+        self.output_move_duration = output_move_duration
+        self.output_recolor_time = output_recolor_time
+        self.output_morph_time = output_morph_time
+        self.output_morph_duration = output_morph_duration
+        self.replace_code_table = replace_code_table
+        self.replace_code_table_duration = replace_code_table_duration
+        # both of these are asked for more than once and built once
+        self._landed = None
+        self._wipe_edge = None
+        self._wipe_frame = None
+        self._swap = None
+        super().__init__(**kwargs)
+
+    # ----------------------------------------------------------------
+    @property
+    def output(self):
+        """What the machine prints, worked out in python.
+
+        A property rather than something ``__init__`` computes, because the
+        graph is built by ``super().__init__`` and wants this while it is
+        being built - by which time the program is known but the constructor
+        has not come back yet.
+        """
+        return self.simulate(self.program, self.tape_size, self.code_table)[1]
+
+    @property
+    def arrow_cell(self):
+        """The cell the arrow points at: the last letter the machine printed.
+
+        ``HELLO`` written from :attr:`output_offset` puts its ``O`` on cell
+        ``output_offset + 4``, and that is where the arrow comes to rest.
+        """
+        return self.output_offset + max(len(self.output), 1) - 1
+
+    @property
+    def barb_fraction(self):
+        """Where along the arrow's axis the shaft stops and the head begins."""
+        return self.ARROW_SHAFT_LENGTH / (self.ARROW_SHAFT_LENGTH
+                                          + self.ARROW_HEAD_LENGTH)
+
+    # ----------------------------------------------------------------
+    def _more_control(self, tree, control, x):
+        """The six parameters of the transition, added to the control frame.
+
+        ``CopyProgramTime``, ``SwitchLetterTime`` and ``LetterDuration`` are
+        set when the modifier is built and left alone; ``ProgramShift`` and
+        the two shrink factors are what the scene keyframes to bring the copy
+        of the program down onto the tape.
+        """
+        for row, (node_name, value) in enumerate((
+                ("CopyProgramTime", self.copy_program_time),
+                ("ShrinkFontSize", 1.0),
+                ("ShrinkSpacing", 1.0),
+                ("SwitchLetterTime", self.switch_letter_time),
+                ("LetterDuration", self.letter_duration),
+                ("ProgramDisappearTime", self.program_disappear_time),
+                ("ProgramDisappearDuration", self.program_disappear_duration),
+                ("OutputDisappearTime", self.output_disappear_time),
+                ("OutputMoveDuration", self.output_move_duration),
+                ("OutputRecolorTime", self.output_recolor_time),
+                ("OutputMorphTime", self.output_morph_time),
+                ("OutputMorphDuration", self.output_morph_duration),
+                ("ReplaceCodeTable", self.replace_code_table),
+                ("ReplaceCodeTableDuration", self.replace_code_table_duration))):
+            control[node_name] = InputValue(tree, location=(x, -12.6 - 0.4 * row),
+                                            value=value, name=node_name)
+        control["OutputOffset"] = InputInteger(tree, location=(x, -17.2),
+                                               integer=self.output_offset,
+                                               name="OutputOffset")
+        control["ArrowColor"] = InputMaterial(tree, location=(x, -17.8),
+                                              material=self.ARROW_COLOR,
+                                              name="ArrowColor", **self.kwargs)
+        self.materials.append(control["ArrowColor"].node.material)
+        control["ProgramShift"] = InputVector(tree, location=(x, -14.8),
+                                              vector=Vector(), name="ProgramShift")
+        # The ascii table is a grid of 32 columns rather than a row of 26, so
+        # it is centred on the tape by its own width, and it stands high
+        # enough that its bottom band clears the arrow standing on the tape -
+        # which is itself a tape-drop lower by then.
+        middle = 0.5 * self.tape_size * self.cell_size
+        control["AsciiTablePosition"] = InputVector(
+            tree, location=(x, -18.6), name="AsciiTablePosition",
+            vector=Vector([middle - 0.5 * (self.ASCII_WIDTH - 1) * self.ASCII_SPACING,
+                           0, self.ASCII_TOP]))
+
+    # ----------------------------------------------------------------
+    def _table_swap(self, tree, control):
+        """``TableSwap``: how far the last transform has got, from 0 to 1.
+
+        The one number behind the whole of it - the alphabet leaving to the
+        right, the ascii table arriving from the left, and the tape and its
+        two arrows stepping down between them. Everything that moves reads
+        this, so nothing can drift out of step with the rest.
+
+        :return: a FLOAT socket, 0 before ``ReplaceCodeTable`` and 1
+            ``ReplaceCodeTableDuration`` later.
+        """
+        if self._swap is not None:
+            return self._swap
+        dials = self._unpack(tree, control, "ReplaceCodeTable",
+                             "ReplaceCodeTableDuration", location=(-9, 12.4),
+                             name="SwapControl")
+        now = SceneTime(tree, location=(-9, 11.4), std_out="Seconds",
+                        name="SwapClock")
+        gone = make_function(
+            tree, name="TableSwapDone", location=(-7.6, 11.8), hide=False,
+            functions={"Gone": "seconds,start,-,duration,/,0,max,1,min"},
+            inputs=["seconds", "start", "duration"], outputs=["Gone"],
+            scalars=["seconds", "start", "duration", "Gone"])
+        for socket, socket_name in (
+                (now.std_out, "seconds"),
+                (dials.out("ReplaceCodeTable"), "start"),
+                (dials.out("ReplaceCodeTableDuration"), "duration")):
+            tree.links.new(socket, gone.inputs[socket_name])
+
+        frame = Frame(tree, location=(-9.4, 13.2), label="TableSwap")
+        frame.add([dials, now, gone])
+        self._swap = gone.outputs["Gone"]
+        return self._swap
+
+    # ----------------------------------------------------------------
+    def _tape_stand(self, tree, control, position, location=(0, 0),
+                    name="TapeStand"):
+        """``TapePosition``, stepping down as the tables change over.
+
+        The ascii table of the extended machine is a grid rather than a row
+        and wants the room, so the tape and the two arrows that point at it -
+        the head marker below and the one the read-out became above - move
+        down together over the same second. They all read this, so they move
+        as one thing rather than three.
+        """
+        swap = self._table_swap(tree, control)
+        drop = make_function(
+            tree, name=name, location=location, hide=True,
+            functions={"Down": ["place_x", "place_y",
+                                "place_z,gone,%s,*,+" % self.TAPE_DROP]},
+            inputs=["place", "gone"], outputs=["Down"],
+            vectors=["place", "Down"], scalars=["gone"])
+        tree.links.new(position, drop.inputs["place"])
+        tree.links.new(swap, drop.inputs["gone"])
+        return drop.outputs["Down"], [drop]
+
+    # ----------------------------------------------------------------
+    def _create_code_table_frame(self, tree, control):
+        """The alphabet of the simple machine, on its way out to the right."""
+        table = super()._create_code_table_frame(tree, control)
+        swap = self._table_swap(tree, control)
+        away = make_function(
+            tree, name="TableLeaving", location=(-1, 11.6), hide=True,
+            functions={"Away": ["gone,%s,*" % self.TABLE_SLIDE, "0", "0"]},
+            inputs=["gone"], outputs=["Away"], scalars=["gone"],
+            vectors=["Away"])
+        tree.links.new(swap, away.inputs["gone"])
+        slid = TransformGeometry(tree, location=(0.4, 11.0), geometry=table,
+                                 translation=away.outputs["Away"],
+                                 name="SlideOldTable")
+        frame = Frame(tree, location=(-1.4, 13.0), label="TableLeaves")
+        frame.add([away, slid])
+        return slid.geometry_out
+
+    # ----------------------------------------------------------------
+    @property
+    def ascii_table(self):
+        """The printable characters, the ones the extended machine reads."""
+        return "".join(chr(code) for code
+                       in range(self.ASCII_FIRST, self.ASCII_LAST + 1))
+
+    # ----------------------------------------------------------------
+    def _create_ascii_table_frame(self, tree, control):
+        """``AsciiTable``: what the machine after this one reads, arriving.
+
+        The alphabet of the simple machine says ``A`` is 1 and stops at 26.
+        The extended machine has no alphabet: its cells hold bytes, and the
+        bytes that happen to be instructions are the program. So the table
+        that replaces it is the printable half of ascii over the codes it
+        stands for, wrapped into bands of :attr:`ASCII_WIDTH`, with the ten
+        instructions drawn large and in their own colours so that the eye can
+        find them in the crowd. That contrast is the argument the shot is
+        making, which is why the two tables cross rather than cut.
+
+        It is built here rather than taken from
+        :class:`BrainFuckExtendedModifier`: that machine's table reads its own
+        control frame - a ``TableWidth``, a ``CommandTable``, an ``OpColors``
+        bundle - and calls a ``_create_table_frame`` of a different signature,
+        so sharing it would mean restructuring a class this shot does not use.
+
+        :return: the geometry socket of the table, on its way in from the left.
+        """
+        y = -53.0
+        swap = self._table_swap(tree, control)
+        dials = self._unpack(tree, control, "AsciiTablePosition", "GlyphColor",
+                             *[node_name for node_name, _, _ in self.opcode_colors],
+                             location=(17, y), name="AsciiControl")
+        table = InputString(tree, location=(17, y - 1.4), string=self.ascii_table,
+                            name="AsciiCharacters")
+        commands = InputString(tree, location=(17, y - 2.0),
+                               string="".join(characters for _, _, characters
+                                              in self.opcode_colors),
+                               name="AsciiCommands")
+
+        zone = RepeatZone(tree, location=(19, y), node_width=11,
+                          iterations=len(self.ascii_table))
+        entry = zone.iteration
+        # where this entry stands: along its band, and one band lower for
+        # every ASCII_WIDTH characters. The code goes on the upper line and
+        # the character it stands for on the lower one.
+        places = make_function(
+            tree, name="AsciiPlaces", location=(20.4, y - 0.6), hide=False,
+            aux_functions={
+                "column": "i,%d,%%" % self.ASCII_WIDTH,
+                "band": "i,%d,/,floor" % self.ASCII_WIDTH,
+                "across": "origin_x,column,%s,*,+" % self.ASCII_SPACING,
+                "line": "origin_z,band,%s,*,-" % (2 * self.ASCII_LINE_GAP
+                                                  + self.ASCII_BAND_GAP)},
+            functions={"CodeAt": ["across", "origin_y", "line"],
+                       "CharAt": ["across", "origin_y",
+                                  "line,%s,-" % self.ASCII_LINE_GAP]},
+            inputs=["origin", "i"], outputs=["CodeAt", "CharAt"],
+            vectors=["origin", "CodeAt", "CharAt"], integers=["i"],
+            scalars=["column", "band", "across", "line"])
+        tree.links.new(dials.out("AsciiTablePosition"), places.inputs["origin"])
+        tree.links.new(entry, places.inputs["i"])
+
+        character = SliceString(tree, location=(20.4, y - 2.0), string=table.std_out,
+                                position=entry, length=1, name="AsciiCharacter")
+        # an instruction is drawn large: "in" counts the character inside the
+        # set of instructions, which is 1 for one of the ten and 0 for the
+        # rest, and the size follows from that
+        big = make_function(
+            tree, name="AsciiGlyphSize", location=(21.4, y - 2.0), hide=True,
+            custom_ops={"in": {"type": FindInString,
+                               "inputs": ("String", "Search"),
+                               "output": "Count", "label": "in"}},
+            functions={"size": "%s,1,commands,letter,in,0,>,%s,1,-,*,+,*"
+                               % (self.ASCII_GLYPH, self.ASCII_COMMAND_SCALE)},
+            inputs=["commands", "letter"], outputs=["size"],
+            strings=["commands", "letter"], scalars=["size"])
+        tree.links.new(commands.std_out, big.inputs["commands"])
+        tree.links.new(character.std_out, big.inputs["letter"])
+        char_curves = StringToCurves(tree, location=(22.4, y - 2.0),
+                                     string=character.std_out,
+                                     size=big.outputs["size"], align_x="CENTER",
+                                     align_y="MIDDLE", hide=True)
+        code = IntegerMath(tree, location=(20.4, y - 1.2), operation="ADD",
+                           inputs0=entry, inputs1=self.ASCII_FIRST, name="AsciiCode")
+        label = ValueToString(tree, location=(21.4, y - 1.2), data_type="INT",
+                              value=code.std_out, name="AsciiCodeLabel")
+        code_curves = StringToCurves(tree, location=(22.4, y - 1.2),
+                                     string=label.std_out, size=self.ASCII_GLYPH,
+                                     align_x="CENTER", align_y="MIDDLE", hide=True)
+
+        entries, ends = [], []
+        for curves, position, row, tag in (
+                (code_curves, places.outputs["CodeAt"], y - 0.2, "AsciiCode"),
+                (char_curves, places.outputs["CharAt"], y - 3.0, "AsciiChar")):
+            realize = RealizeInstances(tree, location=(23.4, row))
+            fill = FillCurve(tree, location=(24.4, row), mode="N-gons")
+            place = TransformGeometry(tree, location=(25.4, row),
+                                      translation=position,
+                                      rotation=[pi / 2, 0, 0], name="Place" + tag)
+            create_geometry_line(tree, [realize, fill, place], ins=curves.geometry_out)
+            entries += [realize, fill, place]
+            ends.append(place)
+
+        pair = JoinGeometry(tree, location=(26.4, y - 1.6))
+        for end in ends:
+            tree.links.new(end.geometry_out, pair.geometry_in)
+        # the plain characters in GlyphColor, the instructions in their own -
+        # the same test and the same palette as everywhere else in the video
+        which = instruction_selector(tree, character.std_out, self.opcode_colors,
+                                     location=(26.4, y - 3.4),
+                                     name="AsciiColorSelector")
+        painters = [SetMaterial(tree, location=(27.4, y - 1.6),
+                                material=dials.out("GlyphColor"),
+                                name="PaintAsciiPlain")]
+        painters += [SetMaterial(tree, location=(27.4, y - 2.0 - 0.3 * row),
+                                 selection=which.outputs[node_name],
+                                 material=dials.out(node_name),
+                                 name="PaintAscii" + node_name, hide=True)
+                     for row, (node_name, _, _) in enumerate(self.opcode_colors)]
+        create_geometry_line(tree, [pair] + painters)
+
+        grown = JoinGeometry(tree, location=(29.4, y - 1.6))
+        tree.links.new(painters[-1].geometry_out, grown.geometry_in)
+        tree.links.new(zone.repeat_input.outputs["Geometry"], grown.geometry_in)
+        tree.links.new(grown.geometry_out, zone.repeat_output.inputs["Geometry"])
+
+        box = self._create_table_frame(tree, control, zone.geometry_out,
+                                       location=(31, y - 0.6),
+                                       label="AsciiTableFrame")
+        joined = JoinGeometry(tree, location=(40, y))
+        tree.links.new(zone.geometry_out, joined.geometry_in)
+        tree.links.new(box, joined.geometry_in)
+
+        # ... and the whole of it comes in from the left as the old one leaves
+        coming = make_function(
+            tree, name="TableArriving", location=(40, y - 2.4), hide=True,
+            functions={"In": ["gone,1,-,%s,*" % self.TABLE_SLIDE, "0", "0"]},
+            inputs=["gone"], outputs=["In"], scalars=["gone"], vectors=["In"])
+        tree.links.new(swap, coming.inputs["gone"])
+        slid = TransformGeometry(tree, location=(41.4, y), geometry=joined.geometry_out,
+                                 translation=coming.outputs["In"],
+                                 name="SlideAsciiTable")
+
+        frame = Frame(tree, location=(16.6, y + 1.0), label="AsciiTable")
+        frame.add([dials, table, commands, zone, places, character, big,
+                   char_curves, code, label, code_curves, pair, which, grown,
+                   joined, coming, slid] + entries + painters)
+        return slid.geometry_out
+
+    # ----------------------------------------------------------------
+    def _letters_landed(self, tree, control):
+        """``LetterTransfer``: how many letters have reached the tape by now.
+
+        Zero until ``SwitchLetterTime``, one more every ``LetterDuration``
+        after it, and never more than the program is long. Two frames ask for
+        it - the tape, to know what to write on a cell, and the copy of the
+        program, to know which of its columns have left - so it is built once
+        and handed to both.
+
+        :return: an INT socket, the number of letters that have landed.
+        """
+        if self._landed is not None:
+            return self._landed
+        dials = self._unpack(tree, control, "SwitchLetterTime", "LetterDuration",
+                             location=(17, -31.4), name="TransferControl")
+        now = SceneTime(tree, location=(17, -32.4), std_out="Seconds",
+                        name="TransferClock")
+        # +1 so that the first letter lands *at* SwitchLetterTime rather than
+        # one LetterDuration after it
+        count = make_function(
+            tree, name="LettersLanded", location=(18.6, -31.8), hide=False,
+            functions={"Landed": "seconds,start,-,duration,/,floor,1,+,0,max,%d,min"
+                                 % len(self.program)},
+            inputs=["seconds", "start", "duration"], outputs=["Landed"],
+            scalars=["seconds", "start", "duration"], integers=["Landed"])
+        for socket, socket_name in ((now.std_out, "seconds"),
+                                    (dials.out("SwitchLetterTime"), "start"),
+                                    (dials.out("LetterDuration"), "duration")):
+            tree.links.new(socket, count.inputs[socket_name])
+
+        frame = Frame(tree, location=(16.6, -30.8), label="LetterTransfer")
+        frame.add([dials, now, count])
+        self._landed = count.outputs["Landed"]
+        return self._landed
+
+    # ----------------------------------------------------------------
+    def _program_wipe(self, tree, control):
+        """``ProgramWipe``: the edge that takes the old program away.
+
+        One number, shared by everything the wipe removes: the x the wipe has
+        reached. It starts a margin left of the input display at
+        ``ProgramDisappearTime`` and arrives a margin past its right edge
+        ``ProgramDisappearDuration`` later, and whatever stands to the left of
+        it is gone. So the program and the box it is written in are taken away
+        the way a line of text is read, rather than fading out as one thing -
+        the copy above the tape is by then the only program left.
+
+        The edge is worked out from the display rather than from a bounding
+        box of what is being deleted: the box would shrink as the wipe ate
+        into it and the wipe would run away with itself.
+
+        :return: a FLOAT socket, the x the wipe has reached.
+        """
+        if self._wipe_edge is not None:
+            return self._wipe_edge
+        dials = self._unpack(tree, control, "InputPosition", "InputDisplaySize",
+                             "ProgramDisappearTime", "ProgramDisappearDuration",
+                             location=(31, -17.8), name="WipeControl")
+        now = SceneTime(tree, location=(31, -19.0), std_out="Seconds",
+                        name="WipeClock")
+        edge = make_function(
+            tree, name="WipeEdge", location=(32.6, -18.2), hide=False,
+            aux_functions={"gone": "seconds,start,-,duration,/,0,max,1,min"},
+            functions={"Edge": "place_x,width,0.5,*,-,%s,-,gone,width,%s,+,*,+"
+                               % (self.WIPE_MARGIN, 2 * self.WIPE_MARGIN)},
+            inputs=["place", "width", "seconds", "start", "duration"],
+            outputs=["Edge"], vectors=["place"],
+            scalars=["width", "seconds", "start", "duration", "gone", "Edge"])
+        for socket, socket_name in (
+                (dials.out("InputPosition"), "place"),
+                (dials.out("InputDisplaySize"), "width"),
+                (now.std_out, "seconds"),
+                (dials.out("ProgramDisappearTime"), "start"),
+                (dials.out("ProgramDisappearDuration"), "duration")):
+            tree.links.new(socket, edge.inputs[socket_name])
+
+        self._wipe_frame = Frame(tree, location=(30.6, -17.0), label="ProgramWipe")
+        self._wipe_frame.add([dials, now, edge])
+        self._wipe_edge = edge.outputs["Edge"]
+        return self._wipe_edge
+
+    # ----------------------------------------------------------------
+    def _wipe(self, tree, control, geometry, location, name):
+        """*geometry*, with whatever the wipe has passed over deleted.
+
+        A point is gone once the edge of :meth:`_program_wipe` has passed its
+        x, and ``Delete Geometry`` in ALL mode takes the faces hanging off it
+        with it - so a letter of the program leaves as a letter rather than
+        losing its vertices one at a time.
+
+        :return: the geometry socket of what is left.
+        """
+        edge = self._program_wipe(tree, control)
+        x, y = location
+        here = Position(tree, location=(x, y - 0.8), name=name + "Here")
+        passed = make_function(
+            tree, name=name + "Passed", location=(x + 1, y - 0.8), hide=True,
+            functions={"Gone": "here_x,edge,<"},
+            inputs=["here", "edge"], outputs=["Gone"],
+            vectors=["here"], scalars=["edge"], booleans=["Gone"])
+        tree.links.new(here.std_out, passed.inputs["here"])
+        tree.links.new(edge, passed.inputs["edge"])
+        gone = DeleteGeometry(tree, location=(x + 2, y), domain="POINT", mode="ALL",
+                              geometry=geometry, selection=passed.outputs["Gone"],
+                              name=name)
+        self._wipe_frame.add([here, passed, gone])
+        return gone.geometry_out
+
+    # ----------------------------------------------------------------
+    def _output_string(self, tree, control, text):
+        """What the output display reads: nothing, once the tape has it.
+
+        The box hands the word over to :meth:`_create_output_copy_frame` the
+        moment it sets off, and that copy is what is seen crossing the
+        picture. The letters of it are laid out from the same measurements as
+        this text, so the handover is a swap of two drawings that are in the
+        same place, and nothing moves at the moment it happens.
+        """
+        now = SceneTime(tree, location=(21.4, -8.4), std_out="Seconds",
+                        name="HandoverClock")
+        dials = self._unpack(tree, control, "OutputDisappearTime",
+                             location=(21.4, -9.2), name="HandoverControl")
+        arrived = make_function(
+            tree, name="OutputHasArrived", location=(22.8, -8.7), hide=True,
+            functions={"There": "seconds,start,<,not"},
+            inputs=["seconds", "start"], outputs=["There"],
+            scalars=["seconds", "start"], booleans=["There"])
+        for socket, socket_name in (
+                (now.std_out, "seconds"),
+                (dials.out("OutputDisappearTime"), "start")):
+            tree.links.new(socket, arrived.inputs[socket_name])
+        left = Switch(tree, location=(24.0, -8.4), input_type="STRING",
+                      switch=arrived.outputs["There"], false=text, true="",
+                      name="OutputInTheBox")
+        frame = Frame(tree, location=(21.0, -7.8), label="OutputHandover")
+        frame.add([now, dials, arrived, left])
+        return left.std_out
+
+    # ----------------------------------------------------------------
+    def _create_display_frame(self, tree, control, label, width, position, location,
+                              control_at):
+        """The read-outs. The two of them lead very different lives here."""
+        if label == "OutputDisplay":
+            return self._create_output_display_frame(tree, control, width, position)
+        box = super()._create_display_frame(tree, control, label, width, position,
+                                            location, control_at)
+        if label != "InputDisplay":
+            return box
+        return self._wipe(tree, control, box, location=(34, -19.6),
+                          name="WipeInputDisplay")
+
+    # ----------------------------------------------------------------
+    def _create_output_display_frame(self, tree, control, width, position):
+        """``OutputDisplay``: the box the machine printed into, and its arrow.
+
+        Once the printed string is on the tape the box has nothing left to
+        say, so it stops being a read-out and becomes a pointer: it turns
+        ``ArrowColor`` at ``OutputRecolorTime`` and then, over
+        ``OutputMorphDuration`` from ``OutputMorphTime``, unrolls into an
+        arrow standing over the cell that holds the last letter it printed -
+        the ``O`` of ``HELLO``.
+
+        **Why the box is built differently here.** The simple machine draws
+        it with ``Curve Wireframe``, which is a mesh and has nothing a morph
+        can hold on to. :class:`~geometry_nodes.nodes.MorphNode2` wants both
+        shapes as *a curve carrying a radius*, so that a blend of the two
+        paths and the two radius profiles sweeps out the whole way between
+        them - see the ``morphing`` scene and
+        :class:`~geometry_nodes.modifier_video_brainfuck.TubeMorphModifier`,
+        which is where this is taken from. So the rectangle is written that
+        way from the first frame of the shot rather than swapped for one when
+        the morph starts: at ``Morph Parameter`` 0 it is the same box, drawn
+        as a swept tube instead of a wireframe.
+
+        The frame is cut open to be a curve with two ends, which leaves a
+        notch one sample wide in it - :attr:`ARROW_SAMPLES` is high enough
+        that it reads as a mitre on a corner rather than a gap. ``Close
+        Loop`` would sweep it shut and put a bridge across the arrow instead,
+        which is the more visible of the two.
+
+        :return: the geometry socket of the box, whatever it is by then.
+        """
+        y = -41.0
+        dials = self._unpack(tree, control, width, position, "TapePosition",
+                             "TapeSize", "CellSize", "OutputRecolorTime",
+                             "OutputMorphTime", "OutputMorphDuration",
+                             "FrameColor", "ArrowColor",
+                             location=(26, y), name="OutputDisplayControl")
+
+        # --- curve 1: the box the machine printed into ------------------
+        # Not a ``Quadrilateral``: that is a *cyclic* curve, and a cyclic
+        # curve resampled to N points and then swept as an open one is one
+        # segment short - the gap where its two ends should meet. This is the
+        # same rectangle written as five corners, the first of them repeated
+        # at the end, so the sweep goes the whole way round and closes on
+        # itself with the two flat caps touching.
+        step = MeshLine(tree, location=(27, y - 0.4), mode="OFFSET", count=5,
+                        start_location=Vector(), offset=Vector([1, 0, 0]),
+                        name="OutputCornerPoints")
+        which = Index(tree, location=(27, y - 1.4), name="WhichCorner")
+        corners = make_function(
+            tree, name="OutputCorners", location=(28, y - 1.4), hide=True,
+            # only one of the two tests can hold, so their sum is 0 or 1 and
+            # this is -1 on the left and bottom, +1 on the right and top
+            aux_functions={"right": "i,1,=,i,2,=,+,2,*,1,-",
+                           "top": "i,2,=,i,3,=,+,2,*,1,-"},
+            functions={"At": ["right,width,*,0.5,*",
+                              "top,%s,*,0.5,*" % self.display_height, "0"]},
+            inputs=["i", "width"], outputs=["At"],
+            integers=["i"], scalars=["width", "right", "top"], vectors=["At"])
+        tree.links.new(which.std_out, corners.inputs["i"])
+        tree.links.new(dials.out(width), corners.inputs["width"])
+        box = SetPosition(tree, location=(28, y - 0.4), geometry=step.geometry_out,
+                          position=corners.outputs["At"], name="OutputRectangle")
+        loop = MeshToCurve(tree, location=(29, y - 0.4), mesh=box.geometry_out,
+                           name="OutputOutline")
+        thick = SetCurveRadius(tree, location=(30.4, y - 0.4),
+                               curve=loop.geometry_out, radius=self.frame_radius,
+                               name="OutputThickness")
+        stood = TransformGeometry(tree, location=(30, y - 0.4),
+                                  geometry=thick.geometry_out,
+                                  translation=dials.out(position),
+                                  rotation=[pi / 2, 0, 0],
+                                  name="PlaceOutputDisplay")
+
+        # --- curve 2: the arrow, as an axis and a radius ----------------
+        # the cell it stands over is where the tape's Mesh Line puts it: the
+        # points are spread between the two ends of a line TapeSize*CellSize
+        # long, so they sit one TapeSize/(TapeSize-1) cell apart, not one cell
+        ends = make_function(
+            tree, name="ArrowEnds", location=(28, y - 2.0), hide=False,
+            aux_functions={"across": "place_x,%d,size,*,cell,*,size,1,-,/,+"
+                                     % self.arrow_cell},
+            functions={"Tip": ["across", "place_y", "place_z,%s,+" % self.ARROW_GAP],
+                       "Foot": ["across", "place_y", "place_z,%s,+"
+                                % (self.ARROW_GAP + self.ARROW_SHAFT_LENGTH
+                                   + self.ARROW_HEAD_LENGTH)]},
+            inputs=["place", "size", "cell"], outputs=["Tip", "Foot"],
+            vectors=["place", "Tip", "Foot"], integers=["size"],
+            scalars=["cell", "across"])
+        # the tape steps down at the end of the shot and the arrow points at
+        # a cell of it, so it reads the same drifted position the cells do
+        stand, drift = self._tape_stand(tree, control, dials.out("TapePosition"),
+                                        location=(27, y - 3.0), name="ArrowStand")
+        for socket, socket_name in ((stand, "place"),
+                                    (dials.out("TapeSize"), "size"),
+                                    (dials.out("CellSize"), "cell")):
+            tree.links.new(socket, ends.inputs[socket_name])
+        axis = CurveLine(tree, location=(30, y - 2.0), mode="POINTS",
+                         start=ends.outputs["Foot"], end=ends.outputs["Tip"],
+                         name="ArrowAxis")
+        sampled = ResampleCurve(tree, location=(31, y - 2.0), mode="Count",
+                                curve=axis.geometry_out, count=self.ARROW_SAMPLES,
+                                name="ArrowSamples")
+        # the radius is what makes the axis an arrow: it holds at the shaft,
+        # steps out to the barbs and falls to nothing at the point
+        along = SplineParameter(tree, location=(30, y - 3.2), std_out="Factor",
+                                name="AlongArrow")
+        profile = make_function(
+            tree, name="ArrowRadius", location=(31, y - 3.2), hide=True,
+            aux_functions={
+                "shaft": "u,%.6f,<" % self.barb_fraction,
+                "head": "1,u,-,%.6f,/,%.6f,*" % (1 - self.barb_fraction,
+                                                 self.ARROW_HEAD_RADIUS)},
+            functions={"radius": "shaft,%.6f,*,1,shaft,-,head,*,+"
+                                 % self.ARROW_SHAFT_RADIUS},
+            inputs=["u"], outputs=["radius"],
+            scalars=["u", "shaft", "head", "radius"])
+        tree.links.new(along.std_out, profile.inputs["u"])
+        shaped = SetCurveRadius(tree, location=(32, y - 2.0),
+                                curve=sampled.geometry_out,
+                                radius=profile.outputs["radius"],
+                                name="ArrowProfile")
+
+        # --- the morph, and the colour it happens in --------------------
+        drive = make_function(
+            tree, name="OutputMorphDriver", location=(31, y - 4.4), hide=True,
+            functions={"Morph": "seconds,start,-,duration,/,0,max,1,min",
+                       "Recolored": "seconds,recolor,<,not"},
+            inputs=["seconds", "start", "duration", "recolor"],
+            outputs=["Morph", "Recolored"],
+            scalars=["seconds", "start", "duration", "recolor", "Morph"],
+            booleans=["Recolored"])
+        now = SceneTime(tree, location=(30, y - 4.4), std_out="Seconds",
+                        name="MorphClock")
+        for socket, socket_name in (
+                (now.std_out, "seconds"),
+                (dials.out("OutputMorphTime"), "start"),
+                (dials.out("OutputMorphDuration"), "duration"),
+                (dials.out("OutputRecolorTime"), "recolor")):
+            tree.links.new(socket, drive.inputs[socket_name])
+        morph = MorphNode2(tree, location=(33.4, y - 1.0),
+                           curve1=stood.geometry_out, curve2=shaped.geometry_out,
+                           morph_parameter=drive.outputs["Morph"],
+                           samples=self.ARROW_SAMPLES,
+                           profile_resolution=self.ARROW_PROFILE,
+                           name="OutputMorph")
+        material = Switch(tree, location=(33.4, y - 3.6), input_type="MATERIAL",
+                          switch=drive.outputs["Recolored"],
+                          false=dials.out("FrameColor"),
+                          true=dials.out("ArrowColor"), name="OutputBoxColor")
+        painted = SetMaterial(tree, location=(35, y - 1.0),
+                              geometry=morph.geometry_out,
+                              material=material.std_out, name="PaintOutputDisplay")
+
+        frame = Frame(tree, location=(25.6, y + 0.8), label="OutputDisplay")
+        frame.add([dials, step, which, corners, box, loop, thick, stood, ends,
+                   axis, sampled, along, profile, shaped, now, drive, morph,
+                   material, painted] + drift)
+        return painted.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_program_strip(self, tree, control, variables, run):
+        """The strip of the machine, wiped away when its time is up."""
+        strip = super()._create_program_strip(tree, control, variables, run)
+        return self._wipe(tree, control, strip, location=(34, -22.2),
+                          name="WipeProgramStrip")
+
+    def _tape_in_zone(self, tree, control, sim_in):
+        """``Rebuild``: this frame's tape, at this frame's size.
+
+        A ``Mesh Line`` of the current ``TapeSize`` and ``CellSize`` - the
+        same line the ``Tape`` frame builds, but here it is rebuilt every
+        frame rather than once - carrying the values of the tape of the frame
+        before, read cell by cell with a ``Sample Index``.
+
+        The guard is what makes a *growing* tape work. ``Sample Index`` clamps
+        an index that is past the end of the geometry it is given, so without
+        it every cell that has just appeared would come up holding a copy of
+        what was in the last old cell instead of nothing.
+
+        :return: the geometry the automaton reads and writes, and the nodes
+            that build it, for the frame in the editor.
+        """
+        dials = self._unpack(tree, control, "TapeSize", "CellSize",
+                             location=(2.2, 0.6), name="RebuildControl")
+        old = sim_in.outputs["Geometry"]
+
+        # the tape as it should look now
+        end = make_function(
+            tree, name="NewTapeEnd", location=(3.6, 0.6), hide=True,
+            functions={"end": "e_x,size,cell,*,scale"},
+            inputs=["size", "cell"], outputs=["end"],
+            integers=["size"], scalars=["cell"], vectors=["end"])
+        tree.links.new(dials.out("TapeSize"), end.inputs["size"])
+        tree.links.new(dials.out("CellSize"), end.inputs["cell"])
+        line = MeshLine(tree, location=(4.8, 0.8), mode="END_POINTS",
+                        count=dials.out("TapeSize"),
+                        start_location=Vector(), end_location=end.outputs["end"])
+
+        # ... holding what the tape of the frame before held
+        stored = NamedAttribute(tree, location=(2.2, -0.8), data_type="INT",
+                                name="Value")
+        here = Index(tree, location=(2.2, -1.8))
+        was = SampleIndex(tree, location=(3.6, -0.8), data_type="INT",
+                          domain="POINT", geometry=old, value=stored.std_out,
+                          index=here.std_out, name="ValueBefore")
+        size = DomainSize(tree, location=(2.2, -2.6), geometry=old,
+                          component="MESH", name="TapeSizeBefore")
+        existed = CompareNode(tree, location=(3.6, -2.6), operation="LESS_THAN",
+                              data_type="INT", inputs0=here.std_out,
+                              inputs1=size.node.outputs["Point Count"],
+                              name="CellExisted", hide=True)
+        value = Switch(tree, location=(4.8, -0.8), input_type="INT",
+                       switch=existed.std_out, false=0, true=was.std_out,
+                       name="CarriedValue")
+        tape = StoredNamedAttribute(tree, location=(6.0, 0.8), data_type="INT",
+                                    domain="POINT", name="Value",
+                                    value=value.std_out, label="CarryValues")
+        tree.links.new(line.geometry_out, tape.geometry_in)
+
+        return tape.geometry_out, [dials, end, line, stored, here, was, size,
+                                   existed, value, tape]
+
+    # ----------------------------------------------------------------
+    def _create_cell_values(self, tree, control, variables, run):
+        """``CellValues``: what is written on a cell - a number, or a letter.
+
+        The same numbers as the simple machine until the transfer reaches the
+        cell, and the instruction the program holds at that position after it.
+        The cell keeps whatever value it holds either way: this is what is
+        *drawn* on it, and the tape reading as the program is the picture the
+        shot is after.
+
+        :return: the geometry socket of the lettering.
+        """
+        tape = run["Geometry"]
+        dials = self._unpack(tree, control, "CellSize", "GlyphColor",
+                             "OutputOffset", "OutputDisappearTime",
+                             "OutputMoveDuration",
+                             *[node_name for node_name, _, _ in self.opcode_colors],
+                             location=(25, -1.4), name="ValuesControl")
+        source = self._unpack(tree, variables, "Input", location=(25, -3.0),
+                              name="ValuesVariables")
+        landed = self._letters_landed(tree, control)
+
+        value = NamedAttribute(tree, location=(26, -2), data_type="INT", name="Value")
+        position = Position(tree, location=(26, -2.6))
+        here = Index(tree, location=(26, -3.2))
+        zone = ForEachZone(tree, location=(27, -1.4), domain="POINT", node_width=8,
+                           geometry=tape)
+        zone.add_socket(socket_type="INT", name="Value", value=value.std_out,
+                        for_input=True)
+        zone.add_socket(socket_type="VECTOR", name="Location", value=position.std_out,
+                        for_input=True)
+        # which cell this is, carried in rather than read inside: an Index in
+        # the body of the zone is the index of the element being drawn, and
+        # the cell is what the letter has to be chosen by
+        zone.add_socket(socket_type="INT", name="Index", value=here.std_out,
+                        for_input=True)
+        column = zone.foreach_input.outputs["Index"]
+
+        digits = ValueToString(tree, location=(28, -0.8), data_type="INT",
+                               value=zone.foreach_input.outputs["Value"],
+                               name="CellValue")
+        letter = SliceString(tree, location=(29, -0.2), string=source.out("Input"),
+                             position=column, length=1, name="CellLetter")
+        written = CompareNode(tree, location=(28, -3.6), operation="LESS_THAN",
+                              data_type="INT", inputs0=column, inputs1=landed,
+                              name="LetterHasLanded", hide=True)
+        text = Switch(tree, location=(29, -0.8), input_type="STRING",
+                      switch=written.std_out, false=digits.std_out,
+                      true=letter.std_out, name="CellText")
+
+        # ... and what the machine printed, on the cells from OutputOffset on.
+        # No copy of it travels the way the program's does: the string is one
+        # word in a box and the box has somewhere else to be, so it is simply
+        # here from OutputDisappearTime on and gone from the box at the same
+        # moment - see :meth:`_output_string`.
+        printed = run["Output"]
+        spelt = StringLength(tree, location=(28, -4.2), string=printed,
+                             name="PrintedLength")
+        now = SceneTime(tree, location=(28, -4.8), std_out="Seconds",
+                        name="OutputClock")
+        holds = make_function(
+            tree, name="CellHoldsOutput", location=(29, -4.4), hide=True,
+            aux_functions={"place": "column,offset,-"},
+            functions={"Shows": "seconds,start,duration,+,<,not,"
+                                "place,0,<,not,and,place,spelt,<,and",
+                       "Place": "place"},
+            inputs=["column", "offset", "spelt", "seconds", "start", "duration"],
+            outputs=["Shows", "Place"],
+            integers=["column", "offset", "spelt", "place", "Place"],
+            scalars=["seconds", "start", "duration"], booleans=["Shows"])
+        for socket, socket_name in ((column, "column"),
+                                    (dials.out("OutputOffset"), "offset"),
+                                    (spelt.std_out, "spelt"),
+                                    (now.std_out, "seconds"),
+                                    (dials.out("OutputDisappearTime"), "start"),
+                                    (dials.out("OutputMoveDuration"), "duration")):
+            tree.links.new(socket, holds.inputs[socket_name])
+        spelled = SliceString(tree, location=(30, -4.4), string=printed,
+                              position=holds.outputs["Place"], length=1,
+                              name="CellPrinted")
+        text = Switch(tree, location=(31, -0.8), input_type="STRING",
+                      switch=holds.outputs["Shows"], false=text.std_out,
+                      true=spelled.std_out, name="CellTextOrOutput")
+        size = MathNode(tree, location=(28, -2.4), operation="MULTIPLY",
+                        inputs0=dials.out("CellSize"), inputs1=self.glyph_size,
+                        name="NumberSize")
+        curves = StringToCurves(tree, location=(32, -1.4), string=text.std_out,
+                                size=size.std_out, align_x="CENTER", align_y="BOTTOM")
+        realize = RealizeInstances(tree, location=(33, -1.4))
+        fill = FillCurve(tree, location=(34, -1.4), mode="N-gons")
+        painted = SetMaterial(tree, location=(35, -1.4),
+                              material=dials.out("GlyphColor"), name="PaintNumber")
+        # A letter that has landed keeps the colour it had in the program, so
+        # that a "+" is the same colour wherever it is read - the strip it
+        # came from, the copy it travelled in, and now the cell it sits on.
+        # The same test decides it here as everywhere else, and it answers no
+        # for a cell still showing a number and for the letters of HELLO, so
+        # those stay in GlyphColor, which is the fall-back this chain starts
+        # from.
+        which = instruction_selector(tree, text.std_out, self.opcode_colors,
+                                     location=(33, -3.6), name="CellColorSelector")
+        painters = [SetMaterial(tree, location=(35, -3.6 - 0.3 * row),
+                                selection=which.outputs[node_name],
+                                material=dials.out(node_name),
+                                name="PaintCell" + node_name, hide=True)
+                    for row, (node_name, _, _) in enumerate(self.opcode_colors)]
+        # the whole tape is laid back by tape_tilt further downstream, so a
+        # number turned by the complement of that angle ends up standing
+        # upright on a cell that is itself leaning away from the camera
+        placed = TransformGeometry(tree, location=(37, -1.4),
+                                   translation=zone.foreach_input.outputs["Location"],
+                                   rotation=[pi / 2 - self.tape_tilt, 0, 0],
+                                   name="PlaceNumber")
+        zone.create_geometry_line([realize, fill, painted] + painters + [placed],
+                                  ins=curves.geometry_out)
+
+        frame = Frame(tree, location=(25.6, -0.6), label="CellValues")
+        frame.add([dials, source, value, position, here, zone, digits, letter,
+                   written, spelt, now, holds, spelled, text, size, curves,
+                   realize, fill, painted, which, placed] + painters)
+        return zone.geometry_out
+
+    # ----------------------------------------------------------------
+    def _extra_geometry(self, tree, control, variables, run):
+        """The two travelling copies, on top of everything the machine draws."""
+        return [self._create_program_copy_frame(tree, control, variables),
+                self._create_output_copy_frame(tree, control, run),
+                self._create_ascii_table_frame(tree, control)]
+
+    # ----------------------------------------------------------------
+    def _create_output_copy_frame(self, tree, control, run):
+        """``OutputCopy``: the printed word on its way from the box to the tape.
+
+        ``HELLO`` does not blink out of the read-out and reappear on the
+        cells; it is carried there, one letter per cell, shrinking on the way
+        from the size of a read-out to the size of a letter on a cell. The
+        letters spread apart as they go - they start at the pitch the font set
+        them in and land at the pitch of the tape - which is what makes the
+        shot read as *the printed output becoming the data*.
+
+        **The letters are not laid out again, they are picked up.** ``String
+        to Curves`` hands out one *instance per character*, already standing
+        where the font wants it, and ``Index`` on that domain is the position
+        of the character in the string. So this is the read-out's own text
+        with each of its letters told how far to move, which is why the moment
+        the copy takes over from the read-out cannot be seen. Laying the
+        letters out again from measurements of their own outlines is what does
+        not work: ink is not advance, and the word comes apart by a few
+        percent a letter.
+
+        Each letter is sent to cell ``OutputOffset + i``, at the tape's own
+        point spacing of ``TapeSize/(TapeSize-1)`` cells and half a glyph
+        above it, which is where :meth:`_create_cell_values` is about to draw
+        it. The offsets are in the text's own frame, which the transform at
+        the end stands up into the shot - so its x is the shot's x and its y
+        the shot's z.
+
+        :return: the geometry socket of the letters in flight.
+        """
+        y = -47.0
+        printed = run["Output"]
+        dials = self._unpack(tree, control, "OutputPosition", "OutputOffset",
+                             "OutputDisappearTime", "OutputMoveDuration",
+                             "TapePosition", "TapeSize", "CellSize", "GlyphColor",
+                             location=(20, y), name="OutputCopyControl")
+        now = SceneTime(tree, location=(20, y - 1.8), std_out="Seconds",
+                        name="OutputCopyClock")
+        box_size = 0.6 * self.display_height
+
+        # the read-out's own drawing of the word, one instance per letter
+        letters = StringToCurves(tree, location=(22, y), string=printed,
+                                 size=box_size, align_x="CENTER",
+                                 align_y="MIDDLE", hide=True, name="WordInFlight")
+        which = Index(tree, location=(22, y - 1.0), name="WhichLetter")
+        here = Position(tree, location=(22, y - 1.6), name="LetterHere")
+
+        flight = make_function(
+            tree, name="LetterFlight", location=(23.6, y - 1.2), hide=False,
+            aux_functions={
+                "gone": "seconds,start,-,duration,/,0,max,1,min",
+                "step": "size,cell,*,size,1,-,/",
+                "to_x": "place_x,offset,i,+,step,*,+,home_x,-",
+                "to_y": "place_z,cell,%s,*,2,/,+,home_z,-" % self.glyph_size},
+            functions={"Offset": ["gone,to_x,here_x,-,*",
+                                  "gone,to_y,here_y,-,*", "0"],
+                       "Shrink": "1,gone,cell,%s,*,%s,/,1,-,*,+"
+                                 % (self.glyph_size, box_size),
+                       # before it sets off the read-out has the word and
+                       # after it lands the tape does; either way not this
+                       "Grounded": "seconds,start,<,not,gone,1,<,and,not"},
+            inputs=["here", "home", "place", "size", "cell", "offset", "i",
+                    "seconds", "start", "duration"],
+            outputs=["Offset", "Shrink", "Grounded"],
+            vectors=["here", "home", "place", "Offset"],
+            integers=["size", "offset", "i"],
+            scalars=["cell", "seconds", "start", "duration", "gone", "step",
+                     "to_x", "to_y", "Shrink"],
+            booleans=["Grounded"])
+        for socket, socket_name in (
+                (here.std_out, "here"),
+                (dials.out("OutputPosition"), "home"),
+                (dials.out("TapePosition"), "place"),
+                (dials.out("TapeSize"), "size"),
+                (dials.out("CellSize"), "cell"),
+                (dials.out("OutputOffset"), "offset"),
+                (which.std_out, "i"),
+                (now.std_out, "seconds"),
+                (dials.out("OutputDisappearTime"), "start"),
+                (dials.out("OutputMoveDuration"), "duration")):
+            tree.links.new(socket, flight.inputs[socket_name])
+
+        # TranslateInstances takes an ``instances`` argument and does not
+        # link it, so the geometry goes in by hand
+        spread = TranslateInstances(tree, location=(25.4, y),
+                                    translation=flight.outputs["Offset"],
+                                    name="SpreadLetters")
+        tree.links.new(letters.geometry_out, spread.geometry_in)
+        shrunk = ScaleInstances(tree, location=(26.4, y),
+                                geometry=spread.geometry_out,
+                                scale=flight.outputs["Shrink"],
+                                name="ShrinkLetters")
+        realize = RealizeInstances(tree, location=(27.4, y))
+        fill = FillCurve(tree, location=(28.4, y), mode="N-gons")
+        painted = SetMaterial(tree, location=(29.4, y),
+                              material=dials.out("GlyphColor"),
+                              name="PaintLettersInFlight")
+        put = TransformGeometry(tree, location=(30.4, y),
+                                translation=dials.out("OutputPosition"),
+                                rotation=[pi / 2, 0, 0],
+                                name="PlaceLettersInFlight")
+        gone = DeleteGeometry(tree, location=(31.4, y), domain="POINT", mode="ALL",
+                              selection=flight.outputs["Grounded"],
+                              name="OnlyWhileFlying")
+        create_geometry_line(tree, [shrunk, realize, fill, painted, put, gone])
+
+        frame = Frame(tree, location=(19.6, y + 1.0), label="OutputCopy")
+        frame.add([dials, now, letters, which, here, flight, spread, shrunk,
+                   realize, fill, painted, put, gone])
+        return gone.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_program_copy_frame(self, tree, control, variables):
+        """``CopyOfProgramStrip``: the program again, on its way to the tape.
+
+        The program strip of :meth:`_create_program_strip` once more, with
+        three differences, all of them because this one is going somewhere:
+
+        - it is not a read-out of the machine, so nothing paints it by what
+          has run and there is no box running along it. Every column keeps the
+          colour of the instruction it is, which is what has to survive the
+          journey onto the tape.
+        - ``StripLayout2`` in place of ``StripLayout``: the same ruler with
+          ``ShrinkFontSize`` and ``ShrinkSpacing`` folded into it, so the copy
+          can be squeezed from the width of the input display down to the
+          pitch of the cells without a node per multiplication.
+        - it comes and goes. Before ``CopyProgramTime`` the whole thing is
+          deleted rather than drawn somewhere out of shot, and each column is
+          deleted again once its letter has landed on the tape.
+
+        :return: the geometry socket of the copy.
+        """
+        y = -34.0
+        source = self._unpack(tree, variables, "Input", location=(17, y),
+                              name="CopyVariables")
+        dials = self._unpack(
+            tree, control, "InputPosition", "InputDisplaySize", "ShrinkFontSize",
+            "ShrinkSpacing", "ProgramShift", "CopyProgramTime",
+            *[node_name for node_name, _, _ in self.opcode_colors],
+            location=(17, y - 0.8), name="CopyControl")
+        landed = self._letters_landed(tree, control)
+        program = source.out("Input")
+        size = StringLength(tree, location=(18.6, y), string=program,
+                            name="CopyLength")
+
+        # the strip's own ruler, with the two shrink factors folded in: the
+        # gap between columns is what the copy is squeezed by, and the letters
+        # in it are shrunk by a factor of their own so that they can be made
+        # to fit a cell without the columns having to
+        ruler = make_function(
+            tree, name="StripLayout2", location=(20.0, y - 1.2), hide=False,
+            aux_functions={"gap": "width,%d,/" % (len(self.program) + 2)},
+            functions={"First": "place_x,width,0.5,*,-,gap,+",
+                       "Spacing": "gap,space,*",
+                       "Glyph": "gap,%s,*,font,*" % self.strip_glyph_size},
+            inputs=["place", "width", "font", "space"],
+            outputs=["First", "Spacing", "Glyph"],
+            vectors=["place"],
+            scalars=["width", "font", "space", "gap", "First", "Spacing", "Glyph"])
+        for socket, socket_name in ((dials.out("InputPosition"), "place"),
+                                    (dials.out("InputDisplaySize"), "width"),
+                                    (dials.out("ShrinkFontSize"), "font"),
+                                    (dials.out("ShrinkSpacing"), "space")):
+            tree.links.new(socket, ruler.inputs[socket_name])
+
+        # --- one column per instruction, as in the strip -----------------
+        zone = RepeatZone(tree, location=(22, y), node_width=9,
+                          iterations=size.std_out)
+        column = zone.iteration
+        letter = SliceString(tree, location=(23, y - 0.8), string=program,
+                             position=column, length=1, name="CopyLetter")
+        curves = StringToCurves(tree, location=(24, y - 0.8), string=letter.std_out,
+                                size=ruler.outputs["Glyph"], align_x="CENTER",
+                                align_y="MIDDLE", hide=True)
+        realize = RealizeInstances(tree, location=(25, y - 0.8))
+        fill = FillCurve(tree, location=(26, y - 0.8), mode="N-gons")
+        at = make_function(
+            tree, name="ColumnPlace2", location=(24, y + 0.6), hide=False,
+            functions={"At": ["first,column,spacing,*,+", "place_y", "place_z"]},
+            inputs=["first", "spacing", "column", "place"], outputs=["At"],
+            scalars=["first", "spacing"], integers=["column"],
+            vectors=["place", "At"])
+        for socket, socket_name in ((ruler.outputs["First"], "first"),
+                                    (ruler.outputs["Spacing"], "spacing"),
+                                    (column, "column"),
+                                    (dials.out("InputPosition"), "place")):
+            tree.links.new(socket, at.inputs[socket_name])
+        place = TransformGeometry(tree, location=(27, y - 0.8),
+                                  translation=at.outputs["At"],
+                                  rotation=[pi / 2, 0, 0], name="PlaceCopyColumn")
+
+        which = instruction_selector(tree, letter.std_out, self.opcode_colors,
+                                     location=(27, y - 2.6), name="CopyColorSelector")
+        painters = [SetMaterial(tree, location=(28, y - 0.8 - 0.3 * row),
+                                selection=which.outputs[node_name],
+                                material=dials.out(node_name),
+                                name="Copy" + node_name, hide=True)
+                    for row, (node_name, _, _) in enumerate(self.opcode_colors)]
+        create_geometry_line(tree, [realize, fill, place] + painters,
+                             ins=curves.geometry_out)
+
+        # a column that has been written onto the tape has left the copy
+        gone = DeleteGeometry(tree, location=(29, y - 0.8), domain="POINT",
+                              mode="ALL", geometry=painters[-1].geometry_out,
+                              name="LetterHasLeft")
+        left = CompareNode(tree, location=(28, y - 4.0), operation="LESS_THAN",
+                           data_type="INT", inputs0=column, inputs1=landed,
+                           name="ColumnHasLanded", hide=True)
+        tree.links.new(left.std_out, gone.node.inputs["Selection"])
+        grown = JoinGeometry(tree, location=(30, y - 0.8))
+        tree.links.new(gone.geometry_out, grown.geometry_in)
+        tree.links.new(zone.repeat_input.outputs["Geometry"], grown.geometry_in)
+        tree.links.new(grown.geometry_out, zone.repeat_output.inputs["Geometry"])
+
+        # --- and the copy as a whole ------------------------------------
+        # deleted rather than moved out of shot until it is called for, so
+        # that it costs nothing at all for the first seconds of the scene
+        now = SceneTime(tree, location=(32, y - 2.0), std_out="Seconds",
+                        name="CopyClock")
+        early = CompareNode(tree, location=(33, y - 2.0), operation="LESS_THAN",
+                            data_type="FLOAT", inputs0=now.std_out,
+                            inputs1=dials.out("CopyProgramTime"),
+                            name="BeforeTheCopy", hide=True)
+        hidden = DeleteGeometry(tree, location=(33, y), domain="POINT", mode="ALL",
+                                geometry=zone.geometry_out,
+                                selection=early.std_out, name="NotYet")
+        shifted = TransformGeometry(tree, location=(34, y),
+                                    geometry=hidden.geometry_out,
+                                    translation=dials.out("ProgramShift"),
+                                    name="ShiftCopy")
+
+        frame = Frame(tree, location=(16.6, y + 1.0), label="CopyOfProgramStrip")
+        frame.add([source, dials, size, ruler, zone, letter, curves, realize, fill,
+                   at, place, which, gone, left, grown, now, early, hidden,
+                   shifted] + painters)
+        return shifted.geometry_out
 
 
 class BFFNode(NodeGroup):
@@ -2258,6 +3714,19 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
     # being executed - and how thick its wire is, both in cells
     cursor_scale = 1.3
     cursor_weight = 0.06
+    #: how much taller than wide the cursor is, and how far its middle sits
+    #: above the middle of the cell - a square on the cell by default, but a
+    #: subclass can make it a rectangle tall enough to take in the character
+    #: standing on the cell as well. See :class:`BrainFuckHelloModifier`.
+    cursor_tall = 1.0
+    cursor_lift = 0.0
+
+    #: where the counter starts, and the cell it stops on. ``None`` is the end
+    #: of memory, which is the only stop a machine reading a soup can know; a
+    #: machine running a program that was put there on purpose knows where the
+    #: program begins and ends. See :class:`BrainFuckHelloModifier`.
+    first_instruction = 0
+    halt_at = None
 
     # The two tapes and where they get their initial content from: an Import
     # CSV node per tape in the control frame, named after the node it becomes
@@ -2437,7 +3906,8 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
             # other simply by carrying on.
             "Mate": InputInteger(tree, location=(x, -3.6), integer=0,
                                  name="MatePosition"),
-            "Counter": InputInteger(tree, location=(x, -4.0), integer=0,
+            "Counter": InputInteger(tree, location=(x, -4.0),
+                                    integer=self.first_instruction,
                                     name="ProgramCounter"),
             # -1, so that the first step (index 0) counts as an advance and the
             # first instruction is executed rather than skipped
@@ -2588,9 +4058,15 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         size = DomainSize(tree, location=(3.2, 3.0), component="MESH",
                           geometry=sim_in.outputs["Geometry"], name="MemorySize")
         cells = size.outputs["Point Count"]
+        # the end of memory, unless the class knows a nearer one
+        last = cells
+        if self.halt_at is not None:
+            stop = InputInteger(tree, location=(3.4, 3.0), integer=self.halt_at,
+                                name="HaltAt", hide=True)
+            last = stop.std_out
         inside = CompareNode(tree, location=(4.4, 3.6), operation="LESS_THAN",
                              data_type="INT", inputs0=sim_in.outputs["Counter"],
-                             inputs1=cells, name="BeforeTheEnd", hide=True)
+                             inputs1=last, name="BeforeTheEnd", hide=True)
         started = CompareNode(tree, location=(4.4, 3.2), operation="GREATER_THAN",
                               data_type="INT", inputs0=sim_in.outputs["Counter"],
                               inputs1=-1, name="AfterTheStart", hide=True)
@@ -2700,7 +4176,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
                     in enumerate(zip(self.cell_colors, selections))]
         create_geometry_line(tree, [instances, realize] + painters)
 
-        numbers = self._create_cell_values(tree, control, tape)
+        numbers = self._create_cell_values(tree, control, run)
         heads = self._create_arrows_frame(tree, control, run)
         joined = JoinGeometry(tree, location=(34, 2.6))
         tree.links.new(painters[-1].geometry_out, joined.geometry_in)
@@ -2838,13 +4314,23 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         side = MathNode(tree, location=(27, y - 1.2), operation="MULTIPLY",
                         inputs0=control["CellSize"].std_out, inputs1=self.cursor_scale,
                         name="CursorSize")
+        tall = MathNode(tree, location=(27.4, y - 1.8), operation="MULTIPLY",
+                        inputs0=side.std_out, inputs1=self.cursor_tall,
+                        name="CursorHeight")
         box = Quadrilateral(tree, location=(28, y - 1.2), mode="RECTANGLE",
-                            width=side.std_out, height=side.std_out)
+                            width=side.std_out, height=tall.std_out)
         # a bare curve renders as a hair thin enough to disappear
         wire = CurveWireFrame(tree, location=(29, y - 1.2),
                               radius=self.cursor_weight * self.cell_size,
                               resolution=6, geometry=box.geometry_out)
-        place = TransformGeometry(tree, location=(30, y), translation=spot.std_out,
+        # the character stands above the middle of the cell, so a cursor that
+        # takes it in has to rise with it
+        lifted = VectorMath(tree, location=(29.4, y - 0.6), operation="ADD",
+                            inputs0=spot.std_out,
+                            inputs1=Vector([0, 0, self.cursor_lift]),
+                            name="CursorPlace", hide=True)
+        place = TransformGeometry(tree, location=(30, y),
+                                  translation=lifted.std_out,
                                   rotation=[pi / 2 - self.tape_tilt, 0, 0],
                                   name="PlaceCursor")
         painted = SetMaterial(tree, location=(31, y),
@@ -2854,7 +4340,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
                                      domain="POINT", name="Tape", value=line.std_out,
                                      label="TapeOfCursor")
         create_geometry_line(tree, [place, painted, rides], ins=wire.geometry_out)
-        pieces += [spot, line, side, box, wire, place, painted, rides]
+        pieces += [spot, line, side, tall, box, wire, lifted, place, painted, rides]
 
         joined = JoinGeometry(tree, location=(34, -12))
         for mark in marks + [rides]:
@@ -2884,7 +4370,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         return test
 
     # ----------------------------------------------------------------
-    def _create_cell_values(self, tree, control, tape):
+    def _create_cell_values(self, tree, control, run):
         """``CellValues``: what every cell holds, written on it.
 
         A cell holding the ascii code of one of the ten instructions shows the
@@ -2910,7 +4396,9 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
 
         :return: the geometry socket of the numbers.
         """
+        tape = run["Geometry"]
         value = NamedAttribute(tree, location=(26, -2), data_type="INT", name="Value")
+        which = NamedAttribute(tree, location=(26, -3.2), data_type="INT", name="Cell")
         position = Position(tree, location=(25, -2.6))
         shift = VectorMath(tree, location=(26, -2.6), hide=True, operation="ADD", inputs0=position.std_out,
                            inputs1=Vector([0, 0, 0.25]))
@@ -2919,6 +4407,10 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         zone.add_socket(socket_type="INT", name="Value", value=value.std_out,
                         for_input=True)
         zone.add_socket(socket_type="VECTOR", name="Location", value=shift.std_out,
+                        for_input=True)
+        # which cell this is, carried in rather than read inside: an Index in
+        # the body of the zone is the index of the element being drawn
+        zone.add_socket(socket_type="INT", name="Cell", value=which.std_out,
                         for_input=True)
         held = zone.foreach_input.outputs["Value"]
 
@@ -2948,9 +4440,10 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         tree.links.new(held, color_selection.inputs["value"])
         is_command = color_selection.outputs["IsCommand"]
 
-        glyph = Switch(tree, location=(29.4, -0.8), input_type="STRING",
-                       switch=is_command, true=letter.std_out, false=digits.std_out,
-                       name="CommandOrNumber")
+        glyph = self._cell_glyph(tree, control, held, digits.std_out,
+                                 letter.std_out, is_command,
+                                 cell=zone.foreach_input.outputs["Cell"],
+                                 counter=run["Counter"], location=(29.4, -0.8))
 
         size = MathNode(tree, location=(28, -2.4), operation="MULTIPLY",
                         inputs0=control["CellSize"].std_out, inputs1=self.glyph_size,
@@ -2962,7 +4455,7 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
                             switch=is_command, true=bigger.std_out, false=size.std_out,
                             name="GlyphSize")
 
-        curves = StringToCurves(tree, location=(30, -1.4), string=glyph.std_out,
+        curves = StringToCurves(tree, location=(30, -1.4), string=glyph,
                                 size=glyph_size.std_out, align_x="CENTER",
                                 align_y="BOTTOM")
         realize = RealizeInstances(tree, location=(31, -1.4))
@@ -2996,6 +4489,30 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
                    glyph, size, bigger, glyph_size, curves, realize, fill,
                    placed, opcolors] + painters)
         return zone.geometry_out
+
+    # ----------------------------------------------------------------
+    def _cell_glyph(self, tree, control, held, digits, letter, is_command,
+                    cell=None, counter=None, location=(0, 0)):
+        """What a cell draws: the instruction it holds, or else its number.
+
+        Everything a cell can hold is a byte, and a byte is only an
+        instruction if it is the code of one - so the number is the honest
+        thing to draw for the rest. :class:`BrainFuckHelloModifier` puts a
+        third case between the two.
+
+        :param held: the value of the cell, an INT socket
+        :param digits: that value written out, a STRING socket
+        :param letter: the instruction it stands for, likewise
+        :param is_command: whether it stands for one at all
+        :param cell: which cell of memory this is, an INT socket
+        :param counter: where the program counter stands, likewise - the two
+            of them are what :class:`BrainFuckHelloModifier` needs to know
+            that the machine has halted with an answer on these cells
+        :return: the STRING socket of what to draw.
+        """
+        return Switch(tree, location=location, input_type="STRING",
+                      switch=is_command, true=letter, false=digits,
+                      name="CommandOrNumber").std_out
 
     # ----------------------------------------------------------------
     def _create_code_table_frame(self, tree, control):
@@ -3839,7 +5356,8 @@ class SoupWatcherModifier(GeometryNodesModifier):
                            geometry=placed.geometry_out)
         zone.add_socket(socket_type="INT", name="Byte",
                         value=byte.std_out, for_input=True)
-        glyph_shift = VectorMath(tree,location=(-6,-9.6),label="GlyphShift",inputs0=position.std_out,inputs1=Vector([0,0,0.1]),hide=True)
+        glyph_shift = VectorMath(tree, location=(-6, -9.6), label="GlyphShift", inputs0=position.std_out,
+                                 inputs1=Vector([0, 0, 0.1]), hide=True)
         zone.add_socket(socket_type="VECTOR", name="Location",
                         value=glyph_shift.std_out, for_input=True)
 
@@ -3890,7 +5408,7 @@ class SoupWatcherModifier(GeometryNodesModifier):
                                    name="Paint" + node_name, hide=True)
                        for row, node_name in enumerate(socket_labels)])
 
-        placed_glyph = TransformGeometry(tree, location=(4, -8),rotation=Vector([pi/2,0,0]),
+        placed_glyph = TransformGeometry(tree, location=(4, -8), rotation=Vector([pi / 2, 0, 0]),
                                          translation=zone.foreach_input.outputs["Location"],
                                          name="PlaceGlyph")
         zone.create_geometry_line([realize, fill, stick_out] + painters + [placed_glyph],
@@ -4198,13 +5716,13 @@ GRID = 200
 
 DNA_TRACK_FILE = "dna_track"
 
-TRACK_X_IN = 40.0  # the track starts here, well off screen to the right
-TRACK_Z_UP = 1.6  # height of the incoming run, in the upper half
+TRACK_X_IN = 15.0  # the track starts here, well off screen to the right
+TRACK_Z_UP = -3  # height of the incoming run, in the upper half
 TRACK_X_LOOP = 1.0  # where the roller-coaster loop sits
-TRACK_R1 = 2.7  # and how big it is
+TRACK_R1 = 4.5  # and how big it is
 TRACK_DEPTH = 4.5  # how far back in y a loop steps to clear its own entry
 TRACK_X_LEFT = -11.0  # how far left it gets before turning back
-TRACK_R2 = 2.8  # radius of the 180 degree turn that sends it back right
+TRACK_R2 = 4  # radius of the 180 degree turn that sends it back right
 TRACK_X_OUT = 30.0  # the track ends here, off screen to the right again
 TRACK_STEP = 0.08  # spacing of the samples written to the csv
 
@@ -4216,7 +5734,7 @@ TRACK_STEP = 0.08  # spacing of the samples written to the csv
 # is stretched while it does, is set by how low this is. It was -7, a whole
 # frame height below the middle, which cost twenty units of lift; near the
 # middle it costs ten.
-TRACK_Z_OUT = -1.0
+TRACK_Z_OUT = -3.5
 # and therefore the height the turn has to start from, since a 180 degree turn
 # drops exactly its own diameter. Derived rather than written down, because
 # what matters is where the turn comes *out*.
@@ -4283,8 +5801,12 @@ def dna_flight_path():
     """
     pts = [(TRACK_X_IN, 0.0, TRACK_Z_UP)]
     ends = []
+    distances = []
 
-    def straight(x0, z0, x1, z1, y0, y1, n, y_over=1.0):
+    cumulated_length = 0
+
+    def straight(x0, z0, x1, z1, y0, y1,
+                 n, y_over=1.0):
         """One straight run, with ``y`` and ``z`` eased across it.
 
         :param y_over: the fraction of the segment ``y`` makes its move in.
@@ -4293,51 +5815,89 @@ def dna_flight_path():
             is over the gate while it is still on screen rather than half a
             frame width off the right edge.
         """
+        length = 0
+        pt_old = (x0, y0, z0)
         for k in range(1, n + 1):
             u = k / n
-            pts.append((x0 + (x1 - x0) * u,
-                        y0 + (y1 - y0) * _smoothstep(u / y_over),
-                        z0 + (z1 - z0) * _smoothstep(u)))
+            pt = (x0 + (x1 - x0) * u,
+                  y0 + (y1 - y0) * _smoothstep(u / y_over),
+                  z0 + (z1 - z0) * _smoothstep(u))
+            pts.append(pt)
+            length += (Vector(pt) - Vector(pt_old)).length
+            pt_old = pt
+        return length
 
     tau = 2.0 * pi
 
     # 1 - fly in from the right
-    straight(TRACK_X_IN, TRACK_Z_UP, TRACK_X_LOOP, TRACK_Z_UP, 0.0, 0.0, 400)
+    straight_length = straight(TRACK_X_IN, TRACK_Z_UP, TRACK_X_LOOP, TRACK_Z_UP, 0.0, 0.0, 400)
     ends.append(("loop_start", len(pts) - 1))
+    print("loop_start from strand length:", cumulated_length, "to", cumulated_length + straight_length)
+    cumulated_length += straight_length
+    distances.append(("loop_start", cumulated_length))
 
     # 2 - the roller-coaster loop
     n = 400
+    pt_old = (TRACK_X_LOOP - TRACK_R1 * math.sin(0),
+              TRACK_DEPTH * _smoothstep(0 / tau),
+              TRACK_Z_UP + TRACK_R1 - TRACK_R1 * math.cos(0))
+    loop_length = 0
     for k in range(1, n + 1):
         a = tau * k / n
-        pts.append((TRACK_X_LOOP - TRACK_R1 * math.sin(a),
-                    TRACK_DEPTH * _smoothstep(a / tau),
-                    TRACK_Z_UP + TRACK_R1 - TRACK_R1 * math.cos(a)))
+        pt = (TRACK_X_LOOP - TRACK_R1 * math.sin(a),
+              TRACK_DEPTH * _smoothstep(a / tau),
+              TRACK_Z_UP + TRACK_R1 - TRACK_R1 * math.cos(a))
+        loop_length += (Vector(pt) - Vector(pt_old)).length
+        pts.append(pt)
+        pt_old = pt
+
     ends.append(("loop_end", len(pts) - 1))
+    print("loop_end from strand length:", cumulated_length, "to", cumulated_length + loop_length)
+    cumulated_length += loop_length
+    distances.append(("loop_end", cumulated_length))
 
     # 3 - on to the left, climbing to the height the turn needs to start at,
     # and back out of the loop's depth
-    straight(TRACK_X_LOOP, TRACK_Z_UP, TRACK_X_LEFT, TRACK_Z_MID,
-             TRACK_DEPTH, 0.0, 400)
+    straight_length2 = straight(TRACK_X_LOOP, TRACK_Z_UP, TRACK_X_LEFT, TRACK_Z_MID,
+                                TRACK_DEPTH, 0.0, 400)
     ends.append(("turn_start", len(pts) - 1))
+    print("turn_start from strand length:", cumulated_length, "to", cumulated_length + straight_length2)
+    cumulated_length += straight_length2
+    distances.append(("turn_start", cumulated_length))
 
     # 4 - the 180 degree turn, ending level and heading right. It also spends
     # itself getting y up to the near edge of the gate, so that the molecule
     # comes out of the turn with the fork immediately ahead of it.
     n = 600
+    turn_length = 0
+    pt_old = (TRACK_X_LEFT - TRACK_R2 * math.sin(0),
+              TRACK_Y_WOUND * _smoothstep(0 / (0.5 * tau)),
+              TRACK_Z_MID - TRACK_R2 + TRACK_R2 * math.cos(0))
     for k in range(1, n + 1):
-        b = 0.5 * tau * k / n
-        pts.append((TRACK_X_LEFT - TRACK_R2 * math.sin(b),
-                    TRACK_Y_WOUND * _smoothstep(b / (0.5 * tau)),
-                    TRACK_Z_MID - TRACK_R2 + TRACK_R2 * math.cos(b)))
+        b = 0.5 * tau * k / n  # half a circle
+        pt = (TRACK_X_LEFT - TRACK_R2 * math.sin(b),
+              TRACK_Y_WOUND * _smoothstep(b / (0.5 * tau)),
+              TRACK_Z_MID - TRACK_R2 + TRACK_R2 * math.cos(b))
+        turn_length += (Vector(pt) - Vector(pt_old)).length
+        pts.append(pt)
+        pt_old = pt
+
     ends.append(("turn_end", len(pts) - 1))
+    print("turn_end from strand length:", cumulated_length, "to", cumulated_length + turn_length)
+    cumulated_length += turn_length
+    distances.append(("turn_end", cumulated_length))
 
     # 5 - away to the right and off the screen, crossing the gate as it goes
     # and staying over it: anything that drifted back under TRACK_Y_WOUND here
     # would wind itself up again on the way out.
     z_out = TRACK_Z_OUT
-    straight(TRACK_X_LEFT, z_out, TRACK_X_OUT, z_out,
-             TRACK_Y_WOUND, TRACK_Y_OPEN, 900,
-             y_over=TRACK_OPEN_RUN / (TRACK_X_OUT - TRACK_X_LEFT))
+    length3 = straight(TRACK_X_LEFT, z_out, TRACK_X_OUT, z_out,
+                       TRACK_Y_WOUND, TRACK_Y_OPEN, 900,
+                       y_over=TRACK_OPEN_RUN / (TRACK_X_OUT - TRACK_X_LEFT))
+
+    print("end_point from strand length:", cumulated_length, "to", cumulated_length + length3)
+    cumulated_length += length3
+    distances.append(("end_point", cumulated_length))
 
     # resample at a uniform arc length, so that "length along the track" and
     # "distance travelled" are the same number - the molecule is spaced by arc
@@ -4357,7 +5917,7 @@ def dna_flight_path():
         f = 0.0 if span == 0 else (s - cumulative[j]) / span
         even.append(tuple(p + (q - p) * f for p, q in zip(pts[j], pts[j + 1])))
         s += TRACK_STEP
-    return even, total, {name: cumulative[i] for name, i in ends}
+    return even, total, {name: cumulative[i] for name, i in ends}, {name: length for name, length in distances}
 
 
 def write_dna_track(path):
@@ -4369,12 +5929,12 @@ def write_dna_track(path):
 
     :return: ``(length, marks)`` - see :func:`dna_flight_path`.
     """
-    points, total, marks = dna_flight_path()
+    points, total, marks, distances = dna_flight_path()
     with open(path, "w") as file:
         file.write("X,Y,Z\n")
         for x, y, z in points:
             file.write("%.5f,%.5f,%.5f\n" % (x, y, z))
-    return total, marks
+    return total, marks, distances
 
 
 class MorphModifier(GeometryNodesModifier):
@@ -5093,7 +6653,7 @@ class DNAModifier(GeometryNodesModifier):
         #: its segments ends - what the scene needs in order to say "start the
         #: split once the turn is behind us" without knowing how the track is
         #: put together
-        self.track_length, self.track_marks = write_dna_track(self.track_path)
+        self.track_length, self.track_marks, self.distances = write_dna_track(self.track_path)
         #: length of the molecule itself, in the same units
         self.molecule_length = (pairs - 1) * spacing
 
@@ -6822,8 +8382,8 @@ class RNALogoModifier(GeometryNodesModifier):
         at = _in_frame((-11.3, 7.0))
         control = {
             "Progress": InputValue(tree, location=at(0.1, -0.1),
-                                     value=self.progress, name="Progress",
-                                     label="Progress", node_height=GRID),
+                                   value=self.progress, name="Progress",
+                                   label="Progress", node_height=GRID),
             "PointCount": InputInteger(tree, location=at(0.1, -0.5),
                                        integer=self.point_count,
                                        name="PointCount", label="PointCount",
@@ -7709,18 +9269,11 @@ class RNACircleModifier(GeometryNodesModifier):
         # the inward radius of the circle, which is where a base has to point.
         # Curve Tangent is already a unit vector and so is the cross product of
         # two perpendicular ones, so there is nothing to normalise
-        tangent = InputTangent(tree, location=at(5.7, -0.1), node_height=GRID,
-                               name="Tangent", label="Tangent")
-        plane = InputVector(tree, location=at(5.4, -0.4),
-                            vector=Vector([0.0, 1.0, 0.0]), node_height=GRID,
-                            name="PlaneNormal", label="PlaneNormal")
-        spoke = VectorMath(tree, location=at(6.6, -0.8),
-                           operation="CROSS_PRODUCT", inputs0=tangent.std_out,
-                           inputs1=plane.std_out, node_height=GRID,
-                           name="InwardSpoke", label="InwardSpoke")
+        position = Position(tree, location=at(5.7, -0.1), node_height=GRID, label="Radius")
+
         normal = VectorMath(tree, location=at(7.4, -1.1), operation="SCALE",
-                            inputs0=spoke.std_out,
-                            float_input=control["Radius"].std_out,
+                            inputs0=position.std_out,
+                            float_input=-1,
                             node_height=GRID, name="InwardNormal",
                             label="InwardNormal")
 
@@ -7739,7 +9292,7 @@ class RNACircleModifier(GeometryNodesModifier):
                       node_height=GRID)
         frame.add([radius, turn_x, angle_x, cosine, circle_x, turn_z, angle_z,
                    sine, circle_z, point, ring, grow_index, grown, head,
-                   tangent, plane, spoke, normal, index, capture])
+                   position, normal, index, capture])
         return {
             "geometry": capture.geometry_out,
             "Normal": capture["Normal"],
@@ -8071,11 +9624,11 @@ class MovingTapeModifier(GeometryNodesModifier):
     NUMBER_FRAME = (-2.8, 3.6)
     CUTOFF_FRAME = (5.3, 1.8)
 
-    def __init__(self, tape_length=100, tape_span=100.0, tape_size=0.9,
+    def __init__(self, tape_length=50, tape_span=50.0, tape_size=0.9,
                  cell_tilt=0.31066858768463135, number_size=0.5,
                  number_offset=(0, 0, 0.3), number_depth=0.1,
                  max_value=255, seed=0,
-                 start_time=1.0, transition_time=20.0, travel_distance=229.0,
+                 start_time=1.0, transition_time=20.0, travel_distance=115.0,
                  left_cutoff=-14.0, right_cutoff=14.0,
                  tape_color="gray_1", number_color="BaseMixing",
                  number_seed="CellSeed",
@@ -8428,3 +9981,1352 @@ class MovingTapeModifier(GeometryNodesModifier):
                       node_height=GRID)
         frame.add([where, along, left, right, gone])
         return gone.std_out
+
+
+class LifeOnEarthModifier(GeometryNodesModifier):
+    """"Life on Earth", written flat and then wrapped into a graticule.
+
+    The port of ``video_bff/tmp.xml`` as the editor holds it now - the tree
+    that took the place of the moving tape. Two words are set as curves, the
+    letters grow in one at a time, and then every glyph outline inflates into
+    a circle on a sphere: the letters of ``Life on`` become the circles of
+    longitude, the letters of ``Earth`` the circles of latitude, and what is
+    left standing when the move is over is a wireframe globe made of nothing
+    but the sentence it started as. A solid ball arrives underneath it in the
+    last fraction of a second, so the graticule finishes on a planet rather
+    than on a cage.
+
+    **A letter is a spline, not a character.** ``LattitudeIndex`` and
+    ``LongitudeIndex`` are stored on the ``CURVE`` domain after the glyph
+    instances are realized, so what they number is *outlines*: the ``e`` of
+    ``Life`` is two of them (its body and its counter) and contributes two
+    meridians. That is the editor's own choice and it is kept - it is also
+    what makes the graticule dense enough to read as one, since ``Life on``
+    only has six characters.
+
+    **How a glyph becomes a circle.** Every outline is resampled to
+    ``Resolution`` points, so point ``i`` of a spline is its ``i mod
+    Resolution``-th sample whichever spline it is on. That is the angle round
+    the circle; which circle comes from the letter's index::
+
+        meridian:  phi = (LattitudeIndex - 1) * pi / letters("Life on")
+                   theta = (i mod Resolution) * 2 pi / Resolution
+        parallel:  theta = LongitudeIndex * pi / (letters("Earth") + 1)
+                   phi = (i mod Resolution) * 2 pi / Resolution
+
+        p = Radius * (cos phi sin theta, cos theta, sin phi sin theta)
+
+    with the poles on **y**, so an object carrying this modifier has to be
+    turned a quarter turn about x for them to stand upright - see
+    ``BffScene.how_on_earth``. A point is then linearly blended from where its
+    letter drew it to where its circle wants it,
+
+        ``position = (1 - lambda) * flat + lambda * p``,
+
+    over ``TransformDuration`` from ``TransformTime``. Because both ends are
+    written into one ``Set Position`` there is nothing to keyframe - the whole
+    animation lives in ``Scene Time`` inside the graph, which is a problem of
+    its own for ``render_with_skips``; see :meth:`BffScene.how_on_earth`.
+
+    **The letters grow rather than pop.** The editor's tree simply deleted
+    every letter whose moment had not come, so the sentence arrived one glyph
+    at a time in full size. Here each letter is given the whole slot it used
+    to wait through: letter ``i`` of ``Life on`` grows from nothing to full
+    size over ``[StartTime + (i-1) dt, StartTime + i dt]`` with ``dt =
+    TransitionTime / letters``, so it is complete at exactly the moment it
+    used to appear at and the word is still finished at ``StartTime +
+    TransitionTime``. ``Earth`` follows on the same terms one
+    ``TransitionTime`` later, over ``TransitionTime2``.
+
+    Growing means scaling about the glyph's own centre, and that centre is
+    not something the realized curve knows any more - by then a letter is
+    just a run of splines among all the others. So it is written down while
+    the glyphs are still *instances*, one ``Store Named Attribute`` on the
+    ``INSTANCE`` domain (:attr:`PIVOT`) recording each glyph's placement,
+    which ``Realize Instances`` then copies onto every point of that glyph.
+    ``Earth``'s pivots carry ``word_offset`` themselves, because the
+    ``Transform Geometry`` that shifts the word runs after the store and does
+    not touch a named attribute.
+
+    Eleven frames of nodes, the editor's eleven - and they are built in this
+    order, because blender names a frame by when it was made and the xml
+    refers to them by that name:
+
+    ``ControlPanel``
+        every constant: the four times, the resolution, the radius of the
+        globe and of the tubes, and the two materials.
+    ``Create Geometry``
+        the two words as curves, realized and numbered. The ``Resample
+        Curve`` that gives every outline the same point count sits just
+        outside it, on the way to the reroute the rest of the graph reads.
+    ``Lambda``
+        the one ramp the whole transformation runs on, and the clock the
+        letters are timed against.
+    ``Grow Life On`` / ``Earth``
+        each word's own schedule, and the two ``Delete Geometry`` nodes that
+        leave only that word's letters, only once they have started.
+    ``Circles Of Longitude`` / ``Circles Of Latitude``
+        where a point goes on the sphere.
+    ``Original Position`` (twice)
+        where it came from, scaled about its glyph's pivot by how far that
+        letter has grown.
+    ``Globe``
+        the ball, swelling to ``Radius - TubeRadius`` over the last
+        ``GlobeLead`` seconds of the transformation, so that it arrives just
+        as the graticule settles and sits exactly inside the tubes.
+    ``CurveGeometry``
+        both words joined and swept into tube.
+
+    :param first_word: the word that becomes the meridians.
+    :param second_word: the word that becomes the parallels.
+    :param word_offset: where ``second_word`` is set relative to
+        ``first_word`` - the two are separate ``String to Curves`` nodes on
+        one baseline, so this is what spaces them into one sentence.
+    :param text_size: cap height of the lettering.
+    :param font: name of a loaded Blender font.
+    :param start_time: when the first letter starts growing.
+    :param transition_time: seconds ``first_word`` takes to write itself on.
+    :param transition_time2: the same for ``second_word``, which follows it.
+    :param transform_time: when the letters start leaving the page.
+    :param transform_duration: seconds they take to reach the sphere.
+    :param resolution: points every glyph outline is resampled to, and so the
+        number of segments each circle of the graticule is drawn with.
+    :param radius: radius of the globe the letters end up on.
+    :param tube_radius: radius of the tube every outline is swept into.
+    :param profile_resolution: segments of that tube.
+    :param globe_lead: how long before the end of the transformation the
+        solid ball starts to appear, in seconds.
+    :param globe_segments: meridional resolution of the ball.
+    :param globe_rings: latitudinal resolution of the ball.
+    :param letter_color: palette name for the lettering.
+    :param letter_emission: emission strength of the lettering material.
+        These scenes sit on a black background and are lit mostly by their
+        own emission, which is why this defaults to full rather than to the
+        ``**kwargs`` the ball takes.
+    :param globe_color: palette name for the ball.
+    """
+
+    # Where the eleven frames of the editor sit. Everything inside one of them
+    # is placed through _in_frame(<origin>), which turns the relative
+    # coordinates an exported xml gives for a framed node back into the
+    # absolute ones this file writes - see the note on _in_frame itself.
+    # They are also built in this order, because blender names a frame by when
+    # it was made and the xml refers to them by that name.
+    CONTROL_FRAME = (0.1, 2.5)
+    CREATE_FRAME = (-7.5, 1.9)
+    LAMBDA_FRAME = (2.8, 1.6)
+    GROW_FRAME = (3.0, 3.7)
+    EARTH_FRAME = (3.2, -1.1)
+    MERIDIAN_FRAME = (9.7, 2.2)
+    PARALLEL_FRAME = (9.5, -0.4)
+    FLAT_LIFE_FRAME = (9.9, 4.1)
+    FLAT_EARTH_FRAME = (10.0, -2.4)
+    GLOBE_FRAME = (14.3, 1.7)
+    TUBE_FRAME = (15.2, -0.3)
+
+    #: the glyph's own centre, stored while the glyphs are still instances so
+    #: that a letter can be grown about it once they are not
+    PIVOT = "GlyphPivot"
+    #: the two per-outline counters, spelled the way the editor spells them -
+    #: they are the keys the tree reads itself by, so the typo stays
+    LATITUDE = "LattitudeIndex"
+    LONGITUDE = "LongitudeIndex"
+
+    def __init__(self, first_word="Life on", second_word="Earth",
+                 word_offset=(5.8, 0, 0), text_size=2.0, font="Bfont Regular",
+                 start_time=1.0, transition_time=2.0, transition_time2=1.5,
+                 transform_time=6.0, transform_duration=3.0,
+                 resolution=100, radius=10.0,
+                 tube_radius=0.03, profile_resolution=8,
+                 globe_lead=0.1, globe_segments=64, globe_rings=32,
+                 letter_color="example", letter_emission=1.0,
+                 globe_color="joker", name="LifeOnEarth", **kwargs):
+        self.first_word = first_word
+        self.second_word = second_word
+        self.word_offset = Vector(word_offset)
+        self.text_size = text_size
+        self.font = font
+        self.start_time = start_time
+        self.transition_time = transition_time
+        self.transition_time2 = transition_time2
+        self.transform_time = transform_time
+        self.transform_duration = transform_duration
+        self.resolution = resolution
+        self.radius = radius
+        self.tube_radius = tube_radius
+        self.profile_resolution = profile_resolution
+        self.globe_lead = globe_lead
+        self.globe_segments = globe_segments
+        self.globe_rings = globe_rings
+        self.letter_color = letter_color
+        self.letter_emission = letter_emission
+        self.globe_color = globe_color
+        self.kwargs = kwargs
+        super().__init__(name=name, automatic_layout=False)
+
+    # ----------------------------------------------------------------
+    @property
+    def written(self):
+        """When the last letter of ``second_word`` has finished growing."""
+        return self.start_time + self.transition_time + self.transition_time2
+
+    @property
+    def transform_end(self):
+        """When the graticule has settled and the ball is fully there."""
+        return self.transform_time + self.transform_duration
+
+    def timeline(self):
+        """The four moments a shot has to be cut around.
+
+        :return: ``(written, transform_time, globe_in, transform_end)`` in
+            seconds - the sentence complete, the letters starting to leave it,
+            the ball starting to appear, and everything in place.
+        """
+        return (self.written, self.transform_time,
+                self.transform_end - self.globe_lead, self.transform_end)
+
+    # ----------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._create_control_panel_frame(tree)
+        letters, counts = self._create_geometry_frame(tree, control)
+        ramp, clock = self._create_lambda_frame(tree, control)
+
+        # one ramp, two halves of the graph a long way apart - the editor's
+        # own pair of reroutes, and the reason the two Original Position
+        # frames each read their own socket rather than sharing one noodle
+        to_life = Reroute(tree, location=(9.5, 2.4), ins=ramp, node_height=GRID,
+                          name="LambdaToLife")
+        to_earth = Reroute(tree, location=(9.5, -2.2), ins=ramp, node_height=GRID,
+                           name="LambdaToEarth")
+
+        life_geo, life_grow = self._create_grow_life_on_frame(
+            tree, control, letters, counts["life"], clock)
+        earth_geo, earth_grow = self._create_earth_frame(
+            tree, control, letters, counts["earth"], clock)
+
+        meridian = self._create_circles_of_longitude_frame(
+            tree, control, counts["life"], to_life.std_out)
+        parallel = self._create_circles_of_latitude_frame(
+            tree, control, counts["earth"], to_earth.std_out)
+
+        flat_life = self._create_original_position_frame(
+            tree, self.FLAT_LIFE_FRAME, life_grow, to_life.std_out, "Life")
+        flat_earth = self._create_original_position_frame(
+            tree, self.FLAT_EARTH_FRAME, earth_grow, to_earth.std_out, "Earth")
+
+        # (1 - lambda) * where the letter drew it + lambda * where its circle
+        # wants it: one Set Position holds the whole transformation
+        life_at = VectorMath(tree, location=(12.2, 1.4), operation="ADD",
+                             inputs0=flat_life, inputs1=meridian,
+                             node_height=GRID, name="LifePosition")
+        life_moved = SetPosition(tree, location=(13.3, 1.6), geometry=life_geo,
+                                 position=life_at.std_out, node_height=GRID,
+                                 name="MoveLifeOntoGlobe")
+        earth_at = VectorMath(tree, location=(12.5, -0.4), operation="ADD",
+                              inputs0=flat_earth, inputs1=parallel,
+                              node_height=GRID, name="EarthPosition")
+        earth_moved = SetPosition(tree, location=(13.4, -0.1), geometry=earth_geo,
+                                  position=earth_at.std_out, node_height=GRID,
+                                  name="MoveEarthOntoGlobe")
+
+        globe = self._create_globe_frame(tree, control)
+        tubes = self._create_curve_geometry_frame(
+            tree, control, life_moved.geometry_out, earth_moved.geometry_out)
+
+        joined = JoinGeometry(tree, location=(19.6, -0.7), node_height=GRID,
+                              name="JoinGlobe")
+        tree.links.new(tubes, joined.geometry_in)
+        tree.links.new(globe, joined.geometry_in)
+
+        self.group_outputs.location = (20.6 * GRID, -0.7 * GRID)
+        tree.links.new(joined.geometry_out, self.group_outputs.inputs["Geometry"])
+
+    # ----------------------------------------------------------------
+    def _create_control_panel_frame(self, tree):
+        """``ControlPanel``: every constant of the sentence and of the globe.
+
+        :return: ``{name: node}``, so that the frames downstream can pick the
+            parameter they need by the name it carries in the editor.
+        """
+        at = _in_frame(self.CONTROL_FRAME)
+        control = {
+            "StartTime": InputValue(tree, location=at(0.1, -0.1),
+                                    value=self.start_time, node_height=GRID,
+                                    name="StartTime"),
+            "TransitionTime": InputValue(tree, location=at(0.2, -0.6),
+                                         value=self.transition_time,
+                                         node_height=GRID, name="TransitionTime"),
+            "TransitionTime2": InputValue(tree, location=at(0.2, -0.9),
+                                          value=self.transition_time2,
+                                          node_height=GRID, name="TransitionTime2"),
+            "Resolution": InputInteger(tree, location=at(0.2, -1.4),
+                                       integer=self.resolution,
+                                       node_height=GRID, name="Resolution"),
+            "TransformTime": InputValue(tree, location=at(0.2, -1.8),
+                                        value=self.transform_time,
+                                        node_height=GRID, name="TransformTime"),
+            "TransformDuration": InputValue(tree, location=at(0.2, -2.1),
+                                            value=self.transform_duration,
+                                            node_height=GRID,
+                                            name="TransformDuration"),
+            "Radius": InputValue(tree, location=at(0.1, -2.7), value=self.radius,
+                                 node_height=GRID, name="Radius"),
+            "TubeRadius": InputValue(tree, location=at(0.1, -3.1),
+                                     value=self.tube_radius, node_height=GRID,
+                                     name="TubeRadius"),
+            "GlobeLead": InputValue(tree, location=at(0.1, -3.5),
+                                    value=self.globe_lead, node_height=GRID,
+                                    name="GlobeLead"),
+        }
+
+        # **self.kwargs carries things like `emission=0.6` through to every
+        # material - the same forwarding the other modifiers of this file do.
+        # The lettering overrides it: it is the thing the shot is about and it
+        # is read on black, so it is emissive whatever the ball is.
+        control["LetterMaterial"] = InputMaterial(
+            tree, location=at(0.1, -3.9), material=self.letter_color,
+            node_height=GRID, name="LetterMaterial",
+            **dict(self.kwargs, emission=self.letter_emission))
+        control["GlobeMaterial"] = InputMaterial(
+            tree, location=at(0.1, -4.3), material=get_texture(self.globe_color, **self.kwargs),
+            node_height=GRID, name="GlobeMaterial", **self.kwargs)
+        for key in ("LetterMaterial", "GlobeMaterial"):
+            self.materials.append(control[key].node.material)
+
+        frame = Frame(tree, location=self.CONTROL_FRAME, label="ControlPanel",
+                      node_height=GRID)
+        frame.add(list(control.values()))
+        return control
+
+    # ----------------------------------------------------------------
+    def _create_geometry_frame(self, tree, control):
+        """``Create Geometry``: the sentence, numbered outline by outline.
+
+        The two words are set separately so that they can be timed
+        separately, and joined only once each has been stamped with a counter
+        of its own - ``LattitudeIndex`` on ``Life on``, ``LongitudeIndex`` on
+        ``Earth``. After the join, a curve carrying a zero in one of them is
+        exactly a curve belonging to the other word, which is how the two
+        halves of the graph tell their own letters apart (see the pair of
+        ``Delete Geometry`` nodes in each).
+
+        The counters are ``Index + 1`` rather than ``Index``, so that zero can
+        mean "not this word" - and so that the ``Attribute Statistic`` reading
+        their maximum comes back with the *number* of outlines rather than
+        with the last one's index.
+
+        :return: ``(curves, counts)`` - the resampled sentence, and the two
+            outline counts keyed ``"life"`` and ``"earth"``.
+        """
+        at = _in_frame(self.CREATE_FRAME)
+        first = InputString(tree, location=at(0.9, -2.2), string=self.first_word,
+                            node_height=GRID, name="FirstWord")
+        second = InputString(tree, location=at(0.1, -2.9), string=self.second_word,
+                             node_height=GRID, name="SecondWord")
+        life = StringToCurves(tree, location=at(1.8, -1.5), string=first.std_out,
+                              size=self.text_size, font=self.font, align_x="LEFT",
+                              align_y="TOP_BASELINE", pivot_mode="MIDPOINT",
+                              node_height=GRID, name="LifeCurves")
+        earth = StringToCurves(tree, location=at(1.0, -2.7), string=second.std_out,
+                               size=self.text_size, font=self.font, align_x="LEFT",
+                               align_y="TOP_BASELINE", pivot_mode="MIDPOINT",
+                               node_height=GRID, name="EarthCurves")
+
+        # A glyph's own centre, written down while it is still an instance -
+        # nothing downstream could work it out again, since by then a letter
+        # is just a run of splines among all the others. It takes both of
+        # String to Curves' answers: `Position` on the INSTANCE domain is
+        # where the glyph sits on the baseline, and the node's `Pivot Point`
+        # output is the middle of the glyph *within* that instance (which is
+        # what `pivot_mode="MIDPOINT"` is there to say). Their sum is the
+        # letter's middle in the sentence's own frame, and it is what a letter
+        # grows about. Realize Instances then copies the attribute onto every
+        # point of the geometry it realizes, so each point comes out knowing
+        # which letter it belongs to and where that letter's middle is.
+        life_origin = Position(tree, location=at(1.3, -0.2), node_height=GRID,
+                               hide=True, name="LifeGlyphOrigin")
+        life_centre = VectorMath(tree, location=at(2.1, -0.2), operation="ADD",
+                                 inputs0=life_origin.std_out,
+                                 inputs1=life.pivot_point, node_height=GRID,
+                                 hide=True, name="LifeGlyphCentre")
+        life_pivot = StoredNamedAttribute(tree, location=at(2.9, -0.2),
+                                          data_type="FLOAT_VECTOR", domain="INSTANCE",
+                                          name=self.PIVOT, value=life_centre.std_out,
+                                          node_height=GRID, hide=True,
+                                          label="StoreLifePivot")
+        tree.links.new(life.geometry_out, life_pivot.geometry_in)
+        realize_life = RealizeInstances(tree, location=at(2.9, -1.3),
+                                        geometry=life_pivot.geometry_out,
+                                        node_height=GRID, name="RealizeLife")
+
+        life_index = Index(tree, location=at(3.8, -1.5), node_height=GRID,
+                           name="LifeOutline")
+        life_number = MathNode(tree, location=at(4.7, -1.8), operation="ADD",
+                               inputs0=life_index.std_out, inputs1=1.0,
+                               node_height=GRID, name="LifeOutlineNumber")
+        life_stored = StoredNamedAttribute(tree, location=at(5.5, -1.0),
+                                           data_type="INT", domain="CURVE",
+                                           name=self.LATITUDE,
+                                           value=life_number.std_out,
+                                           node_height=GRID,
+                                           label="StoreLattitudeIndex")
+        tree.links.new(realize_life.geometry_out, life_stored.geometry_in)
+
+        # `Earth`'s pivots have to carry the offset themselves: the Transform
+        # Geometry that shifts the word runs after the store and moves
+        # positions, not named attributes
+        earth_origin = Position(tree, location=at(0.1, -5.1), node_height=GRID,
+                                hide=True, name="EarthGlyphOrigin")
+        earth_centre = VectorMath(tree, location=at(0.9, -5.1), operation="ADD",
+                                  inputs0=earth_origin.std_out,
+                                  inputs1=earth.pivot_point, node_height=GRID,
+                                  hide=True, name="EarthGlyphCentre")
+        earth_shifted_origin = VectorMath(tree, location=at(1.7, -5.1),
+                                          operation="ADD",
+                                          inputs0=earth_centre.std_out,
+                                          inputs1=self.word_offset,
+                                          node_height=GRID, hide=True,
+                                          name="EarthGlyphPlacement")
+        earth_pivot = StoredNamedAttribute(tree, location=at(2.5, -5.1),
+                                           data_type="FLOAT_VECTOR",
+                                           domain="INSTANCE", name=self.PIVOT,
+                                           value=earth_shifted_origin.std_out,
+                                           node_height=GRID, hide=True,
+                                           label="StoreEarthPivot")
+        tree.links.new(earth.geometry_out, earth_pivot.geometry_in)
+        realize_earth = RealizeInstances(tree, location=at(2.1, -2.8),
+                                         geometry=earth_pivot.geometry_out,
+                                         node_height=GRID, name="RealizeEarth")
+        placed = TransformGeometry(tree, location=at(2.9, -2.8),
+                                   geometry=realize_earth.geometry_out,
+                                   translation=self.word_offset,
+                                   node_height=GRID, name="PlaceEarth")
+
+        earth_index = Index(tree, location=at(3.7, -3.8), node_height=GRID,
+                            name="EarthOutline")
+        earth_number = MathNode(tree, location=at(4.6, -3.4), operation="ADD",
+                                inputs0=earth_index.std_out, inputs1=1.0,
+                                node_height=GRID, name="EarthOutlineNumber")
+        earth_stored = StoredNamedAttribute(tree, location=at(5.5, -2.6),
+                                            data_type="INT", domain="CURVE",
+                                            name=self.LONGITUDE,
+                                            value=earth_number.std_out,
+                                            node_height=GRID,
+                                            label="StoreLongitudeIndex")
+        tree.links.new(placed.geometry_out, earth_stored.geometry_in)
+
+        life_count = AttributeStatistic(tree, location=at(6.7, -0.1),
+                                        data_type="FLOAT", domain="CURVE",
+                                        geometry=life_stored.geometry_out,
+                                        attribute=life_number.std_out,
+                                        std_out="Max", node_height=GRID,
+                                        name="LifeOutlineCount")
+        earth_count = AttributeStatistic(tree, location=at(6.8, -2.6),
+                                         data_type="FLOAT", domain="CURVE",
+                                         geometry=earth_stored.geometry_out,
+                                         attribute=earth_number.std_out,
+                                         std_out="Max", node_height=GRID,
+                                         name="EarthOutlineCount")
+
+        joined = JoinGeometry(tree, location=at(6.7, -2.0), node_height=GRID,
+                              name="JoinWords")
+        tree.links.new(earth_stored.geometry_out, joined.geometry_in)
+        tree.links.new(life_stored.geometry_out, joined.geometry_in)
+        frame = Frame(tree, location=self.CREATE_FRAME, label="Create Geometry",
+                      node_height=GRID)
+        frame.add([first, second, life, earth, life_origin, life_centre,
+                   life_pivot, realize_life, life_index, life_number,
+                   life_stored, earth_origin, earth_centre,
+                   earth_shifted_origin, earth_pivot, realize_earth, placed,
+                   earth_index, earth_number, earth_stored, life_count,
+                   earth_count, joined])
+
+        # every outline to the same number of points, which is what lets
+        # `Index mod Resolution` be "how far round this circle am I". It sits
+        # outside the frame, on the way out of it: what the rest of the graph
+        # reads is the *resampled* sentence, and the two nodes that say so
+        # belong with the reroute rather than with the lettering
+        sampled = ResampleCurve(tree, location=(2.0, 0.2), mode="Count",
+                                curve=joined.geometry_out,
+                                count=control["Resolution"].std_out,
+                                node_height=GRID, name="ResampleOutlines")
+        # the sentence leaves over a reroute, because both halves of the graph
+        # start from it
+        route = Reroute(tree, location=(2.9, 0.0), ins=sampled.geometry_out,
+                        node_height=GRID, name="Sentence")
+        return route.std_out, {"life": life_count.std_out,
+                               "earth": earth_count.std_out}
+
+    # ----------------------------------------------------------------
+    def _create_lambda_frame(self, tree, control):
+        """``Lambda``: the ramp the whole transformation runs on.
+
+        ``lambda = min(max(t - TransformTime, 0), TransformDuration) /
+        TransformDuration`` - zero until the move starts, one once it is over,
+        and the straight line in between. The editor spells it out as five
+        loose ``Math`` nodes; it is one formula and it is written as one here.
+
+        The clock the *letters* are timed against lives here too, next to the
+        one the ramp reads. They are two ``Scene Time`` nodes rather than one
+        because each is wired to only its own half of the graph, but keeping
+        them together is what makes this frame "everything that reads the
+        clock" rather than just the ramp.
+
+        :return: ``(lambda, seconds)`` - the ramp in ``0..1``, and the letter
+            clock the two word frames time themselves against.
+        """
+        at = _in_frame(self.LAMBDA_FRAME)
+        letters = SceneTime(tree, location=at(0.1, -0.1), std_out="Seconds",
+                            node_height=GRID, name="LetterClock")
+        clock = SceneTime(tree, location=at(0.1, -0.6), std_out="Seconds",
+                          node_height=GRID, name="TransformClock")
+        ramp = make_function(
+            tree, name="Lambda",
+            functions={"lam": "time,transformTime,-,0,max,duration,min,duration,/"},
+            inputs=["time", "transformTime", "duration"], outputs=["lam"],
+            scalars=["time", "transformTime", "duration", "lam"], hide=True)
+        # make_function scales y by 100 rather than by the 200 everything else
+        # in this class uses, so its own location argument cannot be used
+        ramp.location = tuple(coordinate * GRID for coordinate in at(1.6, -0.3))
+        tree.links.new(clock.std_out, ramp.inputs["time"])
+        tree.links.new(control["TransformTime"].std_out, ramp.inputs["transformTime"])
+        tree.links.new(control["TransformDuration"].std_out, ramp.inputs["duration"])
+
+        frame = Frame(tree, location=self.LAMBDA_FRAME, label="Lambda",
+                      node_height=GRID)
+        frame.add([letters, clock, ramp])
+        return ramp.outputs["lam"], letters.std_out
+
+    # ----------------------------------------------------------------
+    def _create_letter_clock(self, tree, control, count, location, name, offset):
+        """One word's writing-on schedule, as a formula.
+
+        Letter ``i`` (counting from one, which is what the stored index is)
+        owns the slot ``[offset + (i-1) dt, offset + i dt]``, where ``dt`` is
+        the word's transition time divided by how many outlines it has. It
+        grows across that slot and is complete at the end of it - which is the
+        moment the editor's tree made it appear at, so the word is still
+        finished exactly when it always was.
+
+        :param offset: the socket the word's own clock starts from -
+            ``StartTime`` for the first word, ``StartTime + TransitionTime``
+            for the second.
+        :return: the group node, with a ``begin`` and a ``grow`` output.
+        """
+        schedule = make_function(
+            tree, name=name,
+            aux_functions={"dt": "transition,count,/"},
+            functions={
+                "begin": "offset,index,1,-,dt,*,+",
+                "grow": "time,offset,index,1,-,dt,*,+,-,dt,/,0,max,1,min",
+            },
+            inputs=["time", "offset", "transition", "count", "index"],
+            outputs=["begin", "grow"],
+            scalars=["time", "offset", "transition", "count", "index", "dt",
+                     "begin", "grow"], hide=True)
+        schedule.location = tuple(coordinate * GRID for coordinate in location)
+        tree.links.new(offset, schedule.inputs["offset"])
+        tree.links.new(count, schedule.inputs["count"])
+        return schedule
+
+    # ----------------------------------------------------------------
+    def _create_grow_life_on_frame(self, tree, control, letters, count, clock):
+        """``Grow Life On``: the first word, growing in letter by letter.
+
+        Two ``Delete Geometry`` nodes, both of them the editor's: the first
+        drops every outline whose slot has not opened yet (a letter at zero
+        size would otherwise leave a bead of tube at its own pivot), the
+        second drops every outline that belongs to the other word - which
+        after the join is exactly an outline whose ``LattitudeIndex`` is zero.
+
+        :return: ``(geometry, grow)`` - this word's outlines, and how far each
+            of them has grown.
+        """
+        at = _in_frame(self.GROW_FRAME)
+        schedule = self._create_letter_clock(
+            tree, control, count, at(1.5, -0.5), "LifeLetterClock",
+            control["StartTime"].std_out)
+        tree.links.new(clock, schedule.inputs["time"])
+        tree.links.new(control["TransitionTime"].std_out,
+                       schedule.inputs["transition"])
+        index = NamedAttribute(tree, location=at(0.1, -0.9), data_type="INT",
+                               name=self.LATITUDE, node_height=GRID,
+                               label="LattitudeIndex")
+        tree.links.new(index.std_out, schedule.inputs["index"])
+
+        waiting = CompareNode(tree, location=at(3.1, -0.9), operation="LESS_THAN",
+                              data_type="FLOAT", inputs0=clock,
+                              inputs1=schedule.outputs["begin"],
+                              node_height=GRID, name="LifeLetterNotDueYet")
+        due = DeleteGeometry(tree, location=at(4.3, -1.2), domain="CURVE",
+                             mode="ALL", geometry=letters,
+                             selection=waiting.std_out, node_height=GRID,
+                             name="DropUnstartedLifeLetters")
+
+        belongs = NamedAttribute(tree, location=at(3.0, -0.1), data_type="INT",
+                                 name=self.LATITUDE, node_height=GRID,
+                                 label="LattitudeIndex")
+        foreign = CompareNode(tree, location=at(4.3, -0.2), operation="EQUAL",
+                              data_type="INT", inputs0=belongs.std_out,
+                              inputs1=0, node_height=GRID, name="NotALifeLetter")
+        only = DeleteGeometry(tree, location=at(5.3, -1.2), domain="CURVE",
+                              mode="ALL", geometry=due.geometry_out,
+                              selection=foreign.std_out, node_height=GRID,
+                              name="DropEarthLetters")
+
+        frame = Frame(tree, location=self.GROW_FRAME, label="Grow Life On",
+                      node_height=GRID)
+        frame.add([schedule, index, waiting, due, belongs, foreign, only])
+        return only.geometry_out, schedule.outputs["grow"]
+
+    # ----------------------------------------------------------------
+    def _create_earth_frame(self, tree, control, letters, count, clock):
+        """``Earth``: the second word, on the same terms one word later.
+
+        Identical to :meth:`_create_grow_life_on_frame` but for the two things
+        that make it the second word: its clock starts at ``StartTime +
+        TransitionTime`` rather than at ``StartTime``, and it reads and keeps
+        ``LongitudeIndex`` rather than ``LattitudeIndex``.
+
+        :return: ``(geometry, grow)``.
+        """
+        at = _in_frame(self.EARTH_FRAME)
+        # StartTime + TransitionTime: `Earth` starts writing itself the
+        # moment `Life on` has finished
+        after = MathNode(tree, location=at(1.1, -1.4), operation="ADD",
+                         inputs0=control["StartTime"].std_out,
+                         inputs1=control["TransitionTime"].std_out,
+                         node_height=GRID, name="AfterLifeOn")
+        schedule = self._create_letter_clock(
+            tree, control, count, at(1.4, -0.9), "EarthLetterClock",
+            after.std_out)
+        tree.links.new(clock, schedule.inputs["time"])
+        tree.links.new(control["TransitionTime2"].std_out,
+                       schedule.inputs["transition"])
+        index = NamedAttribute(tree, location=at(0.1, -0.5), data_type="INT",
+                               name=self.LONGITUDE, node_height=GRID,
+                               label="LongitudeIndex")
+        tree.links.new(index.std_out, schedule.inputs["index"])
+
+        waiting = CompareNode(tree, location=at(3.1, -0.4), operation="LESS_THAN",
+                              data_type="FLOAT", inputs0=clock,
+                              inputs1=schedule.outputs["begin"],
+                              node_height=GRID, name="EarthLetterNotDueYet")
+        due = DeleteGeometry(tree, location=at(4.3, -0.1), domain="CURVE",
+                             mode="ALL", geometry=letters,
+                             selection=waiting.std_out, node_height=GRID,
+                             name="DropUnstartedEarthLetters")
+
+        belongs = NamedAttribute(tree, location=at(3.1, -1.3), data_type="INT",
+                                 name=self.LONGITUDE, node_height=GRID,
+                                 label="LongitudeIndex")
+        foreign = CompareNode(tree, location=at(4.3, -0.9), operation="EQUAL",
+                              data_type="INT", inputs0=belongs.std_out,
+                              inputs1=0, node_height=GRID,
+                              name="NotAnEarthLetter")
+        only = DeleteGeometry(tree, location=at(5.3, -0.1), domain="CURVE",
+                              mode="ALL", geometry=due.geometry_out,
+                              selection=foreign.std_out, node_height=GRID,
+                              name="DropLifeLetters")
+
+        frame = Frame(tree, location=self.EARTH_FRAME, label="Earth",
+                      node_height=GRID)
+        frame.add([after, schedule, index, waiting, due, belongs, foreign, only])
+        return only.geometry_out, schedule.outputs["grow"]
+
+    # ----------------------------------------------------------------
+    def _create_circles_of_longitude_frame(self, tree, control, count, ramp):
+        """``Circles Of Longitude``: where a letter of ``Life on`` is going.
+
+        Meridian ``i`` of ``count`` runs at ``phi = (i-1) pi / count`` and is
+        drawn by walking ``theta`` once round; the poles land on **y**. The
+        whole thing is scaled by ``lambda`` so that at the start of the
+        transformation every target sits on the origin, which is what makes
+        ``flat + target`` a blend rather than a sum: the flat term is scaled
+        by ``1 - lambda`` in the ``Original Position`` frame.
+
+        :return: the vector socket of the target position.
+        """
+        at = _in_frame(self.MERIDIAN_FRAME)
+        latitude = NamedAttribute(tree, location=at(0.1, -0.1), data_type="INT",
+                                  name=self.LATITUDE, node_height=GRID,
+                                  label="LattitudeIndex")
+        sample = Index(tree, location=at(0.4, -1.1), node_height=GRID,
+                       name="AlongTheMeridian")
+        point = make_function(
+            tree, name="MeridianPoint",
+            aux_functions={
+                "phi": "latIndex,1,-,%.15f,*,count,/" % pi,
+                "theta": "index,resolution,%%,%.15f,*,resolution,/" % (2 * pi),
+                # not `scale`: that spelling is the RPN vector operator
+                "reach": "lam,radius,*",
+            },
+            functions={"point": ["phi,cos,theta,sin,*,reach,*",
+                                 "theta,cos,reach,*",
+                                 "phi,sin,theta,sin,*,reach,*"]},
+            inputs=["index", "resolution", "count", "latIndex", "radius", "lam"],
+            outputs=["point"],
+            scalars=["index", "resolution", "count", "latIndex", "radius", "lam",
+                     "phi", "theta", "reach"],
+            vectors=["point"], hide=True)
+        point.location = tuple(coordinate * GRID for coordinate in at(1.5, -0.8))
+        tree.links.new(sample.std_out, point.inputs["index"])
+        tree.links.new(control["Resolution"].std_out, point.inputs["resolution"])
+        tree.links.new(count, point.inputs["count"])
+        tree.links.new(latitude.std_out, point.inputs["latIndex"])
+        tree.links.new(control["Radius"].std_out, point.inputs["radius"])
+        tree.links.new(ramp, point.inputs["lam"])
+
+        frame = Frame(tree, location=self.MERIDIAN_FRAME,
+                      label="Circles Of Longitude", node_height=GRID)
+        frame.add([latitude, sample, point])
+        return point.outputs["point"]
+
+    # ----------------------------------------------------------------
+    def _create_circles_of_latitude_frame(self, tree, control, count, ramp):
+        """``Circles Of Latitude``: where a letter of ``Earth`` is going.
+
+        The same sphere read the other way round: the letter's index picks the
+        *latitude* ``theta = i pi / (count + 1)`` and ``phi`` walks once round
+        it. The ``+ 1`` is what keeps the parallels off the poles - the first
+        letter would otherwise be a circle of zero radius sitting on the
+        north pole, and one letter of the word would simply disappear.
+
+        :return: the vector socket of the target position.
+        """
+        at = _in_frame(self.PARALLEL_FRAME)
+        longitude = NamedAttribute(tree, location=at(0.1, -0.9), data_type="INT",
+                                   name=self.LONGITUDE, node_height=GRID,
+                                   label="LongitudeIndex")
+        sample = Index(tree, location=at(0.2, -0.1), node_height=GRID,
+                       name="AroundTheParallel")
+        point = make_function(
+            tree, name="ParallelPoint",
+            aux_functions={
+                "phi": "index,resolution,%%,%.15f,*,resolution,/" % (2 * pi),
+                "theta": "lonIndex,%.15f,*,count,1,+,/" % pi,
+                # not `scale`: that spelling is the RPN vector operator
+                "reach": "lam,radius,*",
+            },
+            functions={"point": ["phi,cos,theta,sin,*,reach,*",
+                                 "theta,cos,reach,*",
+                                 "phi,sin,theta,sin,*,reach,*"]},
+            inputs=["index", "resolution", "count", "lonIndex", "radius", "lam"],
+            outputs=["point"],
+            scalars=["index", "resolution", "count", "lonIndex", "radius", "lam",
+                     "phi", "theta", "reach"],
+            vectors=["point"], hide=True)
+        point.location = tuple(coordinate * GRID for coordinate in at(1.7, -0.7))
+        tree.links.new(sample.std_out, point.inputs["index"])
+        tree.links.new(control["Resolution"].std_out, point.inputs["resolution"])
+        tree.links.new(count, point.inputs["count"])
+        tree.links.new(longitude.std_out, point.inputs["lonIndex"])
+        tree.links.new(control["Radius"].std_out, point.inputs["radius"])
+        tree.links.new(ramp, point.inputs["lam"])
+
+        frame = Frame(tree, location=self.PARALLEL_FRAME,
+                      label="Circles Of Latitude", node_height=GRID)
+        frame.add([longitude, sample, point])
+        return point.outputs["point"]
+
+    # ----------------------------------------------------------------
+    def _create_original_position_frame(self, tree, origin, grow, ramp, tag):
+        """``Original Position``: where a point was before the globe took it.
+
+        Two frames of the editor with the same label and the same three
+        nodes, one per word, so they are built by one method called twice.
+
+        The flat term is not simply ``Position``: a letter that has not
+        finished growing has to be *small*, and small about its own centre
+        rather than about the origin of the sentence. So the point is first
+        pulled towards its glyph's pivot by however far that letter has got,
+
+            ``pivot + (position - pivot) * grow``
+
+        and only then faded out by ``1 - lambda`` as the globe takes over.
+        With ``grow`` at one the first factor is the identity, so once the
+        sentence is written this is exactly the editor's ``Position``.
+
+        :param origin: the frame's own location.
+        :param tag: ``"Life"`` or ``"Earth"``, to keep the two sets of node
+            names apart.
+        :return: the vector socket of the flat contribution.
+        """
+        at = _in_frame(origin)
+        where = Position(tree, location=at(0.1, -0.1), node_height=GRID,
+                         name="%sPointPosition" % tag)
+        pivot = NamedAttribute(tree, location=at(0.1, -0.9),
+                               data_type="FLOAT_VECTOR", name=self.PIVOT,
+                               node_height=GRID, label="GlyphPivot")
+        flat = make_function(
+            tree, name="%sFlatPosition" % tag,
+            functions={"flat": [
+                "pivot_x,pos_x,pivot_x,-,grow,*,+,1,lam,-,*",
+                "pivot_y,pos_y,pivot_y,-,grow,*,+,1,lam,-,*",
+                "pivot_z,pos_z,pivot_z,-,grow,*,+,1,lam,-,*"]},
+            inputs=["pos", "pivot", "grow", "lam"], outputs=["flat"],
+            vectors=["pos", "pivot", "flat"], scalars=["grow", "lam"], hide=True)
+        flat.location = tuple(coordinate * GRID for coordinate in at(1.2, -0.4))
+        tree.links.new(where.std_out, flat.inputs["pos"])
+        tree.links.new(pivot.std_out, flat.inputs["pivot"])
+        tree.links.new(grow, flat.inputs["grow"])
+        tree.links.new(ramp, flat.inputs["lam"])
+
+        frame = Frame(tree, location=origin, label="Original Position",
+                      node_height=GRID)
+        frame.add([where, pivot, flat])
+        return flat.outputs["flat"]
+
+    # ----------------------------------------------------------------
+    def _create_globe_frame(self, tree, control):
+        """``Globe``: the ball the graticule ends up drawn on.
+
+        It swells from nothing to ``Radius - TubeRadius`` over the last
+        ``GlobeLead`` seconds of the transformation. Two things are being
+        bought with that timing and that radius: the ball arrives while the
+        letters are still moving, so it reads as the thing they were heading
+        for rather than as something switched on afterwards; and its surface
+        lands exactly on the *inside* of the tubes, which is close enough to
+        look like one object and far enough that nothing z-fights.
+
+        How much of an arrival it is, is what ``GlobeLead`` decides. At the
+        editor's 0.1 s it is six frames - the ball snaps in under a graticule
+        that is already almost home, which is the reading where the letters
+        are the subject and the ocean is what they turn out to have been
+        drawn on. Give it half a second and it inflates instead.
+
+        :return: the geometry socket of the ball.
+        """
+        at = _in_frame(self.GLOBE_FRAME)
+        clock = SceneTime(tree, location=at(0.1, -0.2), std_out="Seconds",
+                          node_height=GRID, hide=True, name="GlobeClock")
+        swell = make_function(
+            tree, name="GlobeRadius",
+            functions={"radius": "R,tube,-,time,transformTime,duration,+,"
+                                 "lead,-,-,lead,/,0,max,1,min,*"},
+            inputs=["time", "transformTime", "duration", "lead", "R", "tube"],
+            outputs=["radius"],
+            scalars=["time", "transformTime", "duration", "lead", "R", "tube",
+                     "radius"], hide=True)
+        swell.location = tuple(coordinate * GRID for coordinate in at(1.0, -0.1))
+        tree.links.new(clock.std_out, swell.inputs["time"])
+        tree.links.new(control["TransformTime"].std_out, swell.inputs["transformTime"])
+        tree.links.new(control["TransformDuration"].std_out, swell.inputs["duration"])
+        tree.links.new(control["GlobeLead"].std_out, swell.inputs["lead"])
+        tree.links.new(control["Radius"].std_out, swell.inputs["R"])
+        tree.links.new(control["TubeRadius"].std_out, swell.inputs["tube"])
+
+        ball = UVSphere(tree, location=at(1.9, -0.3), radius=swell.outputs["radius"],
+                        segments=self.globe_segments, rings=self.globe_rings,
+                        node_height=GRID, name="Globe")
+        smooth = SetShadeSmooth(tree, location=at(2.9, -0.3),
+                                geometry=ball.geometry_out, node_height=GRID,
+                                name="SmoothGlobe")
+        painted = SetMaterial(tree, location=at(3.8, -0.6),
+                              geometry=smooth.geometry_out,
+                              material=control["GlobeMaterial"].std_out,
+                              node_height=GRID, name="PaintGlobe")
+
+        frame = Frame(tree, location=self.GLOBE_FRAME, label="Globe",
+                      node_height=GRID)
+        frame.add([clock, swell, ball, smooth, painted])
+        return painted.geometry_out
+
+    # ----------------------------------------------------------------
+    def _create_curve_geometry_frame(self, tree, control, life, earth):
+        """``CurveGeometry``: the two words joined and swept into tube.
+
+        The last thing that happens to the lettering, and the first that
+        treats it as one object: both halves have been moved onto the sphere
+        by now, so what joins here is a single set of closed curves, whether
+        they are still spelling the sentence or already drawing the graticule.
+
+        The editor sweeps them with the "Curve to Tube" asset group; a circle
+        and a ``Curve to Mesh`` is the same thing out of nodes this file
+        already has, and it does not depend on an asset library being linked
+        into the .blend.
+
+        :return: the geometry socket of the painted tubes.
+        """
+        at = _in_frame(self.TUBE_FRAME)
+        grid = JoinGeometry(tree, location=at(0.1, -0.5), node_height=GRID,
+                            name="JoinGraticule")
+        tree.links.new(life, grid.geometry_in)
+        tree.links.new(earth, grid.geometry_in)
+
+        profile = CurveCircle(tree, location=at(0.1, -0.9),
+                              resolution=self.profile_resolution,
+                              radius=control["TubeRadius"].std_out,
+                              node_height=GRID, name="TubeProfile")
+        tube = CurveToMesh(tree, location=at(1.0, -0.1), curve=grid.geometry_out,
+                           profile_curve=profile.geometry_out, fill_caps=True,
+                           node_height=GRID, name="CurveToTube")
+        smooth = SetShadeSmooth(tree, location=at(1.9, -0.4),
+                                geometry=tube.geometry_out, node_height=GRID,
+                                name="SmoothTube")
+        painted = SetMaterial(tree, location=at(2.8, -0.4),
+                              geometry=smooth.geometry_out,
+                              material=control["LetterMaterial"].std_out,
+                              node_height=GRID, name="PaintLetters")
+
+        frame = Frame(tree, location=self.TUBE_FRAME, label="CurveGeometry",
+                      node_height=GRID)
+        frame.add([grid, profile, tube, smooth, painted])
+        return painted.geometry_out
+
+
+class EpochCounterModifier(GeometryNodesModifier):
+    """``Epoch: n``, counting up ten a frame.
+
+    The read-out the soup runs behind: a word and a number, and the number is
+    the frame the scene is on rather than anything keyframed. So it costs one
+    ``Scene Time`` and cannot fall out of step with a render that skips
+    frames - see :meth:`BrainFuckSimpleModifier.create_node` for the other
+    side of that argument, where a simulation zone *does* need the frames one
+    at a time.
+
+    The count is ``(frame - StartFrame) * Step``, held at zero before the
+    scene starts and at ``LastEpoch`` once it is over, so the shot can be held
+    on the finished number for as long as the cut needs. It reaches
+    :attr:`epochs` at :attr:`frames` - ask the scene-side for both rather
+    than working them out twice.
+
+    ``Value to String`` is what makes this a geometry-nodes job rather than a
+    text object: the number is not known when the tree is built, so the glyphs
+    have to be chosen while it runs. Everything after it is the usual way of
+    turning a string into something a camera can see - outlines to curves,
+    curves realized and filled, and one material over the lot; see
+    :meth:`_lettering`, which is that line of nodes.
+
+    **The word and the number are two lines of lettering, not one string.**
+    Joined into one and centred, the pair would slide left every time the
+    number gained a digit, and the word would never be twice in the same
+    place. So the number is centred on the origin, where it grows about its
+    own middle, and the word is set once at :attr:`label_offset` and does not
+    move again. It costs a second ``String to Curves`` and a ``Join
+    Geometry``, and it is the only way the read-out holds still.
+
+    :param step: how far the count goes up from one frame to the next
+    :param last_epoch: the number it stops at
+    :param label: what stands in front of the number, its trailing space and
+        all
+    :param text_size: cap height of the number, in blender units
+    :param label_size: cap height of the word, which is set on its own rather
+        than fed from ``TextSize``: the word is a caption and stays the size
+        it is written at whatever the number is scaled to
+    :param label_offset: where the word stands, in x, from the middle of the
+        number
+    :param start_frame: the frame the count leaves zero on
+    :param color: the colour of the lettering; ``emission`` and the rest of
+        the material's keywords come through ``kwargs``
+    """
+
+    def __init__(self, step=10, first_epoch=0,last_epoch=10000, label="Epoch: ",
+                 text_size=1.0, label_size=1.0, label_offset=-2.7,
+                 start_frame=1, frame_skip=10, color="text",
+                 name="EpochCounter", **kwargs):
+        self.frame_skip = frame_skip
+        self.step = step
+        self.first_epoch = first_epoch
+        self.last_epoch = last_epoch
+        self.label = label
+        self.text_size = text_size
+        self.label_size = label_size
+        self.label_offset = label_offset
+        self.start_frame = start_frame
+        self.color = color
+        self.kwargs = kwargs
+        super().__init__(name=name, automatic_layout=False)
+
+    # ----------------------------------------------------------------
+    @property
+    def frames(self):
+        """How many frames the count takes to arrive at :attr:`last_epoch`."""
+        return int(math.ceil(self.last_epoch / self.step * self.frame_skip))
+
+    @property
+    def duration(self):
+        """... and how many seconds that is, for the scene to hold on."""
+        return self.frames / FRAME_RATE
+
+    # ----------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = {
+            "Step": InputValue(tree, location=(0, 0), value=self.step,
+                               name="Step"),
+            "FrameSkip": InputInteger(tree, location=(0, 0), integer=self.frame_skip, name="FrameSkip"),
+            "FirstEpoch": InputInteger(tree, location=(0, -0.8),integer=self.first_epoch, name="FirstEpoch"),
+            "LastEpoch": InputInteger(tree, location=(0, -0.8),integer=self.last_epoch, name="LastEpoch"),
+            "StartFrame": InputValue(tree, location=(0, -1.6),
+                                     value=self.start_frame, name="StartFrame"),
+            "TextSize": InputValue(tree, location=(0, -2.4), value=self.text_size,
+                                   name="TextSize"),
+        }
+        colour = InputMaterial(tree, location=(0, -3.2), material=self.color,
+                               name="EpochColor", **self.kwargs)
+        self.materials.append(colour.node.material)
+        frame = Frame(tree, location=(-0.4, 0.8), label="ControlParameter")
+        frame.add(list(control.values()) + [colour])
+
+        now = SceneTime(tree, location=(2, 0), std_out="Frame", name="EpochClock")
+        # held at zero before the scene starts and at LastEpoch after it ends,
+        # so that the number is right on a frame either side of the count
+        count = make_function(
+            tree, name="EpochNumber", location=(3.4, -0.4), hide=False,
+            functions={"Epoch": "frame,frameSkip,/,floor,start,-,0,max,step,*,last,min,first,+"},
+            inputs=["frame", "start", "step", "first","last", "frameSkip"], outputs=["Epoch"],
+            scalars=["step"], integers=["start", "frameSkip", "frame", "first","last", "Epoch"])
+        for socket, socket_name in ((now.std_out, "frame"),
+                                    (control["StartFrame"].std_out, "start"),
+                                    (control["Step"].std_out, "step"),
+                                    (control["FirstEpoch"].std_out, "first"),
+                                    (control["LastEpoch"].std_out, "last"),
+                                    (control["FrameSkip"].std_out, "frameSkip")):
+            tree.links.new(socket, count.inputs[socket_name])
+        digits = ValueToString(tree, location=(5, -0.4), data_type="INT",
+                               value=count.outputs["Epoch"], name="EpochDigits")
+        word = InputString(tree, location=(5.1, 1.4), string=self.label,
+                           name="EpochLabel")
+
+        # the number, centred on the origin, and the word, held to the left of
+        # it - two lines rather than one string, see the class docstring
+        number = self._lettering(tree, digits.std_out,
+                                 control["TextSize"].std_out, colour.std_out,
+                                 origin=(7.8, 0))
+        caption = self._lettering(tree, word.std_out, self.label_size,
+                                  colour.std_out, origin=(7.8, 2.8),
+                                  translation=[self.label_offset, 0, 0])
+        joined = JoinGeometry(tree, location=(13, 0.6), hide=True,
+                              geometry=[number[-1].geometry_out,
+                                        caption[-1].geometry_out])
+
+        counter = Frame(tree, location=(1.6, 0.8), label="EpochCounter")
+        counter.add([now, count, word, digits] + number + caption)
+
+        self.group_outputs.location = (14.1 * 200, 0.3 * 200)
+        tree.links.new(joined.geometry_out, self.group_outputs.inputs["Geometry"])
+
+    # ----------------------------------------------------------------
+    @staticmethod
+    def _lettering(tree, string, size, material, origin, translation=None):
+        """One line of text: a string socket in, something a camera can see out.
+
+        Outlines to curves, curves realized and filled, one material over the
+        lot, and a quarter turn to stand the result up - the same five nodes
+        for the word as for the number, which is why they are written once.
+
+        :param string: the socket the text comes from
+        :param size: cap height, a socket or a number
+        :param material: the socket every glyph is painted from
+        :param origin: where the line of nodes starts in the editor
+        :param translation: where the finished lettering stands, or ``None``
+            to leave it on the origin
+        :return: the nodes of the line, the last of them carrying the geometry
+        """
+        x, y = origin
+        curves = StringToCurves(tree, location=(x, y), string=string, size=size,
+                                align_x="CENTER", align_y="MIDDLE",
+                                name="EpochCurves")
+        realize = RealizeInstances(tree, location=(x + 1.2, y))
+        fill = FillCurve(tree, location=(x + 2.2, y), mode="N-gons")
+        painted = SetMaterial(tree, location=(x + 3.2, y), material=material,
+                              name="PaintEpoch")
+        # String to Curves writes in the x-y plane; a quarter turn about x
+        # stands the words up for a camera looking along +y
+        stood = TransformGeometry(tree, location=(x + 4.2, y),
+                                  translation=[0, 0, 0] if translation is None
+                                  else translation,
+                                  rotation=[pi / 2, 0, 0], name="StandEpochUp")
+        create_geometry_line(tree, [realize, fill, painted, stood],
+                             ins=curves.geometry_out)
+        return [curves, realize, fill, painted, stood]
+
+
+class BrainFuckHelloModifier(BrainFuckExtendedModifier):
+    """The two-headed machine writing HELLO onto one short tape.
+
+    :class:`BrainFuckExtendedModifier` runs a soup: two tapes of sixty-four
+    bytes from csv, and a program that is whatever those bytes happen to be.
+    This is the same machine with the soup taken away - one tape, short enough
+    to read, holding one program that was written on purpose::
+
+        {{{{{{++++[>++<-]>.}>+++++.}<++++.}.}+++.}
+
+    and it is the argument of the whole video in one shot: *the same HELLO*
+    the one-headed machine printed, on a machine that cannot print. There is
+    no output box here, because there is no output - a BFF program says what
+    it has to say by writing it onto the tape, so HELLO has to appear on the
+    tape itself, and that is what the second head is for.
+
+    **How the tape is laid out.** Three kinds of cell, and the program needs
+    all three:
+
+    ``0`` to ``scratch - 1``
+        zero, and the counter walks over them as no-ops on its way in. They
+        are head0's workspace: ``++++[>++<-]`` counts eight into the second of
+        them and the later runs add to it, so this is where the numbers are
+        built.
+    ``scratch`` on
+        the program, one character per cell as its ascii code. The counter
+        reads a cell and takes its value for an opcode, so this *is* the
+        program - and it draws as one, because a cell holding the code of an
+        instruction shows the instruction.
+    the last ``spare``
+        zero, and where the answer lands. ``{`` walks head1 *left* off cell 0
+        and round the ring onto them, which is why they are at the far end and
+        why there have to be exactly six: one per letter, and one more for the
+        head to finish on.
+
+    **Why fifty-one cells.** Three, forty-two and six. One fewer and head1
+    comes round the ring into the program and overwrites it; one more and the
+    letters land a cell further along with a gap behind them. The machine
+    halts after 69 steps, when the counter walks off the end.
+
+    **Why the cells read as letters.** The values written are 8, 5, 12, 12 and
+    15 - the alphabet encoding of the one-headed machine, where ``A`` is 1 and
+    ``Z`` is 26, and the reason that machine could print HELLO in 27
+    instructions. The extended machine draws a cell as its number unless the
+    number is the code of an instruction, so as it stands the answer would
+    read ``8 5 12 12 15``. :meth:`_cell_glyph` puts a third case in between:
+    a value from 1 to 26 draws as the letter of :attr:`LETTERS` it stands for.
+    Set ``letters=False`` to see the numbers instead, which is the same tape
+    read the machine's own way.
+
+    :param program: the BFF program, written onto the tape from cell
+        ``scratch``
+    :param scratch: zero cells in front of it for head0 to work in
+    :param spare: cells behind it for head1 to write the answer into
+    :param letters: read the answer back through the table above the tape
+        once the machine has halted, rather than leaving it as numbers
+    """
+
+    #: HELLO on the two-headed machine. Five ``{`` put head1 on the last five
+    #: cells of the ring - one per letter, with nothing left over - and each
+    #: ``}`` walks it one to the right for the next; the arithmetic between
+    #: them is the one-headed HELLO with its prints turned into copies. The
+    #: five ``}`` bring head1 round to cell 0 again, so it ends where it
+    #: started and no cell is spent on parking it.
+    HELLO = "{{{{{++++[>++<-]>.}>+++++.}<++++.}.}+++.}"
+
+    #: What the two cells head0 adds up in start out holding, and the whole
+    #: trick of this machine: 64 is where the capitals begin in ascii, so
+    #: ``++++[>++<-]`` counting eight into a cell that holds 64 leaves 72 -
+    #: and 72 *is* ``H``. So the machine writes ascii rather than a code that
+    #: has to be translated afterwards, and the table above the tape is the
+    #: right table to read its answer in. Cell 0 stays at zero: it is the
+    #: loop's counter and the loop ends when it runs out.
+    LETTER_ORIGIN = 64
+
+    #: The cursor is a rectangle rather than a square here, tall enough to
+    #: take in the character standing on the cell as well as the cell itself -
+    #: an instruction is drawn ``cell_command_scale`` times the size of a
+    #: number, and it is the instruction the cursor is pointing out.
+    cursor_tall = 2.6
+    cursor_lift = 0.45
+
+    def __init__(self, program=None, scratch=3, gap=1, spare=5, letters=True,
+                 cell_size=0.5, name="HelloExtended", **kwargs):
+        self.bff_program = self.HELLO if program is None else program
+        self.scratch = scratch
+        self.gap = gap
+        self.spare = spare
+        self.letters = letters
+        # one tape, and no csv files to fill it from
+        kwargs.pop("tape_files", None)
+        super().__init__(
+            tape_size=scratch + len(self.bff_program) + gap + spare,
+            cell_size=cell_size, tape_files=(), name=name, **kwargs)
+
+    # ----------------------------------------------------------------
+    @property
+    def first_answer(self):
+        """The first cell the answer is written on."""
+        return self.scratch + len(self.bff_program) + self.gap
+
+    @property
+    def first_instruction(self):
+        """Where the counter starts: the first cell that is not zero.
+
+        The scratch cells in front of the program are zero, and a zero is a
+        no-op, so a counter starting at 0 spends its first steps walking over
+        nothing. It starts on the program instead, which is also where the
+        cursor first appears.
+        """
+        return self.scratch
+
+    @property
+    def halt_at(self):
+        """Where the counter stops: the zero cell after the last instruction.
+
+        This machine knows where its program ends, so it does not have to run
+        off the end of memory to find out - it stops on the zero that was put
+        there for it. Everything past that point is the answer, and reading
+        the answer as instructions is what the soup does, not what this does.
+        """
+        return self.scratch + len(self.bff_program)
+
+    # ----------------------------------------------------------------
+    @property
+    def steps(self):
+        """How many instructions the machine executes before it halts.
+
+        The counter starts at 0 and moves one cell at a time except where a
+        bracket sends it back, so this is worked out by running the thing -
+        see :meth:`simulate`. The scene needs it to know how long the shot is.
+        """
+        return self.simulate()[0]
+
+    def simulate(self):
+        """Run the program in python, exactly as the graph runs it.
+
+        :return: ``(steps, tape)`` - the tape as the machine leaves it.
+        """
+        tape = ([0] + [self.LETTER_ORIGIN] * (self.scratch - 1)
+                + [ord(character) for character in self.bff_program]
+                + [0] * (self.gap + self.spare))
+        size = len(tape)
+        head0 = head1 = steps = 0
+        counter = self.first_instruction
+        while self.first_instruction <= counter < self.halt_at:
+            byte = tape[counter]
+            code = chr(byte) if 32 <= byte < 127 else ""
+            onward = counter + 1
+            if code == ">":
+                head0 = (head0 + 1) % size
+            elif code == "<":
+                head0 = (head0 - 1) % size
+            elif code == "}":
+                head1 = (head1 + 1) % size
+            elif code == "{":
+                head1 = (head1 - 1) % size
+            elif code == "+":
+                tape[head0] = (tape[head0] + 1) % 256
+            elif code == "-":
+                tape[head0] = (tape[head0] - 1) % 256
+            elif code == ".":
+                tape[head1] = tape[head0]
+            elif code == ",":
+                tape[head0] = tape[head1]
+            elif code in "[]":
+                # the partner is searched for in the tape as it stands, the
+                # way _create_bracket_scan does it
+                forward, depth = code == "[", 1
+                jumps = (byte == ord("[") and tape[head0] == 0) or \
+                        (byte == ord("]") and tape[head0] != 0)
+                if jumps:
+                    index = counter + (1 if forward else -1)
+                    while 0 <= index < size and depth:
+                        here = chr(tape[index]) if 32 <= tape[index] < 127 else ""
+                        depth += (here == code) - (here == ("]" if forward else "["))
+                        index += 1 if forward else -1
+                    onward = index if depth == 0 else size
+                    if not forward and depth == 0:
+                        onward = index + 2
+            counter, steps = onward, steps + 1
+        return steps, tape
+
+    # ----------------------------------------------------------------
+    def _create_tape_frame(self, tree, control):
+        """``Tape``: one tape, with the program written into the middle of it.
+
+        No csv and no second tape. The value of a cell is the ascii code of
+        the program character that belongs on it and zero everywhere else,
+        which is the whole of the layout the class docstring describes - a
+        ``Slice String`` on the program and a range test around it.
+
+        :return: the geometry socket of the initial tape.
+        """
+        program = InputString(tree, location=(-8, -1.4), string=self.bff_program,
+                              name="Program")
+        length = MathNode(tree, location=(-8, 0), operation="MULTIPLY",
+                          inputs0=control["TapeSize"].std_out,
+                          inputs1=control["CellSize"].std_out, name="TapeLength")
+        end = CombineXYZ(tree, location=(-7, 0), x=length.std_out, name="TapeEnd")
+        line = MeshLine(tree, location=(-6, 0.6), mode="END_POINTS",
+                        count=control["TapeSize"].std_out,
+                        start_location=Vector([0, 0, 0]), end_location=end.std_out)
+
+        cell = Index(tree, location=(-8, -2.0), name="CellIndex")
+        where = make_function(
+            tree, name="ProgramCell", location=(-6.6, -1.7), hide=True,
+            aux_functions={"at": "i,%d,-" % self.scratch},
+            functions={"At": "at",
+                       "OnIt": "at,0,<,not,at,%d,<,and" % len(self.bff_program),
+                       # the cells head0 adds up in start at the origin; cell
+                       # 0 is the loop counter, and everything past the
+                       # program - the zero it ends on and the cells the
+                       # answer lands on - starts at nothing
+                       "Based": "i,0,>,i,%d,<,and" % self.scratch},
+            inputs=["i"], outputs=["At", "OnIt", "Based"],
+            integers=["i", "at", "At"], booleans=["OnIt", "Based"])
+        tree.links.new(cell.std_out, where.inputs["i"])
+        character = SliceString(tree, location=(-5.4, -1.4), string=program.std_out,
+                                position=where.outputs["At"], length=1,
+                                name="ProgramCharacter")
+        code = CharToAscii(tree, location=(-4.6, -1.4), char=character.std_out,
+                           name="ProgramByte")
+        empty = Switch(tree, location=(-4.6, -2.2), input_type="INT",
+                       switch=where.outputs["Based"], false=0,
+                       true=self.LETTER_ORIGIN, name="BlankOrOrigin")
+        byte = Switch(tree, location=(-3.8, -1.4), input_type="INT",
+                      switch=where.outputs["OnIt"], false=empty.std_out,
+                      true=code.std_out, name="CellByte")
+        # the attribute has to exist from the first frame on, otherwise the
+        # Sample Index in the automaton has nothing to read
+        values = StoredNamedAttribute(tree, location=(-3.0, 0.6), data_type="INT",
+                                      domain="POINT", name="Value",
+                                      value=byte.std_out, label="LoadTape")
+        # one tape, so every cell is on tape 0 and its number is its index -
+        # the Cells frame drops each cell onto the line of its own tape and
+        # the arrows read the cell number back off the realized geometry
+        tape_kind = StoredNamedAttribute(tree, location=(-2.2, 0.6), data_type="INT",
+                                         domain="POINT", name="Tape", value=0,
+                                         label="TapeNumber")
+        number = StoredNamedAttribute(tree, location=(-1.4, 0.6), data_type="INT",
+                                      domain="POINT", name="Cell",
+                                      value=cell.std_out, label="CellNumber")
+        create_geometry_line(tree, [line, values, tape_kind, number])
+
+        frame = Frame(tree, location=(-8.4, 1.4), label="Tape")
+        frame.add([program, length, end, line, cell, where, character, code,
+                   empty, byte, values, tape_kind, number])
+        return number.geometry_out
+
+    # ----------------------------------------------------------------
+    def _cell_glyph(self, tree, control, held, digits, letter, is_command,
+                    cell=None, counter=None, location=(0, 0)):
+        """An instruction, a number, or - at the very end - a letter.
+
+        The cells the answer lands on start at nothing and show it, and they
+        show what is copied onto them as it arrives, which is 72 and 69 and
+        76: numbers, because a number is what a cell holds. Only once the
+        machine has halted are they read as what the table above the tape
+        says they are, and then the tape says HELLO.
+
+        Nothing is translated to do that. The 64 the two working cells start
+        at has already done the work - the machine wrote ascii - so this is
+        the same ``Slice String`` on ``CodeTable`` that draws an instruction,
+        asked for a few cells more.
+        """
+        if not self.letters:
+            return super()._cell_glyph(tree, control, held, digits, letter,
+                                       is_command, cell=cell, counter=counter,
+                                       location=location)
+        x, y = location
+        reading = make_function(
+            tree, name="CellReading", location=(x - 1.4, y - 1.2), hide=True,
+            # an instruction always; a cell of the answer once the machine has
+            # stopped, and only if what it holds is something the table shows
+            functions={"AsLetter": "command,counter,%d,<,not,i,%d,<,not,and,"
+                                   "value,31,<,not,and,value,127,<,and,or"
+                                   % (self.halt_at, self.first_answer)},
+            inputs=["value", "i", "counter", "command"], outputs=["AsLetter"],
+            integers=["value", "i", "counter"],
+            booleans=["command", "AsLetter"])
+        for socket, socket_name in ((held, "value"), (cell, "i"),
+                                    (counter, "counter"),
+                                    (is_command, "command")):
+            tree.links.new(socket, reading.inputs[socket_name])
+        return Switch(tree, location=(x, y), input_type="STRING",
+                      switch=reading.outputs["AsLetter"], true=letter,
+                      false=digits, name="LetterOrNumber").std_out

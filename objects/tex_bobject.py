@@ -107,7 +107,7 @@ class TexBObject(BObject):
         for obj in self.objects:
             obj.disappear(begin_time=begin_time, transition_time=transition_time, **kwargs)
 
-    def write(self, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
+    def write(self, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME,**kwargs):
         """
         The write animation consists of two parts. First the outline of the letter is drawn and
         eventually the shape of the letter appears on the screen
@@ -118,11 +118,11 @@ class TexBObject(BObject):
         :return:
         """
 
-        return self.write_index(0, begin_time=begin_time, transition_time=transition_time)
+        return self.write_index(0, begin_time=begin_time, transition_time=transition_time,**kwargs)
 
-    def write_index(self, expression_index, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME):
+    def write_index(self, expression_index, begin_time=0, transition_time=OBJECT_APPEARANCE_TIME,**kwargs):
         ibpy.link(self.ref_obj)
-        self.objects[expression_index].write(begin_time=begin_time, transition_time=transition_time)
+        self.objects[expression_index].write(begin_time=begin_time, transition_time=transition_time,**kwargs)
         return begin_time + transition_time
 
     def move(self, direction, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):

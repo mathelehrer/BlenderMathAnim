@@ -300,20 +300,22 @@ class LogoFromInstances(BObject):
         if isinstance(self.scale,float):
             self.scale = [self.scale]*3
 
+        skip_red = get_from_kwargs(kwargs_red,"skip",[])
         if instance_red:
             for i in range(0, details + 1):
-                den = 2 + i * i
-                r = 1 / den
-                x = 2 * i / den
-                y = 3 / den
-                if mode == "XY":
-                    location = [x,y,0]
-                else:
-                    location = [x,0,y]
-                self.red_instances.append(instance_red(location=location,
-                                                 name='red_' + str(i),**kwargs_red,scale=[r]*3))
+                if not i in skip_red:
+                    den = 2 + i * i
+                    r = 1 / den
+                    x = 2 * i / den
+                    y = 3 / den
+                    if mode == "XY":
+                        location = [x,y,0]
+                    else:
+                        location = [x,0,y]
+                    self.red_instances.append(instance_red(location=location,
+                                                     name='red_' + str(i),**kwargs_red,scale=[r]*3))
 
-                if i > 0:
+                if i > 0 and not -i in skip_red:
                     den = 2 + i * i
                     r = 1 / den
                     x = -2 * i / den

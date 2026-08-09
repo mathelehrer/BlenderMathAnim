@@ -1349,7 +1349,7 @@ class SampleCurve(GreenNode):
         self.normal_out = self.node.outputs["Normal"]
 
         if curves:
-            self.tree.links.new(curves, self.node.inputs["Curve"])
+            self.tree.links.new(curves, self.node.inputs["Curves"])
         if value:
             if isinstance(value, (int, float)):
                 self.node.inputs["Value"].default_value = value
@@ -7609,6 +7609,15 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
 
     Unquoted they would be read as ``LESS_THAN``, ``GREATER_THAN``, a token
     separator, and so on.
+
+    The same trap catches *variable names*: a name that is spelled like one of
+    the tokens of :data:`~interface.ibpy.OPERATORS` is read as the operator,
+    because a token is looked up there before it is looked up among the
+    inputs.  So an input called ``length`` is the length of a vector, one
+    called ``min`` is the minimum of the two below it on the stack, and the
+    group is built without an error - it simply computes something else.  Name
+    them for what they are but around that list: ``end`` rather than
+    ``length``, ``low``/``high`` rather than ``min``/``max``.
 
     ``custom_ops`` extends the RPN operator vocabulary with user-defined
     nodes.  It is a dict mapping an operator token (the string that appears in

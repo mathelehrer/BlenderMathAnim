@@ -5225,10 +5225,14 @@ class QuadModifier(GeometryNodesModifier):
         quad_node = Quadrilateral(tree, mode=self.mode, width=width, height=height, hide=True)
 
         resolution = get_from_kwargs(kwargs, "resolution", 100)
+        thickness = get_from_kwargs(kwargs,"thickness",1)
         res_node = InputInteger(tree, name="Resolution", integer=resolution, hide=True)
         idx = Index(tree)
 
         grow = InputValue(tree, name="Grow", value=0, hide=True)
+        thickness = InputValue(tree,name="Thickness",value=thickness,hide=True)
+        thickness_factor = MathNode(tree,operation="MULTIPLY",inputs0=thickness.std_out,inputs1=0.02,
+                                    hide=True,label="ThicknessFactor")
 
         grow_function = make_function(tree, name="GrowFunction",
                                       functions={
@@ -5239,12 +5243,11 @@ class QuadModifier(GeometryNodesModifier):
         links.new(idx.std_out, grow_function.inputs["idx"])
         links.new(grow.std_out, grow_function.inputs["grow"])
 
-        resample = ResampleCurve(tree, count=resolution, hide=True)
+        resample = ResampleCurve(tree, count=res_node.std_out, hide=True)
         trim = TrimCurve(tree, hide=True)
         select_geo = SeparateGeometry(tree, selection=grow_function.outputs["selection"], hide=True)
 
-        thickness = get_from_kwargs(kwargs, "thickness", 1)
-        wireframe = CurveWireFrame(tree, radius=thickness * 0.02, hide=True)
+        wireframe = CurveWireFrame(tree, radius=thickness_factor.std_out, hide=True)
 
         geo_location = get_from_kwargs(kwargs, "geo_location", Vector())
         normal = get_from_kwargs(kwargs, "normal", [0, 0, 0])
