@@ -2831,6 +2831,98 @@ class SetShadeSmooth(GreenNode):
             self.tree.links.new(shade_smooth, self.inputs["Shade Smooth"])
 
 
+class MeshToVolume(GreenNode):
+    """
+    GeometryNodeMeshToVolume: fills the inside of a closed mesh with a volume
+    grid of constant ``density``.
+
+    ``resolution_mode`` is a menu socket in blender 5, an enum property in
+    older versions, so it is set whichever way the node offers; "Amount"
+    reads ``Voxel Amount`` (voxels along the longest side of the bounding
+    box), "Size" reads ``Voxel Size``.
+    """
+
+    def __init__(self, tree, location=(0, 0),
+                 mesh=None, density=1.0,
+                 resolution_mode="Amount",
+                 voxel_size=0.3, voxel_amount=64.0,
+                 interior_band_width=0.2,
+                 **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeMeshToVolume")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_in = self.node.inputs["Mesh"]
+        self.geometry_out = self.node.outputs["Volume"]
+
+        if "Resolution Mode" in self.node.inputs:
+            self.node.inputs["Resolution Mode"].default_value = resolution_mode
+        elif hasattr(self.node, "resolution_mode"):
+            self.node.resolution_mode = resolution_mode
+
+        if mesh is not None:
+            tree.links.new(mesh, self.node.inputs["Mesh"])
+
+        for socket, value in (("Density", density),
+                              ("Voxel Size", voxel_size),
+                              ("Voxel Amount", voxel_amount),
+                              ("Interior Band Width", interior_band_width)):
+            if socket not in self.node.inputs:
+                continue
+            if isinstance(value, (int, float)):
+                self.node.inputs[socket].default_value = value
+            else:
+                tree.links.new(value, self.node.inputs[socket])
+
+
+class DistributePointsInVolume(GreenNode):
+    """
+    GeometryNodeDistributePointsInVolume: scatters points through a volume.
+
+    In "Random" mode the point count of every voxel is proportional to
+    ``Density`` **times the value stored in that voxel**, so a volume whose
+    grid carries a scalar field f is sampled with a point density
+    proportional to f - which is what makes an arbitrary spatial distribution
+    reachable at all (see
+    :class:`~geometry_nodes.modifier_video_interferences.SpatialDistributionModifier`).
+    "Grid" mode ignores the density and places one point per voxel of
+    ``Spacing`` whose value exceeds ``Threshold``.
+    """
+
+    def __init__(self, tree, location=(0, 0),
+                 volume=None, mode="Random",
+                 density=100.0, seed=0,
+                 spacing=(0.3, 0.3, 0.3), threshold=0.1,
+                 **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeDistributePointsInVolume")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_in = self.node.inputs["Volume"]
+        self.geometry_out = self.node.outputs["Points"]
+
+        if "Mode" in self.node.inputs:
+            self.node.inputs["Mode"].default_value = mode
+        elif hasattr(self.node, "mode"):
+            self.node.mode = mode.upper()
+
+        if volume is not None:
+            tree.links.new(volume, self.node.inputs["Volume"])
+
+        for socket, value in (("Density", density), ("Seed", seed),
+                              ("Threshold", threshold)):
+            if socket not in self.node.inputs:
+                continue
+            if isinstance(value, (int, float)):
+                self.node.inputs[socket].default_value = value
+            else:
+                tree.links.new(value, self.node.inputs[socket])
+
+        if "Spacing" in self.node.inputs:
+            if isinstance(spacing, (list, tuple, Vector)):
+                self.node.inputs["Spacing"].default_value = tuple(spacing)
+            else:
+                tree.links.new(spacing, self.node.inputs["Spacing"])
+
+
 class VolumeCube(GreenNode):
     """
     GeometryNodeVolumeCube: samples a scalar density field on a 3D voxel grid
@@ -7904,6 +7996,9 @@ _SCALAR_MATH_OPS = {
     "cosh": ("COSH", "cosh", True, ()),
     "acos": ("ARCCOSINE", "acos", True, ()),
     "tan": ("TANGENT", "tan", True, ()),
+    "atan": ("ARCTANGENT", "atan", True, ()),
+    "tanh": ("TANH", "tanh", True, ()),
+    "exp": ("EXPONENT", "exp", True, ()),
     "abs": ("ABSOLUTE", "abs", True, ()),
     "sgn": ("SIGN", "sgn", True, ()),
     "round": ("ROUND", None, True, ()),
