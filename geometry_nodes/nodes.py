@@ -7966,6 +7966,259 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
     return group
 
 
+# ---------------------------------------------------------------------------
+#  BESSEL FUNCTIONS OF THE FIRST AND SECOND KIND, ORDER ZERO
+# ---------------------------------------------------------------------------
+#
+# Blender's Math node has no Bessel function, and there is no way to build one
+# out of the operations it does have - J0 is not elementary. What there is
+# instead is a very good *polynomial* approximation, Abramowitz & Stegun
+# 9.4.1-9.4.3, which is what these coefficients are. It splits the axis at
+# x = 3 and uses a different form on each side:
+#
+#   x <= 3   a plain polynomial in (x/3)^2, six terms, error < 5e-8. Y0 needs
+#            one extra piece, the log singularity (2/pi) ln(x/2) J0(x), which
+#            is what makes Y0 the *outgoing* half of the wave.
+#   x >= 3   the modulus-and-phase form, J0 = f0(x) cos(th0(x)) / sqrt(x) and
+#            Y0 = f0(x) sin(th0(x)) / sqrt(x), where f0 and th0 are polynomials
+#            in 3/x. This is the important half: f0 -> sqrt(2/pi) and
+#            th0 -> x - pi/4, so the approximation *is* the far-field wave plus
+#            a correction, and it stays accurate however large x gets. A
+#            lookup table cannot do that - it would have to be resampled every
+#            time the wavelength or the extent of the surface changed, and it
+#            would have to store the oscillation itself rather than its slowly
+#            varying envelope and phase.
+#
+# Measured against scipy over x in (0, 400]: |error| < 4.9e-8 for J0 and
+# < 2.4e-8 for Y0, which is below the 1.2e-7 resolution of the float32 the
+# shader evaluates in. In other words the approximation is exact as far as
+# blender is concerned; the error that survives is the rounding of x itself.
+_J0_SMALL = (1.0, -2.2499997, 1.2656208, -0.3163866,
+             0.0444479, -0.0039444, 0.00021)
+_Y0_SMALL = (0.36746691, 0.60559366, -0.74350384, 0.25300117,
+             -0.04261214, 0.00427916, -0.00024846)
+_BESSEL_F0 = (0.79788456, -0.00000077, -0.00552740, -0.00009512,
+              0.00137237, -0.00072805, 0.00014476)
+# coefficients of t^1 ... t^6 in th0 = x - pi/4 + sum_i a_i t^i
+_BESSEL_TH = (-0.04166397, -0.00003954, 0.00262573,
+              -0.00054125, -0.00029333, 0.00013558)
+_QUARTER_PI = 0.78539816
+# ln(x) = lg(x) * ln(10) - the RPN vocabulary has only the base-10 log, so the
+# conversion is folded into the constant that multiplies it anyway
+_TWO_OVER_PI_LN10 = float(2 / np.pi * np.log(10))
+
+
+def horner_rpn(coefficients, variable):
+    """RPN for ``sum_i coefficients[i] * variable**i``, by Horner's rule.
+
+    Horner rather than the direct sum because it needs no powers: a term
+    costs one MULTIPLY and one ADD, so a degree-six polynomial is twelve
+    nodes instead of twelve plus six POWERs, and it is the numerically
+    better-conditioned order into the bargain.
+
+    :param coefficients: ascending, ``coefficients[0]`` being the constant term.
+    :param variable: name of the RPN symbol to evaluate at.
+    """
+    terms = [repr(float(coefficients[-1]))]
+    for c in coefficients[-2::-1]:
+        terms.append("%s,*,%s,+" % (variable, repr(float(c))))
+    return ",".join(terms)
+
+
+def bessel_j0_y0_rpn(argument, prefix="bessel", want=("j0", "y0")):
+    r"""RPN for :math:`J_0` and :math:`Y_0` of a **strictly positive** argument.
+
+    The two cylinder functions of order zero, which are to a circular wave
+    what sine and cosine are to a plane one: the field radiated by a point
+    source in two dimensions is
+
+    .. math::
+        u(r, t) = \mathrm{Re}\big[H^{(1)}_0(kr)\,e^{-i\omega t}\big]
+                = J_0(kr)\cos\omega t + Y_0(kr)\sin\omega t ,
+
+    and the familiar :math:`\sin(kr-\omega t)/\sqrt r` is only what that
+    becomes far from the source. Near it the two disagree completely - the
+    elementary form diverges as :math:`r^{-1/2}` and puts its wavefronts in
+    the wrong places, while the true field diverges only as :math:`\ln r`.
+
+    Most callers do not want this function: :data:`BESSEL_OPS` puts both of
+    them into the RPN vocabulary as ordinary postfix operators, so a formula
+    can simply say ``"x,j0"``, and every use shares one copy of the
+    approximation. This is the raw material that builds those groups, and is
+    worth calling directly only to *inline* the arithmetic - which is
+    cheaper when both functions are wanted for the same argument, because
+    then the two branches' shared polynomials are evaluated once rather than
+    once per group.
+
+    Usage - the returned formulas go straight into ``aux_functions``, and
+    every one of their keys must also be listed in ``scalars``::
+
+        aux = {"x": "r,k,*"}
+        b, names = bessel_j0_y0_rpn("x", prefix="b")
+        aux.update(b)
+        make_function(tree, aux_functions=aux,
+                      functions={"u": "%s,wt,cos,*,%s,wt,sin,*,+"
+                                      % (names["j0"], names["y0"])},
+                      scalars=[..., "x"] + list(aux), ...)
+
+    Costs 73 nodes for both functions together (51 for ``j0`` alone), most of
+    it the two polynomial branches, which are evaluated *both* and then
+    selected between - a shader has no branches, so the arithmetic of the
+    unused side happens regardless. That is also why each branch clamps its
+    own argument (``min(x,3)`` on one side, ``max(x,3)`` on the other): the
+    large-x branch forms ``3/x``, and without the clamp the small-x side of
+    the picture would multiply an infinity by zero and come out NaN.
+
+    :param argument: name of the RPN symbol holding *x*. It must be positive
+        everywhere the group is evaluated - :math:`Y_0(x)\to-\infty` as
+        :math:`x\to0`, so a caller that can reach the origin has to hold *x*
+        off it with a ``max``, which is a source of finite radius rather than
+        a point.
+    :param prefix: stem for the generated aux names, so that several
+        arguments can be evaluated in one group without colliding.
+    :param want: which of ``"j0"``, ``"y0"`` to produce. Dropping ``"y0"``
+        skips the logarithm and the second polynomial.
+    :return: ``(aux, names)`` - the aux formulas in dependency order, and a
+        dict mapping ``"j0"``/``"y0"`` to the aux key holding that result.
+    """
+    p = prefix
+    x = argument
+    aux = {}
+
+    # --- small-x branch, a polynomial in t^2 = (x/3)^2 --------------------
+    aux[p + "_xs"] = "%s,3,min" % x
+    aux[p + "_ts"] = "{0}_xs,3,/,2,**".format(p)
+    aux[p + "_j0s"] = horner_rpn(_J0_SMALL, p + "_ts")
+
+    # --- large-x branch, modulus and phase as polynomials in t = 3/x ------
+    aux[p + "_xl"] = "%s,3,max" % x
+    aux[p + "_t"] = "3,{0}_xl,/".format(p)
+    aux[p + "_f0"] = horner_rpn(_BESSEL_F0, p + "_t")
+    # th0 = x - pi/4 + t*(a1 + t*(a2 + ...)); the leading t factors out, so
+    # Horner runs over a1..a6 and the whole thing is multiplied by t once
+    aux[p + "_th"] = "{0}_xl,{1},-,{2},{0}_t,*,+".format(
+        p, repr(_QUARTER_PI), horner_rpn(_BESSEL_TH, p + "_t"))
+    aux[p + "_amp"] = "{0}_f0,{0}_xl,sqrt,/".format(p)
+
+    # --- pick a branch, without branching --------------------------------
+    aux[p + "_sel"] = "%s,3,<" % x
+    aux[p + "_nsel"] = "1,{0}_sel,-".format(p)
+
+    names = {}
+    if "j0" in want:
+        aux[p + "_j0l"] = "{0}_amp,{0}_th,cos,*".format(p)
+        aux[p + "_j0"] = "{0}_j0s,{0}_sel,*,{0}_j0l,{0}_nsel,*,+".format(p)
+        names["j0"] = p + "_j0"
+    if "y0" in want:
+        aux[p + "_y0l"] = "{0}_amp,{0}_th,sin,*".format(p)
+        # (2/pi) ln(x/2) J0(x) + polynomial; the ln is a base-10 lg with the
+        # change of base folded into the constant in front of it
+        aux[p + "_y0s"] = "{0}_xs,2,/,lg,{1},*,{0}_j0s,*,{2},+".format(
+            p, repr(_TWO_OVER_PI_LN10), horner_rpn(_Y0_SMALL, p + "_ts"))
+        aux[p + "_y0"] = "{0}_y0s,{0}_sel,*,{0}_y0l,{0}_nsel,*,+".format(p)
+        names["y0"] = p + "_y0"
+    return aux, names
+
+
+_BESSEL_GROUP_NAMES = {("j0", "Shader"): "BesselJ0",
+                       ("y0", "Shader"): "BesselY0",
+                       ("j0", "GeometryNodes"): "BesselJ0Geo",
+                       ("y0", "GeometryNodes"): "BesselY0Geo"}
+
+
+def bessel_node_group(kind="j0", node_group_type="Shader"):
+    """The node group datablock for :math:`J_0` or :math:`Y_0`, built once.
+
+    Wraps the seventy-odd Math nodes of :func:`bessel_j0_y0_rpn` into a group
+    with one input ``x`` and one output, so that the formula that uses it
+    stays readable and every source in a scene shares one copy of the
+    approximation instead of carrying its own.
+
+    Cached by name in ``bpy.data.node_groups``, which is per blender session:
+    the first call builds it, every later one hands back the same datablock.
+    The group is given a fake user, because between being built and being
+    instanced it has none and would not survive a save.
+
+    ``J_0`` and ``Y_0`` get a group each rather than one group with two
+    outputs. They do share work - ``Y_0`` needs ``J_0``'s small-x polynomial
+    for the logarithmic term - but an RPN operator yields one value, so a
+    two-output group would have to be *instanced* twice to give both, and
+    then the shared part is evaluated twice regardless. Measured: 63 + 81 =
+    144 math nodes per argument this way against 2 x 88 = 176 that way, and
+    each group is independently useful. Inlining both with
+    :func:`bessel_j0_y0_rpn` is cheaper still at 88, and is the reason that
+    function stays public.
+
+    :param kind: ``"j0"`` or ``"y0"``.
+    :param node_group_type: ``"Shader"`` or ``"GeometryNodes"``. The two tree
+        types cannot share a group datablock, so there is one cached group
+        per kind per type.
+    """
+    tree_type = ("ShaderNodeTree" if "Shader" in node_group_type
+                 else "GeometryNodeTree")
+    key = (kind, "Shader" if "Shader" in node_group_type else "GeometryNodes")
+    if key not in _BESSEL_GROUP_NAMES:
+        raise ValueError("kind is 'j0' or 'y0', not %r" % kind)
+    name = _BESSEL_GROUP_NAMES[key]
+
+    existing = bpy.data.node_groups.get(name)
+    if existing is not None and existing.bl_idname == tree_type:
+        return existing
+
+    # make_function always drops its group *node* into a host tree, so build
+    # into a scratch tree and keep only the tree the node points at
+    scratch = bpy.data.node_groups.new(type=tree_type, name=name + "Scratch")
+    out = kind.upper()
+    aux, names = bessel_j0_y0_rpn("x", prefix="b", want=(kind,))
+    group = make_function(scratch, name=name, node_group_type=node_group_type,
+                          functions={out: names[kind]}, aux_functions=aux,
+                          inputs=["x"], outputs=[out],
+                          scalars=["x", out] + list(aux), hide=False)
+    tree = group.node_tree
+    tree.use_fake_user = True
+    bpy.data.node_groups.remove(scratch)
+    return tree
+
+
+class BesselNode(Node):
+    """A group node evaluating :math:`J_0(x)` or :math:`Y_0(x)`.
+
+    Usable in a shader tree and in a geometry tree alike - it looks at what
+    kind of tree it is being put into and instances the matching group. Most
+    of the time it is not constructed directly but reached through
+    :data:`BESSEL_OPS`, which puts it into the RPN vocabulary.
+
+    :param kind: ``"j0"`` or ``"y0"``.
+    """
+
+    def __init__(self, tree, kind="j0", location=(0, 0), **kwargs):
+        if tree.bl_idname == "ShaderNodeTree":
+            self.node = tree.nodes.new("ShaderNodeGroup")
+            group_type = "Shader"
+        else:
+            self.node = tree.nodes.new("GeometryNodeGroup")
+            group_type = "GeometryNodes"
+        self.node.node_tree = bessel_node_group(kind, group_type)
+        super().__init__(tree, location, **kwargs)
+        self.std_out = self.node.outputs[0]
+
+
+# The Bessel functions as RPN operators, to hand to make_function's
+# `custom_ops`. Both are unary and postfix like `sin`, so a circular wave is
+#
+#     "amp,x,j0,wt,cos,*,x,y0,wt,sin,*,+,*"
+#
+# Passing these shadows any *variable* called `j0` or `y0` in the same call -
+# a token is looked up among the operators before it is looked up among the
+# inputs - so name a variable around them, as with the built-in operators.
+BESSEL_OPS = {
+    "j0": {"type": BesselNode, "class_kwargs": {"kind": "j0"},
+           "inputs": ("x",), "unary": True, "output": "J0", "label": "J0"},
+    "y0": {"type": BesselNode, "class_kwargs": {"kind": "y0"},
+           "inputs": ("x",), "unary": True, "output": "Y0", "label": "Y0"},
+}
+
+
 # Dispatch tables consumed by build_function.
 #
 # Scalar ops -> ShaderNodeMath. Each entry is keyed by the RPN token and

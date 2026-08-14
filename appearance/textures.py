@@ -9,7 +9,7 @@ import numpy as np
 from sympy import Symbol, re, im, false
 
 from extended_math_nodes.generic_nodes import SphericalHarmonics200, CMBNode
-from geometry_nodes.nodes import make_function
+from geometry_nodes.nodes import make_function, BESSEL_OPS
 from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
     Vector, set_material, create_iterator_group, get_obj, animate_sky_background, \
@@ -24,10 +24,12 @@ from shader_nodes.shader_nodes import (Mapping, AttributeNode, HueSaturationValu
                                        Displacement, ShaderNode, MixShader,
                                        TextureCoordinate, ColorRamp, ShaderFrame,
                                        ShaderRepeatZone, BrightContrast, RGB, PrincipledBSDF, OnRightNode, CombineXYZ,
-                                       IfNode, Mix, VoronoiTexture)
+                                       IfNode, Mix, VoronoiTexture, OutputMaterial)
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
+
+tau = 2 * np.pi
 
 
 def flatten(list_of_lists):
@@ -454,6 +456,8 @@ def get_texture(material, **kwargs):
             material = make_mandelbrot_material(**kwargs)
         elif material == 'hat_tile_fractal':
             material = hat_tile_fractal(**kwargs)
+        elif material == 'interference':
+            material = interference_texture(**kwargs)
         elif material == 'iteration':
             material = make_iteration_material(**kwargs)
         elif material == 'hue':
@@ -1556,6 +1560,339 @@ def gradient_from_attribute(name="AngleDisplacement", **kwargs):
 
         links.new(attr2.fac_out, trafo.inputs["alpha"])
         links.new(trafo.outputs["alpha"], bsdf.inputs["Alpha"])
+    return mat
+
+
+def interference_texture(name="Interference", **kwargs):
+    r"""The 2D interference pattern of N circular waves, painted on a surface.
+
+    Ported from ``Material.002`` of ``video_interferences/trails/2D.blend``,
+    where it is five wave groups feeding a chain of Math nodes. Each source
+    contributes a travelling circular wave read at the surface's own uv,
+
+    .. math::
+        w_j(\mathbf u, t) = \frac{A}{\sqrt{r_j}}
+            \sin\!\big(2\pi r_j/\lambda - 2\pi f t\big),
+        \qquad r_j = |\mathbf u - \mathbf c_j| ,
+
+    and the sum of them drives two things: the colour through a ramp on
+    ``(sum + 1)/2``, which centres the ramp on the undisturbed surface, and
+    the **alpha** through ``sum**2``, which is the energy. That second one is
+    what makes the picture: the nodal lines - where the waves cancel - go
+    transparent, so the fringes are cut out of the plane rather than painted
+    on it.
+
+    The 1/sqrt(r) envelope is the 2D one, not a typo for the 1/r of
+    :class:`~geometry_nodes.modifier_video_interferences.RealInterferenceModifier`:
+    a circular wave spreads its energy over a circumference rather than a
+    sphere, so the amplitude falls as one over the square root. It still
+    diverges at each source, which is why the sources sit on the uv square's
+    edge in the default layout - a source in view is a white-hot point.
+
+    **That formula is only the far field**, and ``model`` chooses whether to
+    put up with it. A point source in two dimensions actually radiates the
+    Hankel function, whose real part is
+
+    .. math::
+        u(r,t) = J_0(kr)\cos\omega t + Y_0(kr)\sin\omega t ,
+        \qquad k = 2\pi/\lambda ,
+
+    and only for :math:`kr \gg 1` does that become
+    :math:`\sqrt{2/\pi kr}\,\cos(kr - \omega t - \pi/4)`, which is the
+    ``"farfield"`` expression up to a constant phase. Within the first
+    wavelength or two of a source the two are different pictures: the
+    elementary form's amplitude runs away as :math:`r^{-1/2}` while the true
+    one only diverges as :math:`\ln r`, and the wavefronts are not evenly
+    spaced there either - the phase :math:`\theta_0(kr)` lags :math:`kr`, so
+    the first few rings sit further out than a constant-wavelength model puts
+    them. Both Bessel functions are evaluated by
+    :func:`~geometry_nodes.nodes.bessel_j0_y0_rpn`, a polynomial
+    approximation good to 5e-8, well under what float32 can hold.
+
+    The whole sum is one :func:`~geometry_nodes.nodes.make_function` node
+    rather than the blend's five group instances and four adds: the formula
+    is then readable in one place, and adding a sixth source is a longer
+    list rather than more wiring.
+
+    Dials, reachable with ``ibpy.get_node_from_shader(material, label)``:
+    ``Time`` (ramp it to make the waves travel), ``Frequency``,
+    ``Wavelength``, ``Amplitude``, and ``Center<j>X`` / ``Center<j>Y`` per
+    source.
+
+    :param name: name of the material.
+    :param sources: uv positions of the emitters. The default is the blend's
+        five, equally spaced up the v axis at u = 0.
+    :param wavelength: lambda, in uv units.
+    :param frequency: f, in cycles per unit of ``time``.
+    :param amplitude: A, the amplitude one source would have at r = 1. It
+        means the same thing in every ``model``: the Bessel models carry a
+        ``pi/sqrt(lambda)`` factor so that their far field matches this one,
+        which is what makes ``model`` a switch of look rather than of scale.
+    :param model: which solution of the 2D wave equation a source radiates.
+
+        ``"farfield"`` (default)
+            ``A/sqrt(r) sin(2 pi r/lambda - 2 pi f t)``, the blend's formula.
+            The default because it is what every existing scene was composed
+            against, and because at four or five wavelengths from a source it
+            is already indistinguishable from the real thing.
+        ``"hankel"``
+            ``J0(kr) cos(wt) + Y0(kr) sin(wt)``, the exact outgoing wave.
+            This is the one to reach for when a source is *in shot*.
+        ``"bessel"``
+            ``J0(kr) cos(wt)``, the standing wave. Finite everywhere -
+            ``J0(0) = 1`` - so it needs no clamp at all and no source is ever
+            a bright spot, but it does not travel: the pattern pulses in
+            place rather than streaming outwards. Cheaper by 22 nodes a
+            source, and the right model for a cavity rather than a radiator.
+    :param uv_scale: the size the uv square stands for, as ``(sx, sy)`` or a
+        single number for both. Distances are measured in ``uv * uv_scale``,
+        so on a non-square surface - where uv still runs 0..1 in both
+        directions and a circle would otherwise render as an ellipse - pass
+        the surface's world extent and the waves come out round.
+        ``wavelength`` and ``source_radius`` are then lengths in those same
+        units, while ``sources`` stay in plain uv, i.e. fractions of the
+        surface. Defaults to ``(1, 1)``, which measures in uv and is what a
+        square wants.
+    :param source_radius: how far off the origin ``r`` is held, in the same
+        units as ``wavelength``, for the Bessel models. ``Y0`` has a logarithmic pole at a true point
+        source, so something has to stop it; the physical reading is that the
+        emitter has this radius. Defaults to ``wavelength/20``. Unused by
+        ``"farfield"``, which has its own (unclamped) pole.
+    :param time: t. A plain value rather than a clock, because the shader
+        editor has no equivalent of ``Scene Time``; a scene animates it with
+        ``ibpy.change_default_value``.
+    :param gradient: ``{position: rgba}`` stops of the colour ramp. The
+        default runs red -> black -> green, so crest and trough get opposite
+        hues and the undisturbed surface is black.
+    :param emission_strength: how much the ramp colour is also emitted. The
+        blend's 0.5 is not the node's default (a fresh Principled BSDF emits
+        nothing at all), and it is doing real work: the fringes are lit by
+        themselves rather than by a lamp, which is what keeps the pattern
+        readable where the surface faces away from the light.
+    """
+    sources = get_from_kwargs(kwargs, "sources",
+                              [(0, 0), (0, 0.25), (0, 0.5), (0, 0.75), (0, 1)])
+    wavelength = get_from_kwargs(kwargs, "wavelength", 0.14)
+    frequency = get_from_kwargs(kwargs, "frequency", 5.43)
+    amplitude = get_from_kwargs(kwargs, "amplitude", 0.2)
+    time = get_from_kwargs(kwargs, "time", 0)
+    gradient = get_from_kwargs(kwargs, "gradient",
+                               {0: [1, 0, 0.0091, 1], 0.5: [0, 0, 0, 1],
+                                1: [0.023, 1, 0, 1]})
+    emission_strength = get_from_kwargs(kwargs, "emission_strength", 0.5)
+    model = get_from_kwargs(kwargs, "model", "farfield")
+    source_radius = get_from_kwargs(kwargs, "source_radius", None)
+    uv_scale = get_from_kwargs(kwargs, "uv_scale", (1, 1))
+    if not hasattr(uv_scale, "__len__"):
+        uv_scale = (uv_scale, uv_scale)
+    if model not in ("farfield", "hankel", "bessel"):
+        raise ValueError("model is 'farfield', 'hankel' or 'bessel', "
+                         "not %r" % model)
+    if source_radius is None:
+        # a twentieth of a wavelength: small enough to read as a point at any
+        # sane zoom, large enough that the logarithm has not run away
+        source_radius = wavelength / 20
+
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+    mat.name = name
+    tree = mat.node_tree
+    # built from scratch with the wrappers below, so the two nodes
+    # `use_nodes` hands out for free would only be in the way
+    tree.nodes.clear()
+
+    uv = TextureCoordinate(tree, location=(-6, 0), std_out="UV",
+                           name="Surface", hide=False)
+    time_node = InputValue(tree, location=(-6, 2), value=time, name="Time")
+    frequency_node = InputValue(tree, location=(-6, 1.5), value=frequency,
+                                name="Frequency")
+    wavelength_node = InputValue(tree, location=(-6, 1), value=wavelength,
+                                 name="Wavelength")
+    amplitude_node = InputValue(tree, location=(-6, 0.5), value=amplitude,
+                                name="Amplitude")
+    # uv is 0..1 whatever shape the surface is, so on anything but a square
+    # a circular wave would come out elliptical. These two put the metric
+    # back: distances are measured in (uv * uv_scale), so setting uv_scale
+    # to the surface's world size makes the waves round again and makes
+    # `wavelength` a length in blender units.
+    scale_x = InputValue(tree, location=(-6, 3), value=uv_scale[0],
+                         name="UVScaleX")
+    scale_y = InputValue(tree, location=(-6, 2.5), value=uv_scale[1],
+                         name="UVScaleY")
+    uvscale = CombineXYZ(tree, location=(-5, 2.75), x=scale_x.std_out,
+                         y=scale_y.std_out, name="UVScale")
+
+    # one Combine XYZ per source, so that a scene can animate a source along
+    # either axis on its own - the pair of Values is the blend's arrangement
+    # and the only reason the centres are not baked into the formula
+    centers = []
+    for j, (cx, cy) in enumerate(sources):
+        x = InputValue(tree, location=(-6, -0.5 - j), value=cx,
+                       name="Center%dX" % j)
+        y = InputValue(tree, location=(-6, -1 - j), value=cy,
+                       name="Center%dY" % j)
+        centers.append(CombineXYZ(tree, location=(-5, -0.75 - j),
+                                  x=x.std_out, y=y.std_out,
+                                  name="Center%d" % j))
+
+    n = len(centers)
+    aux = {}
+    for j in range(n):
+        aux["r%d" % j] = "uv,c%d,sub,uvscale,mul,length" % j
+
+    if model == "farfield":
+        for j in range(n):
+            # A/sqrt(r) sin(2 pi r/lambda - 2 pi f t), associated exactly as
+            # the blend does it - (r/lambda)*2pi and (t*f)*2pi rather than the
+            # algebraically identical (2pi*r)/lambda and (2pi*f)*t. At t = 72
+            # the phase runs to ~2500 radians, where a float32 ulp is 2.4e-4,
+            # so the two groupings disagree in the last bit and a fringe edge
+            # lands on the other side of a pixel. Matching the order makes the
+            # port bit-exact against the blend instead of merely equal.
+            aux["w%d" % j] = ("amplitude,r%d,sqrt,/,"
+                              "r%d,wavelength,/,%s,*,"
+                              "time,frequency,*,%s,*,-,sin,*"
+                              % (j, j, tau, tau))
+    else:
+        aux["k"] = "%s,wavelength,/" % tau
+        aux["wt"] = "time,frequency,*,%s,*" % tau
+        # The Bessel models are normalised so that `amplitude` keeps meaning
+        # what it means for "farfield" - the amplitude one source would have
+        # at r = 1 - which is what lets the model be switched without also
+        # re-tuning the picture. J0(x) ~ sqrt(2/(pi x)) cos(x - pi/4) far out,
+        # so matching A/sqrt(r) needs a factor sqrt(pi k/2) = pi/sqrt(lambda).
+        # It is computed from the Wavelength socket rather than baked in as a
+        # number, so that a scene which animates the wavelength stays
+        # normalised as it goes.
+        aux["amp"] = "amplitude,pi,*,wavelength,sqrt,/"
+        for j in range(n):
+            # x = k r, held off the origin: Y0 has a logarithmic pole there,
+            # and a source of radius a rather than a true point is the
+            # physical reading of the clamp anyway
+            aux["x%d" % j] = "r%d,%s,max,k,*" % (j, repr(source_radius))
+            if model == "hankel":
+                # Re[H0(kr) exp(-i w t)] - the outgoing wave
+                aux["w%d" % j] = ("amp,x{0},j0,wt,cos,*,"
+                                  "x{0},y0,wt,sin,*,+,*".format(j))
+            else:
+                # J0(kr) cos(wt) - the standing wave, finite at the source
+                aux["w%d" % j] = "amp,x{0},j0,wt,cos,*,*".format(j)
+    aux["total"] = ",".join("w%d" % j for j in range(n)) + ",+" * (n - 1)
+
+    names = ["uv", "uvscale", "time", "frequency", "wavelength", "amplitude"] \
+            + ["c%d" % j for j in range(n)]
+    intensity = make_function(tree, location=(-3, 0), name="Intensity",
+                              node_group_type="Shader",
+                              functions={"factor": "total,1,+,2,/",
+                                         "alpha": "total,2,**"},
+                              aux_functions=aux,
+                              inputs=names, outputs=["factor", "alpha"],
+                              vectors=["uv", "uvscale"]
+                                      + ["c%d" % j for j in range(n)],
+                              scalars=["time", "frequency", "wavelength",
+                                       "amplitude", "factor", "alpha"]
+                                      + list(aux),
+                              custom_ops={} if model == "farfield"
+                                         else BESSEL_OPS,
+                              hide=False)
+    links = tree.links
+    links.new(uv.std_out, intensity.inputs["uv"])
+    links.new(uvscale.std_out, intensity.inputs["uvscale"])
+    links.new(time_node.std_out, intensity.inputs["time"])
+    links.new(frequency_node.std_out, intensity.inputs["frequency"])
+    links.new(wavelength_node.std_out, intensity.inputs["wavelength"])
+    links.new(amplitude_node.std_out, intensity.inputs["amplitude"])
+    for j, center in enumerate(centers):
+        links.new(center.std_out, intensity.inputs["c%d" % j])
+
+    ramp = ColorRamp(tree, location=(-1, 0), factor=intensity.outputs["factor"],
+                     values=list(gradient.keys()),
+                     colors=[list(c) for c in gradient.values()],
+                     interpolation="LINEAR", hide=False)
+    bsdf = PrincipledBSDF(tree, location=(1, 0), base_color=ramp.std_out,
+                          emission_color=ramp.std_out,
+                          emission_strength=emission_strength,
+                          alpha=intensity.outputs["alpha"],
+                          distribution="MULTI_GGX", hide=False)
+    OutputMaterial(tree, location=(3, 0), surface=bsdf.std_out, hide=False)
+
+    customize_material(mat, **kwargs)
+    return mat
+
+
+def emission_from_attribute(name="AttributeEmission", **kwargs):
+    """One flat colour whose *brightness* is a geometry attribute.
+
+    The sibling of :func:`gradient_from_attribute`, and the other way of
+    showing a per-point number: that one maps the attribute onto a hue through
+    a colour ramp, this one keeps the hue fixed and puts the number into
+    ``Emission Strength``, so a point cloud carrying a field reads as bright
+    and dark rather than as red and blue.
+
+    The picture that wants this is a field that is *already* a brightness -
+    the squared amplitude of a wave, say. A ramp would spend its whole range
+    on the fringes near the sources, where the field is largest, and leave the
+    rest of the cloud one flat colour; emission has no top end, so the bright
+    fringes simply blow out. Pair it with a bloom in the compositor (see
+    ``compositions.create_glow_composition``) - unclamped emission is what
+    the glare node's threshold is looking for, and without it a cloud of
+    sub-pixel points has nothing on screen to glow.
+
+    :param name: name of the material.
+    :param color: palette name (or rgba) of the flat colour, base and
+        emission alike.
+    :param attr_name: geometry attribute to read; its ``Fac`` output is used,
+        so a float attribute is what this expects.
+    :param attr_type: ``GEOMETRY``, ``INSTANCER``, ``OBJECT``, ...
+    :param strength: the attribute is multiplied by this before it reaches
+        ``Emission Strength``.
+    :param function: RPN expression in ``fac`` applied to the attribute first,
+        as in :func:`gradient_from_attribute`. The default ``"fac"`` passes it
+        through; ``"fac,sqrt"`` tames a squared field, ``"fac,1,min"`` clamps.
+    """
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+
+    mat.name = name
+    tree = mat.node_tree
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+
+    customize_material(mat, **kwargs)
+    bsdf = nodes.get("Principled BSDF")
+
+    attr_name = get_from_kwargs(kwargs, "attr_name", "attributeName")
+    attr_type = get_from_kwargs(kwargs, "attr_type", "GEOMETRY")
+    color = get_from_kwargs(kwargs, "color", "yellow")
+    strength = get_from_kwargs(kwargs, "strength", 10)
+    function = get_from_kwargs(kwargs, "function", "fac")
+
+    if color is None or isinstance(color, str):
+        rgba = get_color_from_string(color or "yellow")
+        if rgba is None:
+            raise ValueError("%r is not a palette colour; pass a name from "
+                             "utils.constants.COLOR_NAMES or an rgba" % color)
+        rgba = list(rgba)
+    else:
+        rgba = list(color) + [1] * (4 - len(color))
+    bsdf.inputs["Base Color"].default_value = rgba
+    bsdf.inputs[EMISSION].default_value = rgba
+
+    attr = AttributeNode(tree, location=(-4, 0), hide=False,
+                         attribute_name=attr_name, attribute_type=attr_type)
+    trafo = make_function(tree, functions={
+        "factor": function
+    }, location=(-3, 0), name=attr_name + "_transform",
+                          node_group_type='Shader',
+                          inputs=["fac"], outputs=["factor"], scalars=["fac", "factor"])
+    links.new(attr.fac_out, trafo.inputs["fac"])
+
+    # the strength stays a plain multiplier rather than a second ramp: it is
+    # the one dial that has to be readable in the scene, since it sets where
+    # the field crosses the bloom threshold
+    scale = MathNode(tree, location=(-2, 0), operation="MULTIPLY", hide=False,
+                     input0=trafo.outputs["factor"], input1=strength)
+    links.new(scale.std_out, bsdf.inputs["Emission Strength"])
     return mat
 
 

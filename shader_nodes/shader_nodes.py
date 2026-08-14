@@ -5,6 +5,7 @@ import numpy as np
 from mathutils import Vector
 
 from geometry_nodes.nodes import Frame, layout, make_function
+from interface.interface_constants import EMISSION
 from utils.constants import IMG_DIR
 from utils.kwargs import get_from_kwargs
 from utils.string_utils import parse_vector
@@ -706,23 +707,56 @@ class Mix(ShaderNode):
 
 
 class OutputMaterial(ShaderNode):
-    def __init__(self, tree, location=(0, 0), **kwargs):
+    """The material output.
+
+    :param surface: socket to drive Surface with, so a material can be wired
+        end to end without reaching for ``tree.links`` by hand.
+    """
+
+    def __init__(self, tree, location=(0, 0), surface=None, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeOutputMaterial")
         super().__init__(tree, location=location, **kwargs)
 
+        if surface is not None:
+            tree.links.new(surface, self.node.inputs["Surface"])
+
 
 class PrincipledBSDF(ShaderNode):
-    def __init__(self, tree, location=(0, 0), base_color=None,alpha=None,**kwargs):
+    """The principled shader.
+
+    Every input takes either a socket (linked) or a number/colour (written
+    into the default), so the caller does not have to know which it has.
+
+    :param base_color: ``Base Color``.
+    :param alpha: ``Alpha``.
+    :param emission_color: ``Emission Color`` - note this is called
+        ``Emission`` before blender 4, hence the ``EMISSION`` constant.
+    :param emission_strength: ``Emission Strength``.
+    :param metallic: ``Metallic``.
+    :param roughness: ``Roughness``.
+    :param distribution: ``GGX`` or ``MULTI_GGX``.
+    """
+
+    def __init__(self, tree, location=(0, 0), base_color=None, alpha=None,
+                 emission_color=None, emission_strength=None, metallic=None,
+                 roughness=None, distribution=None, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeBsdfPrincipled")
         super().__init__(tree, location=location, **kwargs)
 
-        if base_color:
-            tree.links.new(base_color, self.node.inputs["Base Color"])
-        if alpha:
-            if isinstance(alpha,(int, float)):
-                self.node.inputs["Alpha"].default_value = alpha
+        self.std_out = self.node.outputs["BSDF"]
+
+        if distribution:
+            self.node.distribution = distribution
+        for key, value in (("Base Color", base_color), ("Alpha", alpha),
+                           (EMISSION, emission_color),
+                           ("Emission Strength", emission_strength),
+                           ("Metallic", metallic), ("Roughness", roughness)):
+            if value is None:
+                continue
+            if isinstance(value, (int, float, list, tuple, Vector)):
+                self.node.inputs[key].default_value = value
             else:
-                self.tree.links.new(alpha, self.node.inputs["Alpha"])
+                tree.links.new(value, self.node.inputs[key])
 
 
 class PrincipledVolume(ShaderNode):
