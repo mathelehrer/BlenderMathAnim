@@ -621,9 +621,27 @@ class VoronoiTexture(ShaderNode):
 
 
 class MixNode(ShaderNode):
-    def __init__(self, tree, location, data_type='FLOAT', factor=0, caseA=0, caseB=0, **kwargs):
+    """``Mix``, blending two values of one data type.
+
+    Note that the node carries a full set of sockets for *every* data type,
+    all of them called ``Factor``/``A``/``B``/``Result``, and a lookup by name
+    finds the first of each - the float ones. So this wrapper is right for
+    ``data_type='FLOAT'`` and would write the wrong socket for a colour; use
+    :class:`Mix` for those.
+
+    :param clamp_factor: whether the factor is clamped to 0..1. Blender's
+        default is ``True``; passing it explicitly keeps a ported tree honest.
+    :param factor_mode: ``'UNIFORM'`` (one factor) or ``'NON_UNIFORM'``.
+    """
+
+    def __init__(self, tree, location, data_type='FLOAT', factor=0, caseA=0, caseB=0,
+                 clamp_factor=None, factor_mode=None, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeMix")
         self.node.data_type = data_type
+        if clamp_factor is not None:
+            self.node.clamp_factor = clamp_factor
+        if factor_mode is not None:
+            self.node.factor_mode = factor_mode
         self.std_out = self.node.outputs[0]
         super().__init__(tree, location, **kwargs)
 

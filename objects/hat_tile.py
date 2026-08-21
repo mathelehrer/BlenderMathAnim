@@ -15,7 +15,7 @@ from geometry_nodes.nodes import (
     CompareNode, InputInteger,
     MathNode, ExtrudeMesh, SampleNearest,
     SampleIndex, Reroute, ComplexMathNode, PointsToVertices, Points, Quadrilateral,
-    FillCurve, StoredNamedAttribute, ScaleElements,
+    FillCurve, StoreNamedAttribute, ScaleElements,
     GeometryToInstance, RotateInstances, TranslateInstances, ForEachZone, Index, SeparateGeometry, RepeatZone,
     InsidePolygon, IndexSwitch, Frame,
     MeshCircle, MeshToPoints, CombineXYZ, SceneTime, make_function, Switch, IcoSphere, InputMaterial, VectorMath,
@@ -427,9 +427,9 @@ class LabbeSelingerModifier(GeometryNodesModifier):
 
         # link orientation to hat switch
         links.new(orientation_switch.std_out, hats.inputs[0])
-        store_orientation = StoredNamedAttribute(tree, location=(x + 2, y), hide=True,
-                                                 name="Orientation", domain="POINT",
-                                                 value=orientation_switch.std_out)
+        store_orientation = StoreNamedAttribute(tree, location=(x + 2, y), hide=True,
+                                                name="Orientation", domain="POINT",
+                                                value=orientation_switch.std_out)
         iop = InstanceOnPoints(tree, location=(x + 3, y), instance=hats.std_out)
         create_geometry_line(tree, [point, store_orientation, iop])
         frame = Frame(tree, location=(x, y), name="Hat Placement")
@@ -465,7 +465,7 @@ class LabbeSelingerModifier(GeometryNodesModifier):
             value=polygon_attr.std_out,
             index=sample_nearest.std_out)
 
-        store_type = StoredNamedAttribute(
+        store_type = StoreNamedAttribute(
             tree, location=(x + 5, y),
             data_type="INT", domain="POINT",
             name="Type", value=sample_index.std_out)
@@ -506,15 +506,15 @@ class LabbeSelingerModifier(GeometryNodesModifier):
         links.new(old_bottom_attr_ifs.std_out, left_transform_ifs.slots[5])
         links.new(old_top_attr_ifs.std_out, left_transform_ifs.slots[7])
 
-        store_bottom_ifs = StoredNamedAttribute(tree, location=(x + 6.5, y - 3.9), data_type="INT",
-                                                domain="POINT", name="Bottom",
-                                                value=bottom_transform_ifs.std_out, hide=False)
-        store_top_ifs = StoredNamedAttribute(tree, location=(x + 7.5, y - 3.7), data_type="INT",
-                                             domain="POINT", name="Top",
-                                             value=top_transform_ifs.std_out, hide=False)
-        store_left_ifs = StoredNamedAttribute(tree, location=(x + 8.5, y - 3.8), data_type="INT",
-                                              domain="POINT", name="Left",
-                                              value=left_transform_ifs.std_out, hide=False)
+        store_bottom_ifs = StoreNamedAttribute(tree, location=(x + 6.5, y - 3.9), data_type="INT",
+                                               domain="POINT", name="Bottom",
+                                               value=bottom_transform_ifs.std_out, hide=False)
+        store_top_ifs = StoreNamedAttribute(tree, location=(x + 7.5, y - 3.7), data_type="INT",
+                                            domain="POINT", name="Top",
+                                            value=top_transform_ifs.std_out, hide=False)
+        store_left_ifs = StoreNamedAttribute(tree, location=(x + 8.5, y - 3.8), data_type="INT",
+                                             domain="POINT", name="Left",
+                                             value=left_transform_ifs.std_out, hide=False)
 
         # Read back and store as OldBottom/OldTop/OldLeft for next iteration
         bottom_attr2_ifs = NamedAttribute(tree, location=(x + 8.5, y - 4.9), data_type="INT",
@@ -523,15 +523,15 @@ class LabbeSelingerModifier(GeometryNodesModifier):
                                        name="Top", hide=True)
         left_attr2_ifs = NamedAttribute(tree, location=(x + 10.5, y - 4.9), data_type="INT",
                                         name="Left", hide=True)
-        store_old_bottom_ifs = StoredNamedAttribute(tree, location=(x + 9.5, y - 3.9), data_type="INT",
-                                                    domain="POINT", name="OldBottom",
-                                                    value=bottom_attr2_ifs.std_out, hide=False)
-        store_old_top_ifs = StoredNamedAttribute(tree, location=(x + 10.5, y - 4.0), data_type="INT",
-                                                 domain="POINT", name="OldTop",
-                                                 value=top_attr2_ifs.std_out, hide=False)
-        store_old_left_ifs = StoredNamedAttribute(tree, location=(x + 11.5, y - 3.9), data_type="INT",
-                                                  domain="POINT", name="OldLeft",
-                                                  value=left_attr2_ifs.std_out, hide=False)
+        store_old_bottom_ifs = StoreNamedAttribute(tree, location=(x + 9.5, y - 3.9), data_type="INT",
+                                                   domain="POINT", name="OldBottom",
+                                                   value=bottom_attr2_ifs.std_out, hide=False)
+        store_old_top_ifs = StoreNamedAttribute(tree, location=(x + 10.5, y - 4.0), data_type="INT",
+                                                domain="POINT", name="OldTop",
+                                                value=top_attr2_ifs.std_out, hide=False)
+        store_old_left_ifs = StoreNamedAttribute(tree, location=(x + 11.5, y - 3.9), data_type="INT",
+                                                 domain="POINT", name="OldLeft",
+                                                 value=left_attr2_ifs.std_out, hide=False)
 
         frame = Frame(tree, location=(x, y), name="Iterated Function System")
         repeat.create_geometry_line([set_pos, store_type,
@@ -644,12 +644,12 @@ class LabbeSelingerModifier(GeometryNodesModifier):
                                  hide=True, index=trapezoid.std_out)
         left_switch = IndexSwitch(tree, location=(x + 5, y - 1), data_type="INT", domain="POINT",
                                   name="LeftOrientation", hide=True, index=trapezoid.std_out)
-        old_bottom = StoredNamedAttribute(tree, location=(x + 2, y), name="OldBottom", data_type="INT", domain="POINT",
-                                          hide=True, value=bottom_switch.std_out)
-        old_top = StoredNamedAttribute(tree, location=(x + 4, y), name="OldTop", data_type="INT", domain="POINT",
-                                       hide=True, value=top_switch.std_out)
-        old_left = StoredNamedAttribute(tree, location=(x + 6, y), name="OldLeft", data_type="INT", domain="POINT",
-                                        hide=True, value=left_switch.std_out)
+        old_bottom = StoreNamedAttribute(tree, location=(x + 2, y), name="OldBottom", data_type="INT", domain="POINT",
+                                         hide=True, value=bottom_switch.std_out)
+        old_top = StoreNamedAttribute(tree, location=(x + 4, y), name="OldTop", data_type="INT", domain="POINT",
+                                      hide=True, value=top_switch.std_out)
+        old_left = StoreNamedAttribute(tree, location=(x + 6, y), name="OldLeft", data_type="INT", domain="POINT",
+                                       hide=True, value=left_switch.std_out)
         switches = [bottom_switch, top_switch, left_switch]
         orientations = {
             "BottomOrientation": [1, 2, 3, 4, 5, 0, 1, 2, 4, 5],
@@ -701,7 +701,7 @@ class LabbeSelingerModifier(GeometryNodesModifier):
             value=polygon_attr.std_out,
             index=sample_nearest.std_out, hide=True)
 
-        store_type = StoredNamedAttribute(
+        store_type = StoreNamedAttribute(
             tree, location=(x + 3, y),
             data_type="INT", domain="POINT",
             name="Type", value=sample_index.std_out, hide=True)
@@ -744,15 +744,15 @@ class LabbeSelingerModifier(GeometryNodesModifier):
         links.new(old_bottom_attr_fs.std_out, left_transform_fs.slots[5])
         links.new(old_top_attr_fs.std_out, left_transform_fs.slots[7])
 
-        store_bottom_fs = StoredNamedAttribute(tree, location=(x + 5.1, y - 3.9), data_type="INT",
-                                               domain="POINT", name="Bottom",
-                                               value=bottom_transform_fs.std_out, hide=True)
-        store_top_fs = StoredNamedAttribute(tree, location=(x + 6.1, y - 3.8), data_type="INT",
-                                            domain="POINT", name="Top",
-                                            value=top_transform_fs.std_out, hide=True)
-        store_left_fs = StoredNamedAttribute(tree, location=(x + 7.0, y - 3.8), data_type="INT",
-                                             domain="POINT", name="Left",
-                                             value=left_transform_fs.std_out, hide=True)
+        store_bottom_fs = StoreNamedAttribute(tree, location=(x + 5.1, y - 3.9), data_type="INT",
+                                              domain="POINT", name="Bottom",
+                                              value=bottom_transform_fs.std_out, hide=True)
+        store_top_fs = StoreNamedAttribute(tree, location=(x + 6.1, y - 3.8), data_type="INT",
+                                           domain="POINT", name="Top",
+                                           value=top_transform_fs.std_out, hide=True)
+        store_left_fs = StoreNamedAttribute(tree, location=(x + 7.0, y - 3.8), data_type="INT",
+                                            domain="POINT", name="Left",
+                                            value=left_transform_fs.std_out, hide=True)
 
         # Read back the new Bottom/Top/Left and store as OldBottom/OldTop/OldLeft for next iteration
         bottom_attr2_fs = NamedAttribute(tree, location=(x + 7.0, y - 4.8), data_type="INT",
@@ -761,15 +761,15 @@ class LabbeSelingerModifier(GeometryNodesModifier):
                                       name="Top", hide=True)
         left_attr2_fs = NamedAttribute(tree, location=(x + 8.7, y - 4.7), data_type="INT",
                                        name="Left", hide=True)
-        store_old_bottom_fs = StoredNamedAttribute(tree, location=(x + 7.8, y - 3.8), data_type="INT",
-                                                   domain="POINT", name="OldBottom",
-                                                   value=bottom_attr2_fs.std_out, hide=True)
-        store_old_top_fs = StoredNamedAttribute(tree, location=(x + 8.6, y - 3.8), data_type="INT",
-                                                domain="POINT", name="OldTop",
-                                                value=top_attr2_fs.std_out, hide=True)
-        store_old_left_fs = StoredNamedAttribute(tree, location=(x + 9.5, y - 3.8), data_type="INT",
-                                                 domain="POINT", name="OldLeft",
-                                                 value=left_attr2_fs.std_out, hide=True)
+        store_old_bottom_fs = StoreNamedAttribute(tree, location=(x + 7.8, y - 3.8), data_type="INT",
+                                                  domain="POINT", name="OldBottom",
+                                                  value=bottom_attr2_fs.std_out, hide=True)
+        store_old_top_fs = StoreNamedAttribute(tree, location=(x + 8.6, y - 3.8), data_type="INT",
+                                               domain="POINT", name="OldTop",
+                                               value=top_attr2_fs.std_out, hide=True)
+        store_old_left_fs = StoreNamedAttribute(tree, location=(x + 9.5, y - 3.8), data_type="INT",
+                                                domain="POINT", name="OldLeft",
+                                                value=left_attr2_fs.std_out, hide=True)
 
         foreach.create_geometry_line([store_type, store_bottom_fs, store_top_fs, store_left_fs,
                                       store_old_bottom_fs, store_old_top_fs, store_old_left_fs])
@@ -927,7 +927,7 @@ class LabbeSelingerModifier(GeometryNodesModifier):
                       realize_inst.geometry_in)
             realizes[i] = realize_inst
 
-            store_kind = StoredNamedAttribute(
+            store_kind = StoreNamedAttribute(
                 tree, location=(x + 11, row_y),
                 data_type="INT", domain="FACE",
                 name="PolygonType", value=polygon_type, hide=True)
@@ -976,12 +976,12 @@ class LabbeSelingerModifier(GeometryNodesModifier):
                                    name="QuadBelow",
                                    hide=True)
         below_fill = FillCurve(tree, location=(x + 16, y + 1), hide=True)
-        below_attr = StoredNamedAttribute(tree, location=(x + 17, y + 1), data_type="INT", domain="FACE",
-                                          name="PolygonType", value=1, hide=True)
+        below_attr = StoreNamedAttribute(tree, location=(x + 17, y + 1), data_type="INT", domain="FACE",
+                                         name="PolygonType", value=1, hide=True)
         quad_above = Quadrilateral(tree, location=(x + 15, y + 2), mode="POINTS", hide=True)
         above_fill = FillCurve(tree, location=(x + 16, y + 2), hide=True)
-        above_attr = StoredNamedAttribute(tree, location=(x + 17, y + 2), data_type="INT", domain="FACE",
-                                          name="PolygonType", value=2, hide=True)
+        above_attr = StoreNamedAttribute(tree, location=(x + 17, y + 2), data_type="INT", domain="FACE",
+                                         name="PolygonType", value=2, hide=True)
 
         for i in range(4):
             links.new(sample_indices_below[i].std_out, quad_below.inputs["Point " + str(i + 1)])
@@ -1142,9 +1142,9 @@ class LabbeSelingerModifier(GeometryNodesModifier):
         mesh2points = MeshToPoints(tree, location=(x + 5, y + 2), hide=True)
 
         pos2 = Position(tree, location=(x + 6, y + 0.5), hide=True)
-        old_pos = StoredNamedAttribute(tree, location=(x + 6, y), name="OldPosition", data_type="FLOAT_VECTOR",
-                                       domain="POINT",
-                                       hide=True, value=pos2.std_out)
+        old_pos = StoreNamedAttribute(tree, location=(x + 6, y), name="OldPosition", data_type="FLOAT_VECTOR",
+                                      domain="POINT",
+                                      hide=True, value=pos2.std_out)
 
         create_geometry_line(tree, [grid, sort_elements, sep_geo, set_pos, mesh2points, old_pos])
 
@@ -1247,8 +1247,8 @@ class LabbeSelingerModifier(GeometryNodesModifier):
 
         # Convert point cloud to mesh vertices
         p2v = PointsToVertices(tree, location=(x, y))
-        store_trapezoid = StoredNamedAttribute(tree, location=(x + 1, y), name="TrapezoidId", data_type="INT",
-                                               domain="POINT", value=-1, hide=True)
+        store_trapezoid = StoreNamedAttribute(tree, location=(x + 1, y), name="TrapezoidId", data_type="INT",
+                                              domain="POINT", value=-1, hide=True)
         links.new(points.geometry_out, p2v.geometry_in)
 
         # Position field feeds the ForEachZone per-element position socket
@@ -1281,9 +1281,9 @@ class LabbeSelingerModifier(GeometryNodesModifier):
                                     target_geometry=sep_geom.geometry_out,
                                     source_position=for_each_zone.outputs["Position"])
 
-        store_trapezoid2 = StoredNamedAttribute(tree, location=(x + 8, y + 1), name="TrapezoidId", data_type="INT",
-                                                domain="POINT", value=sample_nearest.std_out,
-                                                selection=inside_test.std_out)
+        store_trapezoid2 = StoreNamedAttribute(tree, location=(x + 8, y + 1), name="TrapezoidId", data_type="INT",
+                                               domain="POINT", value=sample_nearest.std_out,
+                                               selection=inside_test.std_out)
 
         for_each_zone.create_geometry_line([store_trapezoid2])
 
@@ -1414,7 +1414,7 @@ class LabbeSelingerModifier(GeometryNodesModifier):
         fill = FillCurve(tree, location=(x + 2, y), hide=True)
 
         # Mark the trapezoid face with PolygonType=0.
-        store_trapez = StoredNamedAttribute(
+        store_trapez = StoreNamedAttribute(
             tree, location=(x + 3, y),
             data_type="INT", domain="FACE",
             name="PolygonType", label="MarkTrapez",
@@ -1700,9 +1700,9 @@ class LabbeSelingerOptimizedModifier(GeometryNodesModifier):
         mesh2points = MeshToPoints(tree, location=(x + 5, y + 2), hide=True)
 
         pos2 = Position(tree, location=(x + 6, y + 0.5), hide=True)
-        old_pos = StoredNamedAttribute(tree, location=(x + 6, y), name="OldPosition", data_type="FLOAT_VECTOR",
-                                       domain="POINT",
-                                       hide=True, value=pos2.std_out)
+        old_pos = StoreNamedAttribute(tree, location=(x + 6, y), name="OldPosition", data_type="FLOAT_VECTOR",
+                                      domain="POINT",
+                                      hide=True, value=pos2.std_out)
 
         create_geometry_line(tree, [grid,set_pos,  sort_elements, sep_geo, mesh2points, old_pos])
 
@@ -2215,8 +2215,8 @@ class LabbeSelingerOptimizedModifier(GeometryNodesModifier):
         links = tree.links
 
         links.new(index_socket, hats.inputs[0])
-        store = StoredNamedAttribute(tree, location=(x + 1, y), hide=True,
-                                     name="Orientation", domain="POINT", value=index_socket)
+        store = StoreNamedAttribute(tree, location=(x + 1, y), hide=True,
+                                    name="Orientation", domain="POINT", value=index_socket)
 
         # Store the center of each placed hat as a "Center" attribute: the point
         # position ("OldPosition") plus the centroid (mean vertex position) of
@@ -2232,9 +2232,9 @@ class LabbeSelingerOptimizedModifier(GeometryNodesModifier):
                                       data_type="FLOAT_VECTOR", name="OldPosition")
         center = VectorMath(tree, location=(x + 2, y - 1), operation="ADD",
                             inputs0=old_position.std_out, inputs1=centroid.std_out)
-        store_center = StoredNamedAttribute(tree, location=(x + 2, y),
-                                            name="Center", data_type="FLOAT_VECTOR",
-                                            domain="POINT", value=center.std_out)
+        store_center = StoreNamedAttribute(tree, location=(x + 2, y),
+                                           name="Center", data_type="FLOAT_VECTOR",
+                                           domain="POINT", value=center.std_out)
 
         iop = InstanceOnPoints(tree, location=(x + 3, y), instance=hats.std_out)
         create_geometry_line(tree, [store, store_center, iop], ins=element)
@@ -2625,9 +2625,9 @@ class HatTileSubstitutionModifier(GeometryNodesModifier):
                     asw.new_item()
                 for i, v in enumerate(vals):
                     asw.slots[i + 1].default_value = v
-                store = StoredNamedAttribute(tree, location=(x + 4 + j, y), name=attr_name, label=attr_name + "Store",
-                                             data_type=dt,
-                                             value=asw.std_out, hide=True)
+                store = StoreNamedAttribute(tree, location=(x + 4 + j, y), name=attr_name, label=attr_name + "Store",
+                                            data_type=dt,
+                                            value=asw.std_out, hide=True)
                 links.new(last.geometry_out, store.geometry_in)
                 last = store
                 nodes += [asw, store]
@@ -2728,8 +2728,8 @@ class HatTileSubstitutionModifier(GeometryNodesModifier):
                              location=(x + 1, y - 0.7), hide=True)
         links.new(dir_a.std_out, ndir.inputs["dir"])
         links.new(ref_a.std_out, ndir.inputs["ref"])
-        store = StoredNamedAttribute(tree, location=(x + 3, y), name="dir", data_type="INT",
-                                     value=ndir.outputs["nd"], hide=True)
+        store = StoreNamedAttribute(tree, location=(x + 3, y), name="dir", data_type="INT",
+                                    value=ndir.outputs["nd"], hide=True)
         links.new(setpos.geometry_out, store.geometry_in)
         return store
 
@@ -2824,8 +2824,8 @@ class HatTileSubstitutionModifier(GeometryNodesModifier):
                                location=(x + 2, y + 1), hide=True)
         links.new(dir_a.std_out, orient.inputs["dir"])
         links.new(ref_a.std_out, orient.inputs["ref"])
-        store_o = StoredNamedAttribute(tree, location=(x + 4, y + 2), name="Orientation", data_type="INT",
-                                       value=orient.outputs["o"], hide=True)
+        store_o = StoreNamedAttribute(tree, location=(x + 4, y + 2), name="Orientation", data_type="INT",
+                                      value=orient.outputs["o"], hide=True)
         links.new(code_geo, store_o.geometry_in)
 
         # instance hats, rotate each by dir*30deg about Z
@@ -3364,12 +3364,12 @@ class DeadEndClusterModifier(HatClusterCsvModifier):
         links.new(ref_a.std_out, center.inputs["ref"])
 
         # --- store animation attributes, drop fully absent hats ---------------
-        store_presence = StoredNamedAttribute(tree, location=(-2, 5), name="Presence", data_type="FLOAT",
-                                              domain="POINT", value=state.outputs["presence"], hide=True)
-        store_color = StoredNamedAttribute(tree, location=(-1, 5), name="HatColor", data_type="FLOAT_COLOR",
-                                           domain="POINT", value=color.outputs["col"], hide=True)
-        store_center = StoredNamedAttribute(tree, location=(0, 5), name="HatCenter", data_type="FLOAT_VECTOR",
-                                            domain="POINT", value=center.outputs["center"], hide=True)
+        store_presence = StoreNamedAttribute(tree, location=(-2, 5), name="Presence", data_type="FLOAT",
+                                             domain="POINT", value=state.outputs["presence"], hide=True)
+        store_color = StoreNamedAttribute(tree, location=(-1, 5), name="HatColor", data_type="FLOAT_COLOR",
+                                          domain="POINT", value=color.outputs["col"], hide=True)
+        store_center = StoreNamedAttribute(tree, location=(0, 5), name="HatCenter", data_type="FLOAT_VECTOR",
+                                           domain="POINT", value=center.outputs["center"], hide=True)
         presence_a = NamedAttribute(tree, location=(0.5, 4), name="Presence", data_type="FLOAT", hide=True)
         absent = CompareNode(tree, location=(1, 4.5), data_type="FLOAT", operation="LESS_THAN",
                              inputs0=presence_a.std_out, inputs1=1.0e-4, hide=True)

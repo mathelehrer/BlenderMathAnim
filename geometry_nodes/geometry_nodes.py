@@ -12,7 +12,7 @@ from appearance.textures import penrose_material, create_material_for_e8_visuals
     z_gradient
 from geometry_nodes.nodes import MeshLine, Grid, InstanceOnPoints, IcoSphere, SetShadeSmooth, Position, \
     add_locations, InputValue, SetMaterial, RealizeInstances, JoinGeometry, Points, InputBoolean, InputVector, \
-    PointsToVertices, ExtrudeMesh, SetPosition, WireFrame, create_geometry_line, Index, StoredNamedAttribute, \
+    PointsToVertices, ExtrudeMesh, SetPosition, WireFrame, create_geometry_line, Index, StoreNamedAttribute, \
     ConvexHull, \
     BooleanMath, InsideConvexHull, DeleteGeometry, NamedAttribute, VectorMath, ScaleElements, make_function, \
     Rotation, LinearMap, TransformGeometry, CubeMesh, InsideConvexHull3D, CombineXYZ, E8Node, ProjectionMap, DomainSize, \
@@ -1214,10 +1214,10 @@ def create_z3(name='Z3_generator', n=3, base="PENROSE", **kwargs):
     length += 1
 
     # create attributes
-    attr = StoredNamedAttribute(node_tree, location=(-5 + length, 1.5),
-                                data_type='FLOAT_VECTOR',
-                                domain='POINT', name=name,
-                                value=index2tuple.outputs["P"])
+    attr = StoreNamedAttribute(node_tree, location=(-5 + length, 1.5),
+                               data_type='FLOAT_VECTOR',
+                               domain='POINT', name=name,
+                               value=index2tuple.outputs["P"])
     line.append(attr)
     length += 1
 
@@ -1254,10 +1254,10 @@ def create_z3(name='Z3_generator', n=3, base="PENROSE", **kwargs):
     line2.append(set_pos2)
     length += 1
 
-    stored_index = StoredNamedAttribute(node_tree, location=(-5 + length, 0.5),
-                                        name="SavedIndex",
-                                        data_type='INT',
-                                        value=index.std_out)
+    stored_index = StoreNamedAttribute(node_tree, location=(-5 + length, 0.5),
+                                       name="SavedIndex",
+                                       data_type='INT',
+                                       value=index.std_out)
     line2.append(stored_index)
     length += 1
 
@@ -1280,9 +1280,9 @@ def create_z3(name='Z3_generator', n=3, base="PENROSE", **kwargs):
 
     nline = [points8]
     # create attributes
-    attr = StoredNamedAttribute(node_tree, location=(nl, nh),
-                                data_type='FLOAT_VECTOR', domain='POINT',
-                                name=name, value=mod.outputs["p"])
+    attr = StoreNamedAttribute(node_tree, location=(nl, nh),
+                               data_type='FLOAT_VECTOR', domain='POINT',
+                               name=name, value=mod.outputs["p"])
     nline.append(attr)
     nl += 1
 
@@ -1455,8 +1455,8 @@ def create_z3(name='Z3_generator', n=3, base="PENROSE", **kwargs):
     set_pos3d_sel = SetPosition(node_tree, location=(-4 + length, 7),
                                 selection=convex_hull_test.outputs["Is Inside"],
                                 position=index2tuple.outputs["P"], name="Pos3DSelected")
-    stored_attr = StoredNamedAttribute(node_tree, location=(-3 + length, 7), data_type='INT',
-                                       name='SavedIndex2', value=index.std_out)
+    stored_attr = StoreNamedAttribute(node_tree, location=(-3 + length, 7), data_type='INT',
+                                      name='SavedIndex2', value=index.std_out)
     del_geo_3d_sel = DeleteGeometry(node_tree, location=(-2 + length, 7),
                                     selection=convex_hull_test.outputs["Is Outside"])
     iop_sel = InstanceOnPoints(node_tree, location=(-1 + length, 6.75), instance=sel_icos.geometry_out)
@@ -1765,10 +1765,10 @@ def create_z5(name='Z5_generator', n=3, base="PENROSE", **kwargs):
 
     # create attributes
     for i, name in enumerate(["P1", "P2"]):
-        attr = StoredNamedAttribute(node_tree, location=(-5 + length, 1.5),
-                                    data_type='FLOAT_VECTOR',
-                                    domain='POINT', name=name,
-                                    value=index2tuple.outputs[name])
+        attr = StoreNamedAttribute(node_tree, location=(-5 + length, 1.5),
+                                   data_type='FLOAT_VECTOR',
+                                   domain='POINT', name=name,
+                                   value=index2tuple.outputs[name])
         line.append(attr)
         length += 1
 
@@ -1801,10 +1801,10 @@ def create_z5(name='Z5_generator', n=3, base="PENROSE", **kwargs):
     line2.append(set_pos2)
     length += 1
 
-    stored_index = StoredNamedAttribute(node_tree, location=(-5 + length, 0.5),
-                                        name="SavedIndex",
-                                        data_type='INT',
-                                        value=index.std_out)
+    stored_index = StoreNamedAttribute(node_tree, location=(-5 + length, 0.5),
+                                       name="SavedIndex",
+                                       data_type='INT',
+                                       value=index.std_out)
     line2.append(stored_index)
     length += 1
 
@@ -1835,9 +1835,9 @@ def create_z5(name='Z5_generator', n=3, base="PENROSE", **kwargs):
     nline = [points32]
     # create attributes
     for name in ['p1', 'p2']:
-        attr = StoredNamedAttribute(node_tree, location=(nl, nh),
-                                    data_type='FLOAT_VECTOR', domain='POINT',
-                                    name=name, value=mod.outputs[name])
+        attr = StoreNamedAttribute(node_tree, location=(nl, nh),
+                                   data_type='FLOAT_VECTOR', domain='POINT',
+                                   name=name, value=mod.outputs[name])
         nline.append(attr)
         nl += 1
 

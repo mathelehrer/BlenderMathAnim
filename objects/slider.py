@@ -3,6 +3,7 @@ import numpy as np
 from geometry_nodes.geometry_nodes_modifier import SliderModifier
 from interface import ibpy
 from interface.ibpy import Vector
+from objects import number_line
 from objects.bobject import BObject
 from objects.cube import Cube
 from objects.number_line import NumberLine2
@@ -58,11 +59,16 @@ class BSlider(BObject):
                 numberline_kwargs["location"]=[-self.dimensions[2],0,0]
             else:
                 numberline_kwargs["location"]=[0,0,-self.dimensions[2]]
-            self.numberline = NumberLine2(length=2*self.dimensions[2],radius = 0,axis_label="",tic_label_shift=[2*self.dimensions[0],0,0],**numberline_kwargs)
+
+            tic_label_shift = get_from_kwargs(numberline_kwargs,"tic_label_shift",Vector())
+            tic_label_shift+=Vector([2*self.dimensions[0],0,0])
+            self.numberline = NumberLine2(length=2*self.dimensions[2],radius = 0,axis_label="",
+                                          tic_label_shift=tic_label_shift,**numberline_kwargs)
             children.append(self.numberline)
         else:
             self.numberline = None
-        self.slider_value_slot = ibpy.get_geometry_node_from_modifier(slider_geometry,label="SliderValue").outputs[0]
+        self.slider_value_node= ibpy.get_geometry_node_from_modifier(slider_geometry,label="SliderValue")
+        self.slider_value_slot = self.slider_value_node.outputs[0]
         self.growth_slot = ibpy.get_geometry_node_from_modifier(slider_geometry,label="Growth").outputs[0]
 
         super().__init__(children=children,name="Slider_"+label,**kwargs)
@@ -70,11 +76,15 @@ class BSlider(BObject):
     def appear(self,alpha=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
                clear_data=False, silent=False,linked=False, nice_alpha=False,**kwargs):
         super().appear(alpha=alpha,begin_time=begin_time,transition_time=transition_time,silent=silent,
-                       linked=linked,nice_alpha=nice_alpha,children=False) #children's are not allowed to appear, otherwise they labels won't be shown
+                       linked=linked,nice_alpha=nice_alpha,children=False) #children's are not allowed to appear, otherwise the labels won't be shown
         # use only one quarter of the time to write the label
         self.label.write(begin_time=begin_time+0.75*transition_time,transition_time=0.25*transition_time)
         l = max(list(self.dimensions))
+        self.b_children[0].appear(begin_time=begin_time,transition_time=0) # make slider geometry appear
         if self.numberline:
             self.numberline.grow(begin_time=begin_time, transition_time=transition_time)
         return ibpy.change_default_value(self.growth_slot,from_value=-1.1*l,to_value=1.1*l,begin_time=begin_time,transition_time=transition_time)
 
+    def change_value(self,from_value=0,to_value=1,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        ibpy.change_default_value(self.slider_value_node,from_value=from_value,to_value=to_value,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time

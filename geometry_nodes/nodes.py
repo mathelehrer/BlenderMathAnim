@@ -241,8 +241,8 @@ class Node:
         if type == "STORE_NAMED_ATTRIBUTE":
             data_type = attributes["data_type"]
             domain = attributes["domain"]
-            return StoredNamedAttribute(tree, location=location, name=name, label=label, hide=hide, mute=mute,
-                                        node_height=200, data_type=data_type, domain=domain)
+            return StoreNamedAttribute(tree, location=location, name=name, label=label, hide=hide, mute=mute,
+                                       node_height=200, data_type=data_type, domain=domain)
         if type == "INPUT_ATTRIBUTE":
             data_type = attributes["data_type"]
             return NamedAttribute(tree, location=location, name=name, label=label, hide=hide, mute=mute,
@@ -352,9 +352,10 @@ class Node:
                             label=label, hide=hide, mute=mute, node_height=200,
                             mode=mode)
 
-        # if type=="CURVE_TO_POINTS":
-        #     mode = attributes["mode"]
-        #     return CurveToPoints(tree,location=location,name=name,label=label,hide=hide,mute=mute,node_height=200,mode=mode)
+        if type == "CURVE_TO_POINTS":
+            mode = attributes["mode"]
+            return CurveToPoints(tree, location=location, name=name, label=label, hide=hide, mute=mute,
+                                 node_height=200, mode=mode)
         if type == "CURVE_TO_MESH":
             return CurveToMesh(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type == "RESAMPLE_CURVE":
@@ -1386,6 +1387,47 @@ class Points(GreenNode):
             self.node.inputs["Radius"].default_value = radius
         else:
             self.tree.links.new(radius, self.node.inputs["Radius"])
+
+
+class CurveToPoints(GreenNode):
+    def __init__(self, tree, location=(0, 0),
+                 mode="COUNT",
+                 curve=None,
+                 count=10,
+                 length=0.1, **kwargs
+                 ):
+        """
+        :param tree:
+        :param location:
+        :param mode: "EVALUATED" (a point per control point of the curve),
+                     "COUNT" or "LENGTH"; only the input belonging to the mode
+                     is read by the node
+        :param curve:
+        :param count:
+        :param length:
+        :param kwargs:
+        """
+        self.node = tree.nodes.new(type="GeometryNodeCurveToPoints")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.node.mode = mode
+        self.geometry_out = self.node.outputs["Points"]
+        self.geometry_in = self.node.inputs["Curve"]
+        self.tangent_out = self.node.outputs["Tangent"]
+        self.normal_out = self.node.outputs["Normal"]
+        self.rotation_out = self.node.outputs["Rotation"]
+
+        if curve:
+            self.tree.links.new(curve, self.node.inputs["Curve"])
+        # the node only carries the socket of the mode it is in: in EVALUATED
+        # mode there is neither a Count nor a Length to set
+        for value, socket_name in ((count, "Count"), (length, "Length")):
+            if socket_name not in self.node.inputs:
+                continue
+            if isinstance(value, (int, float)):
+                self.node.inputs[socket_name].default_value = value
+            else:
+                self.tree.links.new(value, self.node.inputs[socket_name])
 
 
 class PointsToVertices(GreenNode):
@@ -2629,7 +2671,7 @@ class CaptureAttribute(GreenNode):
         return self.captured[name]
 
 
-class StoredNamedAttribute(GreenNode):
+class StoreNamedAttribute(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  data_type="FLOAT",
                  domain="POINT",
@@ -5369,9 +5411,9 @@ class E8Node(GreenNode):
         print("Hard-coded entry of roots ...", end="")
         for root in E8Lattice().roots:
             point = Points(tree)
-            attr1 = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", name="comp123", value=list(root[0:3]))
-            attr2 = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", name="comp456", value=list(root[3:6]))
-            attr3 = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", name="comp78", value=list(root[6:8]) + [0])
+            attr1 = StoreNamedAttribute(tree, data_type="FLOAT_VECTOR", name="comp123", value=list(root[0:3]))
+            attr2 = StoreNamedAttribute(tree, data_type="FLOAT_VECTOR", name="comp456", value=list(root[3:6]))
+            attr3 = StoreNamedAttribute(tree, data_type="FLOAT_VECTOR", name="comp78", value=list(root[6:8]) + [0])
 
             create_geometry_line(tree, [point, attr1, attr2, attr3, join])
         print("done")
@@ -6737,8 +6779,8 @@ class CycleNode(NodeGroup):
         sort_elements = SortElements(tree, domain="INSTANCE", sort_weight=sort_numbers.outputs["weight"], )
 
         index = Index(tree)
-        attr_cycle_index = StoredNamedAttribute(tree, name="CycleIndex", domain="INSTANCE", data_type="INT",
-                                                value=index.std_out, hide=False)
+        attr_cycle_index = StoreNamedAttribute(tree, name="CycleIndex", domain="INSTANCE", data_type="INT",
+                                               value=index.std_out, hide=False)
 
         target_index = make_function(tree, name="TargetIndex",
                                      functions={
@@ -6752,8 +6794,8 @@ class CycleNode(NodeGroup):
         attr_target_pos = Position(tree, hide=False)
         target_pos = EvaluateAtIndex(tree, domain="INSTANCE", data_type="FLOAT_VECTOR",
                                      index=target_index.outputs["idx"], value=attr_target_pos.std_out, hide=True)
-        attr_target_position = StoredNamedAttribute(tree, name="TargetPosition", domain="INSTANCE",
-                                                    data_type="FLOAT_VECTOR", value=target_pos.std_out, hide=False)
+        attr_target_position = StoreNamedAttribute(tree, name="TargetPosition", domain="INSTANCE",
+                                                   data_type="FLOAT_VECTOR", value=target_pos.std_out, hide=False)
 
         # move out
         attr_prime = NamedAttribute(tree, name="Prime", domain="INSTANCE", data_type="INT", hide=True)
@@ -6822,8 +6864,8 @@ class CycleNode(NodeGroup):
 
         # update position
         update_pos = Position(tree, hide=True)
-        store_pos = StoredNamedAttribute(tree, name="Position", data_type="FLOAT_VECTOR",
-                                         value=update_pos.std_out, hide=True)
+        store_pos = StoreNamedAttribute(tree, name="Position", data_type="FLOAT_VECTOR",
+                                        value=update_pos.std_out, hide=True)
         final_join = JoinGeometry(tree, hide=True)
         tree.links.new(select_numbers.outputs["Inverted"], final_join.geometry_in)
         create_geometry_line(tree,
@@ -6971,10 +7013,10 @@ class BevelFaces(NodeGroup):
         geometry_to_instance = GeometryToInstance(tree)
         preserved_attr = get_from_kwargs(kwargs, "preserved_attribute", None)
         if preserved_attr is not None:
-            store_attr = StoredNamedAttribute(tree, data_type=get_from_kwargs(kwargs, "attr_data_type", "FLOAT"),
-                                              domain=get_from_kwargs(kwargs, "attr_domain", "FACE"),
-                                              name=get_from_kwargs(kwargs, "attr_name", "attribute_name"),
-                                              value=foreachface.outputs["preserved_attribute"])
+            store_attr = StoreNamedAttribute(tree, data_type=get_from_kwargs(kwargs, "attr_data_type", "FLOAT"),
+                                             domain=get_from_kwargs(kwargs, "attr_domain", "FACE"),
+                                             name=get_from_kwargs(kwargs, "attr_name", "attribute_name"),
+                                             value=foreachface.outputs["preserved_attribute"])
             foreachface.create_geometry_line([iop, realize_geo, convex_hull, geometry_to_instance, store_attr])
         else:
             foreachface.create_geometry_line([iop, realize_geo, convex_hull, geometry_to_instance])
@@ -8003,6 +8045,19 @@ _BESSEL_F0 = (0.79788456, -0.00000077, -0.00552740, -0.00009512,
 _BESSEL_TH = (-0.04166397, -0.00003954, 0.00262573,
               -0.00054125, -0.00029333, 0.00013558)
 _QUARTER_PI = 0.78539816
+# The same two branches for J1 (A&S 9.4.4 and 9.4.6). The small-x polynomial
+# is J1(x)/x, so it carries a factor x, and the large-x phase runs about
+# 3pi/4 rather than pi/4 - which is the whole difference between the two
+# functions out there: J1(x) ~ sqrt(2/pi x) cos(x - 3pi/4) lags J0 by a
+# quarter period. Measured against scipy over x in (0, 40]: |error| < 3.6e-8.
+_J1_SMALL = (0.5, -0.56249985, 0.21093573, -0.03954289,
+             0.00443319, -0.00031761, 0.00001109)
+_BESSEL_F1 = (0.79788456, 0.00000156, 0.01659667, 0.00017105,
+              -0.00249511, 0.00113653, -0.00020033)
+# coefficients of t^1 ... t^6 in th1 = x - 3pi/4 + sum_i a_i t^i
+_BESSEL_TH1 = (0.12499612, 0.00005650, -0.00637879, 0.00074348,
+               0.00079824, -0.00029166)
+_THREE_QUARTER_PI = 2.35619449
 # ln(x) = lg(x) * ln(10) - the RPN vocabulary has only the base-10 log, so the
 # conversion is folded into the constant that multiplies it anyway
 _TWO_OVER_PI_LN10 = float(2 / np.pi * np.log(10))
@@ -8026,7 +8081,7 @@ def horner_rpn(coefficients, variable):
 
 
 def bessel_j0_y0_rpn(argument, prefix="bessel", want=("j0", "y0")):
-    r"""RPN for :math:`J_0` and :math:`Y_0` of a **strictly positive** argument.
+    r"""RPN for :math:`J_0`, :math:`Y_0` and :math:`J_1` of a **positive** argument.
 
     The two cylinder functions of order zero, which are to a circular wave
     what sine and cosine are to a plane one: the field radiated by a point
@@ -8076,10 +8131,15 @@ def bessel_j0_y0_rpn(argument, prefix="bessel", want=("j0", "y0")):
         a point.
     :param prefix: stem for the generated aux names, so that several
         arguments can be evaluated in one group without colliding.
-    :param want: which of ``"j0"``, ``"y0"`` to produce. Dropping ``"y0"``
-        skips the logarithm and the second polynomial.
+    :param want: which of ``"j0"``, ``"y0"``, ``"j1"`` to produce. They share
+        the branch selector and both clamped arguments, so asking for several
+        at once is much cheaper than one call each; dropping ``"y0"`` skips
+        the logarithm and the second polynomial. :math:`J_1` is what
+        :func:`bessel_jm_rpn` starts its recurrence from - and it is also the
+        radial slope of a drum's fundamental, :math:`J_0' = -J_1`.
     :return: ``(aux, names)`` - the aux formulas in dependency order, and a
-        dict mapping ``"j0"``/``"y0"`` to the aux key holding that result.
+        dict mapping ``"j0"``/``"y0"``/``"j1"`` to the aux key holding that
+        result.
     """
     p = prefix
     x = argument
@@ -8109,6 +8169,16 @@ def bessel_j0_y0_rpn(argument, prefix="bessel", want=("j0", "y0")):
         aux[p + "_j0l"] = "{0}_amp,{0}_th,cos,*".format(p)
         aux[p + "_j0"] = "{0}_j0s,{0}_sel,*,{0}_j0l,{0}_nsel,*,+".format(p)
         names["j0"] = p + "_j0"
+    if "j1" in want:
+        # the small-x polynomial is J1(x)/x, hence the factor xs
+        aux[p + "_j1s"] = "%s,%s_xs,*" % (horner_rpn(_J1_SMALL, p + "_ts"), p)
+        aux[p + "_f1"] = horner_rpn(_BESSEL_F1, p + "_t")
+        aux[p + "_th1"] = "{0}_xl,{1},-,{2},{0}_t,*,+".format(
+            p, repr(_THREE_QUARTER_PI), horner_rpn(_BESSEL_TH1, p + "_t"))
+        aux[p + "_amp1"] = "{0}_f1,{0}_xl,sqrt,/".format(p)
+        aux[p + "_j1l"] = "{0}_amp1,{0}_th1,cos,*".format(p)
+        aux[p + "_j1"] = "{0}_j1s,{0}_sel,*,{0}_j1l,{0}_nsel,*,+".format(p)
+        names["j1"] = p + "_j1"
     if "y0" in want:
         aux[p + "_y0l"] = "{0}_amp,{0}_th,sin,*".format(p)
         # (2/pi) ln(x/2) J0(x) + polynomial; the ln is a base-10 lg with the
@@ -8122,8 +8192,10 @@ def bessel_j0_y0_rpn(argument, prefix="bessel", want=("j0", "y0")):
 
 _BESSEL_GROUP_NAMES = {("j0", "Shader"): "BesselJ0",
                        ("y0", "Shader"): "BesselY0",
+                       ("j1", "Shader"): "BesselJ1",
                        ("j0", "GeometryNodes"): "BesselJ0Geo",
-                       ("y0", "GeometryNodes"): "BesselY0Geo"}
+                       ("y0", "GeometryNodes"): "BesselY0Geo",
+                       ("j1", "GeometryNodes"): "BesselJ1Geo"}
 
 
 def bessel_node_group(kind="j0", node_group_type="Shader"):
@@ -8149,7 +8221,7 @@ def bessel_node_group(kind="j0", node_group_type="Shader"):
     :func:`bessel_j0_y0_rpn` is cheaper still at 88, and is the reason that
     function stays public.
 
-    :param kind: ``"j0"`` or ``"y0"``.
+    :param kind: ``"j0"``, ``"y0"`` or ``"j1"``.
     :param node_group_type: ``"Shader"`` or ``"GeometryNodes"``. The two tree
         types cannot share a group datablock, so there is one cached group
         per kind per type.
@@ -8158,7 +8230,7 @@ def bessel_node_group(kind="j0", node_group_type="Shader"):
                  else "GeometryNodeTree")
     key = (kind, "Shader" if "Shader" in node_group_type else "GeometryNodes")
     if key not in _BESSEL_GROUP_NAMES:
-        raise ValueError("kind is 'j0' or 'y0', not %r" % kind)
+        raise ValueError("kind is 'j0', 'y0' or 'j1', not %r" % kind)
     name = _BESSEL_GROUP_NAMES[key]
 
     existing = bpy.data.node_groups.get(name)
@@ -8181,14 +8253,14 @@ def bessel_node_group(kind="j0", node_group_type="Shader"):
 
 
 class BesselNode(Node):
-    """A group node evaluating :math:`J_0(x)` or :math:`Y_0(x)`.
+    """A group node evaluating :math:`J_0(x)`, :math:`Y_0(x)` or :math:`J_1(x)`.
 
     Usable in a shader tree and in a geometry tree alike - it looks at what
     kind of tree it is being put into and instances the matching group. Most
     of the time it is not constructed directly but reached through
     :data:`BESSEL_OPS`, which puts it into the RPN vocabulary.
 
-    :param kind: ``"j0"`` or ``"y0"``.
+    :param kind: ``"j0"``, ``"y0"`` or ``"j1"``.
     """
 
     def __init__(self, tree, kind="j0", location=(0, 0), **kwargs):
@@ -8216,7 +8288,78 @@ BESSEL_OPS = {
            "inputs": ("x",), "unary": True, "output": "J0", "label": "J0"},
     "y0": {"type": BesselNode, "class_kwargs": {"kind": "y0"},
            "inputs": ("x",), "unary": True, "output": "Y0", "label": "Y0"},
+    "j1": {"type": BesselNode, "class_kwargs": {"kind": "j1"},
+           "inputs": ("x",), "unary": True, "output": "J1", "label": "J1"},
 }
+
+
+def bessel_jm_rpn(argument, order, prefix="bessel", floor=0.01):
+    r"""RPN for :math:`J_m` of any integer order, from :math:`J_0` and :math:`J_1`.
+
+    There is no polynomial approximation for a general order and there does
+    not need to be one: the cylinder functions satisfy
+
+    .. math::
+        J_{m+1}(x) = \frac{2m}{x} J_m(x) - J_{m-1}(x),
+
+    so every order follows from the two that are approximated. The recurrence
+    is written out at build time - ``order`` is a python number, not a socket -
+    which is what makes it possible at all in a tree that has no loops.
+
+    The orders are what a *drum* needs, and where they come from: the modes of
+    a circular membrane clamped at r = a are
+    :math:`J_m(\alpha_{mn} r/a)\cos m\varphi\,\cos\omega_{mn}t`, so m is
+    the number of nodal diameters and the mode with m = 2 cannot be written
+    without :math:`J_2`.
+
+    Usage - the ``j0``/``j1`` operators have to be in the vocabulary, so the
+    call that consumes these formulas passes ``custom_ops=BESSEL_OPS``::
+
+        aux = {"x": "r,k,*"}
+        b, name = bessel_jm_rpn("x", 2, prefix="b")
+        aux.update(b)
+        make_function(tree, aux_functions=aux, functions={"u": name},
+                      scalars=[..., "x"] + list(aux),
+                      custom_ops=BESSEL_OPS, ...)
+
+    **Accuracy.** Upward recurrence amplifies the error of its seeds by
+    :math:`2m/x` per step, so it is the small arguments that decide how far it
+    can be pushed. Measured in float32, which is what blender evaluates in,
+    against scipy: :math:`|error| < 4\cdot10^{-7}` for m = 2 and
+    :math:`< 2\cdot10^{-5}` for m = 3 down to x = 0.02, both of them nothing
+    on a surface of unit amplitude. m = 4 reaches 6e-3 at x = 0.02 (and 7e-4
+    at x = 0.05), which is the first order where the innermost ring of a fine
+    polar mesh could show it. Beyond that use a different method.
+
+    :param argument: name of the RPN symbol holding *x*.
+    :param order: m, a non-negative integer.
+    :param prefix: stem for the generated aux names.
+    :param floor: *x* is clamped from below by this before anything divides by
+        it. A ``ShaderNodeMath`` DIVIDE returns 0 rather than infinity at
+        x = 0, which would make :math:`J_2(0)` come out as
+        :math:`0\cdot J_1 - J_0 = -1` instead of 0 - a spike at the exact
+        centre of a disc. Since :math:`J_m(x)\sim(x/2)^m/m!` the clamp costs
+        nothing where it acts: 0.01 moves the centre value of the fundamental
+        by 2.5e-5.
+    :return: ``(aux, name)`` - the aux formulas in dependency order, and the
+        key holding :math:`J_m`.
+    """
+    if int(order) != order or order < 0:
+        raise ValueError("the order of J_m is a non-negative integer, not %r"
+                         % (order,))
+    order = int(order)
+    p = prefix
+    aux = {}
+    x = p + "_x"
+    aux[x] = "%s,%s,max" % (argument, repr(float(floor)))
+    aux[p + "_0"] = "%s,j0" % x
+    if order == 0:
+        return aux, p + "_0"
+    aux[p + "_1"] = "%s,j1" % x
+    for k in range(1, order):
+        aux[p + "_%d" % (k + 1)] = "{0},{1},/,{2},*,{3},-".format(
+            repr(float(2 * k)), x, p + "_%d" % k, p + "_%d" % (k - 1))
+    return aux, p + "_%d" % order
 
 
 # Dispatch tables consumed by build_function.

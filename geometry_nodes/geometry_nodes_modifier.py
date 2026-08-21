@@ -10,7 +10,7 @@ from extended_math_nodes.generic_nodes import AssociatedLegendrePolynomial, \
     SphericalHarmonicsRekursive, SphericalHarmonics200
 from geometry_nodes.nodes import layout, Points, InputValue, CurveCircle, InstanceOnPoints, JoinGeometry, \
     create_geometry_line, RealizeInstances, Position, make_function, ObjectInfo, SetPosition, Index, SetMaterial, \
-    RandomValue, RepeatZone, StoredNamedAttribute, NamedAttribute, VectorMath, CurveToMesh, PointsToCurve, Grid, \
+    RandomValue, RepeatZone, StoreNamedAttribute, NamedAttribute, VectorMath, CurveToMesh, PointsToCurve, Grid, \
     TransformGeometry, InputVector, DeleteGeometry, IcoSphere, MeshLine, InstanceOnEdges, CubeMesh, \
     EdgeVertices, BooleanMath, SetShadeSmooth, RayCast, WireFrame, ConvexHull, InsideConvexHull, ExtrudeMesh, \
     ScaleElements, UVSphere, SceneTime, Simulation, MathNode, PointsToVertices, CombineXYZ, Switch, MeshToPoints, \
@@ -306,7 +306,7 @@ class SpherePreImage(GeometryNodesModifier):
         points2verts = PointsToVertices(tree, location=(left, 2))
         index = Index(tree, location=(left, 1))
         left += 1
-        attr = StoredNamedAttribute(tree, location=(left, 2), name="Index", data_type="INT", value=index.std_out)
+        attr = StoreNamedAttribute(tree, location=(left, 2), name="Index", data_type="INT", value=index.std_out)
         pi_offset = InputVector(tree, location=(left, 1), value=[0, 0, pi])
         left += 1
         extrude_mesh = ExtrudeMesh(tree, location=(left, 2), offset=pi_offset.std_out)
@@ -373,7 +373,7 @@ class SpherePreImage(GeometryNodesModifier):
         points2verts = PointsToVertices(tree, location=(left, -2))
         index = Index(tree, location=(left, 1))
         left += 1
-        attr = StoredNamedAttribute(tree, location=(left, -2), name="Index2", data_type="INT", value=index.std_out)
+        attr = StoreNamedAttribute(tree, location=(left, -2), name="Index2", data_type="INT", value=index.std_out)
         tau_offset = InputVector(tree, location=(left, -1), value=[tau, 0, 0])
         left += 1
         extrude_mesh = ExtrudeMesh(tree, location=(left, -2), offset=tau_offset.std_out)
@@ -662,8 +662,8 @@ class PendulumModifierSmall(GeometryNodesModifier):
         left += 1
         arc_fill = ConvexHull(tree, location=(left, -6))
         left += 1
-        theta_attr = StoredNamedAttribute(tree, location=(left, -6), name="thetaStorage",
-                                          value=simulation.simulation_output.outputs["theta"])
+        theta_attr = StoreNamedAttribute(tree, location=(left, -6), name="thetaStorage",
+                                         value=simulation.simulation_output.outputs["theta"])
         left += 1
         material = gradient_from_attribute(attr_name="thetaStorage",
                                            roughness=0.1, metallic=0.5, emission=0.75)
@@ -698,8 +698,8 @@ class PendulumModifierSmall(GeometryNodesModifier):
         set_graph = SetPosition(tree, location=(left, y + 1), position=comb_xyz.std_out)
         switch = Switch(tree, location=(left, y), switch=freeze_frames.outputs["switch"])
         left += 1
-        attr2 = StoredNamedAttribute(tree, location=(left, y), name='thetaStorage2',
-                                     value=simulation.simulation_output.outputs["theta"])
+        attr2 = StoreNamedAttribute(tree, location=(left, y), name='thetaStorage2',
+                                    value=simulation.simulation_output.outputs["theta"])
         left += 1
         simulation2 = Simulation(tree, location=(left, y + 2))
         left += 1
@@ -895,8 +895,8 @@ class PendulumModifierLarge(GeometryNodesModifier):
         left += 1
         arc_fill = ConvexHull(tree, location=(left, -6))
         left += 1
-        theta_attr = StoredNamedAttribute(tree, location=(left, -6), name="thetaStorage",
-                                          value=simulation.simulation_output.outputs["theta"])
+        theta_attr = StoreNamedAttribute(tree, location=(left, -6), name="thetaStorage",
+                                         value=simulation.simulation_output.outputs["theta"])
         left += 1
         material = gradient_from_attribute(attr_name="thetaStorage",
                                            roughness=0.1, metallic=0.5, emission=0.5)
@@ -931,8 +931,8 @@ class PendulumModifierLarge(GeometryNodesModifier):
         set_graph = SetPosition(tree, location=(left, y + 1), position=comb_xyz.std_out)
         switch = Switch(tree, location=(left, y), switch=freeze_frames.outputs["switch"])
         left += 1
-        attr2 = StoredNamedAttribute(tree, location=(left, y), name='thetaStorage2',
-                                     value=simulation.simulation_output.outputs["theta"])
+        attr2 = StoreNamedAttribute(tree, location=(left, y), name='thetaStorage2',
+                                    value=simulation.simulation_output.outputs["theta"])
         left += 1
         simulation2 = Simulation(tree, location=(left, y + 2))
         left += 1
@@ -1097,7 +1097,7 @@ class LorentzAttractorNode(GeometryNodesModifier):
 
         namedAttribute = NamedAttribute(tree, data_type='FLOAT_VECTOR', name='pos')
 
-        storedNamedAttr = StoredNamedAttribute(tree, data_type='FLOAT_VECTOR', name='pos')
+        storedNamedAttr = StoreNamedAttribute(tree, data_type='FLOAT_VECTOR', name='pos')
         transformation = make_function(tree.nodes, functions={
             "position": [
                 "old_pos_x,a,pos_x,*,-,4,pos_y,*,-,4,pos_z,*,-,pos_y,2,**,-",
@@ -1405,8 +1405,8 @@ class Penrose2DVoronoi(GeometryNodesModifier):
         tree.links.new(edge_vertices.outputs["Position 1"], horizontal_tester.inputs["pos1"])
         tree.links.new(edge_vertices.outputs["Position 2"], horizontal_tester.inputs["pos2"])
 
-        stored_attribute = StoredNamedAttribute(tree, data_type='BOOLEAN', domain='EDGE', name='horizontalAttribute',
-                                                value=horizontal_tester.outputs[0])
+        stored_attribute = StoreNamedAttribute(tree, data_type='BOOLEAN', domain='EDGE', name='horizontalAttribute',
+                                               value=horizontal_tester.outputs[0])
 
         named_attribute = NamedAttribute(tree, data_type='BOOLEAN', name='horizontalAttribute')
         not_node = BooleanMath(tree, operation='NOT', inputs0=named_attribute.std_out, name="Not")
@@ -1506,8 +1506,8 @@ class Penrose2D(GeometryNodesModifier):
         tree.links.new(edge_vertices.outputs["Position 1"], horizontal_tester.inputs["pos1"])
         tree.links.new(edge_vertices.outputs["Position 2"], horizontal_tester.inputs["pos2"])
 
-        stored_attribute = StoredNamedAttribute(tree, data_type='BOOLEAN', domain='EDGE', name='horizontalAttribute',
-                                                value=horizontal_tester.outputs[0])
+        stored_attribute = StoreNamedAttribute(tree, data_type='BOOLEAN', domain='EDGE', name='horizontalAttribute',
+                                               value=horizontal_tester.outputs[0])
 
         named_attribute = NamedAttribute(tree, data_type='BOOLEAN', name='horizontalAttribute')
         not_node = BooleanMath(tree, operation='NOT', inputs0=named_attribute.std_out, name="Not")
@@ -1880,7 +1880,7 @@ class SphericalHarmonicsNode(GeometryNodesModifier):
         set_pos = SetPosition(tree, location=(-2, 1), position=trafo.outputs["position"])
 
         # store the phase for coloring
-        attr = StoredNamedAttribute(tree, location=(-1, -2), name="Phase", value=complex_analyser.outputs["phase"])
+        attr = StoreNamedAttribute(tree, location=(-1, -2), name="Phase", value=complex_analyser.outputs["phase"])
         material = phase2hue_material(attribute_names=["Phase"], **self.kwargs)
         self.materials.append(material)
         color = SetMaterial(tree, location=(0, -1), material=material)
@@ -1924,7 +1924,7 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         points2verts = PointsToVertices(tree, location=(left, 2))
         index = Index(tree, location=(left, 1))
         left += 1
-        attr = StoredNamedAttribute(tree, location=(left, 2), name="Index", data_type="INT", value=index.std_out)
+        attr = StoreNamedAttribute(tree, location=(left, 2), name="Index", data_type="INT", value=index.std_out)
         pi_offset = InputVector(tree, location=(left, 1), value=[0, 0, pi])
         left += 1
         extrude_mesh = ExtrudeMesh(tree, location=(left, 2), offset=pi_offset.std_out)
@@ -1979,7 +1979,7 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         points2verts = PointsToVertices(tree, location=(left, -2))
         index = Index(tree, location=(left, 1))
         left += 1
-        attr = StoredNamedAttribute(tree, location=(left, -2), name="Index2", data_type="INT", value=index.std_out)
+        attr = StoreNamedAttribute(tree, location=(left, -2), name="Index2", data_type="INT", value=index.std_out)
         tau_offset = InputVector(tree, location=(left, -1), value=[tau, 0, 0])
         left += 1
         extrude_mesh = ExtrudeMesh(tree, location=(left, -2), offset=tau_offset.std_out)
@@ -2097,13 +2097,13 @@ class SphericalHarmonicsNode2(GeometryNodesModifier):
         left += 1
         join_full = JoinGeometry(tree, location=(left, 0))
         left += 1
-        alpha_attr = StoredNamedAttribute(tree, location=(left, 0), name="Alpha", value=lambda_node.std_out)
+        alpha_attr = StoreNamedAttribute(tree, location=(left, 0), name="Alpha", value=lambda_node.std_out)
         left += 1
         set_pos = SetPosition(tree, location=(left, 0), position=trafo.outputs["position"])
         left += 1
         # store the phase for coloring
-        attr = StoredNamedAttribute(tree, location=(sphere_node_pos + 1, 1), name="Phase",
-                                    value=complex_analyser.outputs["phase"])
+        attr = StoreNamedAttribute(tree, location=(sphere_node_pos + 1, 1), name="Phase",
+                                   value=complex_analyser.outputs["phase"])
         material = phase2hue_material(attribute_names=["Phase"], alpha_function={"Alpha": "alpha"}, **self.kwargs)
         self.materials.append(material)
 
@@ -3085,7 +3085,7 @@ class LogoModifier(GeometryNodesModifier):
                                                          }, inputs=["pos"], outputs=["position", "scale"],
                                               scalars=[], vectors=["pos", "position", "scale"])
             links.new(pos.std_out, get_pos_and_scale.inputs["pos"])
-            store_center = StoredNamedAttribute(tree, data_type='FLOAT_VECTOR', name=center_names[i], value=pos.std_out)
+            store_center = StoreNamedAttribute(tree, data_type='FLOAT_VECTOR', name=center_names[i], value=pos.std_out)
             set_pos = SetPosition(tree, position=get_pos_and_scale.outputs["position"])
             uv_sphere = UVSphere(tree, segments=segments[i], rings=rings[i], radius=radii[i])
             transform_geometry = TransformGeometry(tree, geometry=uv_sphere.geometry_out, translation=[0, 0, -1])
@@ -3112,8 +3112,8 @@ class LogoModifier(GeometryNodesModifier):
             links.new(get_loc_on_sphere.outputs["r"], get_theta_phi.inputs["r"])
             links.new(get_loc_on_sphere.outputs["length"], get_theta_phi.inputs["l"])
 
-            store_theta = StoredNamedAttribute(tree, name=theta_names[i], value=get_theta_phi.outputs["theta"])
-            store_phi = StoredNamedAttribute(tree, name=phi_names[i], value=get_theta_phi.outputs["phi"])
+            store_theta = StoreNamedAttribute(tree, name=theta_names[i], value=get_theta_phi.outputs["theta"])
+            store_phi = StoreNamedAttribute(tree, name=phi_names[i], value=get_theta_phi.outputs["phi"])
 
             mat = get_material(sphere_colors[i], **kwargs)
             self.materials.append(mat)
@@ -3169,7 +3169,7 @@ class VoronoiModifier(GeometryNodesModifier):
 
         index = Index(tree)
         dual_mesh = DualMesh(tree, keep_boundaries=True)
-        store_index = StoredNamedAttribute(tree, data_type="INT", domain="FACE", name="Index", value=index.std_out)
+        store_index = StoreNamedAttribute(tree, data_type="INT", domain="FACE", name="Index", value=index.std_out)
         split_edges = SplitEdges(tree)
         wireframe_material = get_material("gold")
         wireframe = WireFrameRectangle(tree, node_width=0.02, node_height=0.02)
@@ -3293,12 +3293,12 @@ class RubiksCubeModifier(GeometryNodesModifier):
                             scalars=["idx"])
         links.new(index.std_out, inc.inputs["idx"])
         pos = Position(tree, location=self.loc(-1, 2, 5, -2), hide=False)
-        cubie_index = StoredNamedAttribute(tree, domain='POINT', data_type='INT',
-                                           name="CubieIndex", value=inc.outputs["idx"], hide=False,
-                                           location=self.loc(-1, 2, 5, 0))
-        cubie_pos = StoredNamedAttribute(tree, domain='POINT', data_type='FLOAT_VECTOR',
-                                         name="CubiePosition", value=pos.std_out, hide=False,
-                                         location=self.loc(-1, 2, 6, 0))
+        cubie_index = StoreNamedAttribute(tree, domain='POINT', data_type='INT',
+                                          name="CubieIndex", value=inc.outputs["idx"], hide=False,
+                                          location=self.loc(-1, 2, 5, 0))
+        cubie_pos = StoreNamedAttribute(tree, domain='POINT', data_type='FLOAT_VECTOR',
+                                        name="CubiePosition", value=pos.std_out, hide=False,
+                                        location=self.loc(-1, 2, 6, 0))
         create_geometry_line(tree, [mesh_line, iop, realize_instance, cubie_index, cubie_pos])
 
         # beveled cube
@@ -3374,12 +3374,12 @@ class RubiksCubeModifier(GeometryNodesModifier):
         attr_cubie_index = NamedAttribute(tree, location=self.loc(0, 1, -1, -1), name="CubieIndex",
                                           data_type='INT', hide=False)
         normal = InputNormal(tree, location=self.loc(0, 1, -1, -2), hide=False)
-        store_cubie_index_at_face = StoredNamedAttribute(tree, location=self.loc(0, 1, 1, 0), data_type='INT',
-                                                         domain='FACE', name="CubieIndexAtFace",
-                                                         value=attr_cubie_index.std_out,
-                                                         hide=False)
-        store_face_normal = StoredNamedAttribute(tree, location=self.loc(0, 1, 2, 0), data_type='FLOAT_VECTOR',
-                                                 domain='FACE', name="FaceNormal", value=normal.std_out, hide=False)
+        store_cubie_index_at_face = StoreNamedAttribute(tree, location=self.loc(0, 1, 1, 0), data_type='INT',
+                                                        domain='FACE', name="CubieIndexAtFace",
+                                                        value=attr_cubie_index.std_out,
+                                                        hide=False)
+        store_face_normal = StoreNamedAttribute(tree, location=self.loc(0, 1, 2, 0), data_type='FLOAT_VECTOR',
+                                                domain='FACE', name="FaceNormal", value=normal.std_out, hide=False)
         dual_mesh = DualMesh(tree, location=self.loc(0, 1, 3, 0), hide=False)
         position3 = Position(tree, location=self.loc(0, 1, -1, -3), hide=False)
         abs_2 = VectorMath(tree, operation="ABSOLUTE", inputs0=position3.std_out,
@@ -3410,8 +3410,8 @@ class RubiksCubeModifier(GeometryNodesModifier):
         attr_face_normal = NamedAttribute(tree, location=self.loc(0, 1, -1, -4),
                                           name="FaceNormal", data_type='FLOAT_VECTOR', hide=False)
 
-        store_face_index = StoredNamedAttribute(tree, location=self.loc(0, 1, 5, 0), hide=False,
-                                                domain='POINT', data_type='INT', name="FaceIndex", value=index3.std_out)
+        store_face_index = StoreNamedAttribute(tree, location=self.loc(0, 1, 5, 0), hide=False,
+                                               domain='POINT', data_type='INT', name="FaceIndex", value=index3.std_out)
         align_rotation = AxesToRotation(tree, location=self.loc(0, 1, 5, -2), hide=False,
                                         primary_axis='Z', secondary_axis='Y',
                                         primary_direction=attr_face_normal.std_out,
@@ -3602,9 +3602,9 @@ class RubiksCubeModifier(GeometryNodesModifier):
         edge_centers = CubeMesh(tree, location=self.loc(block_x, block_y, 0, 0),
                                 vertices_x=4, vertices_y=4, vertices_z=4, size=size_function.outputs["size"])
         normal2 = InputNormal(tree, location=self.loc(block_x, block_y, 1, -1))
-        store_face_normal2 = StoredNamedAttribute(tree, location=self.loc(block_x, block_y, 1, 0),
-                                                  name="FaceNormal2", value=normal2.std_out, domain='FACE',
-                                                  data_type="FLOAT_VECTOR", hide=False)
+        store_face_normal2 = StoreNamedAttribute(tree, location=self.loc(block_x, block_y, 1, 0),
+                                                 name="FaceNormal2", value=normal2.std_out, domain='FACE',
+                                                 data_type="FLOAT_VECTOR", hide=False)
         dual_mesh = DualMesh(tree, location=self.loc(block_x, block_y, 2, 0), )
         mesh_to_points = MeshToPoints(tree, location=self.loc(block_x, block_y, 3, 0), hide=True)
 
@@ -3705,9 +3705,9 @@ class RubiksCubeModifier(GeometryNodesModifier):
         label_on_points = InstanceOnPoints(tree, location=self.loc(block_x, block_y, 3, 0),
                                            rotation=align_rotation.std_out, scale=[0.5] * 3, hide=False,
                                            selection=cubie_label.std_out, instance=extrude2.geometry_out)
-        string_attr = StoredNamedAttribute(tree, location=self.loc(block_x, block_y, 4, 0),
-                                           name="CubieIndexString", data_type="INT", domain="POINT",
-                                           value=cubie_index.outputs["idx"], hide=False)
+        string_attr = StoreNamedAttribute(tree, location=self.loc(block_x, block_y, 4, 0),
+                                          name="CubieIndexString", data_type="INT", domain="POINT",
+                                          value=cubie_index.outputs["idx"], hide=False)
         for_each_cubie.create_geometry_line([label_on_points, string_attr])
         create_geometry_line(tree, [strings_to_curve2, fil_curve2, extrude2])
         realize_fonts = RealizeInstances(tree, location=self.loc(block_x, block_y, 6, 0), hide=True)
@@ -3764,9 +3764,9 @@ class RubiksCubeModifier(GeometryNodesModifier):
         label_on_points2 = InstanceOnPoints(tree, location=self.loc(block_x, block_y, 3, 0),
                                             rotation=align_rotation.std_out, scale=[0.5] * 3, hide=False,
                                             selection=face_label.std_out, instance=extrude3.geometry_out)
-        string_attr2 = StoredNamedAttribute(tree, location=self.loc(block_x, block_y, 4, 0),
-                                            name="FaceIndexString", data_type="INT", domain="POINT",
-                                            value=face_index.outputs["idx"], hide=False)
+        string_attr2 = StoreNamedAttribute(tree, location=self.loc(block_x, block_y, 4, 0),
+                                           name="FaceIndexString", data_type="INT", domain="POINT",
+                                           value=face_index.outputs["idx"], hide=False)
         for_each_face.create_geometry_line([label_on_points2, string_attr2])
         create_geometry_line(tree, [strings_to_curve3, fil_curve3, extrude3])
         realize_fonts2 = RealizeInstances(tree, location=self.loc(block_x, block_y, 6, 0), hide=True)
@@ -3833,12 +3833,12 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
         iop = InstanceOnPoints(tree, rotation=face_rotations.std_out)
         realize_instances = RealizeInstances(tree)
         normal = InputNormal(tree)
-        store_normal = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", domain="FACE", name="FaceNormal",
-                                            value=normal.std_out)
+        store_normal = StoreNamedAttribute(tree, data_type="FLOAT_VECTOR", domain="FACE", name="FaceNormal",
+                                           value=normal.std_out)
         dual_mesh2 = DualMesh(tree)
         index = Index(tree)
-        store_face_index = StoredNamedAttribute(tree, data_type="INT", domain="POINT", name="FaceIndex",
-                                                value=index.std_out)
+        store_face_index = StoreNamedAttribute(tree, data_type="INT", domain="POINT", name="FaceIndex",
+                                               value=index.std_out)
 
         create_geometry_line(tree, [grid, split_edges], out=iop.inputs["Instance"])
         create_geometry_line(tree, [cube1, unfold_node, dual_mesh, iop])
@@ -4008,7 +4008,7 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
         # create a smooth cubies
         show_cubies = InputBoolean(tree, value=True, label="ShowCubiesFlag")
         cube2 = CubeMesh(tree, size=r2_factor.std_out, vertices_x=3, vertices_y=3, vertices_z=3)
-        store_cubie_index = StoredNamedAttribute(tree, name="CubieIndex", data_type="INT", domain="POINT")
+        store_cubie_index = StoreNamedAttribute(tree, name="CubieIndex", data_type="INT", domain="POINT")
         # position cubies to the instances
         cube_size = InputValue(tree, value=1, label="CubeSize")
         cubie = BeveledCubeNode(tree, size=cube_size.std_out, bevel=6.03)
@@ -4086,8 +4086,8 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
 
         dual_mesh4 = DualMesh(tree)
         index = Index(tree)
-        store_face_index2 = StoredNamedAttribute(tree, name="FaceIndex", data_type="INT", domain="POINT",
-                                                 value=index.std_out)
+        store_face_index2 = StoreNamedAttribute(tree, name="FaceIndex", data_type="INT", domain="POINT",
+                                                value=index.std_out)
         face_switch = InputBoolean(tree, name="FaceSwitch", value=True)
         for_each_index = ForEachZone(tree, name="ForEachFace", hide=True)
         switch_index = IndexSwitch(tree, name="FaceLabelSwitch", data_type="INT", index=for_each_index.outputs["Index"],
@@ -4133,8 +4133,8 @@ class RubiksCubeUnfolded(GeometryNodesModifier):
                                  false=mat_number_even.std_out, true=mat_number_odd.std_out)
         set_material_font = SetMaterial(tree, material=material_switch.std_out, name="LabelMaterial")
 
-        store_face_index_string = StoredNamedAttribute(tree, name="FaceIndexString", data_type="INT", domain="POINT",
-                                                       value=switch_index.std_out, hide=True)
+        store_face_index_string = StoreNamedAttribute(tree, name="FaceIndexString", data_type="INT", domain="POINT",
+                                                      value=switch_index.std_out, hide=True)
 
         for_each_index.create_geometry_line([iop_face, store_face_index_string])
         create_geometry_line(tree, [string_to_curve, fill_curve, extrude_face, set_material_font, join_string],
@@ -4265,12 +4265,12 @@ class RubiksSphereModifier(GeometryNodesModifier):
                             scalars=["idx"])
         links.new(index.std_out, inc.inputs["idx"])
         pos = Position(tree, location=self.loc(-1, 2, 5, -2), hide=False)
-        cubie_index = StoredNamedAttribute(tree, domain='POINT', data_type='INT',
-                                           name="CubieIndex", value=inc.outputs["idx"], hide=False,
-                                           location=self.loc(-1, 2, 5, 0))
-        cubie_pos = StoredNamedAttribute(tree, domain='POINT', data_type='FLOAT_VECTOR',
-                                         name="CubiePosition", value=pos.std_out, hide=False,
-                                         location=self.loc(-1, 2, 6, 0))
+        cubie_index = StoreNamedAttribute(tree, domain='POINT', data_type='INT',
+                                          name="CubieIndex", value=inc.outputs["idx"], hide=False,
+                                          location=self.loc(-1, 2, 5, 0))
+        cubie_pos = StoreNamedAttribute(tree, domain='POINT', data_type='FLOAT_VECTOR',
+                                        name="CubiePosition", value=pos.std_out, hide=False,
+                                        location=self.loc(-1, 2, 6, 0))
         create_geometry_line(tree, [mesh_line, iop, realize_instance, cubie_index, cubie_pos])
 
         # beveled cube
@@ -4373,12 +4373,12 @@ class RubiksSphereModifier(GeometryNodesModifier):
         attr_cubie_index = NamedAttribute(tree, location=self.loc(0, 1, -1, -1), name="CubieIndex",
                                           data_type='INT', hide=False)
         normal = InputNormal(tree, location=self.loc(0, 1, -1, -2), hide=False)
-        store_cubie_index_at_face = StoredNamedAttribute(tree, location=self.loc(0, 1, 1, 0), data_type='INT',
-                                                         domain='FACE', name="CubieIndexAtFace",
-                                                         value=attr_cubie_index.std_out,
-                                                         hide=False)
-        store_face_normal = StoredNamedAttribute(tree, location=self.loc(0, 1, 2, 0), data_type='FLOAT_VECTOR',
-                                                 domain='FACE', name="FaceNormal", value=normal.std_out, hide=False)
+        store_cubie_index_at_face = StoreNamedAttribute(tree, location=self.loc(0, 1, 1, 0), data_type='INT',
+                                                        domain='FACE', name="CubieIndexAtFace",
+                                                        value=attr_cubie_index.std_out,
+                                                        hide=False)
+        store_face_normal = StoreNamedAttribute(tree, location=self.loc(0, 1, 2, 0), data_type='FLOAT_VECTOR',
+                                                domain='FACE', name="FaceNormal", value=normal.std_out, hide=False)
         dual_mesh = DualMesh(tree, location=self.loc(0, 1, 3, 0), hide=False)
         position3 = Position(tree, location=self.loc(0, 1, -1, -3), hide=False)
         abs_2 = VectorMath(tree, operation="ABSOLUTE", inputs0=position3.std_out,
@@ -4409,8 +4409,8 @@ class RubiksSphereModifier(GeometryNodesModifier):
         attr_face_normal = NamedAttribute(tree, location=self.loc(0, 1, -1, -4),
                                           name="FaceNormal", data_type='FLOAT_VECTOR', hide=False)
 
-        store_face_index = StoredNamedAttribute(tree, location=self.loc(0, 1, 5, 0), hide=False,
-                                                domain='POINT', data_type='INT', name="FaceIndex", value=index3.std_out)
+        store_face_index = StoreNamedAttribute(tree, location=self.loc(0, 1, 5, 0), hide=False,
+                                               domain='POINT', data_type='INT', name="FaceIndex", value=index3.std_out)
         align_rotation = AxesToRotation(tree, location=self.loc(0, 1, 5, -2), hide=False,
                                         primary_axis='Z', secondary_axis='Y',
                                         primary_direction=attr_face_normal.std_out,
@@ -4595,13 +4595,13 @@ class RubiksCubeGroupStabChain(GeometryNodesModifier):
                                             }, inputs=["pos"], outputs=["first", "clean_position"],
                                             scalars=["first"], vectors=["pos", "clean_position"], hide=True)
         links.new(pos.std_out, first_orbit_element.inputs["pos"])
-        store_attr_pos = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", name="PrimaryPosition", value=pos.std_out,
-                                              hide=True)
-        store_attr_idx = StoredNamedAttribute(tree, data_type="INT", name="ElementIndex", value=index.std_out,
-                                              hide=True)
+        store_attr_pos = StoreNamedAttribute(tree, data_type="FLOAT_VECTOR", name="PrimaryPosition", value=pos.std_out,
+                                             hide=True)
+        store_attr_idx = StoreNamedAttribute(tree, data_type="INT", name="ElementIndex", value=index.std_out,
+                                             hide=True)
 
-        store_attr_first = StoredNamedAttribute(tree, data_type="BOOLEAN", name="First",
-                                                value=first_orbit_element.outputs["first"], hide=True)
+        store_attr_first = StoreNamedAttribute(tree, data_type="BOOLEAN", name="First",
+                                               value=first_orbit_element.outputs["first"], hide=True)
         in_geometry = SetPosition(tree, position=first_orbit_element.outputs["clean_position"], hide=True)
 
         # do the coloring
@@ -4844,8 +4844,8 @@ class TransformationModifier(GeometryNodesModifier):
 
         # create faces
         index = Index(tree)
-        store_face_index = StoredNamedAttribute(tree, data_type="INT", domain="FACE", name="FaceIndex",
-                                                value=index.std_out, hide=True)
+        store_face_index = StoreNamedAttribute(tree, data_type="INT", domain="FACE", name="FaceIndex",
+                                               value=index.std_out, hide=True)
         face_color = get_from_kwargs(kwargs, 'face_material', 'drawing')
         face_material = get_material(face_color, **kwargs)
         set_face_material = SetMaterial(tree, material=face_material)
@@ -4922,8 +4922,8 @@ class TransformationSphereModifier(GeometryNodesModifier):
 
         # create faces
         index = Index(tree)
-        store_face_index = StoredNamedAttribute(tree, data_type="INT", domain="FACE", name="FaceIndex",
-                                                value=index.std_out, hide=True)
+        store_face_index = StoreNamedAttribute(tree, data_type="INT", domain="FACE", name="FaceIndex",
+                                               value=index.std_out, hide=True)
         face_color = get_from_kwargs(kwargs, 'face_material', 'drawing')
         face_material = get_material(face_color, **kwargs)
         set_face_material = SetMaterial(tree, material=face_material)
@@ -5144,8 +5144,8 @@ class PermutationModifier(GeometryNodesModifier):
         value2string = ValueToString(tree, value=inc.std_out, hide=True)
         string2curves = StringToCurves(tree, string=value2string.std_out, size=1, hide=True)
         iop2 = InstanceOnPoints(tree, instance=string2curves.geometry_out, hide=True)
-        attr_idx = StoredNamedAttribute(tree, data_type="INT", domain="INSTANCE", name="Index", value=inc.std_out,
-                                        hide=False)
+        attr_idx = StoreNamedAttribute(tree, data_type="INT", domain="INSTANCE", name="Index", value=inc.std_out,
+                                       hide=False)
 
         # create a unique prime identifier for each number
         primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]
@@ -5154,15 +5154,15 @@ class PermutationModifier(GeometryNodesModifier):
         index_switch = IndexSwitch(tree, data_type="INT", index=foreach_number.index, hide=False)
         [index_switch.add_item(value_node.std_out) for value_node in value_nodes]
 
-        attr_prime = StoredNamedAttribute(tree, data_type="INT", domain="INSTANCE", name="Prime",
-                                          value=index_switch.std_out, hide=False)
+        attr_prime = StoreNamedAttribute(tree, data_type="INT", domain="INSTANCE", name="Prime",
+                                         value=index_switch.std_out, hide=False)
 
         combine_xyz2 = CombineXYZ(tree, x=foreach_number.index, hide=True)
         transform_numbers = TransformGeometry(tree, name="TransformNumbers", rotation=[pi / 2, 0, 0],
                                               translation=combine_xyz2.std_out, hide=True)
         position = Position(tree, name="Position", hide=True)
-        attr_position = StoredNamedAttribute(tree, data_type="FLOAT_VECTOR", domain="INSTANCE", name="Position",
-                                             value=position.std_out, hide=False)
+        attr_position = StoreNamedAttribute(tree, data_type="FLOAT_VECTOR", domain="INSTANCE", name="Position",
+                                            value=position.std_out, hide=False)
         foreach_number.create_geometry_line([iop2, attr_idx, attr_prime, transform_numbers, attr_position])
 
         create_geometry_line(tree, [points, foreach_number])
@@ -5546,16 +5546,16 @@ class PowerOfTwoModifier(GeometryNodesModifier):
         points = Points(tree, location=(current, 0), count=2 ** self.level, hide=True)
         current += 1
         index = Index(tree, location=(current, -1), hide=True)
-        index_store = StoredNamedAttribute(tree, location=(current, 0), data_type="INT",
-                                           name="IndexStore", value=index.std_out, hide=True)
+        index_store = StoreNamedAttribute(tree, location=(current, 0), data_type="INT",
+                                          name="IndexStore", value=index.std_out, hide=True)
         index = NamedAttribute(tree, location=(current, -2), data_type="INT", name="IndexStore", label="StoredIndex",
                                hide=True)
         current += 1
-        store_material = StoredNamedAttribute(tree, location=(current, 0), data_type="INT", name="Material",
-                                              value=0, hide=True)
+        store_material = StoreNamedAttribute(tree, location=(current, 0), data_type="INT", name="Material",
+                                             value=0, hide=True)
         current += 1
-        store_scale = StoredNamedAttribute(tree, location=(current, 0), data_type="FLOAT", name="Scale",
-                                           value=1 + 1 / 100, hide=True)
+        store_scale = StoreNamedAttribute(tree, location=(current, 0), data_type="FLOAT", name="Scale",
+                                          value=1 + 1 / 100, hide=True)
         create_geometry_line(tree, [points, index_store, store_material, store_scale])
 
         self.materials.append(get_texture("plastic_joker"))
@@ -5597,11 +5597,11 @@ class PowerOfTwoModifier(GeometryNodesModifier):
             set_pos = SetPosition(tree, location=(current, -1),
                                   offset=offset_function.outputs["offset"], hide=True)
             current += 1
-            store_material = StoredNamedAttribute(tree, location=(current, 0), data_type="INT", name="Material",
-                                                  value=(l + 1) % len(self.materials), hide=True)
+            store_material = StoreNamedAttribute(tree, location=(current, 0), data_type="INT", name="Material",
+                                                 value=(l + 1) % len(self.materials), hide=True)
             current += 1
-            store_scale = StoredNamedAttribute(tree, location=(current, 0), data_type="FLOAT", name="Scale",
-                                               value=1 - l / 100, hide=True)
+            store_scale = StoreNamedAttribute(tree, location=(current, 0), data_type="FLOAT", name="Scale",
+                                              value=1 - l / 100, hide=True)
             current += 1
             join = JoinGeometry(tree, location=(current, 0))
             create_geometry_line(tree, [sep_geo, join])
@@ -5700,12 +5700,12 @@ class FibonacciModifierDiagonal(GeometryNodesModifier):
             scale_instance = ScaleInstances(tree, location=(current, -3 * (n - 1)), scale=combine_xyz.std_out,
                                             center=pivot_node.std_out, hide=True)
             current += 1
-            center_store = StoredNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="FLOAT_VECTOR",
-                                                name="Center",
-                                                domain="INSTANCE", value=center_node.std_out, hide=True)
+            center_store = StoreNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="FLOAT_VECTOR",
+                                               name="Center",
+                                               domain="INSTANCE", value=center_node.std_out, hide=True)
             current += 1
-            index_store = StoredNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="INT",
-                                               domain="INSTANCE", name="Index", value=n, hide=True)
+            index_store = StoreNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="INT",
+                                              domain="INSTANCE", name="Index", value=n, hide=True)
             current += 1
             material = SetMaterial(tree, location=(current, -3 * (n - 1)),
                                    material=self.materials[(n - 1) % len(self.materials)], hide=True)
@@ -5837,12 +5837,12 @@ class FibonacciModifier(GeometryNodesModifier):
             scale_instance = ScaleInstances(tree, location=(current, -3 * (n - 1)),
                                             scale=scale_function.outputs["scale"], center=pivot, hide=True)
             current += 1
-            center_store = StoredNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="FLOAT_VECTOR",
-                                                name="Center",
-                                                domain="INSTANCE", value=center_node.std_out, hide=True)
+            center_store = StoreNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="FLOAT_VECTOR",
+                                               name="Center",
+                                               domain="INSTANCE", value=center_node.std_out, hide=True)
             current += 1
-            index_store = StoredNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="INT",
-                                               domain="INSTANCE", name="Index", value=n, hide=True)
+            index_store = StoreNamedAttribute(tree, location=(current, -3 * (n - 1)), data_type="INT",
+                                              domain="INSTANCE", name="Index", value=n, hide=True)
             current += 1
             material = SetMaterial(tree, location=(current, -3 * (n - 1)),
                                    material=self.materials[(n - 1) % len(self.materials)], hide=True)
@@ -6174,8 +6174,8 @@ class FileExplorerModifier(GeometryNodesModifier):
             rotate = RotateInstances(tree, location=(shift, 0),
                                      rotation=[pi / 2, 0, 0], hide=True)
             shift += 1
-            line_storage = StoredNamedAttribute(tree, location=(shift, 0), data_type="INT", domain="INSTANCE",
-                                                name="Line", value=for_each.index, hide=True)
+            line_storage = StoreNamedAttribute(tree, location=(shift, 0), data_type="INT", domain="INSTANCE",
+                                               name="Line", value=for_each.index, hide=True)
             shift += 1
             terminal_green = get_texture("terminal_green", emission=1)
             self.materials.append(terminal_green)
@@ -6364,8 +6364,8 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         index = Index(tree, hide=True)
         compare = CompareNode(tree, data_type="INT", operation="EQUAL", inputs1=root_vertex_node.std_out,
                               inputs0=index.std_out, hide=True)
-        store_root = StoredNamedAttribute(tree, name="RootIndex", domain="POINT", data_type="BOOLEAN",
-                                          value=compare.std_out, hide=True)
+        store_root = StoreNamedAttribute(tree, name="RootIndex", domain="POINT", data_type="BOOLEAN",
+                                         value=compare.std_out, hide=True)
 
         # reindex faces
         sorting = get_from_kwargs(kwargs, "sorting", True)
@@ -6415,8 +6415,8 @@ class CustomUnfoldModifier(GeometryNodesModifier):
         unfold_node = UnfoldMeshNode(tree, name="UnfoldMeshNode", hide=True, progression=progress.std_out,
                                      scale_elements=1, **kwargs)
 
-        store_face_index = StoredNamedAttribute(tree, name="FaceIndex", data_type="INT", domain="FACE",
-                                                value=index.std_out, hide=True)
+        store_face_index = StoreNamedAttribute(tree, name="FaceIndex", data_type="INT", domain="FACE",
+                                               value=index.std_out, hide=True)
 
         if sorting:
             create_geometry_line(tree, [store_root, sort_node, unfold_node, store_face_index, select_geo],
@@ -6542,8 +6542,8 @@ class EdgePairingVisualizer(GeometryNodesModifier):
 
         # store edge index
         index = Index(tree, hide=True)
-        edge_index_storage = StoredNamedAttribute(tree, name="EdgeIndex", data_type="INT", domain="EDGE",
-                                                  value=index.std_out, hide=True, label="EdgeIndex")
+        edge_index_storage = StoreNamedAttribute(tree, name="EdgeIndex", data_type="INT", domain="EDGE",
+                                                 value=index.std_out, hide=True, label="EdgeIndex")
 
         # prepare materials
         face_material = get_from_kwargs(kwargs, "face_material", "joker")
@@ -6598,8 +6598,8 @@ class EdgePairingVisualizer(GeometryNodesModifier):
         unfold_node = UnfoldMeshNode(tree, name="UnfoldMeshNode", hide=True, progression=progress.std_out,
                                      scale_elements=1, **kwargs)
 
-        store_face_index = StoredNamedAttribute(tree, name="FaceIndex", data_type="INT", domain="FACE",
-                                                value=index.std_out, hide=True)
+        store_face_index = StoreNamedAttribute(tree, name="FaceIndex", data_type="INT", domain="FACE",
+                                               value=index.std_out, hide=True)
 
         material_node = SetMaterial(tree, material=in_face_material_node.std_out, hide=True)
         create_geometry_line(tree, [edge_index_storage, unfold_node, store_face_index, select_geo, material_node],
@@ -6725,8 +6725,8 @@ class Poly600CellStereoModifier(GeometryNodesModifier):
             name_attribute = NamedAttribute(tree, location=(shift, -1.5), name=label, data_type="FLOAT", hide=True)
             sample_index = SampleIndex(tree, location=(shift, -1), data_type="FLOAT", geometry=import_csv.geometry_out,
                                        value=name_attribute.std_out, index=index.std_out, hide=True)
-            store_attribute = StoredNamedAttribute(tree, location=(shift, -0.5), data_type="FLOAT", domain="POINT",
-                                                   name=label, value=sample_index.std_out, hide=True)
+            store_attribute = StoreNamedAttribute(tree, location=(shift, -0.5), data_type="FLOAT", domain="POINT",
+                                                  name=label, value=sample_index.std_out, hide=True)
             attributes.append(store_attribute)
             shift += 1
 
@@ -6881,9 +6881,9 @@ class PolytopeViewerModifier(GeometryNodesModifier):
             sample_index = SampleIndex(tree, location=(shift, -1), data_type="FLOAT",
                                        geometry=vertex_import_csv.geometry_out,
                                        value=name_attribute.std_out, index=index.std_out, hide=True, parent=data_frame)
-            store_attribute = StoredNamedAttribute(tree, location=(shift, -0.5), data_type="FLOAT", domain="POINT",
-                                                   name=label, label="store_" + label, value=sample_index.std_out,
-                                                   hide=True, parent=data_frame)
+            store_attribute = StoreNamedAttribute(tree, location=(shift, -0.5), data_type="FLOAT", domain="POINT",
+                                                  name=label, label="store_" + label, value=sample_index.std_out,
+                                                  hide=True, parent=data_frame)
             attributes.append(store_attribute)
             shift += 1
 
@@ -6894,9 +6894,9 @@ class PolytopeViewerModifier(GeometryNodesModifier):
             sample_index = SampleIndex(tree, location=(shift, -1), data_type="INT",
                                        geometry=face_import_csv.geometry_out,
                                        value=name_attribute.std_out, index=index.std_out, hide=True, parent=data_frame)
-            store_attribute = StoredNamedAttribute(tree, location=(shift, -0.5), data_type="INT", domain="FACE",
-                                                   name=label, label="store_" + label, value=sample_index.std_out,
-                                                   hide=True, parent=data_frame)
+            store_attribute = StoreNamedAttribute(tree, location=(shift, -0.5), data_type="INT", domain="FACE",
+                                                  name=label, label="store_" + label, value=sample_index.std_out,
+                                                  hide=True, parent=data_frame)
             attributes.append(store_attribute)
             shift += 1
 
@@ -8603,7 +8603,7 @@ class SubstitutionModifier(GeometryNodesModifier):
                 tree, location=(in_for + 9, row_y), hide=True)
             links.new(translate_inst.geometry_out,
                       realize_inst.geometry_in)
-            store_kind = StoredNamedAttribute(
+            store_kind = StoreNamedAttribute(
                 tree, location=(in_for + 10, row_y),
                 data_type="BOOLEAN", domain="FACE",
                 name="trapez", value=trapez_marker, hide=True)
@@ -8768,7 +8768,7 @@ class SubstitutionModifier(GeometryNodesModifier):
                 tree, location=(in_for + 9, row_y), hide=True)
             links.new(translate_inst.geometry_out,
                       realize_inst.geometry_in)
-            store_kind = StoredNamedAttribute(
+            store_kind = StoreNamedAttribute(
                 tree, location=(in_for + 10, row_y),
                 data_type="BOOLEAN", domain="FACE",
                 name="trapez", value=trapez_marker, hide=True)
@@ -8846,7 +8846,7 @@ class SubstitutionModifier(GeometryNodesModifier):
         links.new(vertices.outputs["d"], quad.inputs["Point 4"])
 
         fill = FillCurve(tree, location=(x + 2, y), hide=True)
-        store = StoredNamedAttribute(
+        store = StoreNamedAttribute(
             tree, location=(x + 3, y),
             data_type="BOOLEAN", domain="FACE",
             name="trapez", label=store_label,
@@ -9170,9 +9170,9 @@ class SubstitutionModifierFull(GeometryNodesModifier):
         links.new(vertices.outputs["d"], quad.inputs["Point 4"])
 
         fill = FillCurve(tree, location=(x + 3, y), hide=True)
-        store = StoredNamedAttribute(tree, location=(x + 4, y),
-                                     data_type="INT", domain="FACE",
-                                     name="PolygonType", value=0, hide=True)
+        store = StoreNamedAttribute(tree, location=(x + 4, y),
+                                    data_type="INT", domain="FACE",
+                                    name="PolygonType", value=0, hide=True)
         create_geometry_line(tree, [quad, fill, store])
         Frame(tree, location=(x, y), label="Trapezoid").add(
             [one, zero, xi, phi, vertices, quad, fill, store])
@@ -9269,21 +9269,21 @@ class SubstitutionModifierFull(GeometryNodesModifier):
         realize = RealizeInstances(tree, location=(x + 8, y), hide=True)
         links.new(translate_inst.geometry_out, realize.geometry_in)
 
-        store_pt = StoredNamedAttribute(tree, location=(x + 9, y),
-                                        data_type="INT", domain="FACE",
-                                        name="PolygonType", value=polygon_type,
-                                        hide=True)
-        store_sc = StoredNamedAttribute(tree, location=(x + 10, y),
-                                        data_type="BOOLEAN", domain="FACE",
-                                        name="SwitchColor", value=switch_color,
-                                        hide=True)
+        store_pt = StoreNamedAttribute(tree, location=(x + 9, y),
+                                       data_type="INT", domain="FACE",
+                                       name="PolygonType", value=polygon_type,
+                                       hide=True)
+        store_sc = StoreNamedAttribute(tree, location=(x + 10, y),
+                                       data_type="BOOLEAN", domain="FACE",
+                                       name="SwitchColor", value=switch_color,
+                                       hide=True)
         add_d = MathNode(tree, location=(x + 11, y - 1), operation="ADD",
                          inputs0=mul_ts.std_out, inputs1=digit, hide=True,
                          name="TS+%d" % digit)
-        store_ts = StoredNamedAttribute(tree, location=(x + 11, y),
-                                        data_type="INT", domain="FACE",
-                                        name="TranfoSequence", value=add_d.std_out,
-                                        hide=True)
+        store_ts = StoreNamedAttribute(tree, location=(x + 11, y),
+                                       data_type="INT", domain="FACE",
+                                       name="TranfoSequence", value=add_d.std_out,
+                                       hide=True)
         chain = []
         if set_pos is not None:
             chain.append(set_pos)
@@ -9319,10 +9319,10 @@ class SubstitutionModifierFull(GeometryNodesModifier):
                         switch=si_sc.std_out)
         sw_sub.node.inputs["False"].default_value = 2
         sw_sub.node.inputs["True"].default_value = 3
-        store_sub = StoredNamedAttribute(tree, location=(x + 3, y - 10),
-                                         data_type="INT", domain="FACE",
-                                         name="PolygonType", value=sw_sub.std_out,
-                                         hide=True)
+        store_sub = StoreNamedAttribute(tree, location=(x + 3, y - 10),
+                                        data_type="INT", domain="FACE",
+                                        name="PolygonType", value=sw_sub.std_out,
+                                        hide=True)
         create_geometry_line(tree, [quad_sub, fill_sub, store_sub])
 
         quad_top = Quadrilateral(tree, location=(x + 1, y - 12), mode="POINTS",
@@ -9334,10 +9334,10 @@ class SubstitutionModifierFull(GeometryNodesModifier):
                         switch=si_sc.std_out)
         sw_top.node.inputs["False"].default_value = 3
         sw_top.node.inputs["True"].default_value = 2
-        store_top = StoredNamedAttribute(tree, location=(x + 3, y - 12),
-                                         data_type="INT", domain="FACE",
-                                         name="PolygonType", value=sw_top.std_out,
-                                         hide=True)
+        store_top = StoreNamedAttribute(tree, location=(x + 3, y - 12),
+                                        data_type="INT", domain="FACE",
+                                        name="PolygonType", value=sw_top.std_out,
+                                        hide=True)
         create_geometry_line(tree, [quad_top, fill_top, store_top])
 
         # --- recompute SwitchColorOld on the four transformed children ---
@@ -9350,10 +9350,10 @@ class SubstitutionModifierFull(GeometryNodesModifier):
         sw_old = Switch(tree, location=(x + 6, y - 5), input_type="BOOLEAN",
                         switch=sc_cur.std_out, true=not_old.std_out,
                         false=sc_old2.std_out)
-        store_scold = StoredNamedAttribute(tree, location=(x + 7, y - 4),
-                                           data_type="BOOLEAN", domain="FACE",
-                                           name="SwitchColorOld",
-                                           value=sw_old.std_out, hide=True)
+        store_scold = StoreNamedAttribute(tree, location=(x + 7, y - 4),
+                                          data_type="BOOLEAN", domain="FACE",
+                                          name="SwitchColorOld",
+                                          value=sw_old.std_out, hide=True)
         links.new(join_children.geometry_out, store_scold.geometry_in)
 
         # --- broadcast the pin face's TranfoSequence to every child ---
@@ -9366,10 +9366,10 @@ class SubstitutionModifierFull(GeometryNodesModifier):
         si_ts = SampleIndex(tree, location=(x + 9, y - 4), data_type="INT",
                             domain="FACE", geometry=store_scold.geometry_out,
                             value=ts_attr.std_out, index=sn.std_out, hide=True)
-        store_pin_ts = StoredNamedAttribute(tree, location=(x + 10, y - 4),
-                                            data_type="INT", domain="FACE",
-                                            name="TranfoSequence",
-                                            value=si_ts.std_out, hide=True)
+        store_pin_ts = StoreNamedAttribute(tree, location=(x + 10, y - 4),
+                                           data_type="INT", domain="FACE",
+                                           name="TranfoSequence",
+                                           value=si_ts.std_out, hide=True)
         links.new(store_scold.geometry_out, store_pin_ts.geometry_in)
 
         out_join = JoinGeometry(tree, location=(x + 11, y - 2))
@@ -9778,12 +9778,12 @@ class SubstitutionModifierFull(GeometryNodesModifier):
         pin = self._build_pin_frame(tree, (-9, -6))
 
         # --- left panel: full subdivision (records the address) ---
-        seed_scold = StoredNamedAttribute(tree, location=(-6, 1),
-                                          data_type="BOOLEAN", domain="FACE",
-                                          name="SwitchColorOld", value=False, hide=True)
-        seed_ts = StoredNamedAttribute(tree, location=(-5, 1), data_type="INT",
-                                       domain="FACE", name="TranfoSequence",
-                                       value=0, hide=True)
+        seed_scold = StoreNamedAttribute(tree, location=(-6, 1),
+                                         data_type="BOOLEAN", domain="FACE",
+                                         name="SwitchColorOld", value=False, hide=True)
+        seed_ts = StoreNamedAttribute(tree, location=(-5, 1), data_type="INT",
+                                      domain="FACE", name="TranfoSequence",
+                                      value=0, hide=True)
         create_geometry_line(tree, [seed, seed_scold, seed_ts])
         before = {n.name for n in tree.nodes}
         left_repeat = self._build_subdivision_repeat(
@@ -9901,7 +9901,7 @@ class AnalyserModifier(GeometryNodesModifier):
             value=polygon_attr.std_out,
             index=sample_nearest.std_out)
 
-        store_type = StoredNamedAttribute(
+        store_type = StoreNamedAttribute(
             tree, location=(x + 5, y),
             data_type="INT", domain="POINT",
             name="Type", value=sample_index.std_out)
@@ -9942,15 +9942,15 @@ class AnalyserModifier(GeometryNodesModifier):
         links.new(old_bottom_attr_ifs.std_out, left_transform_ifs.slots[5])
         links.new(old_top_attr_ifs.std_out, left_transform_ifs.slots[7])
 
-        store_bottom_ifs = StoredNamedAttribute(tree, location=(x + 6.5, y - 3.9), data_type="INT",
-                                                domain="POINT", name="Bottom",
-                                                value=bottom_transform_ifs.std_out, hide=False)
-        store_top_ifs = StoredNamedAttribute(tree, location=(x + 7.5, y - 3.7), data_type="INT",
-                                             domain="POINT", name="Top",
-                                             value=top_transform_ifs.std_out, hide=False)
-        store_left_ifs = StoredNamedAttribute(tree, location=(x + 8.5, y - 3.8), data_type="INT",
-                                              domain="POINT", name="Left",
-                                              value=left_transform_ifs.std_out, hide=False)
+        store_bottom_ifs = StoreNamedAttribute(tree, location=(x + 6.5, y - 3.9), data_type="INT",
+                                               domain="POINT", name="Bottom",
+                                               value=bottom_transform_ifs.std_out, hide=False)
+        store_top_ifs = StoreNamedAttribute(tree, location=(x + 7.5, y - 3.7), data_type="INT",
+                                            domain="POINT", name="Top",
+                                            value=top_transform_ifs.std_out, hide=False)
+        store_left_ifs = StoreNamedAttribute(tree, location=(x + 8.5, y - 3.8), data_type="INT",
+                                             domain="POINT", name="Left",
+                                             value=left_transform_ifs.std_out, hide=False)
 
         # Read back and store as OldBottom/OldTop/OldLeft for next iteration
         bottom_attr2_ifs = NamedAttribute(tree, location=(x + 8.5, y - 4.9), data_type="INT",
@@ -9959,15 +9959,15 @@ class AnalyserModifier(GeometryNodesModifier):
                                        name="Top", hide=True)
         left_attr2_ifs = NamedAttribute(tree, location=(x + 10.5, y - 4.9), data_type="INT",
                                         name="Left", hide=True)
-        store_old_bottom_ifs = StoredNamedAttribute(tree, location=(x + 9.5, y - 3.9), data_type="INT",
-                                                    domain="POINT", name="OldBottom",
-                                                    value=bottom_attr2_ifs.std_out, hide=False)
-        store_old_top_ifs = StoredNamedAttribute(tree, location=(x + 10.5, y - 4.0), data_type="INT",
-                                                 domain="POINT", name="OldTop",
-                                                 value=top_attr2_ifs.std_out, hide=False)
-        store_old_left_ifs = StoredNamedAttribute(tree, location=(x + 11.5, y - 3.9), data_type="INT",
-                                                  domain="POINT", name="OldLeft",
-                                                  value=left_attr2_ifs.std_out, hide=False)
+        store_old_bottom_ifs = StoreNamedAttribute(tree, location=(x + 9.5, y - 3.9), data_type="INT",
+                                                   domain="POINT", name="OldBottom",
+                                                   value=bottom_attr2_ifs.std_out, hide=False)
+        store_old_top_ifs = StoreNamedAttribute(tree, location=(x + 10.5, y - 4.0), data_type="INT",
+                                                domain="POINT", name="OldTop",
+                                                value=top_attr2_ifs.std_out, hide=False)
+        store_old_left_ifs = StoreNamedAttribute(tree, location=(x + 11.5, y - 3.9), data_type="INT",
+                                                 domain="POINT", name="OldLeft",
+                                                 value=left_attr2_ifs.std_out, hide=False)
 
         frame = Frame(tree, location=(x, y), name="Iterated Function System")
         repeat.create_geometry_line([set_pos, store_type,
@@ -10170,16 +10170,16 @@ class AnalyserModifier(GeometryNodesModifier):
 
         position = Position(tree, location=(x + 2, y - 2), hide=True)
 
-        store_position = StoredNamedAttribute(tree, location=(x + 3, y),
-                                              data_type="FLOAT_VECTOR", name="OldPosition",
-                                              value=position.std_out, hide=True)
+        store_position = StoreNamedAttribute(tree, location=(x + 3, y),
+                                             data_type="FLOAT_VECTOR", name="OldPosition",
+                                             value=position.std_out, hide=True)
 
-        store_old_bottom = StoredNamedAttribute(tree, location=(x + 4, y), data_type="INT",
-                                                domain="POINT", name="OldBottom", value=0, hide=True)
-        store_old_top = StoredNamedAttribute(tree, location=(x + 5, y), data_type="INT",
-                                             domain="POINT", name="OldTop", value=1, hide=True)
-        store_old_left = StoredNamedAttribute(tree, location=(x + 6, y), data_type="INT",
-                                              domain="POINT", name="OldLeft", value=2, hide=True)
+        store_old_bottom = StoreNamedAttribute(tree, location=(x + 4, y), data_type="INT",
+                                               domain="POINT", name="OldBottom", value=0, hide=True)
+        store_old_top = StoreNamedAttribute(tree, location=(x + 5, y), data_type="INT",
+                                            domain="POINT", name="OldTop", value=1, hide=True)
+        store_old_left = StoreNamedAttribute(tree, location=(x + 6, y), data_type="INT",
+                                             domain="POINT", name="OldLeft", value=2, hide=True)
 
         create_geometry_line(tree, [points, set_pos, store_position,
                                     store_old_bottom, store_old_top, store_old_left])
@@ -10201,7 +10201,7 @@ class AnalyserModifier(GeometryNodesModifier):
                                    selection=inside.std_out, hide=True)
 
         # outside
-        attr_type = StoredNamedAttribute(tree, location=(x, y + 1), name="Type", data_type="INT", value=0)
+        attr_type = StoreNamedAttribute(tree, location=(x, y + 1), name="Type", data_type="INT", value=0)
 
         create_geometry_line(tree, [attr_type], ins=sep_geo.inverse)
 
@@ -10227,7 +10227,7 @@ class AnalyserModifier(GeometryNodesModifier):
             value=polygon_attr.std_out,
             index=sample_nearest.std_out)
 
-        store_type = StoredNamedAttribute(
+        store_type = StoreNamedAttribute(
             tree, location=(x + 3, y),
             data_type="INT", domain="POINT",
             name="Type", value=sample_index.std_out)
@@ -10270,15 +10270,15 @@ class AnalyserModifier(GeometryNodesModifier):
         links.new(old_bottom_attr_fs.std_out, left_transform_fs.slots[5])
         links.new(old_top_attr_fs.std_out, left_transform_fs.slots[7])
 
-        store_bottom_fs = StoredNamedAttribute(tree, location=(x + 5.1, y - 3.9), data_type="INT",
-                                               domain="POINT", name="Bottom",
-                                               value=bottom_transform_fs.std_out, hide=False)
-        store_top_fs = StoredNamedAttribute(tree, location=(x + 6.1, y - 3.8), data_type="INT",
-                                            domain="POINT", name="Top",
-                                            value=top_transform_fs.std_out, hide=False)
-        store_left_fs = StoredNamedAttribute(tree, location=(x + 7.0, y - 3.8), data_type="INT",
-                                             domain="POINT", name="Left",
-                                             value=left_transform_fs.std_out, hide=False)
+        store_bottom_fs = StoreNamedAttribute(tree, location=(x + 5.1, y - 3.9), data_type="INT",
+                                              domain="POINT", name="Bottom",
+                                              value=bottom_transform_fs.std_out, hide=False)
+        store_top_fs = StoreNamedAttribute(tree, location=(x + 6.1, y - 3.8), data_type="INT",
+                                           domain="POINT", name="Top",
+                                           value=top_transform_fs.std_out, hide=False)
+        store_left_fs = StoreNamedAttribute(tree, location=(x + 7.0, y - 3.8), data_type="INT",
+                                            domain="POINT", name="Left",
+                                            value=left_transform_fs.std_out, hide=False)
 
         # Read back the new Bottom/Top/Left and store as OldBottom/OldTop/OldLeft for next iteration
         bottom_attr2_fs = NamedAttribute(tree, location=(x + 7.0, y - 4.8), data_type="INT",
@@ -10287,15 +10287,15 @@ class AnalyserModifier(GeometryNodesModifier):
                                       name="Top", hide=False)
         left_attr2_fs = NamedAttribute(tree, location=(x + 8.7, y - 4.7), data_type="INT",
                                        name="Left", hide=False)
-        store_old_bottom_fs = StoredNamedAttribute(tree, location=(x + 7.8, y - 3.8), data_type="INT",
-                                                   domain="POINT", name="OldBottom",
-                                                   value=bottom_attr2_fs.std_out, hide=False)
-        store_old_top_fs = StoredNamedAttribute(tree, location=(x + 8.6, y - 3.8), data_type="INT",
-                                                domain="POINT", name="OldTop",
-                                                value=top_attr2_fs.std_out, hide=False)
-        store_old_left_fs = StoredNamedAttribute(tree, location=(x + 9.5, y - 3.8), data_type="INT",
-                                                 domain="POINT", name="OldLeft",
-                                                 value=left_attr2_fs.std_out, hide=False)
+        store_old_bottom_fs = StoreNamedAttribute(tree, location=(x + 7.8, y - 3.8), data_type="INT",
+                                                  domain="POINT", name="OldBottom",
+                                                  value=bottom_attr2_fs.std_out, hide=False)
+        store_old_top_fs = StoreNamedAttribute(tree, location=(x + 8.6, y - 3.8), data_type="INT",
+                                               domain="POINT", name="OldTop",
+                                               value=top_attr2_fs.std_out, hide=False)
+        store_old_left_fs = StoreNamedAttribute(tree, location=(x + 9.5, y - 3.8), data_type="INT",
+                                                domain="POINT", name="OldLeft",
+                                                value=left_attr2_fs.std_out, hide=False)
 
         foreach.create_geometry_line([store_type, store_bottom_fs, store_top_fs, store_left_fs,
                                       store_old_bottom_fs, store_old_top_fs, store_old_left_fs])
@@ -10379,7 +10379,7 @@ class AnalyserModifier(GeometryNodesModifier):
         fill = FillCurve(tree, location=(x + 2, y), hide=True)
 
         # Mark the trapezoid face with PolygonType=0.
-        store_trapez = StoredNamedAttribute(
+        store_trapez = StoreNamedAttribute(
             tree, location=(x + 3, y),
             data_type="INT", domain="FACE",
             name="PolygonType", label="MarkTrapez",
@@ -10416,7 +10416,7 @@ class AnalyserModifier(GeometryNodesModifier):
         fill = FillCurve(tree, location=(x + 2, y), hide=True)
 
         # Mark the parallelogram face with PolygonType=0.
-        store_parallelogram = StoredNamedAttribute(
+        store_parallelogram = StoreNamedAttribute(
             tree, location=(x + 3, y),
             data_type="INT", domain="FACE",
             name="PolygonType", label="MarkParallelgram",
@@ -10548,7 +10548,7 @@ class AnalyserModifier(GeometryNodesModifier):
                       realize_inst.geometry_in)
             realizes[i] = realize_inst
 
-            store_kind = StoredNamedAttribute(
+            store_kind = StoreNamedAttribute(
                 tree, location=(x + 11, row_y),
                 data_type="INT", domain="FACE",
                 name="PolygonType", value=polygon_type, hide=True)
@@ -10597,12 +10597,12 @@ class AnalyserModifier(GeometryNodesModifier):
                                    name="QuadBelow",
                                    hide=True)
         below_fill = FillCurve(tree, location=(x + 16, y + 1), hide=True)
-        below_attr = StoredNamedAttribute(tree, location=(x + 17, y + 1), data_type="INT", domain="FACE",
-                                          name="PolygonType", value=1, hide=True)
+        below_attr = StoreNamedAttribute(tree, location=(x + 17, y + 1), data_type="INT", domain="FACE",
+                                         name="PolygonType", value=1, hide=True)
         quad_above = Quadrilateral(tree, location=(x + 15, y + 2), mode="POINTS", hide=True)
         above_fill = FillCurve(tree, location=(x + 16, y + 2), hide=True)
-        above_attr = StoredNamedAttribute(tree, location=(x + 17, y + 2), data_type="INT", domain="FACE",
-                                          name="PolygonType", value=2, hide=True)
+        above_attr = StoreNamedAttribute(tree, location=(x + 17, y + 2), data_type="INT", domain="FACE",
+                                         name="PolygonType", value=2, hide=True)
 
         for i in range(4):
             links.new(sample_indices_below[i].std_out, quad_below.inputs["Point " + str(i + 1)])
@@ -10729,7 +10729,7 @@ class AnalyserModifier(GeometryNodesModifier):
             realizes[i] = realize_inst
             links.new(translate_inst.geometry_out,
                       realize_inst.geometry_in)
-            store_kind = StoredNamedAttribute(
+            store_kind = StoreNamedAttribute(
                 tree, location=(x + 10, row_y),
                 data_type="INT", domain="FACE",
                 name="PolygonType", value=polygon_type, hide=True)
@@ -10777,12 +10777,12 @@ class AnalyserModifier(GeometryNodesModifier):
                                    name="QuadBelow",
                                    hide=True)
         below_fill = FillCurve(tree, location=(x + 16, y + 1), hide=True)
-        below_attr = StoredNamedAttribute(tree, location=(x + 17, y + 1), data_type="INT", domain="FACE",
-                                          name="PolygonType", value=3, hide=True)
+        below_attr = StoreNamedAttribute(tree, location=(x + 17, y + 1), data_type="INT", domain="FACE",
+                                         name="PolygonType", value=3, hide=True)
         quad_above = Quadrilateral(tree, location=(x + 15, y + 2), mode="POINTS", hide=True)
         above_fill = FillCurve(tree, location=(x + 16, y + 2), hide=True)
-        above_attr = StoredNamedAttribute(tree, location=(x + 17, y + 2), data_type="INT", domain="FACE",
-                                          name="PolygonType", value=4, hide=True)
+        above_attr = StoreNamedAttribute(tree, location=(x + 17, y + 2), data_type="INT", domain="FACE",
+                                         name="PolygonType", value=4, hide=True)
 
         for i in range(4):
             links.new(sample_indices_below[i].std_out, quad_below.inputs["Point " + str(i + 1)])
@@ -10963,7 +10963,7 @@ class FundamentalDomainCoverModifier(GeometryNodesModifier):
         fill = FillCurve(tree, location=(x + 2, y), hide=True)
 
         # Mark the trapezoid face with PolygonType=0.
-        store_trapez = StoredNamedAttribute(
+        store_trapez = StoreNamedAttribute(
             tree, location=(x + 3, y),
             data_type="INT", domain="FACE",
             name="PolygonType", label="MarkTrapez",
@@ -11137,9 +11137,9 @@ class BarnsleyFernModifier(GeometryNodesModifier):
         set_position = SetPosition(tree, position=transform_point.std_out)
         # remember which map moved the point this round; after the last round
         # the attribute holds the map that produced the point's final position
-        store_index = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
-                                           name="map_index",
-                                           value=map_index.outputs["idx"])
+        store_index = StoreNamedAttribute(tree, data_type="INT", domain="POINT",
+                                          name="map_index",
+                                          value=map_index.outputs["idx"])
         repeat.create_geometry_line([set_position, store_index])
 
         # ---- fit the natural fern (x in [-2.2,2.7], y in [0,10]) on the plane
@@ -11299,9 +11299,9 @@ class SierpinskiTriangleModifier(GeometryNodesModifier):
         transform_point = TransformPoint(tree, vector=position.std_out,
                                          transform=switch.std_out)
         set_position = SetPosition(tree, position=transform_point.std_out)
-        store_index = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
-                                           name="map_index",
-                                           value=cloud_idx.outputs["idx"])
+        store_index = StoreNamedAttribute(tree, data_type="INT", domain="POINT",
+                                          name="map_index",
+                                          value=cloud_idx.outputs["idx"])
         repeat.create_geometry_line([set_position, store_index])
         cloud_mat = SetMaterial(tree, material=color_mat)
         create_geometry_line(tree, [points, repeat, cloud_mat],
@@ -11370,8 +11370,8 @@ class SierpinskiTriangleModifier(GeometryNodesModifier):
         line = MeshLine(tree, count=n_vertices)  # n edges, index 0..n
         line_pos = SetPosition(tree, geometry=line.geometry_out,
                                position=traj_pos.std_out)
-        line_store = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
-                                          name="map_index", value=ch.std_out)
+        line_store = StoreNamedAttribute(tree, data_type="INT", domain="POINT",
+                                         name="map_index", value=ch.std_out)
         tree.links.new(line_pos.geometry_out, line_store.geometry_in)
         # reveal only the first `steps` hops: drop vertices with index > steps
         clip_sel = make_function(tree.nodes, functions={"sel": "i,s,>"},
@@ -11413,8 +11413,8 @@ class SierpinskiTriangleModifier(GeometryNodesModifier):
             tree.links.new(ci, corner_switch.node.inputs[i + 1])
         mk_pos = SetPosition(tree, geometry=mk_points.geometry_out,
                              position=corner_switch.std_out)
-        mk_store = StoredNamedAttribute(tree, data_type="INT", domain="POINT",
-                                        name="map_index", value=mk_index.std_out)
+        mk_store = StoreNamedAttribute(tree, data_type="INT", domain="POINT",
+                                       name="map_index", value=mk_index.std_out)
         tree.links.new(mk_pos.geometry_out, mk_store.geometry_in)
         mk_mat = SetMaterial(tree, material=color_mat)
         tree.links.new(mk_store.geometry_out, mk_mat.geometry_in)
@@ -11680,19 +11680,19 @@ class ApollonianGasketModifier(GeometryNodesModifier):
                            hide=True)
         seed_points = Points(tree, location=(0, 0), count=4,
                              radius=radius_in.std_out, parent=seed_frame)
-        store_first = StoredNamedAttribute(
+        store_first = StoreNamedAttribute(
             tree, location=(1, 0), data_type="INT", name="first_letter",
             value=seed_index.std_out, label="first letter = branch colour",
             parent=seed_frame, hide=True)
-        seed_letter = StoredNamedAttribute(
+        seed_letter = StoreNamedAttribute(
             tree, location=(2, 0), data_type="INT", name="letter",
             value=seed_index.std_out, label="letter <- index",
             parent=seed_frame, hide=True)
-        seed_word = StoredNamedAttribute(
+        seed_word = StoreNamedAttribute(
             tree, location=(3, 0), data_type="FLOAT4X4", name="word",
             value=gen_switch.std_out, label="word <- g[letter]",
             parent=seed_frame, hide=True)
-        seed_done = StoredNamedAttribute(
+        seed_done = StoreNamedAttribute(
             tree, location=(4, 0), data_type="BOOLEAN", name="done",
             value=False, label="done <- false", parent=seed_frame, hide=True)
         # g fixes its own fixed point, so the level-1 point is the fixed
@@ -11730,7 +11730,7 @@ class ApollonianGasketModifier(GeometryNodesModifier):
         dup = DuplicateElements(tree, location=(0.3, 2.5), domain="POINT",
                                 amount=child_count.outputs["amount"],
                                 parent=spawn_frame, hide=True)
-        store_digit = StoredNamedAttribute(
+        store_digit = StoreNamedAttribute(
             tree, location=(1.6, 2.5), data_type="INT", name="digit",
             value=dup.duplicate_index, label="digit <- duplicate index",
             parent=spawn_frame, hide=True)
@@ -11758,7 +11758,7 @@ class ApollonianGasketModifier(GeometryNodesModifier):
                                true=parent_letter.std_out,
                                label="frozen: keep letter",
                                parent=advance_frame, hide=True)
-        store_letter = StoredNamedAttribute(
+        store_letter = StoreNamedAttribute(
             tree, location=(0.7, 3.5), data_type="INT", name="letter",
             value=letter_switch.std_out, label="letter <- child letter",
             parent=advance_frame, hide=True)
@@ -11799,7 +11799,7 @@ class ApollonianGasketModifier(GeometryNodesModifier):
         links.new(circle_sep.y, termination.inputs["qy"])
         links.new(circle_sep.z, termination.inputs["r"])
         links.new(eps_in.std_out, termination.inputs["eps"])
-        store_stop = StoredNamedAttribute(
+        store_stop = StoreNamedAttribute(
             tree, location=(0.4, 5.5), data_type="BOOLEAN", name="stop",
             value=termination.outputs["stop"],
             label="stop <- disc small enough", parent=term_frame, hide=True)
@@ -11817,7 +11817,7 @@ class ApollonianGasketModifier(GeometryNodesModifier):
                              true=parent_word.std_out,
                              label="frozen: keep word", parent=word_frame,
                              hide=True)
-        store_word = StoredNamedAttribute(
+        store_word = StoreNamedAttribute(
             tree, location=(0.5, 4.2), data_type="FLOAT4X4", name="word",
             value=word_switch.std_out, label="word <- extended word",
             parent=word_frame, hide=True)
@@ -11891,7 +11891,7 @@ class ApollonianGasketModifier(GeometryNodesModifier):
                                    inputs1=stop_read.std_out,
                                    label="done or stop", parent=freeze_frame,
                                    hide=True)
-        store_done = StoredNamedAttribute(
+        store_done = StoreNamedAttribute(
             tree, location=(0.3, 2.3), data_type="BOOLEAN", name="done",
             value=done_or_stop.std_out, label="done <- done or stop",
             parent=freeze_frame, hide=True)
@@ -12037,15 +12037,15 @@ class HatTileModifier(GeometryNodesModifier):
         # the InstanceOnPoints boundary -- we'll read it back as a per-instance
         # attribute when computing the rotation in RotateInstances.
         set_pos_tri = SetPosition(tree, position=triangular.outputs["position"])
-        store_rot = StoredNamedAttribute(tree, data_type="FLOAT",
-                                         domain="POINT", name="hat_rot_index",
-                                         value=label.outputs["rot_index"])
-        store_tile = StoredNamedAttribute(tree, data_type="BOOLEAN",
-                                          domain="POINT", name="hat_is_tile",
-                                          value=label.outputs["is_tile"])
-        store_anti = StoredNamedAttribute(tree, data_type="BOOLEAN",
-                                          domain="POINT", name="hat_is_anti",
-                                          value=label.outputs["is_anti"])
+        store_rot = StoreNamedAttribute(tree, data_type="FLOAT",
+                                        domain="POINT", name="hat_rot_index",
+                                        value=label.outputs["rot_index"])
+        store_tile = StoreNamedAttribute(tree, data_type="BOOLEAN",
+                                         domain="POINT", name="hat_is_tile",
+                                         value=label.outputs["is_tile"])
+        store_anti = StoreNamedAttribute(tree, data_type="BOOLEAN",
+                                         domain="POINT", name="hat_is_anti",
+                                         value=label.outputs["is_anti"])
 
         # readers (used downstream in field contexts that no longer have
         # access to the original Index):
@@ -12321,8 +12321,8 @@ class ExtendedBrainFuckTapeModifier(GeometryNodesModifier):
         character = SliceString(tree, location=(2.5, 4.6), string=program.std_out,
                                 position=zone.index, length=1, name="Character")
         code = CharToAscii(tree, location=(4, 4.6), char=character.std_out)
-        store = StoredNamedAttribute(tree, location=(5.5, 3.6), data_type="INT",
-                                     domain="POINT", name="Value", value=code.std_out)
+        store = StoreNamedAttribute(tree, location=(5.5, 3.6), data_type="INT",
+                                    domain="POINT", name="Value", value=code.std_out)
         zone.create_geometry_line([store])
 
         frame = Frame(tree, location=(-2.6, 4.8), label="Tape")

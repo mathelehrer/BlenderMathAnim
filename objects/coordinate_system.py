@@ -95,7 +95,9 @@ class CoordinateSystem2(BObject):
             directions = self.directions
             axis_label_keys = list(self.axes_labels.keys())
             for i in range(2):
-                self.axes.append(NumberLine2(name=names[i], direction=directions[i], domain=self.domains[i],
+                self.axes.append(NumberLine2(name=names[i],
+                                             direction=directions[i],
+                                             domain=self.domains[i],
                                              location=axis_locations[i],
                                              tic_labels=self.tic_labels[i],
                                              radius=self.radii[i],
@@ -105,7 +107,8 @@ class CoordinateSystem2(BObject):
                                              include_zero=self.include_zeros[i],
                                              label_rotation=self.label_rotations[i],
                                              length=self.lengths[i],
-                                             color=self.colors[i], axis_label=axis_label_keys[i],
+                                             color=self.colors[i],
+                                             axis_label=axis_label_keys[i],
                                              axis_label_location=self.axes_labels[axis_label_keys[i]], **kwargs))
         elif self.dimension == 3:
             # compute axes locations

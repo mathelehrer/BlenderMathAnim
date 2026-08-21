@@ -7,7 +7,7 @@ from appearance.textures import DNA_BASE_COLORS, RNA_BASE_COLORS, get_texture
 from geometry_nodes.geometry_nodes_modifier import GeometryNodesModifier
 from geometry_nodes.nodes import Points, InputValue, InstanceOnPoints, JoinGeometry, \
     create_geometry_line, RealizeInstances, Position, make_function, Index, SetMaterial, \
-    RepeatZone, StoredNamedAttribute, NamedAttribute, VectorMath, TransformGeometry, InputVector, MeshLine, BooleanMath, \
+    RepeatZone, StoreNamedAttribute, NamedAttribute, VectorMath, TransformGeometry, InputVector, MeshLine, BooleanMath, \
     Simulation, MathNode, CombineXYZ, Switch, CylinderMesh, ConeMesh, Frame, SeparateXYZ, ForEachZone, Quadrilateral, \
     InputInteger, \
     CurveWireFrame, ValueToString, StringToCurves, FillCurve, CompareNode, \
@@ -857,9 +857,9 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         # every cell starts empty. The attribute has to exist from the first
         # frame on, otherwise the "Sample Index" in the automaton has nothing
         # to read and the cells have nothing to be coloured by.
-        zeros = StoredNamedAttribute(tree, location=(-4.6, 0.6), data_type="INT",
-                                     domain="POINT", name="Value", value=0,
-                                     label="ClearTape")
+        zeros = StoreNamedAttribute(tree, location=(-4.6, 0.6), data_type="INT",
+                                    domain="POINT", name="Value", value=0,
+                                    label="ClearTape")
         create_geometry_line(tree, [line, zeros])
         frame = Frame(tree, location=(-8.2, 1.4), label="Tape")
         frame.add([dials, end, line, zeros])
@@ -1060,10 +1060,10 @@ class BrainFuckSimpleModifier(GeometryNodesModifier):
         selection = CompareNode(tree, location=(17.0, -0.6), operation="EQUAL",
                                 data_type="INT", inputs0=here.std_out, inputs1=head,
                                 name="AtTheHead", hide=True)
-        tape = StoredNamedAttribute(tree, location=(18.4, 0.2), data_type="INT",
-                                    domain="POINT", name="Value",
-                                    selection=selection.std_out, value=lowered.std_out,
-                                    label="WriteCell")
+        tape = StoreNamedAttribute(tree, location=(18.4, 0.2), data_type="INT",
+                                   domain="POINT", name="Value",
+                                   selection=selection.std_out, value=lowered.std_out,
+                                   label="WriteCell")
         tree.links.new(tape_in, tape.geometry_in)
 
         # --- printing ---------------------------------------------------
@@ -2593,9 +2593,9 @@ class BrainFuckTransitionModifier(BrainFuckSimpleModifier):
         value = Switch(tree, location=(4.8, -0.8), input_type="INT",
                        switch=existed.std_out, false=0, true=was.std_out,
                        name="CarriedValue")
-        tape = StoredNamedAttribute(tree, location=(6.0, 0.8), data_type="INT",
-                                    domain="POINT", name="Value",
-                                    value=value.std_out, label="CarryValues")
+        tape = StoreNamedAttribute(tree, location=(6.0, 0.8), data_type="INT",
+                                   domain="POINT", name="Value",
+                                   value=value.std_out, label="CarryValues")
         tree.links.new(line.geometry_out, tape.geometry_in)
 
         return tape.geometry_out, [dials, end, line, stored, here, was, size,
@@ -3168,10 +3168,10 @@ class BFFNode(NodeGroup):
         on_head = CompareNode(tree, location=(17.0, -0.4), operation="EQUAL",
                               data_type="INT", inputs0=here.std_out, inputs1=head,
                               name="AtHead0", hide=True)
-        write_head = StoredNamedAttribute(tree, location=(19.4, 0.6), data_type="INT",
-                                          domain="POINT", name="Value",
-                                          selection=on_head.std_out,
-                                          value=fetched.std_out, label="WriteHead0")
+        write_head = StoreNamedAttribute(tree, location=(19.4, 0.6), data_type="INT",
+                                         domain="POINT", name="Value",
+                                         selection=on_head.std_out,
+                                         value=fetched.std_out, label="WriteHead0")
         tree.links.new(geometry, write_head.geometry_in)
 
         # The cell under head1 is only ever written by ".", and the selection
@@ -3184,10 +3184,10 @@ class BFFNode(NodeGroup):
         copies = BooleanMath(tree, location=(18.0, -1.2), operation="AND",
                              inputs0=on_mate.std_out, inputs1=writes,
                              name="CopyToHead1", hide=True)
-        write_mate = StoredNamedAttribute(tree, location=(20.4, 0.6), data_type="INT",
-                                          domain="POINT", name="Value",
-                                          selection=copies.std_out,
-                                          value=cell.std_out, label="WriteHead1")
+        write_mate = StoreNamedAttribute(tree, location=(20.4, 0.6), data_type="INT",
+                                         domain="POINT", name="Value",
+                                         selection=copies.std_out,
+                                         value=cell.std_out, label="WriteHead1")
         create_geometry_line(tree, [write_head, write_mate])
 
         # --- the loop, and where the counter goes next -------------------
@@ -3957,13 +3957,13 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
             # the attribute has to exist from the first frame on, otherwise the
             # "Sample Index" in the automaton has nothing to read and the cells
             # have nothing to be coloured by.
-            values = StoredNamedAttribute(tree, location=(-4.6, 0.6 - 3 * i), data_type="INT",
-                                          domain="POINT", name="Value", value=content.std_out,
-                                          label="LoadTape")
+            values = StoreNamedAttribute(tree, location=(-4.6, 0.6 - 3 * i), data_type="INT",
+                                         domain="POINT", name="Value", value=content.std_out,
+                                         label="LoadTape")
 
-            tape_kind = StoredNamedAttribute(tree, location=(-3.6, 0.6 - 3 * i), data_type="INT",
-                                             domain="POINT", name="Tape", value=i,
-                                             label="TapeNumber")
+            tape_kind = StoreNamedAttribute(tree, location=(-3.6, 0.6 - 3 * i), data_type="INT",
+                                            domain="POINT", name="Tape", value=i,
+                                            label="TapeNumber")
             # Which cell of the whole memory this is: the two tapes are laid
             # end to end, so tape 1 starts at TapeSize. It is written down here
             # for two reasons. The point index only says it before the join,
@@ -3975,10 +3975,10 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
                 IntegerMath(tree, location=(-3.4, -0.4 - 3 * i), operation="ADD",
                             inputs0=cell.std_out, inputs1=control["TapeSize"].std_out,
                             name="CellOnTape" + str(i), hide=True)]
-            number = StoredNamedAttribute(tree, location=(-3.0, 0.6 - 3 * i), data_type="INT",
-                                          domain="POINT", name="Cell",
-                                          value=offset[0].std_out if offset else cell.std_out,
-                                          label="CellNumber")
+            number = StoreNamedAttribute(tree, location=(-3.0, 0.6 - 3 * i), data_type="INT",
+                                         domain="POINT", name="Cell",
+                                         value=offset[0].std_out if offset else cell.std_out,
+                                         label="CellNumber")
             create_geometry_line(tree, [line, values, tape_kind, number])
             ends.append(number)
             frame.add([length, end, line, column, cell, content, values, tape_kind,
@@ -4290,9 +4290,9 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
                                   name="Paint" + label)
             # which tape the head is on, so that the Set Position downstream
             # moves the arrow to the same line as the cell it points at
-            rides = StoredNamedAttribute(tree, location=(33, y), data_type="INT",
-                                         domain="POINT", name="Tape",
-                                         value=line.std_out, label="TapeOf" + label)
+            rides = StoreNamedAttribute(tree, location=(33, y), data_type="INT",
+                                        domain="POINT", name="Tape",
+                                        value=line.std_out, label="TapeOf" + label)
             create_geometry_line(tree, [body, turned, put, painted, rides])
             pieces += [spot, line, along, drop, where, tip, stem, below, body,
                        turned, put, paint, painted, rides]
@@ -4336,9 +4336,9 @@ class BrainFuckExtendedModifier(GeometryNodesModifier):
         painted = SetMaterial(tree, location=(31, y),
                               material=control["PointerColor"].std_out,
                               name="PaintCursor")
-        rides = StoredNamedAttribute(tree, location=(32, y), data_type="INT",
-                                     domain="POINT", name="Tape", value=line.std_out,
-                                     label="TapeOfCursor")
+        rides = StoreNamedAttribute(tree, location=(32, y), data_type="INT",
+                                    domain="POINT", name="Tape", value=line.std_out,
+                                    label="TapeOfCursor")
         create_geometry_line(tree, [place, painted, rides], ins=wire.geometry_out)
         pieces += [spot, line, side, tall, box, wire, lifted, place, painted, rides]
 
@@ -7179,10 +7179,10 @@ class DNAModifier(GeometryNodesModifier):
         base_type = MathNode(tree, location=(46.5, -3.0), operation="ADD",
                              inputs0=parity.std_out, inputs1=upper.std_out,
                              node_height=GRID, name="BaseType")
-        store = StoredNamedAttribute(tree, location=(48.0, 0.0),
-                                     data_type="INT", domain="POINT",
-                                     name="BaseType", value=base_type.std_out,
-                                     node_height=GRID)
+        store = StoreNamedAttribute(tree, location=(48.0, 0.0),
+                                    data_type="INT", domain="POINT",
+                                    name="BaseType", value=base_type.std_out,
+                                    node_height=GRID)
         tree.links.new(strands, store.geometry_in)
         store.node.label = "BaseType"
 
@@ -8536,11 +8536,11 @@ class RNALogoModifier(GeometryNodesModifier):
                              label="DrawOutline")
         # the radius has to travel *on* the curve, since what reads it is a
         # Sample Curve evaluating a field on the geometry it is sampling
-        carried = StoredNamedAttribute(tree, location=at(2.1, -0.3),
-                                       data_type="FLOAT", domain="POINT",
-                                       name="LogoRadius",
-                                       value=outline.outputs["Radius"],
-                                       node_height=GRID, label="CarryRadius")
+        carried = StoreNamedAttribute(tree, location=at(2.1, -0.3),
+                                      data_type="FLOAT", domain="POINT",
+                                      name="LogoRadius",
+                                      value=outline.outputs["Radius"],
+                                      node_height=GRID, label="CarryRadius")
         tree.links.new(placed.geometry_out, carried.geometry_in)
 
         frame = Frame(tree, location=(-2.3, 2.2), node_height=GRID,
@@ -9941,10 +9941,10 @@ class MovingTapeModifier(GeometryNodesModifier):
             seed = MathNode(tree, location=at(6.9, -1.3), operation="ADD",
                             inputs0=zone.index, inputs1=glyphs.index,
                             node_height=GRID, name="SeedIndex", label="")
-            last = StoredNamedAttribute(tree, location=at(7.9, -0.3),
-                                        data_type="FLOAT", domain="POINT",
-                                        name=self.number_seed, value=seed.std_out,
-                                        node_height=GRID, label="SeedNumber")
+            last = StoreNamedAttribute(tree, location=at(7.9, -0.3),
+                                       data_type="FLOAT", domain="POINT",
+                                       name=self.number_seed, value=seed.std_out,
+                                       node_height=GRID, label="SeedNumber")
             tree.links.new(painted.geometry_out, last.geometry_in)
             pieces += [seed, last]
         tree.links.new(last.geometry_out, glyphs.foreach_output.inputs["Geometry"])
@@ -10349,11 +10349,11 @@ class LifeOnEarthModifier(GeometryNodesModifier):
                                  inputs0=life_origin.std_out,
                                  inputs1=life.pivot_point, node_height=GRID,
                                  hide=True, name="LifeGlyphCentre")
-        life_pivot = StoredNamedAttribute(tree, location=at(2.9, -0.2),
-                                          data_type="FLOAT_VECTOR", domain="INSTANCE",
-                                          name=self.PIVOT, value=life_centre.std_out,
-                                          node_height=GRID, hide=True,
-                                          label="StoreLifePivot")
+        life_pivot = StoreNamedAttribute(tree, location=at(2.9, -0.2),
+                                         data_type="FLOAT_VECTOR", domain="INSTANCE",
+                                         name=self.PIVOT, value=life_centre.std_out,
+                                         node_height=GRID, hide=True,
+                                         label="StoreLifePivot")
         tree.links.new(life.geometry_out, life_pivot.geometry_in)
         realize_life = RealizeInstances(tree, location=at(2.9, -1.3),
                                         geometry=life_pivot.geometry_out,
@@ -10364,12 +10364,12 @@ class LifeOnEarthModifier(GeometryNodesModifier):
         life_number = MathNode(tree, location=at(4.7, -1.8), operation="ADD",
                                inputs0=life_index.std_out, inputs1=1.0,
                                node_height=GRID, name="LifeOutlineNumber")
-        life_stored = StoredNamedAttribute(tree, location=at(5.5, -1.0),
-                                           data_type="INT", domain="CURVE",
-                                           name=self.LATITUDE,
-                                           value=life_number.std_out,
-                                           node_height=GRID,
-                                           label="StoreLattitudeIndex")
+        life_stored = StoreNamedAttribute(tree, location=at(5.5, -1.0),
+                                          data_type="INT", domain="CURVE",
+                                          name=self.LATITUDE,
+                                          value=life_number.std_out,
+                                          node_height=GRID,
+                                          label="StoreLattitudeIndex")
         tree.links.new(realize_life.geometry_out, life_stored.geometry_in)
 
         # `Earth`'s pivots have to carry the offset themselves: the Transform
@@ -10387,12 +10387,12 @@ class LifeOnEarthModifier(GeometryNodesModifier):
                                           inputs1=self.word_offset,
                                           node_height=GRID, hide=True,
                                           name="EarthGlyphPlacement")
-        earth_pivot = StoredNamedAttribute(tree, location=at(2.5, -5.1),
-                                           data_type="FLOAT_VECTOR",
-                                           domain="INSTANCE", name=self.PIVOT,
-                                           value=earth_shifted_origin.std_out,
-                                           node_height=GRID, hide=True,
-                                           label="StoreEarthPivot")
+        earth_pivot = StoreNamedAttribute(tree, location=at(2.5, -5.1),
+                                          data_type="FLOAT_VECTOR",
+                                          domain="INSTANCE", name=self.PIVOT,
+                                          value=earth_shifted_origin.std_out,
+                                          node_height=GRID, hide=True,
+                                          label="StoreEarthPivot")
         tree.links.new(earth.geometry_out, earth_pivot.geometry_in)
         realize_earth = RealizeInstances(tree, location=at(2.1, -2.8),
                                          geometry=earth_pivot.geometry_out,
@@ -10407,12 +10407,12 @@ class LifeOnEarthModifier(GeometryNodesModifier):
         earth_number = MathNode(tree, location=at(4.6, -3.4), operation="ADD",
                                 inputs0=earth_index.std_out, inputs1=1.0,
                                 node_height=GRID, name="EarthOutlineNumber")
-        earth_stored = StoredNamedAttribute(tree, location=at(5.5, -2.6),
-                                            data_type="INT", domain="CURVE",
-                                            name=self.LONGITUDE,
-                                            value=earth_number.std_out,
-                                            node_height=GRID,
-                                            label="StoreLongitudeIndex")
+        earth_stored = StoreNamedAttribute(tree, location=at(5.5, -2.6),
+                                           data_type="INT", domain="CURVE",
+                                           name=self.LONGITUDE,
+                                           value=earth_number.std_out,
+                                           node_height=GRID,
+                                           label="StoreLongitudeIndex")
         tree.links.new(placed.geometry_out, earth_stored.geometry_in)
 
         life_count = AttributeStatistic(tree, location=at(6.7, -0.1),
@@ -11273,18 +11273,18 @@ class BrainFuckHelloModifier(BrainFuckExtendedModifier):
                       true=code.std_out, name="CellByte")
         # the attribute has to exist from the first frame on, otherwise the
         # Sample Index in the automaton has nothing to read
-        values = StoredNamedAttribute(tree, location=(-3.0, 0.6), data_type="INT",
-                                      domain="POINT", name="Value",
-                                      value=byte.std_out, label="LoadTape")
+        values = StoreNamedAttribute(tree, location=(-3.0, 0.6), data_type="INT",
+                                     domain="POINT", name="Value",
+                                     value=byte.std_out, label="LoadTape")
         # one tape, so every cell is on tape 0 and its number is its index -
         # the Cells frame drops each cell onto the line of its own tape and
         # the arrows read the cell number back off the realized geometry
-        tape_kind = StoredNamedAttribute(tree, location=(-2.2, 0.6), data_type="INT",
-                                         domain="POINT", name="Tape", value=0,
-                                         label="TapeNumber")
-        number = StoredNamedAttribute(tree, location=(-1.4, 0.6), data_type="INT",
-                                      domain="POINT", name="Cell",
-                                      value=cell.std_out, label="CellNumber")
+        tape_kind = StoreNamedAttribute(tree, location=(-2.2, 0.6), data_type="INT",
+                                        domain="POINT", name="Tape", value=0,
+                                        label="TapeNumber")
+        number = StoreNamedAttribute(tree, location=(-1.4, 0.6), data_type="INT",
+                                     domain="POINT", name="Cell",
+                                     value=cell.std_out, label="CellNumber")
         create_geometry_line(tree, [line, values, tape_kind, number])
 
         frame = Frame(tree, location=(-8.4, 1.4), label="Tape")

@@ -24,7 +24,7 @@ from shader_nodes.shader_nodes import (Mapping, AttributeNode, HueSaturationValu
                                        Displacement, ShaderNode, MixShader,
                                        TextureCoordinate, ColorRamp, ShaderFrame,
                                        ShaderRepeatZone, BrightContrast, RGB, PrincipledBSDF, OnRightNode, CombineXYZ,
-                                       IfNode, Mix, VoronoiTexture, OutputMaterial)
+                                       IfNode, Mix, MixNode, VoronoiTexture, OutputMaterial)
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
@@ -458,6 +458,8 @@ def get_texture(material, **kwargs):
             material = hat_tile_fractal(**kwargs)
         elif material == 'interference':
             material = interference_texture(**kwargs)
+        elif material == 'function':
+            material = function_texture(**kwargs)
         elif material == 'iteration':
             material = make_iteration_material(**kwargs)
         elif material == 'hue':
@@ -1815,6 +1817,135 @@ def interference_texture(name="Interference", **kwargs):
                           alpha=intensity.outputs["alpha"],
                           distribution="MULTI_GGX", hide=False)
     OutputMaterial(tree, location=(3, 0), surface=bsdf.std_out, hide=False)
+
+    customize_material(mat, **kwargs)
+    return mat
+
+
+def function_texture(name="Function", **kwargs):
+    r"""A graph painted by its own value, read from the attributes it carries.
+
+    Ported from ``video_interferences/shader.xml``. The material is meant for
+    what :class:`~objects.functions.FunctionModifier` builds: a tube whose
+    points carry the value of the function as ``result`` and the height it was
+    given as ``amplitude``, so the colour is not a property of the object but
+    of the number at each point.
+
+    Everything is that pair of attributes, normalised to u = result/amplitude,
+    which runs -1..1 for a wave drawn at its own amplitude:
+
+    ``Base Color`` and ``Emission Color``
+        a ramp on ``(u + 1)/2``, so 0 is a trough, 0.5 the zero crossing and 1
+        a crest. The default gradient runs red -> black -> green: opposite
+        hues for opposite signs, and a curve that goes black exactly where it
+        crosses the axis.
+    ``Emission Strength``
+        :math:`u^2` - the energy, so crest and trough glow equally and the
+        zero crossings are dark. It is a socket driven by the attribute, which
+        is why the ``emission`` keyword that other materials take does nothing
+        here.
+    ``Alpha``
+        ``mix(1, u^2, alpha_intensity)``, and then the whole of it through the
+        ``AlphaFactor`` mixer, which is what lets the graph fade in and out as
+        a whole. At ``alpha_intensity = 0`` the tube is solid, at 1 it is cut
+        out wherever the function vanishes, and the ``AlphaIntensity`` value
+        node in between is a dial a scene can ramp::
+
+            dial = ibpy.get_node_from_shader(material, "AlphaIntensity")
+            ibpy.change_default_value(dial, from_value=0, to_value=1,
+                                      begin_time=2, transition_time=3)
+
+    **The global fade.** ``Alpha`` is a driven socket, so writing the shader's
+    ``Alpha`` default -- which is what ``appear``/``disappear`` do to an
+    ordinary material -- would do nothing at all here. The last node is
+    therefore a ``Mix`` of 0 against everything above, and its factor is the
+    object's alpha: 1 shows the graph as described, 0 hides it, and blender
+    interpolates the fade in between. :func:`~interface.ibpy.set_alpha_for_material`
+    finds that node by the label ``AlphaFactor`` and keyframes its factor, so
+    ``wave.appear(...)`` and ``wave.disappear(...)`` work on this material the
+    way they work on any other. (``AlphaMixer``, which the node is called in
+    ``shader.xml``, is the sibling convention for materials with *no*
+    Principled BSDF -- see :func:`~appearance.textures.make_translucent_material`
+    -- and is only looked at when there is none, so it would be passed over
+    here.)
+
+    :param name: material name.
+    :param attribute: the attribute holding the value of the function,
+        ``result`` as :class:`~objects.functions.FunctionModifier` stores it.
+    :param scale_attribute: the attribute the value is measured against,
+        ``amplitude``. It is a per-point attribute rather than a number so
+        that a scene which ramps the amplitude keeps the colours where they
+        are - the crest stays green as it grows.
+    :param gradient: ``{position: rgba}`` for the ramp.
+    :param alpha_intensity: how much of the alpha follows :math:`u^2`.
+    :param alpha: where the global fade starts, the factor of the
+        ``AlphaFactor`` mixer. 1 by default, so a material that is never
+        faded looks the same as before there was one.
+    :param kwargs: passed on to
+        :func:`~interface.ibpy.customize_material` (``roughness``, ...).
+    """
+    attribute = get_from_kwargs(kwargs, "attribute", "result")
+    scale_attribute = get_from_kwargs(kwargs, "scale_attribute", "amplitude")
+    gradient = get_from_kwargs(kwargs, "gradient",
+                               {0: [1, 0, 0.0091, 1], 0.5: [0, 0, 0, 1],
+                                1: [0.023, 1, 0, 1]})
+    alpha_intensity = get_from_kwargs(kwargs, "alpha_intensity", 0.5)
+    # customize_material reads 'alpha' too, and would write it into the
+    # shader's Alpha socket, which is driven here; it belongs on the mixer
+    alpha = kwargs.get("alpha", 1)
+
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+    mat.name = name
+    tree = mat.node_tree
+    # built from scratch with the wrappers below, so the two nodes
+    # `use_nodes` hands out for free would only be in the way
+    tree.nodes.clear()
+
+    value = AttributeNode(tree, location=(-4.7, 0.3), attribute_name=attribute,
+                          attribute_type="GEOMETRY", name="ValueAttribute", hide=False)
+    scale = AttributeNode(tree, location=(-4.7, -0.6), attribute_name=scale_attribute,
+                          attribute_type="GEOMETRY", name="ScaleAttribute", hide=True)
+
+    # (result + amplitude)/amplitude/2 = (u + 1)/2, the ramp's coordinate.
+    # Written as the blend has it, one operation per node, rather than folded
+    # into a single expression: each of these is a socket a scene can reach.
+    shifted = MathNode(tree, location=(-3.7, -0.1), operation="ADD",
+                       input0=value.fac_out, input1=scale.fac_out, name="Shifted")
+    normalized = MathNode(tree, location=(-2.7, -0.6), operation="DIVIDE",
+                          input0=shifted.std_out, input1=scale.fac_out,
+                          name="Rescaled")
+    factor = MathNode(tree, location=(-1.6, -0.5), operation="DIVIDE",
+                      input0=normalized.std_out, input1=2.0, name="RampFactor")
+
+    ramp = ColorRamp(tree, location=(-0.6, 0.9), factor=factor.std_out,
+                     values=list(gradient.keys()),
+                     colors=[list(color) for color in gradient.values()],
+                     interpolation="LINEAR", color_mode="RGB", hide=False)
+
+    # u^2, the energy: the same number for a crest and for the trough under it
+    u = MathNode(tree, location=(-2.0, -1.0), operation="DIVIDE",
+                 input0=value.fac_out, input1=scale.fac_out, name="Normalized")
+    energy = MathNode(tree, location=(-1.1, -1.0), operation="MULTIPLY",
+                      input0=u.std_out, input1=u.std_out, name="Energy")
+
+    intensity = InputValue(tree, location=(-4.6, -1.1), value=alpha_intensity,
+                           name="AlphaIntensity", hide=False)
+    shape = MixNode(tree, location=(-0.2, -1.4), data_type="FLOAT",
+                    factor=intensity.std_out, caseA=1.0, caseB=energy.std_out,
+                    clamp_factor=True, factor_mode="UNIFORM", hide=False)
+    # the global fade: everything above, mixed against nothing at all
+    fade = MixNode(tree, location=(0.6, -0.3), data_type="FLOAT",
+                   factor=alpha, caseA=0.0, caseB=shape.std_out,
+                   clamp_factor=True, factor_mode="UNIFORM",
+                   name="AlphaFactor", hide=False)
+
+    bsdf = PrincipledBSDF(tree, location=(1.5, 0.0), base_color=ramp.std_out,
+                          emission_color=ramp.std_out,
+                          emission_strength=energy.std_out,
+                          alpha=fade.std_out,
+                          distribution="MULTI_GGX", hide=False)
+    OutputMaterial(tree, location=(3.0, 0.0), surface=bsdf.std_out, hide=False)
 
     customize_material(mat, **kwargs)
     return mat

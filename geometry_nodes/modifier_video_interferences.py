@@ -106,6 +106,20 @@ Classes:
 :class:`GaussianCloudModifier`
     f = a gaussian blob — a distribution with a known answer, which is what
     the verification harness leans on.
+:class:`WaveVisualizationModifier`
+    not a cloud either, and the other way round from all of them: a grid whose
+    every vertex is *lifted* to u(r, t) = J0(kr) cos wt + Y0(kr) sin wt, so the
+    surface is the field rather than a set of probes reading it. The elongation
+    is kept in a per-vertex attribute, and the colour comes from
+    ``interference_texture`` in its "hankel" model - the same wave, recomputed
+    in the shader from the surface's uv.
+:class:`DrumModeModifier`
+    the same idea as :class:`WaveVisualizationModifier` with a *boundary*: a
+    disc clamped at its rim, standing up as one normal mode of the 2+1 wave
+    equation, u = J_m(alpha_mn r/a) cos m phi cos omega_mn t. The modes are
+    built side by side and an ``Index Switch`` on the ``Mode`` dial picks
+    which one is showing, so a scene walks through the overtone series of a
+    drum by keyframing one integer.
 :class:`FarFieldModifier`
     not a cloud at all: the *directions* a line of equally spaced sources
     radiates into, sin(alpha_n) = n lambda / g, drawn as rays from the centre
@@ -115,14 +129,17 @@ Classes:
 import numpy as np
 
 from geometry_nodes.geometry_nodes_modifier import GeometryNodesModifier
-from geometry_nodes.nodes import (CubeMesh, CurveCircle, CurveLine, CurveToMesh,
+from geometry_nodes.nodes import (BESSEL_OPS, CombineXYZ, CubeMesh, CurveCircle,
+                                  CurveLine, CurveToMesh,
                                   DeleteGeometry, DistributePointsInVolume,
-                                  Frame, IcoSphere, InputValue, InputVector,
-                                  InstanceOnPoints, JoinGeometry, MathNode, MeshToVolume,
-                                  Points, Position, RandomValue, RealizeInstances,
-                                  SceneTime, SetMaterial, SetPosition,
-                                  StoredNamedAttribute, TransformGeometry,
-                                  VolumeCube, WireFrame, make_function)
+                                  Frame, Grid, IcoSphere, IndexSwitch, InputInteger,
+                                  InputValue, InputVector,
+                                  InstanceOnPoints, JoinGeometry, MathNode,
+                                  MergeByDistance, MeshToVolume,
+                                  NamedAttribute, Points, Position, RandomValue,
+                                  RealizeInstances, SceneTime, SetMaterial, SetPosition,
+                                  SetShadeSmooth, StoreNamedAttribute, TransformGeometry,
+                                  VolumeCube, WireFrame, bessel_jm_rpn, make_function)
 from interface.ibpy import Vector
 
 pi = np.pi
@@ -420,9 +437,9 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         if density is not None:
             # carried on the points so that a material can read it; the value
             # is f at the point's own position, i.e. the local intensity
-            store = StoredNamedAttribute(tree, location=(3, 0), name="intensity",
-                                         data_type="FLOAT", domain="POINT",
-                                         value=density)
+            store = StoreNamedAttribute(tree, location=(3, 0), name="intensity",
+                                        data_type="FLOAT", domain="POINT",
+                                        value=density)
             store.node.parent = frame.node
             tree.links.new(points, store.geometry_in)
             points = store.geometry_out
@@ -1059,3 +1076,846 @@ class FarFieldModifier(GeometryNodesModifier):
             geometry = painted.geometry_out
 
         links.new(geometry, self.group_outputs.inputs["Geometry"])
+
+
+class WaveVisualizationModifier(GeometryNodesModifier):
+    r"""A grid standing up as the *exact* outgoing wave of a point source in 2D.
+
+    Every other class in this module reads the field with probes - a cloud of
+    points that lights up where the field is strong. This one does the other
+    thing a field admits: it **is** the field. A flat, finely tessellated grid
+    in the x-y plane, every vertex lifted to
+
+    .. math::
+        u(\mathbf r, t) = A' \sum_j \Big[ J_0(k r_j)\cos\omega t
+                                        + Y_0(k r_j)\sin\omega t \Big]
+                        = A' \sum_j \mathrm{Re}\big[H^{(1)}_0(k r_j)
+                                                    e^{-i\omega t}\big],
+        \qquad r_j = |\mathbf r - \mathbf c_j|,
+
+    with :math:`k = 2\pi/\lambda` and :math:`\omega = 2\pi f`. That is the
+    outgoing solution of the 2+1 dimensional wave equation, not the
+    :math:`\sin(kr - \omega t)/\sqrt r` that stands in for it: the elementary
+    form is only the asymptotics, and a surface is precisely the display on
+    which the difference is visible. Near a source the true wavefronts are
+    pulled inwards - the first crest lands at 0.38 lambda rather than 0.50 -
+    and the amplitude rises like :math:`\ln r` instead of running away as
+    :math:`r^{-1/2}`, which is what makes a source in shot a hill rather than
+    a spike. Both cylinder functions come from
+    :data:`~geometry_nodes.nodes.BESSEL_OPS`, so the tree says ``x,j0`` and
+    ``x,y0`` and the Abramowitz-Stegun approximation behind them is shared by
+    every source (see ``geometry_nodes/docs/BesselNode.tex``).
+
+    The tree is three frames, one method each, and they are stages rather than
+    decoration - each hands the next exactly one thing:
+
+    :meth:`_control_frame`
+        the dials and the clock. ``Wavelength``, ``Frequency``, ``Amplitude``
+        and one ``Source<j>`` vector per emitter, plus ``Scene Time ->
+        Seconds``, which is why this modifier moves **without a keyframe**.
+    :meth:`_wave_frame`
+        the arithmetic: one :func:`~geometry_nodes.nodes.make_function` group
+        turning the ``Position`` field and those dials into the scalar u.
+    :meth:`_geometry_frame`
+        the grid, the store, the displacement and the paint.
+
+    Two things in the last frame are ordering, not taste. The elongation is
+    stored **before** ``Set Position`` and the displacement then reads it back
+    through a ``Named Attribute``: a field is evaluated on the geometry the
+    node receives, so an attribute stored *after* the lift would be computed
+    from the lifted vertices, whose distance to a source is
+    :math:`\sqrt{r^2+u^2}` rather than r - the surface would be right and the
+    number wrong. Reading it back also means the seventy-odd math nodes of
+    each Bessel group run once per vertex rather than twice.
+
+    And the grid's ``UV Map`` output is stored as a ``FLOAT2`` on the
+    **corner** domain under the name ``UVMap``, which is what makes it a uv
+    layer rather than an attribute nothing reads. Without it the material's
+    ``Texture Coordinate -> UV`` is all zeros and the surface renders in one
+    flat colour, which looks like a broken shader rather than a missing
+    attribute.
+
+    **The colour comes from the material, and it is the same wave.**
+    ``material="interference"`` paints the surface with
+    :func:`~appearance.textures.interference_texture` in its ``"hankel"``
+    model, which recomputes exactly this sum in the shader from the uv - so
+    crest and trough take opposite hues and the nodal rings, where the alpha
+    is :math:`u^2`, are cut clean out of the surface. The parameters are
+    handed to it from the same python values that build the tree, and
+    ``uv_scale`` is set to the grid's own size, so the two agree by
+    construction rather than by being typed twice.
+
+    The one thing that does **not** synchronise itself is the clock. A shader
+    tree has no ``Scene Time`` node, so the material carries a plain ``Time``
+    value while the geometry reads seconds off the scene. A scene that wants
+    them locked ramps the material's ``Time`` linearly from 0 to the shot
+    length in seconds::
+
+        wave = WaveVisualizationModifier(name="Wave", wavelength=0.8)
+        surface = Plane(name="WaveSurface")
+        surface.add_mesh_modifier(type='NODES', node_modifier=wave)
+        clock = ibpy.get_node_from_shader(wave.material, "Time")
+        ibpy.change_default_value(clock, from_value=0, to_value=20,
+                                  begin_time=0, transition_time=20)
+
+    Left un-ramped the surface still moves and the colours stand still, which
+    is a legitimate look (the pattern of a standing exposure over a moving
+    membrane) but not the one this is for.
+
+    The dials, reachable with
+    ``ibpy.get_geometry_node_from_modifier(modifier, label)``:
+
+    ``Wavelength``
+        lambda. Feeds k *and* the normalisation, so the far-field amplitude
+        stays put as it is ramped.
+    ``Frequency``
+        f, in cycles per second of scene time. The tree computes
+        :math:`2\pi f t`, so ramping it re-phases the wave already in flight -
+        a chirp rather than a change of pitch.
+    ``Amplitude``
+        A, the height one source would reach at r = 1 in the far field. The
+        ``pi/sqrt(lambda)`` that turns it into A' is
+        :func:`~appearance.textures.interference_texture`'s convention,
+        carried over unchanged so that the same number means the same height
+        in the tree and the same colour in the shader.
+    ``Source<j>``
+        the emitters, as vectors in the grid's own plane.
+
+    :param name: name of the node group, and of the modifier in the stack.
+    :param size: edge length of the (square) grid, in blender units.
+    :param resolution: vertices per side. The default 301 is 90601 vertices,
+        which resolves a wavelength of 0.8 on a grid of side 8 with 30 samples
+        - well past the point where the crests stop looking faceted. It is the
+        one parameter worth turning *down* while composing a shot: the Bessel
+        polynomials run per vertex.
+    :param sources: emitter positions ``(x, y)`` in grid coordinates, the
+        origin being the grid's centre. The sum of solutions is a solution, so
+        several of them interfere.
+    :param wavelength: lambda, in blender units.
+    :param frequency: f, in cycles per second of scene time.
+    :param amplitude: A, in blender units (see the ``Amplitude`` dial).
+    :param source_radius: how far off the origin r is held. :math:`Y_0` has a
+        logarithmic pole at a true point source, so something has to stop it;
+        the physical reading is an emitter of this radius. Defaults to
+        ``wavelength/20``, which is also
+        :func:`~appearance.textures.interference_texture`'s default - pass the
+        same number to both or the surface and its colour disagree in the one
+        place the eye is drawn to. It is a python constant baked into the
+        formula, not a socket, so it does **not** follow an animated
+        ``Wavelength``: a scene that halves lambda doubles ``k * source_radius``
+        and the pole grows, since the normalisation ``pi/sqrt(lambda)`` rises
+        while the clamp stays put. Give it a larger fraction of the wavelength
+        (``wavelength/10``) if a sweep is planned and the spike has to stay in
+        frame.
+    :param attribute: name of the float attribute the elongation is stored
+        under, on the point domain. It is what displaces the surface, and it
+        is left on the mesh for anything downstream to read.
+    :param material: ``"interference"`` builds the matched texture (the
+        default); a palette name or a ``bpy.types.Material`` is set as it
+        stands; ``None`` leaves the surface unpainted.
+    :param shade_smooth: smooth-shade the result. A displaced grid is a
+        polyhedron, and at 300 vertices a side the facets are exactly the size
+        of the fringes.
+    """
+
+    def __init__(self, name="WaveVisualization", size=8.0, resolution=301,
+                 sources=((0.0, 0.0),), wavelength=0.8, frequency=1.0,
+                 amplitude=0.25, source_radius=None, attribute="elongation",
+                 material="interference", shade_smooth=True, **kwargs):
+        self.name = name
+        self.size = size
+        self.resolution = resolution
+        self.sources = [Vector((s[0], s[1], 0)) for s in sources]
+        if not self.sources:
+            raise ValueError("a wave needs at least one source")
+        self.wavelength = wavelength
+        self.frequency = frequency
+        self.amplitude = amplitude
+        # the same default as interference_texture, so that the two clamps
+        # coincide when neither is given explicitly
+        self.source_radius = wavelength / 20 if source_radius is None \
+            else source_radius
+        self.attribute = attribute
+        self.paint = material
+        self.shade_smooth = shade_smooth
+        self.kwargs = kwargs
+        # filled in by _geometry_frame; the scene needs it to reach the
+        # shader's Time value
+        self.material = None
+        super().__init__(name=name, automatic_layout=False, **kwargs)
+
+    # ------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._control_frame(tree)
+        elongation = self._wave_frame(tree, control)
+        geometry = self._geometry_frame(tree, elongation)
+        tree.links.new(geometry, self.group_outputs.inputs["Geometry"])
+
+    # ------------------------------------------------------------------
+    def _control_frame(self, tree):
+        """The dials and the clock: everything a scene animates, in one place.
+
+        Nothing is computed here - not even ``omega = 2 pi f``. The wave frame
+        takes ``time`` and ``frequency`` as separate inputs and forms
+        ``time,frequency,*,tau,*`` itself, which is the association
+        :func:`~appearance.textures.interference_texture` uses in the shader.
+        Matching it matters at the end of a long shot: at t = 60 s the phase
+        is some 400 radians, where a float32 ulp is 3e-5, and the two ways of
+        bracketing the product differ in the last bits. Same order, same
+        wavefronts, and the painted fringes sit on the geometric ones.
+
+        :return: dict of the sockets the wave frame consumes.
+        """
+        frame = Frame(tree, location=(0, 2), label="Control",
+                      name="ControlFrame")
+        clock = SceneTime(tree, location=(0, 1), std_out="Seconds",
+                          name="Clock", parent=frame)
+        wavelength = InputValue(tree, location=(0, 0), value=self.wavelength,
+                                name="Wavelength", parent=frame)
+        frequency = InputValue(tree, location=(0, -1), value=self.frequency,
+                               name="Frequency", parent=frame)
+        amplitude = InputValue(tree, location=(0, -2), value=self.amplitude,
+                               name="Amplitude", parent=frame)
+        sources = [InputVector(tree, location=(0, -3 - j), vector=source,
+                               name="Source%d" % j, hide=True, parent=frame)
+                   for j, source in enumerate(self.sources)]
+        return {"time": clock.std_out,
+                "wavelength": wavelength.std_out,
+                "frequency": frequency.std_out,
+                "amplitude": amplitude.std_out,
+                "sources": [s.std_out for s in sources]}
+
+    # ------------------------------------------------------------------
+    def _wave_frame(self, tree, control):
+        r"""u(r, t), the whole of it, as one function group.
+
+        The auxiliaries are the arithmetic worth naming, and they are shared
+        rather than repeated: ``k`` and ``amp`` are computed once for all
+        sources, and each source's ``r`` is used twice - once clamped into the
+        Bessel argument, and once (through it) by both cylinder functions.
+
+        ``amp`` is ``A pi / sqrt(lambda)``, which looks arbitrary and is not:
+        :math:`J_0(x) \sim \sqrt{2/\pi x}\cos(x - \pi/4)`, so a far-field
+        amplitude of :math:`A/\sqrt r` needs a factor
+        :math:`\sqrt{\pi k/2} = \pi/\sqrt\lambda`. It is built from the
+        ``Wavelength`` socket rather than baked in as a number, so a scene
+        that sweeps the wavelength keeps the same wave height as it goes.
+
+        :return: the socket carrying the scalar elongation.
+        """
+        frame = Frame(tree, location=(3, 0), label="Wave Computation",
+                      name="WaveFrame")
+        position = Position(tree, location=(0, -1), name="GridPosition",
+                            hide=True, parent=frame)
+
+        n = len(self.sources)
+        aux = {}
+        aux["k"] = "%s,wavelength,/" % tau
+        aux["wt"] = "time,frequency,*,%s,*" % tau
+        aux["amp"] = "amplitude,pi,*,wavelength,sqrt,/"
+        for j in range(n):
+            # the grid is still flat where this is evaluated, so the distance
+            # in the plane is the distance in space
+            aux["r%d" % j] = "pos,c%d,sub,length" % j
+        for j in range(n):
+            # x = k r, held off the pole of Y0
+            aux["x%d" % j] = "r%d,%s,max,k,*" % (j, repr(self.source_radius))
+        for j in range(n):
+            # Re[H0(kr) exp(-i w t)], the outgoing wave
+            aux["w%d" % j] = ("amp,x{0},j0,wt,cos,*,"
+                              "x{0},y0,wt,sin,*,+,*".format(j))
+        aux["u"] = ",".join("w%d" % j for j in range(n)) + ",+" * (n - 1)
+
+        names = ["pos", "time", "frequency", "wavelength", "amplitude"] \
+                + ["c%d" % j for j in range(n)]
+        wave = make_function(tree, location=(2, 0), name="Elongation",
+                             functions={"elongation": "u"},
+                             aux_functions=aux,
+                             inputs=names, outputs=["elongation"],
+                             vectors=["pos"] + ["c%d" % j for j in range(n)],
+                             scalars=["time", "frequency", "wavelength",
+                                      "amplitude", "elongation"] + list(aux),
+                             custom_ops=BESSEL_OPS, parent=frame, hide=False)
+
+        tree.links.new(position.std_out, wave.inputs["pos"])
+        for key in ("time", "frequency", "wavelength", "amplitude"):
+            tree.links.new(control[key], wave.inputs[key])
+        for j, source in enumerate(control["sources"]):
+            tree.links.new(source, wave.inputs["c%d" % j])
+        return wave.outputs["elongation"]
+
+    # ------------------------------------------------------------------
+    def _geometry_frame(self, tree, elongation):
+        """Grid -> uv -> store -> lift -> paint.
+
+        The order is the argument. See the class docstring for why the store
+        comes before the lift and why the uv map has to be written out by
+        hand.
+
+        :return: the geometry socket for the group output.
+        """
+        frame = Frame(tree, location=(8, 0), label="Geometry",
+                      name="GeometryFrame")
+        grid = Grid(tree, location=(0, 0), size_x=self.size, size_y=self.size,
+                    vertices_x=self.resolution, vertices_y=self.resolution,
+                    name="Grid", parent=frame)
+
+        # the grid's uv is an anonymous field; named and put on the corner
+        # domain it becomes the uv layer the material samples
+        uv = StoreNamedAttribute(tree, location=(1, 0), data_type="FLOAT2",
+                                 domain="CORNER", name="UVMap",
+                                 value=grid.node.outputs["UV Map"],
+                                 parent=frame)
+        tree.links.new(grid.geometry_out, uv.geometry_in)
+
+        stored = StoreNamedAttribute(tree, location=(2, 0), data_type="FLOAT",
+                                     domain="POINT", name=self.attribute,
+                                     value=elongation, parent=frame)
+        tree.links.new(uv.geometry_out, stored.geometry_in)
+
+        # read back rather than reusing the socket: this is what makes the
+        # elongation the thing that moves the surface, and it costs one node
+        # against a second evaluation of every Bessel group
+        height = NamedAttribute(tree, location=(3, -2), data_type="FLOAT",
+                                name=self.attribute, parent=frame, hide=True)
+        offset = CombineXYZ(tree, location=(4, -2), z=height.std_out,
+                            name="Lift", parent=frame, hide=True)
+        lifted = SetPosition(tree, location=(5, 0),
+                             geometry=stored.geometry_out,
+                             offset=offset.std_out, name="Displace",
+                             parent=frame)
+        geometry = lifted.geometry_out
+
+        if self.shade_smooth:
+            smooth = SetShadeSmooth(tree, location=(6, 0), geometry=geometry,
+                                    name="Smooth", parent=frame)
+            geometry = smooth.geometry_out
+
+        if self.paint is not None:
+            painted = SetMaterial(tree, location=(7, 0), geometry=geometry,
+                                  material=self._texture(), name="Paint",
+                                  parent=frame)
+            self.material = painted.material
+            self.materials.append(painted.material)
+            geometry = painted.geometry_out
+        return geometry
+
+    # ------------------------------------------------------------------
+    def _texture(self):
+        """The material, with the tree's own parameters written into it.
+
+        ``interference_texture`` measures in uv, so the sources move into the
+        unit square and ``uv_scale`` carries the grid's size - after which its
+        ``wavelength`` and ``source_radius`` are lengths in blender units,
+        exactly as they are here. Anything else (a palette name, a finished
+        material) is handed to ``Set Material`` untouched.
+        """
+        if not isinstance(self.paint, str) or self.paint != "interference":
+            return self.paint
+        from appearance.textures import interference_texture
+        return interference_texture(
+            name=self.name + "Texture",
+            model="hankel",
+            sources=[(0.5 + source.x / self.size, 0.5 + source.y / self.size)
+                     for source in self.sources],
+            uv_scale=(self.size, self.size),
+            wavelength=self.wavelength, frequency=self.frequency,
+            amplitude=self.amplitude, source_radius=self.source_radius,
+            **self.kwargs)
+
+    # ------------------------------------------------------------------
+    def elongation_numpy(self, points, seconds=0.0):
+        """The same u, in numpy, at one instant - the tree's mirror.
+
+        The convention of this module: every field that goes into a tree also
+        goes into numpy, so the modifier can be checked against something
+        other than itself. ``scipy.special.j0``/``y0`` are the exact functions
+        here, so a comparison also measures what the polynomial approximation
+        costs (5e-8, i.e. nothing).
+
+        :param points: ``(n, 2)`` or ``(n, 3)`` array of positions; only x
+            and y are read.
+        :param seconds: the scene time the tree reads off the clock.
+        """
+        from scipy.special import j0, y0
+        points = np.asarray(points, dtype=float)[:, :2]
+        k = tau / self.wavelength
+        wt = seconds * self.frequency * tau
+        amp = self.amplitude * pi / np.sqrt(self.wavelength)
+        total = np.zeros(len(points))
+        for source in self.sources:
+            radius = np.linalg.norm(points - np.array([source.x, source.y]),
+                                    axis=1)
+            x = np.maximum(radius, self.source_radius) * k
+            total += amp * (j0(x) * np.cos(wt) + y0(x) * np.sin(wt))
+        return total
+
+
+# ---------------------------------------------------------------------------
+#  A DRUM
+# ---------------------------------------------------------------------------
+#
+#: Zeros :math:`\alpha_{mn}` of :math:`J_m` - ``scipy.special.jn_zeros(m, 4)``,
+#: to six decimals. A membrane clamped at r = a can only vibrate at radii that
+#: put a zero of the Bessel function on the rim, which is what makes this table
+#: the spectrum of a drum: the mode (m, n) has k = alpha_mn / a, and the
+#: frequencies are those numbers divided by alpha_01 - 1, 1.593, 2.136, 2.296,
+#: ... - a series that is not harmonic, which is why a drum has no pitch the
+#: way a string does.
+BESSEL_ZEROS = {0: (2.404826, 5.520078, 8.653728, 11.791534),
+                1: (3.831706, 7.015587, 10.173468, 13.323692),
+                2: (5.135622, 8.417244, 11.619841, 14.795952),
+                3: (6.380162, 9.761023, 13.015201, 16.223466),
+                4: (7.588342, 11.064709, 14.372537, 17.615966)}
+
+#: max |J_m|, which every mode of that order reaches at its first extremum.
+#: Dividing by it is what makes ``Amplitude`` mean the height of the crest for
+#: every mode rather than only for the fundamental - J_3 peaks at 0.43, so an
+#: un-normalised (3,1) would stand less than half as tall as (0,1) on the same
+#: dial and the switch would look like a fade.
+_BESSEL_PEAKS = {0: 1.0, 1: 0.581865, 2: 0.486499, 3: 0.434394, 4: 0.399652}
+
+
+class DrumModeModifier(GeometryNodesModifier):
+    r"""A clamped disc standing up as one normal mode of a drum.
+
+    :class:`WaveVisualizationModifier` is this modifier without a boundary: a
+    source radiates and the field runs off to infinity, so what it shows is
+    :math:`H^{(1)}_0`, an outgoing wave. Put a rim on it - clamp the membrane
+    at r = a, u(a, t) = 0 - and nothing runs off any more. The wave that comes
+    back interferes with the wave going out, only certain frequencies survive
+    it, and the solutions of
+
+    .. math::
+        \frac{\partial^2 u}{\partial t^2} = c^2\nabla^2 u ,
+        \qquad u\big|_{r=a} = 0
+
+    are standing waves, one for each pair of integers:
+
+    .. math::
+        u_{mn}(r, \varphi, t) = A\,J_m\!\Big(\alpha_{mn}\frac{r}{a}\Big)
+                                \cos m\varphi\,\cos\omega_{mn}t ,
+        \qquad \omega_{mn} = \frac{c\,\alpha_{mn}}{a},
+
+    with :math:`\alpha_{mn}` the n-th zero of :math:`J_m` (:data:`BESSEL_ZEROS`).
+    The boundary condition *is* that table: the rim can only be held still if a
+    zero of the Bessel function lands on it. So **m counts nodal diameters**
+    (the lines through the centre that never move, where :math:`\cos m\varphi`
+    vanishes) and **n counts nodal circles** (the rings, where :math:`J_m`
+    does), and the mode is completely described by saying how many of each.
+
+    Two things about this that the flat scenes cannot show, and this one is
+    built to:
+
+    The overtones are **not harmonic**. A string's modes go 1, 2, 3, ...; a
+    drum's go :math:`\alpha_{mn}/\alpha_{01}` = 1, 1.593, 2.136, 2.296, 2.653,
+    ... The ``Frequency`` dial is the *fundamental*'s, and every mode takes its
+    own multiple of it from the table, so switching modes while the surface
+    moves also changes the pitch - inaudibly, but visibly, since the (2,1) mode
+    beats more than twice as fast as (0,1).
+
+    And a mode with :math:`m>0` has **no motion at the centre**:
+    :math:`J_m(0)=0` for every m but zero. The fundamental is a single hill
+    rising and falling; (1,1) is a see-saw about a diameter; (2,1) is a
+    quadrupole. That is the picture the switch is for.
+
+    **The switch.** Every mode in ``modes`` is built into the tree as a
+    function group of its own, and an ``Index Switch`` on the ``Mode`` dial
+    picks which one reaches the geometry::
+
+        drum = DrumModeModifier(name="Drum", modes=((0, 1), (1, 1), (2, 1)))
+        drum.set_mode((1, 1), begin_time=6)      # or set_mode(1, ...)
+
+    An integer switch is a hard cut, which is what makes it read as *this mode
+    now, that mode next* rather than as a morph; the price is that all of the
+    modes are evaluated per vertex and only one of them is used, since a field
+    has no branches. Six modes on a 100 x 180 mesh is what the default costs,
+    and it is the number to bring down first if the viewport goes sticky.
+
+    The tree is four frames, one method each:
+
+    :meth:`_control_frame`
+        the dials and the clock - ``Radius``, ``Amplitude``, ``Frequency``,
+        ``Mode``, and ``Scene Time -> Seconds``, which is why the drum moves
+        without a keyframe.
+    :meth:`_membrane_frame`
+        the disc. A ``Grid`` of ``radial`` x ``angular`` vertices is *not* a
+        disc but a square parameter domain, and one ``Set Position`` bends it
+        into one: :math:`(s, \varphi) \mapsto (a s\cos\varphi, a s\sin\varphi)`.
+        A polar mesh rather than a square grid with its corners deleted,
+        because the rim then really is the rim - a clamped edge cut out of a
+        square mesh is a staircase, and the silhouette is the one place a drum
+        is read. ``Merge by Distance`` welds the seam at
+        :math:`\varphi = 0 \equiv 2\pi` and collapses the ``angular``
+        coincident vertices at the centre into one.
+    :meth:`_mode_frame`
+        the arithmetic: one :func:`~geometry_nodes.nodes.make_function` group
+        per mode, each computing its own u from ``Position``, and the switch.
+        :math:`J_m` comes from :func:`~geometry_nodes.nodes.bessel_jm_rpn` -
+        the ``j0``/``j1`` groups and the upward recurrence - so the tree says
+        ``x,j0`` and ``2,x,/,j1,*,j0,-`` rather than carrying a table.
+    :meth:`_geometry_frame`
+        store, read back, lift, smooth, paint. The elongation is stored
+        **before** the lift and read back through a ``Named Attribute`` for the
+        same reason as in :class:`WaveVisualizationModifier`: a field is
+        evaluated on the geometry the node receives, so an attribute stored
+        after the lift would measure r on the *lifted* surface, where it is
+        no longer the r the formula means.
+
+    The dials, reachable with
+    ``ibpy.get_geometry_node_from_modifier(modifier, label)``:
+
+    ``Radius``
+        a, the radius of the clamped rim. It is in the geometry *and* in the
+        wave (through :math:`\alpha_{mn}r/a`), so ramping it grows the drum
+        with its mode pattern intact rather than sliding the pattern across it.
+    ``Amplitude``
+        the height of the crest, for every mode (see ``normalize``).
+    ``Frequency``
+        the fundamental's frequency in cycles per second of scene time; each
+        mode runs at its own multiple of it.
+    ``Mode``
+        which entry of ``modes`` is showing. An integer; :meth:`set_mode`
+        keyframes it.
+
+    :param name: name of the node group, and of the modifier in the stack.
+    :param radius: a, in blender units.
+    :param radial: vertices along the radius. Ten per radial oscillation is
+        smooth; the (1,2) mode needs :math:`\alpha_{12}/\pi \approx 2.2` of
+        them across, so 100 is generous and 40 already holds up.
+    :param angular: vertices around. A mode with m nodal diameters has 2m
+        sectors, so this only has to beat the *silhouette*, which is why it is
+        the larger of the two.
+    :param modes: the modes to build, as ``(m, n)`` pairs - m nodal diameters,
+        n the index of the zero (n = 1 is no interior nodal circle). m is
+        limited to 4 by :data:`BESSEL_ZEROS`, and the recurrence behind
+        :math:`J_4` is the shakiest thing in the tree (see
+        :func:`~geometry_nodes.nodes.bessel_jm_rpn`).
+    :param mode: index into ``modes`` the drum starts on.
+    :param amplitude: A, in blender units.
+    :param frequency: the fundamental's frequency, in cycles per second.
+    :param normalize: divide each mode by its own :math:`\max|J_m|`, so that
+        ``Amplitude`` is the crest height whichever mode is showing. ``False``
+        leaves the Bessel functions as they are, which is the honest relative
+        amplitude of a membrane that was struck once.
+    :param attribute: name of the float attribute the elongation is stored
+        under. It displaces the surface and the material reads it back.
+    :param material: ``"elongation"`` (the default) builds a divergent colour
+        ramp on that attribute through
+        :func:`~appearance.textures.gradient_from_attribute`, so crest and
+        trough take opposite colours and the nodal lines are the colour in
+        between - the whole point of a mode, drawn on the surface that has it.
+        A palette name or a ``bpy.types.Material`` is set as it stands;
+        ``None`` leaves the disc unpainted.
+    :param colors: the three palette colours of that ramp, trough to crest.
+    :param shade_smooth: smooth-shade the result.
+    :param kwargs: passed on to the material (``emission``, ...) and to
+        :class:`~geometry_nodes.geometry_nodes_modifier.GeometryNodesModifier`.
+    """
+
+    def __init__(self, name="DrumMode", radius=3.0, radial=100, angular=180,
+                 modes=((0, 1), (1, 1), (2, 1), (0, 2), (3, 1), (1, 2)),
+                 mode=0, amplitude=0.5, frequency=0.4, normalize=True,
+                 attribute="elongation", material="elongation",
+                 colors=("blue", "background", "important"),
+                 shade_smooth=True, **kwargs):
+        self.name = name
+        self.radius = radius
+        self.radial = radial
+        self.angular = angular
+        self.modes = [tuple(entry) for entry in modes]
+        if not self.modes:
+            raise ValueError("a drum needs at least one mode")
+        for m, n in self.modes:
+            if m not in BESSEL_ZEROS or not 1 <= n <= len(BESSEL_ZEROS[m]):
+                raise ValueError("no zero alpha_%s%s in BESSEL_ZEROS - m is "
+                                 "0..4 and n is 1..4" % (m, n))
+        self.mode = self.mode_index(mode)
+        # what the Mode dial is currently keyframed to; set_mode needs it to
+        # write the keyframe that holds the previous mode until the cut
+        self.current_mode = self.mode
+        self.amplitude = amplitude
+        self.frequency = frequency
+        self.normalize = normalize
+        self.attribute = attribute
+        self.paint = material
+        self.colors = colors
+        self.shade_smooth = shade_smooth
+        self.kwargs = kwargs
+        # filled in by _geometry_frame
+        self.material = None
+        super().__init__(name=name, automatic_layout=False, **kwargs)
+
+    # ------------------------------------------------------------------
+    def mode_index(self, mode):
+        """The index into ``modes`` of ``mode``, given as index or ``(m, n)``."""
+        if isinstance(mode, (tuple, list)):
+            mode = tuple(mode)
+            if mode not in self.modes:
+                raise ValueError("mode %s is not one of the modes this drum "
+                                 "was built with, %s" % (mode, self.modes))
+            return self.modes.index(mode)
+        if not 0 <= mode < len(self.modes):
+            raise ValueError("mode index %r is outside 0..%d"
+                             % (mode, len(self.modes) - 1))
+        return int(mode)
+
+    def frequency_ratio(self, mode):
+        """omega_mn / omega_01, the mode's frequency in units of the fundamental."""
+        m, n = self.modes[self.mode_index(mode)]
+        return BESSEL_ZEROS[m][n - 1] / BESSEL_ZEROS[0][0]
+
+    # ------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._control_frame(tree)
+        membrane = self._membrane_frame(tree, control)
+        elongation = self._mode_frame(tree, control)
+        geometry = self._geometry_frame(tree, membrane, elongation)
+        tree.links.new(geometry, self.group_outputs.inputs["Geometry"])
+
+    # ------------------------------------------------------------------
+    def _control_frame(self, tree):
+        """The dials and the clock.
+
+        ``Mode`` is an ``Integer`` node rather than a ``Value`` one because an
+        ``Index Switch`` wants an integer and because that is what it is: there
+        is no mode between (1,1) and (2,1) to interpolate through.
+
+        Nothing here is named so that another node's name contains it -
+        ``ibpy.get_geometry_node_from_modifier`` matches by substring, so a
+        frame called "Modes" or a function group called "Mode_1_1" would answer
+        to ``"Mode"`` before the dial did.
+
+        :return: dict of the sockets the rest of the tree consumes.
+        """
+        frame = Frame(tree, location=(0, 2), label="Control",
+                      name="ControlFrame")
+        clock = SceneTime(tree, location=(0, 1), std_out="Seconds",
+                          name="Clock", parent=frame)
+        radius = InputValue(tree, location=(0, 0), value=self.radius,
+                            name="Radius", parent=frame)
+        amplitude = InputValue(tree, location=(0, -1), value=self.amplitude,
+                               name="Amplitude", parent=frame)
+        frequency = InputValue(tree, location=(0, -2), value=self.frequency,
+                               name="Frequency", parent=frame)
+        selector = InputInteger(tree, location=(0, -3), integer=self.mode,
+                                name="Mode", parent=frame)
+        return {"time": clock.std_out,
+                "radius": radius.std_out,
+                "amplitude": amplitude.std_out,
+                "frequency": frequency.std_out,
+                "mode": selector.std_out}
+
+    # ------------------------------------------------------------------
+    def _membrane_frame(self, tree, control):
+        r"""The disc, bent out of a square grid.
+
+        The grid runs -0.5..0.5 in both directions, which the map reads as
+        :math:`s = x + \tfrac12 \in [0,1]` along the radius and
+        :math:`\varphi = (y + \tfrac12)\,2\pi` around. ``Set Position`` in its
+        *absolute* mode, not the offset one: the grid's coordinates are a
+        parameter domain and nothing about them is a position yet.
+
+        What comes out has two seams, and ``Merge by Distance`` closes both -
+        the join at :math:`\varphi = 2\pi`, where the grid's two opposite edges
+        land on each other, and the centre, where a whole row of vertices sits
+        at r = 0. The tolerance is 1e-4 against a spacing of a/radial, so it
+        welds what is coincident and nothing that is merely close.
+
+        :return: the geometry socket carrying the flat disc.
+        """
+        frame = Frame(tree, location=(0, -2), label="Membrane",
+                      name="MembraneFrame")
+        grid = Grid(tree, location=(0, 0), size_x=1, size_y=1,
+                    vertices_x=self.radial, vertices_y=self.angular,
+                    name="ParameterGrid", parent=frame)
+        position = Position(tree, location=(0, -2), name="GridPosition",
+                            hide=True, parent=frame)
+        polar = make_function(tree, location=(1, -2), name="Polar",
+                              aux_functions={
+                                  "s": "pos_x,0.5,+,radius,*",
+                                  "phi": "pos_y,0.5,+,%s,*" % repr(tau)},
+                              functions={"disc": ["phi,cos,s,*",
+                                                  "phi,sin,s,*",
+                                                  "0"]},
+                              inputs=["pos", "radius"], outputs=["disc"],
+                              vectors=["pos", "disc"],
+                              scalars=["radius", "s", "phi"],
+                              parent=frame, hide=True)
+        tree.links.new(position.std_out, polar.inputs["pos"])
+        tree.links.new(control["radius"], polar.inputs["radius"])
+
+        disc = SetPosition(tree, location=(2, 0), geometry=grid.geometry_out,
+                           position=polar.outputs["disc"], name="BendIntoDisc",
+                           parent=frame)
+        welded = MergeByDistance(tree, location=(3, 0),
+                                 geometry=disc.geometry_out, distance=1e-4,
+                                 name="CloseTheSeam", parent=frame)
+        return welded.geometry_out
+
+    # ------------------------------------------------------------------
+    def _mode_frame(self, tree, control):
+        r"""One function group per mode, and the switch that picks one.
+
+        Each group is the whole of :math:`u_{mn}` for its own mode: the radius
+        and azimuth of the vertex it is evaluated on, the Bessel function of
+        the order that mode wants, the angular factor, and the clock. Nothing
+        is shared between them because nothing can be - a different m is a
+        different chain of Bessel groups - which is exactly what makes them
+        switchable rather than dialable.
+
+        The ``m = 0`` modes skip the angular factor rather than multiplying by
+        :math:`\cos 0 = 1`, so the fundamental costs an ``atan2`` less.
+
+        :return: the socket carrying the elongation of the selected mode.
+        """
+        frame = Frame(tree, location=(4, 0), label="Drum modes",
+                      name="Solutions")
+        position = Position(tree, location=(0, 0), name="DiscPosition",
+                            hide=True, parent=frame)
+
+        sockets = []
+        for i, (m, n) in enumerate(self.modes):
+            alpha = BESSEL_ZEROS[m][n - 1]
+            ratio = alpha / BESSEL_ZEROS[0][0]
+            peak = _BESSEL_PEAKS[m] if self.normalize else 1.0
+
+            aux = {}
+            # the disc is still flat here, so the distance in the plane is the
+            # distance in space
+            aux["r"] = "pos,length"
+            aux["x"] = "r,radius,/,%s,*" % repr(alpha)
+            bessel, jm = bessel_jm_rpn("x", m, prefix="b")
+            aux.update(bessel)
+            aux["wt"] = "time,frequency,*,%s,*" % repr(tau * ratio)
+            elongation = "amplitude,%s,/,%s,*,wt,cos,*" % (repr(peak), jm)
+            if m:
+                aux["ang"] = "pos_y,pos_x,atan2,%s,*,cos" % repr(float(m))
+                elongation += ",ang,*"
+            aux["u"] = elongation
+
+            group = make_function(
+                tree, location=(1, -i), name="Wave_%d_%d" % (m, n),
+                functions={"elongation": "u"}, aux_functions=aux,
+                inputs=["pos", "time", "frequency", "radius", "amplitude"],
+                outputs=["elongation"], vectors=["pos"],
+                scalars=["time", "frequency", "radius", "amplitude",
+                         "elongation"] + list(aux),
+                custom_ops=BESSEL_OPS, parent=frame, hide=True)
+            tree.links.new(position.std_out, group.inputs["pos"])
+            for key in ("time", "frequency", "radius", "amplitude"):
+                tree.links.new(control[key], group.inputs[key])
+            sockets.append(group.outputs["elongation"])
+
+        if len(sockets) == 1:
+            return sockets[0]
+
+        switch = IndexSwitch(tree, location=(3, 0), data_type="FLOAT",
+                             index=control["mode"], name="ModeSwitch",
+                             parent=frame)
+        for socket in sockets:
+            switch.add_item(socket)
+        return switch.std_out
+
+    # ------------------------------------------------------------------
+    def _geometry_frame(self, tree, membrane, elongation):
+        """Store -> read back -> lift -> smooth -> paint.
+
+        :return: the geometry socket for the group output.
+        """
+        frame = Frame(tree, location=(8, 0), label="Geometry",
+                      name="GeometryFrame")
+        stored = StoreNamedAttribute(tree, location=(0, 0), data_type="FLOAT",
+                                     domain="POINT", name=self.attribute,
+                                     value=elongation, parent=frame)
+        tree.links.new(membrane, stored.geometry_in)
+
+        height = NamedAttribute(tree, location=(1, -2), data_type="FLOAT",
+                                name=self.attribute, parent=frame, hide=True)
+        offset = CombineXYZ(tree, location=(2, -2), z=height.std_out,
+                            name="Lift", parent=frame, hide=True)
+        lifted = SetPosition(tree, location=(3, 0),
+                             geometry=stored.geometry_out,
+                             offset=offset.std_out, name="Displace",
+                             parent=frame)
+        geometry = lifted.geometry_out
+
+        if self.shade_smooth:
+            smooth = SetShadeSmooth(tree, location=(4, 0), geometry=geometry,
+                                    name="Smooth", parent=frame)
+            geometry = smooth.geometry_out
+
+        if self.paint is not None:
+            painted = SetMaterial(tree, location=(5, 0), geometry=geometry,
+                                  material=self._texture(), name="Paint",
+                                  parent=frame)
+            self.material = painted.material
+            self.materials.append(painted.material)
+            geometry = painted.geometry_out
+        return geometry
+
+    # ------------------------------------------------------------------
+    def _texture(self):
+        """The material: the elongation as a colour, zero in the middle.
+
+        The ramp is fed ``u/(2A) + 0.5``, so it runs from trough at 0 through
+        the nodal value at 0.5 to crest at 1 - which puts the nodal diameters
+        and circles on the surface as the one colour that does not move.
+        """
+        if not isinstance(self.paint, str) or self.paint != "elongation":
+            return self.paint
+        from appearance.textures import gradient_from_attribute
+        from utils.constants import COLOR_NAMES, COLORS_SCALED
+        rgba = [COLORS_SCALED[COLOR_NAMES.index(color)] for color in self.colors]
+        return gradient_from_attribute(
+            name=self.name + "Texture", attr_name=self.attribute,
+            function="fac,%s,/,0.5,+" % repr(2 * self.amplitude),
+            gradient={0: rgba[0], 0.5: rgba[1], 1: rgba[2]},
+            **self.kwargs)
+
+    # ------------------------------------------------------------------
+    def set_mode(self, mode, begin_time=0):
+        """Cut to another mode, as an index or as an ``(m, n)`` pair.
+
+        Two keyframes one frame apart - the mode it was showing, then the new
+        one - so that everything before ``begin_time`` keeps the old mode
+        however many times this is called.
+
+        :return: ``begin_time``, so it chains like the other timings.
+        """
+        from interface import ibpy
+        index = self.mode_index(mode)
+        dial = ibpy.get_geometry_node_from_modifier(self, "Mode")
+        if dial is None:
+            raise KeyError("no Mode dial in %s" % self.tree.name)
+        ibpy.change_default_integer(dial, from_value=self.current_mode,
+                                    to_value=index, begin_time=begin_time,
+                                    transition_time=0)
+        self.current_mode = index
+        return begin_time
+
+    # ------------------------------------------------------------------
+    def elongation_numpy(self, points, seconds=0.0, mode=None):
+        """The same u, in numpy - the tree's mirror.
+
+        ``scipy.special.jv`` is the exact Bessel function here, so comparing
+        the two also measures what the polynomial approximation and the
+        recurrence behind :math:`J_m` cost.
+
+        :param points: ``(n, 2)`` or ``(n, 3)`` array of positions on the flat
+            disc; only x and y are read.
+        :param seconds: the scene time the tree reads off the clock.
+        :param mode: which mode, as an index or an ``(m, n)`` pair. Defaults to
+            the one the tree was built showing.
+        """
+        from scipy.special import jv
+        points = np.asarray(points, dtype=float)[:, :2]
+        m, n = self.modes[self.mode if mode is None else self.mode_index(mode)]
+        alpha = BESSEL_ZEROS[m][n - 1]
+        peak = _BESSEL_PEAKS[m] if self.normalize else 1.0
+        radius = np.linalg.norm(points, axis=1)
+        # the same clamp bessel_jm_rpn applies before it divides by x
+        x = np.maximum(alpha * radius / self.radius, 0.01)
+        wt = tau * self.frequency * alpha / BESSEL_ZEROS[0][0] * seconds
+        angle = np.cos(m * np.arctan2(points[:, 1], points[:, 0])) if m else 1.0
+        return self.amplitude / peak * jv(m, x) * angle * np.cos(wt)

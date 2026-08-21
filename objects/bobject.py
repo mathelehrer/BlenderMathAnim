@@ -905,7 +905,7 @@ class BObject(object):
         """
 
         if not self.appeared:
-            self.appear(alpha=alpha, begin_time=0, transition_time=0,chidren=children)
+            self.appear(alpha=alpha, begin_time=0, transition_time=0,children=children)
         if pivot:
             ibpy.set_pivot(self, pivot)
         if scale is None:

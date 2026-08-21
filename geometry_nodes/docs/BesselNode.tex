@@ -1,0 +1,344 @@
+% =====================================================================
+%  The polynomial approximations behind BesselNode
+%  Build:  pdflatex BesselNode.tex   (run twice for the ToC)
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!55!black,
+    urlcolor=blue!55!black,
+    citecolor=blue!55!black,
+    pdftitle={The approximations behind BesselNode},
+    pdfauthor={BlenderMathAnim}
+}
+
+\newcommand{\node}[1]{\texttt{#1}}
+\newcommand{\bigO}{\mathcal{O}}
+
+\title{Bessel Functions of Order Zero in a Shader\\
+       \large The Abramowitz--Stegun approximations used by \node{BesselNode}}
+\author{BlenderMathAnim --- \node{geometry\_nodes/nodes.py}}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\bigskip
+
+% =====================================================================
+\section{Why an approximation at all}
+% =====================================================================
+
+Blender's \node{Math} node offers the elementary operations and nothing
+else, and $J_0$ is not elementary: it cannot be assembled from
+$\sin$, $\cos$, $\exp$, $\log$ and the arithmetic operations in any finite
+number of steps. A shader that wants the field of a two-dimensional point
+source therefore has three options --- a lookup texture, a truncated series,
+or a uniform approximation. The library uses the third, in the classical form
+tabulated by Abramowitz \& Stegun, \S9.4.1--9.4.3.\footnote{M.~Abramowitz and
+I.~A.~Stegun, \emph{Handbook of Mathematical Functions}, Dover 1964,
+\S9.4, pp.~369--370. The coefficients there are due to E.~E.~Allen (1954/1956).}
+
+The functions in question are the two cylinder functions of order zero. They
+stand to a circular wave as $\cos$ and $\sin$ stand to a wave in one spatial dimension:
+%
+\begin{equation}
+  u(r,t) \;=\; \operatorname{Re}\!\left[H^{(1)}_0(kr)\,e^{-i\omega t}\right]
+        \;=\; J_0(kr)\cos\omega t \;+\; Y_0(kr)\sin\omega t ,
+  \label{eq:wave}
+\end{equation}
+%
+and the familiar $\sin(kr-\omega t)/\sqrt{r}$ is only what
+\eqref{eq:wave} becomes far from the source. Near it the two disagree
+completely: the elementary form diverges as $r^{-1/2}$ and puts its
+wavefronts in the wrong places, whereas the true field diverges only
+logarithmically.
+
+The decisive property is the behaviour as $x\to\infty$. The large-argument
+branch below is written in \emph{modulus and phase} form, so what the
+polynomials approximate is the slowly varying envelope and the phase
+\emph{correction}, not the oscillation itself. It is therefore accurate at
+every $x$, however large. A lookup table cannot do that: it would have to be
+resampled whenever the wavelength or the extent of the surface changed, and it
+would have to store the oscillation.
+
+% =====================================================================
+\section{Small argument: $0 < x \le 3$}
+% =====================================================================
+
+Both branches are polynomials in
+%
+\begin{equation}
+  t \;=\; \frac{x}{3}, \qquad 0 < t \le 1 ,
+\end{equation}
+%
+and, because $J_0$ is even and $Y_0-\tfrac{2}{\pi}\ln(x/2)J_0$ is even, only
+even powers of $t$ occur. Written traditionally:
+
+\subsection*{$J_0$, A\&S 9.4.1}
+
+\begin{equation}
+\begin{aligned}
+  J_0(x) \;=\;
+      &\;\;\;1
+      \;-\; 2.2499997\,t^{2}
+      \;+\; 1.2656208\,t^{4}
+      \;-\; 0.3163866\,t^{6}\\
+      &\;+\; 0.0444479\,t^{8}
+      \;-\; 0.0039444\,t^{10}
+      \;+\; 0.0002100\,t^{12}
+      \;+\; \varepsilon ,
+\end{aligned}
+\label{eq:j0small}
+\end{equation}
+%
+with $|\varepsilon| < 5\cdot10^{-8}$. The stated range in the Handbook is
+$-3\le x\le 3$; the code only ever evaluates it for $x>0$.
+
+\subsection*{$Y_0$, A\&S 9.4.2}
+
+$Y_0$ is logarithmically singular at the origin, and the singularity is not
+polynomial. It is split off explicitly, multiplied by $J_0$ --- which is what
+makes $Y_0$ the outgoing half of the wave --- and what remains is again an
+even polynomial in $t$:
+%
+\begin{equation}
+\begin{aligned}
+  Y_0(x) \;=\; \frac{2}{\pi}\ln\!\left(\frac{x}{2}\right) J_0(x)
+      \;+\;&\; \frac{2\gamma}{\pi}
+      \;+\; 0.60559366\,t^{2}
+      \;-\; 0.74350384\,t^{4}\\
+      &\;+\; 0.25300117\,t^{6}
+      \;-\; 0.04261214\,t^{8}
+      \;+\; 0.00427916\,t^{10}\\
+      &\;-\; 0.00024846\,t^{12}
+      \;+\; \varepsilon ,
+\end{aligned}
+\label{eq:y0small}
+\end{equation}
+%
+with $|\varepsilon| < 1.4\cdot10^{-8}$, valid for $0 < x \le 3$. The constant
+term is exact as well: the Handbook's $0.36746691$ is $2\gamma/\pi =
+0.367466905\ldots$, with $\gamma$ Euler's constant --- as it must be, since
+$Y_0(x) \to \tfrac{2}{\pi}\big[\ln(x/2)+\gamma\big]$ as $x\to0$ and the
+logarithm has already been taken out in front. Note that the $J_0$ appearing
+in \eqref{eq:y0small} is the \emph{same} polynomial \eqref{eq:j0small}: the two
+small-argument branches share it.
+
+The remaining coefficients have no closed form. They are close to the Taylor
+coefficients --- $-2.2499997$ against $-\tfrac{9}{4}$, $1.2656208$ against
+$\big(\tfrac{9}{4}\big)^{2}\!/4 = 1.265625$ --- but deliberately not equal to
+them: they are a fit over the whole interval $0<t\le1$, which buys a uniform
+$5\cdot10^{-8}$ from six terms where the truncated Taylor series, exact at the
+origin, would be off by $4\cdot10^{-5}$ at $t=1$. The departure grows with the
+order, reaching $4\cdot10^{-5}$ in the $t^{12}$ coefficient, so these must be
+transcribed as printed and not ``corrected'' towards the series.
+
+% =====================================================================
+\section{Large argument: $3 \le x < \infty$}
+% =====================================================================
+
+Here the variable is reciprocal,
+%
+\begin{equation}
+  t \;=\; \frac{3}{x}, \qquad 0 < t \le 1 ,
+\end{equation}
+%
+and the two functions are written as one amplitude $f_0$ and one phase
+$\theta_0$, in the form (A\&S 9.4.3)
+%
+\begin{equation}
+  J_0(x) \;=\; x^{-1/2} f_0(x)\,\cos\theta_0(x),
+  \qquad
+  Y_0(x) \;=\; x^{-1/2} f_0(x)\,\sin\theta_0(x).
+  \label{eq:modphase}
+\end{equation}
+%
+This is the whole point of the construction: the trigonometric function
+carries the oscillation exactly, and only the envelope and the phase shift are
+approximated. The polynomials are
+
+\begin{equation}
+\begin{aligned}
+  f_0 \;=\;
+      &\;\;\; \sqrt{\frac{2}{\pi}}
+      \;-\; 0.00000077\,t
+      \;-\; 0.00552740\,t^{2}
+      \;-\; 0.00009512\,t^{3}\\
+      &\;+\; 0.00137237\,t^{4}
+      \;-\; 0.00072805\,t^{5}
+      \;+\; 0.00014476\,t^{6}
+      \;+\; \varepsilon ,
+\end{aligned}
+\label{eq:f0}
+\end{equation}
+%
+with $|\varepsilon| < 1.6\cdot10^{-8}$, and
+
+\begin{equation}
+\begin{aligned}
+  \theta_0 \;=\; x
+      &\;-\; \frac{\pi}{4}
+      \;-\; 0.04166397\,t
+      \;-\; 0.00003954\,t^{2}
+      \;+\; 0.00262573\,t^{3}\\
+      &\;-\; 0.00054125\,t^{4}
+      \;-\; 0.00029333\,t^{5}
+      \;+\; 0.00013558\,t^{6}
+      \;+\; \varepsilon ,
+\end{aligned}
+\label{eq:theta0}
+\end{equation}
+%
+with $|\varepsilon| < 7\cdot10^{-8}$ (an absolute error \emph{in the phase},
+in radians).
+
+The two leading constants are not fitted at all --- they are the asymptotics
+themselves, and are written above in closed form. The Handbook prints them as
+the decimals $0.79788456$ and $0.78539816$, which are exactly
+$\sqrt{2/\pi} = 0.797884560803\ldots$ and $\pi/4 = 0.785398163397\ldots$
+rounded to the eight digits carried throughout.\footnote{\node{nodes.py} keeps
+the rounded decimals, \node{\_BESSEL\_F0[0]} and \node{\_QUARTER\_PI}; the
+substitution is immaterial at the precision in play, and changes the measured
+errors of \S5 by less than $5\cdot10^{-9}$.} With them in place,
+\eqref{eq:modphase} reduces to the textbook
+%
+\begin{equation}
+  J_0(x) \;\sim\; \sqrt{\frac{2}{\pi x}}\,\cos\!\left(x-\frac{\pi}{4}\right),
+  \qquad
+  Y_0(x) \;\sim\; \sqrt{\frac{2}{\pi x}}\,\sin\!\left(x-\frac{\pi}{4}\right),
+  \qquad x\to\infty,
+\end{equation}
+%
+with the polynomials in $t=3/x$ supplying the correction. The approximation
+\emph{is} the far-field wave plus a correction, which is why it does not
+degrade with distance.
+
+% =====================================================================
+\section{How the two branches are joined}
+% =====================================================================
+
+A shader has no branches: both sides of \eqref{eq:j0small}/\eqref{eq:y0small}
+and \eqref{eq:modphase} are evaluated for every $x$, and one of them is then
+selected by an arithmetic mask. With
+%
+\begin{equation}
+  s \;=\; [\,x < 3\,] \;\in\; \{0,1\},
+\end{equation}
+%
+the result is $s\,\cdot\,(\text{small branch}) + (1-s)\,\cdot\,(\text{large
+branch})$. Because the discarded branch is computed anyway, each side clamps
+its own argument before use:
+%
+\begin{equation}
+  x_{\text{small}} \;=\; \min(x,3),
+  \qquad
+  x_{\text{large}} \;=\; \max(x,3).
+\end{equation}
+%
+Without the clamp the large-$x$ branch would form $3/x$ at small $x$ and
+multiply an infinity by the zero mask, producing \texttt{NaN} rather than
+nothing --- $0\cdot\infty$ is not $0$ in IEEE~754.
+
+Two further remarks on the translation into RPN:
+
+\begin{itemize}[leftmargin=1.4em]
+\item The polynomials are evaluated by Horner's rule
+      (\node{horner\_rpn}). Beyond costing no \node{POWER} nodes --- one
+      multiply and one add per term --- it is the better-conditioned order.
+\item The phase \eqref{eq:theta0} is arranged as
+      $\theta_0 = x - \pi/4 + t\,\big(a_1 + t(a_2 + \cdots)\big)$: the leading
+      factor $t$ is pulled out so that Horner runs over $a_1\ldots a_6$ and
+      the bracket is multiplied by $t$ once.
+\item The RPN vocabulary provides only the base-$10$ logarithm, so the
+      $\tfrac{2}{\pi}\ln(x/2)$ of \eqref{eq:y0small} is evaluated as
+      $\tfrac{2}{\pi}\ln(10)\cdot\log_{10}(x/2)$, the change of base being
+      folded into the constant that stands in front of it anyway.
+\item $Y_0(x)\to-\infty$ as $x\to0$. The caller is responsible for holding
+      $x$ off the origin (a \node{max}), which physically means a source of
+      finite radius rather than a point.
+\end{itemize}
+
+% =====================================================================
+\section{Accuracy actually achieved}
+% =====================================================================
+
+Evaluated in double precision against \node{scipy.special} on
+$4\cdot10^{6}$ points of $(0,400]$:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+                    & $\max|\Delta J_0|$ & $\max|\Delta Y_0|$ \\
+\midrule
+$0 < x < 3$         & $4.9\cdot10^{-8}$  & $2.4\cdot10^{-8}$ \\
+$3 \le x \le 400$   & $1.2\cdot10^{-8}$  & $9.1\cdot10^{-9}$ \\
+\midrule
+overall             & $4.9\cdot10^{-8}$  & $2.4\cdot10^{-8}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Both figures sit below $1.2\cdot10^{-7}$, the resolution of the
+\texttt{float32} the shader evaluates in. As far as Blender is concerned the
+approximation is exact; the error that survives evaluation is the rounding of
+$x$ itself, not the approximation of $J_0$. The error does not grow with $x$
+--- the large-argument entries above would read the same on $(400,4000]$ ---
+because $t=3/x$ shrinks and the oscillation is carried by the exact
+$\cos$/$\sin$.
+
+% =====================================================================
+\section{Where this lives in the code}
+% =====================================================================
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Formula} & \textbf{Name in \node{nodes.py}} \\
+\midrule
+\eqref{eq:j0small} coefficients              & \node{\_J0\_SMALL} \\
+\eqref{eq:y0small} coefficients, $2\gamma/\pi$ first & \node{\_Y0\_SMALL} \\
+\eqref{eq:f0} coefficients, $\sqrt{2/\pi}$ first & \node{\_BESSEL\_F0} \\
+\eqref{eq:theta0} coefficients $a_1\ldots a_6$ & \node{\_BESSEL\_TH} \\
+$\pi/4$                                      & \node{\_QUARTER\_PI} \\
+$\tfrac{2}{\pi}\ln 10$                       & \node{\_TWO\_OVER\_PI\_LN10} \\
+\midrule
+Horner evaluation                            & \node{horner\_rpn()} \\
+the RPN for both functions                   & \node{bessel\_j0\_y0\_rpn()} \\
+the cached node group                        & \node{bessel\_node\_group()} \\
+the group node                               & \node{BesselNode} \\
+the postfix operators \node{j0}, \node{y0}   & \node{BESSEL\_OPS} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+In a formula the functions appear as ordinary unary postfix operators, so the
+circular wave \eqref{eq:wave} of amplitude \node{amp} reads
+
+\begin{center}
+\node{"amp,x,j0,wt,cos,*,x,y0,wt,sin,*,+,*"}
+\end{center}
+
+\noindent
+provided \node{BESSEL\_OPS} is passed as \node{custom\_ops}. Each operator
+instances a shared, fake-user group, so every source in a scene uses one copy
+of the approximation. Calling \node{bessel\_j0\_y0\_rpn()} directly inlines
+the arithmetic instead, which is cheaper when both functions are wanted for
+the same argument, because then the shared polynomials
+--- \eqref{eq:j0small}, \eqref{eq:f0}, \eqref{eq:theta0} --- are evaluated
+once rather than once per group: 88 math nodes inlined against
+$63+81=144$ through the two groups.
+
+\end{document}

@@ -1,7 +1,7 @@
 from appearance.textures import glow_at_appearance
 from geometry_nodes.geometry_nodes_modifier import GeometryNodesModifier
 from geometry_nodes.nodes import MeshLine, JoinGeometry, create_geometry_line, InstanceOnPoints, IcoSphere, Index, \
-    SceneTime, InputValue, DeleteGeometry, make_function, SetMaterial, StoredNamedAttribute
+    SceneTime, InputValue, DeleteGeometry, make_function, SetMaterial, StoreNamedAttribute
 from interface import ibpy
 from interface.ibpy import create_mesh, get_color
 from objects.bobject import BObject
@@ -88,7 +88,7 @@ class PointCloudModifier(GeometryNodesModifier):
         links.new(time.outputs["Frame"],selector.inputs["frame"])
         links.new(index.std_out,selector.inputs["index"])
 
-        glow_attr = StoredNamedAttribute(tree,data_type="FLOAT",name="Glow",domain="INSTANCE",value=selector.outputs["glow"])
+        glow_attr = StoreNamedAttribute(tree, data_type="FLOAT", name="Glow", domain="INSTANCE", value=selector.outputs["glow"])
         color = glow_at_appearance(**self.kwargs)
         set_mat = SetMaterial(tree,material=color)
 
