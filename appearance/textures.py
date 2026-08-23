@@ -1887,8 +1887,8 @@ def function_texture(name="Function", **kwargs):
     attribute = get_from_kwargs(kwargs, "attribute", "result")
     scale_attribute = get_from_kwargs(kwargs, "scale_attribute", "amplitude")
     gradient = get_from_kwargs(kwargs, "gradient",
-                               {0: [1, 0, 0.0091, 1], 0.5: [0, 0, 0, 1],
-                                1: [0.023, 1, 0, 1]})
+                               {0: [1, 0.16, 0.767, 1], 0.5: [0, 0, 0, 1],
+                                1: [0.095, 0.983, 1, 1]})
     alpha_intensity = get_from_kwargs(kwargs, "alpha_intensity", 0.5)
     # customize_material reads 'alpha' too, and would write it into the
     # shader's Alpha socket, which is driven here; it belongs on the mixer
@@ -1943,6 +1943,103 @@ def function_texture(name="Function", **kwargs):
     bsdf = PrincipledBSDF(tree, location=(1.5, 0.0), base_color=ramp.std_out,
                           emission_color=ramp.std_out,
                           emission_strength=energy.std_out,
+                          alpha=fade.std_out,
+                          distribution="MULTI_GGX", hide=False)
+    OutputMaterial(tree, location=(3.0, 0.0), surface=bsdf.std_out, hide=False)
+
+    customize_material(mat, **kwargs)
+    return mat
+
+
+def acoustic_texture(name="acoustic", **kwargs):
+    r"""Compressions and rarefactions of a sound wave, read off ``intensity``.
+
+    Ported from ``video_interferences/shader.xml`` as it stands after the
+    organ-pipe pass, and the material
+    :class:`~geometry_nodes.modifier_video_interferences.AcousticModifier`
+    hangs on its points. One geometry attribute, ``intensity``, drives all
+    three of the sockets that matter, and it is the *signed* elongation of
+    the wave rescaled to run 0..1, so f = 0.5 is undisturbed air:
+
+    ``Base Color`` / ``Emission Color``
+        a ramp on the attribute itself, with the blend's three stops - red at
+        0.29, blue at 0.5, green at 0.74. Rarefaction and compression get
+        opposite hues and the ramp is symmetric about the resting value, so a
+        travelling wave reads as bands of colour moving down the pipe.
+
+    ``Alpha`` and ``Emission Strength``
+        both follow d = |2f - 1|, the distance from that resting value, which
+        is 0 at the nodes and 1 at a full crest or trough. So the wave is *cut
+        out of* the cloud rather than painted on it: the air that is not
+        moving goes transparent and dark, and only the compressions and
+        rarefactions are left glowing. The alpha is what makes a cloud of ten
+        thousand spheres legible at all - without it the points in front of a
+        crest veil the crest.
+
+    :param name: material name. The scenes call it ``"acoustic"``.
+    :param attribute: the attribute to read, ``intensity`` as
+        :class:`~geometry_nodes.modifier_video_interferences.SpatialDistributionModifier`
+        stores it.
+    :param attr_type: ``GEOMETRY``, ``INSTANCER``, ``OBJECT``, ...
+    :param gradient: ``{position: rgba}`` stops of the ramp.
+    :param emission_strength: what d is multiplied by on its way to
+        ``Emission Strength``. The blend's 5 is bright enough to bloom; pair
+        it with ``compositions.create_glow_composition``.
+    :param alpha: where the global fade starts, the factor of the
+        ``AlphaFactor`` mixer - the same arrangement as
+        :func:`function_texture`, and for the same reason: ``Alpha`` is a
+        driven socket here, so ``appear``/``disappear``, which write the
+        shader's ``Alpha`` default, would otherwise do nothing at all.
+    :param kwargs: passed on to :func:`~interface.ibpy.customize_material`.
+    """
+    attribute = get_from_kwargs(kwargs, "attribute", "intensity")
+    attr_type = get_from_kwargs(kwargs, "attr_type", "GEOMETRY")
+    gradient = get_from_kwargs(kwargs, "gradient",
+                               {0.2909: [1, 0, 0.00048, 1],
+                                0.5: [0.0139, 0, 1, 1],
+                                0.7364: [0.014, 1, 0, 1]})
+    emission_strength = get_from_kwargs(kwargs, "emission_strength", 5)
+    # customize_material reads 'alpha' too, and would write it into the
+    # shader's Alpha socket, which is driven here; it belongs on the mixer
+    alpha = kwargs.get("alpha", 1)
+
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+    mat.name = name
+    tree = mat.node_tree
+    # built from scratch with the wrappers below, so the two nodes
+    # `use_nodes` hands out for free would only be in the way
+    tree.nodes.clear()
+
+    value = AttributeNode(tree, location=(-4.5, 0), attribute_name=attribute,
+                          attribute_type=attr_type, name="IntensityAttribute",
+                          hide=True)
+    ramp = ColorRamp(tree, location=(-2.6, 0.6), factor=value.fac_out,
+                     values=list(gradient.keys()),
+                     colors=[list(color) for color in gradient.values()],
+                     interpolation="LINEAR", color_mode="RGB", hide=False)
+
+    # d = |2f - 1|, one operation per node as the blend has it: each of these
+    # is a socket a scene can reach, and the pair (Doubled, Centered) is where
+    # the resting value of the medium is written down
+    doubled = MathNode(tree, location=(-3.5, -1.0), operation="MULTIPLY",
+                       input0=value.fac_out, input1=2.0, name="Doubled")
+    centered = MathNode(tree, location=(-2.6, -1.0), operation="SUBTRACT",
+                        input0=doubled.std_out, input1=1.0, name="Centered")
+    deviation = MathNode(tree, location=(-1.7, -1.0), operation="ABSOLUTE",
+                         input0=centered.std_out, name="Deviation")
+    glow = MathNode(tree, location=(-0.8, -1.5), operation="MULTIPLY",
+                    input0=deviation.std_out, input1=emission_strength,
+                    name="EmissionStrength")
+    # the global fade: the alpha above, mixed against nothing at all
+    fade = MixNode(tree, location=(-0.8, -0.5), data_type="FLOAT",
+                   factor=alpha, caseA=0.0, caseB=deviation.std_out,
+                   clamp_factor=True, factor_mode="UNIFORM",
+                   name="AlphaFactor", hide=False)
+
+    bsdf = PrincipledBSDF(tree, location=(1.0, 0.0), base_color=ramp.std_out,
+                          emission_color=ramp.std_out,
+                          emission_strength=glow.std_out,
                           alpha=fade.std_out,
                           distribution="MULTI_GGX", hide=False)
     OutputMaterial(tree, location=(3.0, 0.0), surface=bsdf.std_out, hide=False)

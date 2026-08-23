@@ -190,6 +190,9 @@ class BDerivation:
         """Write the current (first) line."""
         return self.current.write(begin_time=begin_time, transition_time=transition_time, **kwargs)
 
+    def disappear(self,begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
+        return self.current.disappear(begin_time=begin_time, transition_time=transition_time, **kwargs)
+
     def highlight(self, substring, occurrence=None, color='important', emission=3,
                   begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, restore=True,**kwargs):
         """Flash a substring of the current line (tint + emission pulse)."""

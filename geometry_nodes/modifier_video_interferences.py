@@ -106,6 +106,17 @@ Classes:
 :class:`GaussianCloudModifier`
     f = a gaussian blob — a distribution with a known answer, which is what
     the verification harness leans on.
+:class:`AcousticModifier`
+    the organ pipe: a *cylinder* of points, drawn from a travelling plane
+    wave A sin(2 pi x/lambda - 2 pi t/T). Two firsts here — the distribution
+    is handed in as an RPN **string** rather than written in python, and the
+    region is narrowed by a second field, the pipe wall, OR-ed into the same
+    cull as the rejection test (:meth:`SpatialDistributionModifier.constraint`).
+:class:`PolarGridModifier`
+    not a cloud at all, and the only one here that is about *coordinates*
+    rather than about a field: a panel ruled with horizontal and vertical
+    lines, bent by one dial into the circles and rays of polar coordinates -
+    with the colours travelling along with the shapes.
 :class:`WaveVisualizationModifier`
     not a cloud either, and the other way round from all of them: a grid whose
     every vertex is *lifted* to u(r, t) = J0(kr) cos wt + Y0(kr) sin wt, so the
@@ -129,17 +140,20 @@ Classes:
 import numpy as np
 
 from geometry_nodes.geometry_nodes_modifier import GeometryNodesModifier
-from geometry_nodes.nodes import (BESSEL_OPS, CombineXYZ, CubeMesh, CurveCircle,
-                                  CurveLine, CurveToMesh,
+from geometry_nodes.nodes import (BESSEL_OPS, BooleanMath, CombineXYZ, CubeMesh,
+                                  CurveCircle, CurveLine, CurveToMesh,
                                   DeleteGeometry, DistributePointsInVolume,
+                                  DuplicateElements,
                                   Frame, Grid, IcoSphere, IndexSwitch, InputInteger,
                                   InputValue, InputVector,
                                   InstanceOnPoints, JoinGeometry, MathNode,
                                   MergeByDistance, MeshToVolume,
                                   NamedAttribute, Points, Position, RandomValue,
-                                  RealizeInstances, SceneTime, SetMaterial, SetPosition,
+                                  RealizeInstances, ResampleCurve, SceneTime,
+                                  SetMaterial, SetPosition,
                                   SetShadeSmooth, StoreNamedAttribute, TransformGeometry,
-                                  VolumeCube, WireFrame, bessel_jm_rpn, make_function)
+                                  VolumeCube, WireFrame, bessel_jm_rpn, make_function,
+                                  split_rpn, create_geometry_line)
 from interface.ibpy import Vector
 
 pi = np.pi
@@ -151,6 +165,110 @@ def _vector(value):
     if isinstance(value, (int, float)):
         return Vector([value, value, value])
     return Vector(value)
+
+
+# ---------------------------------------------------------------------------
+#  the numpy side of an RPN formula
+# ---------------------------------------------------------------------------
+# ``make_function``'s vocabulary, in numpy, so that a formula handed to a
+# modifier as a *string* can be evaluated on both sides: once as nodes, for
+# the picture, and once here, for <f> and for the checks the module docstring
+# asks for. Only what makes sense on arrays of numbers is here - rotations and
+# strings are a node-tree affair.
+_RPN_UNARY = {
+    "sin": np.sin, "cos": np.cos, "tan": np.tan,
+    "asin": np.arcsin, "acos": np.arccos, "atan": np.arctan,
+    "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh,
+    "exp": np.exp, "sqrt": np.sqrt, "abs": np.abs, "sgn": np.sign,
+    # blender pins the base of LOGARITHM to 10 for "lg"
+    "lg": np.log10,
+    "round": np.round, "floor": np.floor, "ceil": np.ceil,
+    "frac": lambda a: a - np.floor(a),
+    "not": lambda a: np.logical_not(a).astype(float),
+    # vector ops, which act on the last axis of an (n, 3) array
+    "length": lambda a: np.linalg.norm(a, axis=-1),
+    "vfloor": np.floor,
+    "normalize": lambda a: a / np.linalg.norm(a, axis=-1, keepdims=True),
+}
+
+_RPN_BINARY = {
+    "+": np.add, "-": np.subtract, "*": np.multiply, "/": np.divide,
+    "%": np.mod, "**": np.power, "min": np.minimum, "max": np.maximum,
+    "atan2": np.arctan2,
+    "<": lambda left, right: (left < right).astype(float),
+    ">": lambda left, right: (left > right).astype(float),
+    "=": lambda left, right: (left == right).astype(float),
+    "and": lambda left, right: np.logical_and(left, right).astype(float),
+    "or": lambda left, right: np.logical_or(left, right).astype(float),
+    # vector ops
+    "add": np.add, "sub": np.subtract, "mul": np.multiply, "div": np.divide,
+    "mod": np.mod,
+    # a vector times a *per-point* scalar needs the axis put back
+    "scale": lambda left, right: left * (np.expand_dims(right, -1)
+                                         if np.ndim(right) else right),
+    "dot": lambda left, right: np.sum(left * right, axis=-1),
+    "cross": lambda left, right: np.cross(left, right),
+}
+
+
+def rpn_numpy(expression, variables):
+    """Evaluate one of :func:`~geometry_nodes.nodes.make_function`'s RPN
+    expressions in numpy.
+
+    The mirror of the node group, for a formula that only exists as a string -
+    :class:`AcousticModifier` takes its distribution that way, and <f> (and so
+    the number of candidates the sampler has to draw) cannot be measured
+    without evaluating it. Values in ``variables`` may be scalars or arrays,
+    and numpy's broadcasting does the rest, so one call evaluates the formula
+    at every point of an ``(n, 3)`` cloud at once.
+
+    Tokens are looked up **as operators first**, exactly as ``make_function``
+    does it, so the same trap is here: a variable called ``length`` is the
+    length of a vector and never the caller's variable. Name them around
+    :data:`~interface.ibpy.OPERATORS`.
+
+    :param expression: the RPN string, e.g. ``"a,x,*,sin"``.
+    :param variables: ``{name: value}``; components of a vector variable are
+        also reachable as ``name_x``, ``name_y``, ``name_z``.
+    :raises ValueError: on an unknown token or an expression that does not
+        leave exactly one value on the stack - which is what a formula with a
+        typo in it does, and is worth hearing about before blender silently
+        builds something else.
+    """
+    channels = dict(variables)
+    for key, value in list(variables.items()):
+        if np.ndim(value) and np.shape(value)[-1] == 3:
+            for i, component in enumerate("xyz"):
+                channels["%s_%s" % (key, component)] = np.asarray(value)[..., i]
+
+    stack = []
+    for token in split_rpn(expression):
+        if token in _RPN_UNARY:
+            if not stack:
+                raise ValueError("%r has nothing to apply %r to"
+                                 % (expression, token))
+            stack.append(_RPN_UNARY[token](stack.pop()))
+        elif token in _RPN_BINARY:
+            if len(stack) < 2:
+                raise ValueError("%r has no two operands for %r"
+                                 % (expression, token))
+            right, left = stack.pop(), stack.pop()
+            stack.append(_RPN_BINARY[token](left, right))
+        elif token in channels:
+            stack.append(channels[token])
+        elif token == "pi":
+            stack.append(np.pi)
+        else:
+            try:
+                stack.append(float(token))
+            except ValueError:
+                raise ValueError("%r in %r is neither an operator, one of the "
+                                 "variables %s, nor a number"
+                                 % (token, expression, sorted(channels)))
+    if len(stack) != 1:
+        raise ValueError("%r leaves %d values on the stack, not one"
+                         % (expression, len(stack)))
+    return stack[0]
 
 
 class SpatialDistributionModifier(GeometryNodesModifier):
@@ -197,6 +315,11 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         The ``emission`` keyword means the same thing on both paths - how
         bright - but it lands differently: a constant strength for the ramp,
         the factor f is multiplied by here.
+    :param material: a ready ``bpy.types.Material`` to paint the points with,
+        which takes precedence over the three paths above. The way to hand the
+        cloud a material a scene built for itself - see
+        :func:`~appearance.textures.acoustic_texture`, which reads the same
+        ``intensity`` attribute but does more with it than a ramp can.
     :param box_color: palette name for a wireframe of the box, or ``None``
         for no box.
     :param box_radius: tube radius of that wireframe.
@@ -206,7 +329,7 @@ class SpatialDistributionModifier(GeometryNodesModifier):
                  method="rejection", count=20000, resolution=64,
                  voxel_amount=64.0, seed=0, radius=0.02, subdivisions=1,
                  color="drawing", color_by_density=False, gradient=None,
-                 emission_by_density=False,
+                 emission_by_density=False, material=None,
                  box_color=None, box_radius=0.01,
                  name="SpatialDistribution", **kwargs):
         if method not in ("rejection", "grid", "uniform"):
@@ -237,6 +360,7 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         self.gradient = gradient or {0: [0, 0, 0.35, 1], 0.5: [0.6, 0.1, 0.5, 1],
                                      1: [1, 0.95, 0.6, 1]}
         self.emission_by_density = emission_by_density
+        self.material = material
         self.box_color = box_color
         self.box_radius = box_radius
         self.kwargs = kwargs
@@ -277,6 +401,22 @@ class SpatialDistributionModifier(GeometryNodesModifier):
     def density_numpy(self, points):
         """f evaluated at an ``(n, 3)`` array of positions - the same f."""
         return np.ones(len(points))
+
+    def constraint(self, tree, position, location=(0, 0)):
+        """Socket that is **true where a point is to be thrown away**, or ``None``.
+
+        The other half of :meth:`density`, and the one that is about the
+        *region* rather than the distribution: the candidates are drawn in a
+        box, and a subclass that wants them inside something else - a
+        cylinder, a sphere, the pipe of
+        :class:`AcousticModifier` - says so here. The socket is OR-ed with the
+        rejection test in :meth:`_sampling_frame`, so the geometry is culled
+        by the same ``Delete Geometry`` node as the distribution and costs
+        nothing extra.
+
+        ``None``, the default, is "the box, and nothing more".
+        """
+        return None
 
     def estimate_mean_density(self, samples=200000, seed=1234):
         """<f> over the box by Monte Carlo, which is the acceptance rate.
@@ -400,11 +540,19 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         ``method="uniform"`` there is nothing to cull either, and hanging that
         attribute on the points is the entire job: it is the only trace f
         leaves in the tree, and what the material downstream reads.
+
+        A subclass that also confines the points to a *region* smaller than
+        the box says so in :meth:`constraint`, and the two selections are
+        OR-ed together into the one ``Delete Geometry``: a point goes if its
+        uniform draw beat f, **or** if it is outside the region. Both
+        conditions are fields evaluated on the point itself, so the whole
+        cull is still a single node.
         """
         frame = Frame(tree, location=(6, 0), label="Sampling",
                       name="SamplingFrame")
         points = candidates
         density = None
+        discard = None
 
         if self.method == "rejection":
             density = self.density(tree, position.std_out, location=(0, -1))
@@ -423,16 +571,32 @@ class SpatialDistributionModifier(GeometryNodesModifier):
                 test.parent = frame.node
                 tree.links.new(draw.std_out, test.inputs["u"])
                 tree.links.new(density, test.inputs["f"])
-                cull = DeleteGeometry(tree, location=(2, 0), domain="POINT",
-                                      geometry=points,
-                                      selection=test.outputs["reject"],
-                                      name="Reject", parent=frame)
-                points = cull.geometry_out
+                discard = test.outputs["reject"]
         elif self.method == "uniform" or self.color_by_density \
                 or self.emission_by_density:
             density = self.density(tree, position.std_out, location=(0, -1))
             if density is not None:
                 density.node.parent = frame.node
+
+        # the region the points are confined to, on top of the box they were
+        # drawn in - the pipe wall, for the modifier that has one
+        outside = self.constraint(tree, position.std_out, location=(1, -3))
+        if outside is not None:
+            outside.node.parent = frame.node
+            if discard is None:
+                discard = outside
+            else:
+                either = BooleanMath(tree, location=(2, -2), operation="OR",
+                                     inputs0=discard, inputs1=outside,
+                                     name="RejectOrOutside", hide=True,
+                                     parent=frame)
+                discard = either.std_out
+
+        if discard is not None:
+            cull = DeleteGeometry(tree, location=(2, 0), domain="POINT",
+                                  geometry=points, selection=discard,
+                                  name="Reject", parent=frame)
+            points = cull.geometry_out
 
         if density is not None:
             # carried on the points so that a material can read it; the value
@@ -464,7 +628,16 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         tree.links.new(instances.geometry_out, realized.geometry_in)
         geometry = realized.geometry_out
 
-        if self.emission_by_density:
+        if self.material is not None:
+            # a material the caller built and handed over, ready to go: it
+            # reads the `intensity` attribute stored above like the two
+            # builders below, only it was not built here
+            painted = SetMaterial(tree, location=(3, 0), geometry=geometry,
+                                  material=self.material, name="PaintPoints",
+                                  parent=frame)
+            self.materials.append(painted.material)
+            geometry = painted.geometry_out
+        elif self.emission_by_density:
             from appearance.textures import emission_from_attribute
             # `emission` says how bright on either painting path, so it is
             # read out of kwargs rather than consumed: the ramp path still
@@ -883,6 +1056,474 @@ class GaussianCloudModifier(SpatialDistributionModifier):
         return np.exp(-radius ** 2 / (2 * self.sigma ** 2))
 
 
+#: the distribution :class:`AcousticModifier` is built around, as an RPN
+#: string: A sin(2 pi x / lambda - 2 pi t / T), a plane wave running down the
+#: pipe. Every symbol in it is a socket of the ``Intensity`` group, so the
+#: formula can be swapped for another one without touching the tree.
+ACOUSTIC_PLANE_WAVE = ("amplitude,2,pi,*,wavelength,/,x,*,"
+                       "2,pi,*,period,/,time,*,-,sin,*")
+
+#: the same wave read as an *air density* rather than an elongation,
+#: (1 + A sin(...))/2, which is the variant that stays inside [0, 1]: the
+#: sampler then keeps points everywhere and merely piles them up in the
+#: compressions, and 0.5 - the resting density - is where
+#: :func:`~appearance.textures.acoustic_texture` puts its transparent,
+#: undisturbed air.
+ACOUSTIC_AIR_DENSITY = "1,%s,+,2,/" % ACOUSTIC_PLANE_WAVE
+
+
+class AcousticModifier(SpatialDistributionModifier):
+    r"""Air in an organ pipe: points drawn from a sound wave, inside a cylinder.
+
+    The tree of ``video_interferences/tmp.xml``, and the cloud the script's
+    organ pipe asks for. Two things separate it from the modifiers above, and
+    they are the two halves of :meth:`_sampling_frame`:
+
+    **The distribution is a string.** :meth:`density` does not know what f is;
+    it builds whatever RPN expression ``intensity`` holds into the
+    ``Intensity`` group, over the symbols
+
+    ``x``, ``y``, ``z``
+        the sampled position, component by component - and ``pos``, the
+        position itself, for the vector operators.
+    ``amplitude``, ``wavelength``, ``period``
+        A, lambda and T, each a ``Value`` node of the same name (capitalised:
+        ``Amplitude``, ``Wavelength``, ``Period``) that a scene can ramp.
+    ``time``
+        t, off ``Scene Time -> Seconds``.
+
+    plus numbers and ``pi``. The default is :data:`ACOUSTIC_PLANE_WAVE`,
+
+    .. math:: f(x, t) = A \sin\!\Big(\frac{2\pi}{\lambda}x
+                                   - \frac{2\pi}{T}t\Big),
+
+    the plane wave of the script, and because ``time`` comes off the clock it
+    travels down the pipe without a keyframe, as
+    :class:`RealInterferenceModifier` does. Any other formula in those symbols
+    is one argument away - a *standing* wave, say, which is the pipe's own
+    solution rather than the wave running through it::
+
+        "amplitude,2,pi,*,wavelength,/,x,*,sin,*,2,pi,*,period,/,time,*,cos,*"
+
+    **Sign, and what the sampler does with it.** f as written runs -A..A,
+    while a rejection test only ever accepts with probability f: the negative
+    half-cycles - the rarefactions - are *empty*, and what travels down the
+    pipe is a train of bands of points, one per compression. That is a fair
+    picture of a sound wave, and it is the one the default draws.
+    :meth:`estimate_mean_density` accounts for it exactly (it averages f
+    clipped to [0, 1], which is the acceptance rate), so ``count`` still means
+    what it says. Pass :data:`ACOUSTIC_AIR_DENSITY` instead for the other
+    reading, where the whole pipe stays populated and only the *density* of
+    the points ripples - that is the one
+    :func:`~appearance.textures.acoustic_texture` was drawn around, since its
+    ramp and its alpha both take 0.5 for undisturbed air.
+
+    **The pipe is a constraint, not a mesh.** The candidates are drawn in the
+    bounding box, and :meth:`constraint` throws away the ones with
+    y^2 + z^2 > R^2 - one ``PipeWall`` function node in the sampling frame,
+    OR-ed into the same ``Delete Geometry`` as the rejection test. So the
+    cylinder costs one node rather than a ``Mesh to Volume``, and its radius
+    is a dial (``PipeRadius``) a scene can open up. The corner of the box that
+    the cylinder does not fill is 1 - pi/4 = 21% of the candidates, and
+    :meth:`estimate_mean_density` knows that too.
+
+    The dials, reachable with
+    ``ibpy.get_geometry_node_from_modifier(modifier, label)``: ``Amplitude``,
+    ``Wavelength``, ``Period``, ``PipeRadius``. Ramping ``Wavelength`` walks
+    the pipe through its harmonics, which is what the script's
+    lambda in {2.00, 2.57, 3.60, 6.00, 18.0} m is a list of.
+
+    :param length: the pipe, along x.
+    :param pipe_radius: R, its radius about the x axis.
+    :param amplitude: A.
+    :param wavelength: lambda, in the same units as the pipe.
+    :param period: T, in seconds - the clock is ``Scene Time -> Seconds``, so
+        this is real time and the wave moves at lambda/T units per second.
+    :param intensity: the RPN string above, or ``None`` for the plane wave.
+    :param material: what to paint the points with;
+        :func:`~appearance.textures.acoustic_texture` under the name
+        ``acoustic`` by default, which reads the ``intensity`` attribute this
+        modifier stores.
+    """
+
+    def __init__(self, length=9.0, pipe_radius=1.0, amplitude=1.0,
+                 wavelength=tau, period=tau, intensity=None,
+                 method="rejection", count=30000, radius=0.01, material=None,
+                 name="Acoustic", **kwargs):
+        self.length = length
+        self.pipe_radius = pipe_radius
+        self.amplitude = amplitude
+        self.wavelength = wavelength
+        self.period = period
+        self.intensity = ACOUSTIC_PLANE_WAVE if intensity is None else intensity
+        if material is None:
+            # imported here rather than at module level: appearance.textures
+            # imports geometry_nodes.nodes, and the other two builders in this
+            # module are pulled in the same way for the same reason
+            from appearance.textures import acoustic_texture
+            material = acoustic_texture(name="acoustic")
+        super().__init__(name=name,
+                         size=(length, 2 * pipe_radius, 2 * pipe_radius),
+                         method=method, count=count, radius=radius,
+                         material=material, **kwargs)
+
+    # ------------------------------------------------------------------
+    def density(self, tree, position, location=(0, 0)):
+        x, y = location
+        function = make_function(
+            tree, location=location,
+            functions={"density": self.intensity},
+            # the components, so that a formula can be written in x, y, z
+            # rather than in pos_x, pos_y, pos_z - the pipe runs along x and
+            # the formulas that go in here are about x
+            aux_functions={"x": "pos_x", "y": "pos_y", "z": "pos_z"},
+            inputs=["pos", "amplitude", "wavelength", "period", "time"],
+            outputs=["density"],
+            vectors=["pos"],
+            scalars=["amplitude", "wavelength", "period", "time",
+                     "x", "y", "z", "density"],
+            name="Intensity", hide=False)
+        tree.links.new(position, function.inputs["pos"])
+
+        # the dials, built once and reused if density() is called again
+        if not hasattr(self, "amplitude_node"):
+            self.amplitude_node = InputValue(tree, location=(x - 2, y + 3),
+                                             value=self.amplitude,
+                                             name="Amplitude")
+            self.wavelength_node = InputValue(tree, location=(x - 2, y + 2),
+                                              value=self.wavelength,
+                                              name="Wavelength")
+            self.period_node = InputValue(tree, location=(x - 2, y + 1),
+                                          value=self.period, name="Period")
+            # and the reason the wave travels with no keyframe in the tree
+            self.clock = SceneTime(tree, location=(x - 2, y), name="Clock")
+
+        for socket, dial in (("amplitude", self.amplitude_node),
+                             ("wavelength", self.wavelength_node),
+                             ("period", self.period_node),
+                             ("time", self.clock)):
+            tree.links.new(dial.std_out, function.inputs[socket])
+        return function.outputs["density"]
+
+    # ------------------------------------------------------------------
+    def constraint(self, tree, position, location=(0, 0)):
+        """The pipe wall: true for the candidates outside the cylinder."""
+        x, y = location
+        wall = make_function(
+            tree, location=location,
+            functions={"outside": "pos_y,pos_y,*,pos_z,pos_z,*,+,rad,rad,*,>"},
+            inputs=["pos", "rad"], outputs=["outside"],
+            vectors=["pos"], scalars=["rad", "outside"],
+            name="PipeWall", hide=True)
+        tree.links.new(position, wall.inputs["pos"])
+
+        if not hasattr(self, "pipe_radius_node"):
+            self.pipe_radius_node = InputValue(tree, location=(x - 2, y - 1),
+                                               value=self.pipe_radius,
+                                               name="PipeRadius", hide=True)
+        tree.links.new(self.pipe_radius_node.std_out, wall.inputs["rad"])
+        return wall.outputs["outside"]
+
+    # ------------------------------------------------------------------
+    def density_numpy(self, points, seconds=0.0):
+        """The same formula, in numpy, at one instant.
+
+        ``seconds`` is the scene time the tree reads off the clock; the
+        default 0 is the frame the modifier is built on.
+        """
+        points = np.asarray(points, dtype=float)
+        values = rpn_numpy(self.intensity,
+                           {"pos": points,
+                            "x": points[:, 0], "y": points[:, 1],
+                            "z": points[:, 2],
+                            "amplitude": self.amplitude,
+                            "wavelength": self.wavelength,
+                            "period": self.period,
+                            "time": seconds})
+        return np.broadcast_to(np.asarray(values, dtype=float),
+                               (len(points),)).copy()
+
+    def inside_numpy(self, points):
+        """True for the points the pipe wall keeps - the mirror of
+        :meth:`constraint`."""
+        points = np.asarray(points, dtype=float)
+        return (points[:, 1] ** 2 + points[:, 2] ** 2
+                <= self.pipe_radius ** 2)
+
+    # ------------------------------------------------------------------
+    def estimate_mean_density(self, samples=200000, seed=1234):
+        """The acceptance rate of the whole sampling frame, not just of f.
+
+        Two things the base class's version does not know about. The pipe
+        throws away the corners of the box - that is a factor pi/4 for a
+        cylinder inscribed in its own bounding box, and it is measured here
+        rather than assumed, since :meth:`inside_numpy` is free to be any
+        region. And a point is accepted with probability *clip(f, 0, 1)*, not
+        f: where the wave is negative the acceptance is zero, not negative,
+        and averaging f raw would report ~0 for a plane wave and ask the
+        sampler for millions of candidates to make up for it.
+        """
+        rng = np.random.default_rng(seed)
+        points = rng.uniform(np.array(self.box_min), np.array(self.box_max),
+                             size=(samples, 3))
+        values = np.asarray(self.density_numpy(points), dtype=float)
+        peak = values.max() if len(values) else 1.0
+        if peak > 1 + 1e-6:
+            print("Warning: %s density peaks at %.3f > 1; the distribution "
+                  "will be clipped there." % (type(self).__name__, peak))
+        accepted = np.clip(values, 0.0, 1.0) * self.inside_numpy(points)
+        return float(np.clip(accepted.mean(), 1e-6, 1.0))
+
+
+class PolarGridModifier(GeometryNodesModifier):
+    r"""A cartesian grid of lines bent into a polar one, on a dial.
+
+    Two families of straight lines - ``horizontals`` of them running along x,
+    ``verticals`` running along y, filling a panel centred on the object,
+    whose width is chosen so that the cells come out square (see
+    ``square_cells``) - and one ``Transition`` value that carries every point
+    of them from where it is to where polar coordinates would put it:
+
+    .. math::
+        \varphi = 2\pi\,\frac{x + w/2}{w}, \qquad
+        r = R\,\frac{y + h/2}{h}, \qquad
+        \mathbf p(t) = (1-t)\,(x, y) + t\,(r\cos\varphi,\; r\sin\varphi).
+
+    So the panel is read as the (φ, r) rectangle: its **width is one full
+    turn** and its **height is the radius**, which is what makes each family
+    turn into the thing it should. A horizontal line is y = const, hence
+    r = const, hence a **circle**; a vertical line is x = const, hence
+    φ = const, hence a **ray**. The bottom edge of the panel is r = 0, so the
+    lowest horizontal line closes up into the point where all the rays meet,
+    and the left and right edges are φ = 0 and φ = 2π, so the first and last
+    vertical line land on the same ray.
+
+    ``t`` is a plain lerp between the two pictures rather than anything
+    cleverer, which is the honest thing to animate: at t = 0.5 the shape is
+    half way between a straight line and its circle, which is what "the grid
+    is being bent" looks like. Nothing about it is a coordinate change of the
+    *scene* - only the drawing moves.
+
+    **The colours change with the shape**, because a circle is not a
+    horizontal line any more and should not be painted as one. The value of
+    the dial is stored on every point as the ``transition`` attribute, and
+    each family gets a two-stop
+    :func:`~appearance.textures.gradient_from_attribute` ramp on it, so the
+    horizontals travel from ``horizontal_color`` to ``circle_color`` and the
+    verticals from ``vertical_color`` to ``ray_color`` while they bend. A
+    panel left at t = 0 is a cartesian grid in the first pair of colours and
+    stays one; that is how the same modifier serves as the "before" panel.
+
+    The dial, reachable with
+    ``ibpy.get_geometry_node_from_modifier(modifier, "Transition")``:
+
+    ``Transition``
+        t, 0 = cartesian, 1 = polar. The one thing a scene animates.
+
+    :param size: the panel, a scalar or ``(width, height)``. With
+        ``square_cells`` the width is recomputed and only the height is read.
+    :param horizontals: how many lines along x - circles, afterwards.
+    :param verticals: how many along y - rays, afterwards.
+    :param resolution: points per horizontal line. This is the one that has to
+        be generous: a circle is only as round as the line it was bent from.
+    :param ray_resolution: points per vertical line. A ray is straight and so
+        is the lerp that makes it, so this one can be small.
+    :param radius: R, how far the outermost circle reaches. Defaults to half
+        the smaller side of the panel, which is the largest disc that still
+        fits inside it.
+    :param thickness: tube radius of the drawn lines.
+    :param square_cells: widen (or narrow) the panel so that the cartesian
+        grid comes out of equally spaced lines both ways - the default,
+        because a grid of oblong cells reads as a stretched picture rather
+        than as a coordinate system. It sets ``width = height *
+        (verticals - 1)/(horizontals - 1)``, so the two line counts choose
+        the panel's aspect ratio: nine circles and twelve rays want a panel
+        half again as wide as it is tall. Pass ``False`` to use ``size`` as
+        given.
+    :param transition: where the dial starts.
+    :param horizontal_color: palette name for the lines along x, at t = 0.
+    :param vertical_color: palette name for the lines along y, at t = 0.
+    :param circle_color: what the horizontals become at t = 1.
+    :param ray_color: what the verticals become at t = 1.
+    """
+
+    def __init__(self, size=3.0, horizontals=11, verticals=13, resolution=193,
+                 ray_resolution=33, radius=None, thickness=0.02,
+                 square_cells=True, transition=0.0, horizontal_color="drawing",
+                 vertical_color="custom1", circle_color="joker",
+                 ray_color="example", name="PolarGrid", **kwargs):
+        if horizontals < 2 or verticals < 2:
+            raise ValueError("a grid needs at least two lines each way, "
+                             "got %d and %d" % (horizontals, verticals))
+        if isinstance(size, (int, float)):
+            size = (size, size)
+        self.width, self.height = float(size[0]), float(size[1])
+        if square_cells:
+            # the width follows from the height and the two line counts: the
+            # cartesian grid is only *read* as a grid if its cells are square,
+            # and the two spacings are h/(horizontals - 1) and
+            # w/(verticals - 1), so this is the one width that makes them
+            # equal. The height is what is kept because it is also the radius
+            # the polar picture has to fit into.
+            self.width = self.height * (verticals - 1) / (horizontals - 1)
+        self.horizontals = horizontals
+        self.verticals = verticals
+        self.resolution = resolution
+        self.ray_resolution = ray_resolution
+        self.radius = min(self.width, self.height) / 2 if radius is None \
+            else radius
+        self.thickness = thickness
+        self.transition = transition
+        self.horizontal_color = horizontal_color
+        self.vertical_color = vertical_color
+        self.circle_color = circle_color
+        self.ray_color = ray_color
+        self.kwargs = kwargs
+        # kept because the materials are named after the tree: two panels of
+        # the same modifier are two node groups, and their four ramps should
+        # say which panel they belong to rather than pile up as .001
+        self.label = name
+        super().__init__(name=name, automatic_layout=False)
+
+    # ------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        # the one dial, outside both frames because both families read it
+        self.transition_node = InputValue(tree, location=(0, 2),
+                                          value=self.transition,
+                                          name="Transition")
+        circles = self._family(tree, "horizontal", location=(2, 0))
+        rays = self._family(tree, "vertical", location=(2, -4))
+        joined = JoinGeometry(tree, location=(11, 0), name="JoinGrid")
+        tree.links.new(circles, joined.geometry_in)
+        tree.links.new(rays, joined.geometry_in)
+        tree.links.new(joined.geometry_out,
+                       self.group_outputs.inputs["Geometry"])
+
+    # ------------------------------------------------------------------
+    def _family(self, tree, kind, location=(0, 0)):
+        """One family of parallel lines, bent, tubed and painted.
+
+        Both families are the same six nodes: *one* line, resampled, then
+        ``Duplicate Elements`` on the spline domain to make the rest of them
+        and the ``Duplicate Index`` field to space the copies out. Drawing one
+        line and copying it keeps the tree the same size whether the grid has
+        nine lines or ninety, and it is the index - not a stack of primitives -
+        that says where each one goes.
+        """
+        x, y = location
+        w, h = self.width, self.height
+        if kind == "horizontal":
+            count, points = self.horizontals, self.resolution
+            start = Vector((-w / 2, -h / 2, 0))
+            end = Vector((w / 2, -h / 2, 0))
+            step = (0.0, h / (count - 1))
+            label, colors = "Horizontals", (self.horizontal_color,
+                                            self.circle_color)
+        else:
+            count, points = self.verticals, self.ray_resolution
+            start = Vector((-w / 2, -h / 2, 0))
+            end = Vector((-w / 2, h / 2, 0))
+            step = (w / (count - 1), 0.0)
+            label, colors = "Verticals", (self.vertical_color, self.ray_color)
+
+        frame = Frame(tree, location=location, label=label,
+                      name=label + "Frame")
+        line = CurveLine(tree, location=(0, 0), start=start, end=end,
+                         name=label + "Line", parent=frame)
+        dense = ResampleCurve(tree, location=(1, 0), curve=line.geometry_out,
+                              count=points, name=label + "Resample",
+                              parent=frame)
+        copies = DuplicateElements(tree, location=(2, 0), domain="SPLINE",
+                                   geometry=dense.geometry_out, amount=count,
+                                   name=label + "Copies", parent=frame)
+        # copy number i sits i steps along, which is the whole of the grid
+        spacing = make_function(tree, location=(2, -1),
+                                functions={"offset": ["i,%s,*" % repr(step[0]),
+                                                      "i,%s,*" % repr(step[1]),
+                                                      "0"]},
+                                inputs=["i"], outputs=["offset"],
+                                scalars=["i"], vectors=["offset"],
+                                name=label + "Spacing", hide=True)
+        spacing.parent = frame.node
+        tree.links.new(copies.duplicate_index, spacing.inputs["i"])
+        spread = SetPosition(tree, location=(3, 0),
+                             geometry=copies.geometry_out,
+                             offset=spacing.outputs["offset"],
+                             name=label + "Spread", parent=frame)
+
+        # the map itself, reading the position the lines have just been given
+        position = Position(tree, location=(3, -1), hide=True, parent=frame)
+        warp = make_function(
+            tree, location=(4, -1),
+            functions={"position": ["pos_x,1,t,-,*,r,phi,cos,*,t,*,+",
+                                    "pos_y,1,t,-,*,r,phi,sin,*,t,*,+",
+                                    "pos_z"]},
+            aux_functions={"phi": "pos_x,%s,+,%s,/,%s,*" % (repr(w / 2),
+                                                            repr(w), repr(tau)),
+                           "r": "pos_y,%s,+,%s,/,%s,*" % (repr(h / 2), repr(h),
+                                                          repr(self.radius))},
+            inputs=["pos", "t"], outputs=["position"],
+            vectors=["pos", "position"], scalars=["t", "phi", "r"],
+            name=label + "ToPolar", hide=False)
+        warp.parent = frame.node
+        tree.links.new(position.std_out, warp.inputs["pos"])
+        tree.links.new(self.transition_node.std_out, warp.inputs["t"])
+        bent = SetPosition(tree, location=(5, 0), geometry=spread.geometry_out,
+                           position=warp.outputs["position"],
+                           name=label + "ToPolarPosition", parent=frame)
+
+        # the dial, carried on the geometry so that the material can follow
+        # the shape: a line that has become a circle is painted as a circle
+        store = StoreNamedAttribute(tree, location=(6, 0), name="transition",
+                                    data_type="FLOAT", domain="POINT",
+                                    value=self.transition_node.std_out)
+        store.node.parent = frame.node
+        tree.links.new(bent.geometry_out, store.geometry_in)
+
+        profile = CurveCircle(tree, location=(6, -1), radius=self.thickness,
+                              resolution=8, name=label + "Profile",
+                              parent=frame)
+        tube = CurveToMesh(tree, location=(7, 0), curve=store.geometry_out,
+                           profile_curve=profile.geometry_out, fill_caps=True,
+                           name=label + "Tube", parent=frame)
+        smooth = SetShadeSmooth(tree, location=(8, 0),
+                                geometry=tube.geometry_out,
+                                name=label + "Smooth", parent=frame)
+        painted = SetMaterial(tree, location=(9, 0),
+                              geometry=smooth.geometry_out,
+                              material=self._material(label, *colors),
+                              name="Paint" + label, parent=frame)
+        self.materials.append(painted.material)
+        return painted.geometry_out
+
+    # ------------------------------------------------------------------
+    def _material(self, label, before, after):
+        """A two-stop ramp on the ``transition`` attribute, ``before`` to ``after``.
+
+        A colour that has to *travel* cannot be a ``Set Material`` on its own -
+        that socket takes a material, not a field - so the value of the dial
+        goes onto the geometry as an attribute and the material reads it. Two
+        stops and a linear ramp is then exactly a mix of the two palette
+        colours by t.
+        """
+        from appearance.textures import gradient_from_attribute
+        from utils.color_conversion import get_color_from_string
+
+        gradient = {}
+        for stop, color in ((0.0, before), (1.0, after)):
+            rgba = get_color_from_string(color) if isinstance(color, str) \
+                else color
+            if rgba is None:
+                raise ValueError("%r is not a palette colour; pass a name from "
+                                 "utils.constants.COLOR_NAMES or an rgba"
+                                 % color)
+            gradient[stop] = list(rgba)
+        return gradient_from_attribute(name=self.label + label,
+                                       attr_name="transition",
+                                       attr_type="GEOMETRY", function="fac",
+                                       gradient=gradient, **self.kwargs)
+
+
 class FarFieldModifier(GeometryNodesModifier):
     r"""Rays along the far-field maxima of a line of equally spaced sources.
 
@@ -1220,7 +1861,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
 
     def __init__(self, name="WaveVisualization", size=8.0, resolution=301,
                  sources=((0.0, 0.0),), wavelength=0.8, frequency=1.0,
-                 amplitude=0.25, source_radius=None, attribute="elongation",
+                 amplitude=0.25, source_radius=None, attribute="result",
                  material="interference", shade_smooth=True, **kwargs):
         self.name = name
         self.size = size
@@ -1248,7 +1889,8 @@ class WaveVisualizationModifier(GeometryNodesModifier):
     def create_node(self, tree, **kwargs):
         control = self._control_frame(tree)
         elongation = self._wave_frame(tree, control)
-        geometry = self._geometry_frame(tree, elongation)
+        geometry = self._geometry_frame(tree, control,elongation)
+        self.group_outputs.location = (9*200,0)
         tree.links.new(geometry, self.group_outputs.inputs["Geometry"])
 
     # ------------------------------------------------------------------
@@ -1266,7 +1908,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
 
         :return: dict of the sockets the wave frame consumes.
         """
-        frame = Frame(tree, location=(0, 2), label="Control",
+        frame = Frame(tree, location=(0, 0), label="Control",
                       name="ControlFrame")
         clock = SceneTime(tree, location=(0, 1), std_out="Seconds",
                           name="Clock", parent=frame)
@@ -1303,7 +1945,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
 
         :return: the socket carrying the scalar elongation.
         """
-        frame = Frame(tree, location=(3, 0), label="Wave Computation",
+        frame = Frame(tree, location=(1, 0), label="Wave Computation",
                       name="WaveFrame")
         position = Position(tree, location=(0, -1), name="GridPosition",
                             hide=True, parent=frame)
@@ -1328,7 +1970,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
 
         names = ["pos", "time", "frequency", "wavelength", "amplitude"] \
                 + ["c%d" % j for j in range(n)]
-        wave = make_function(tree, location=(2, 0), name="Elongation",
+        wave = make_function(tree, location=(1, 0), name="Elongation",
                              functions={"elongation": "u"},
                              aux_functions=aux,
                              inputs=names, outputs=["elongation"],
@@ -1345,7 +1987,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         return wave.outputs["elongation"]
 
     # ------------------------------------------------------------------
-    def _geometry_frame(self, tree, elongation):
+    def _geometry_frame(self, tree, control,elongation):
         """Grid -> uv -> store -> lift -> paint.
 
         The order is the argument. See the class docstring for why the store
@@ -1354,7 +1996,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
 
         :return: the geometry socket for the group output.
         """
-        frame = Frame(tree, location=(8, 0), label="Geometry",
+        frame = Frame(tree, location=(1, 2), label="Geometry",
                       name="GeometryFrame")
         grid = Grid(tree, location=(0, 0), size_x=self.size, size_y=self.size,
                     vertices_x=self.resolution, vertices_y=self.resolution,
@@ -1366,38 +2008,44 @@ class WaveVisualizationModifier(GeometryNodesModifier):
                                  domain="CORNER", name="UVMap",
                                  value=grid.node.outputs["UV Map"],
                                  parent=frame)
-        tree.links.new(grid.geometry_out, uv.geometry_in)
 
         stored = StoreNamedAttribute(tree, location=(2, 0), data_type="FLOAT",
                                      domain="POINT", name=self.attribute,
                                      value=elongation, parent=frame)
-        tree.links.new(uv.geometry_out, stored.geometry_in)
+
+        amp_store = StoreNamedAttribute(tree,location=(3,0),data_type="FLOAT",
+                                        domain="POINT",name="amplitude",
+                                        value=control["amplitude"],parent=frame)
 
         # read back rather than reusing the socket: this is what makes the
         # elongation the thing that moves the surface, and it costs one node
         # against a second evaluation of every Bessel group
-        height = NamedAttribute(tree, location=(3, -2), data_type="FLOAT",
+        height = NamedAttribute(tree, location=(2, -2), data_type="FLOAT",
                                 name=self.attribute, parent=frame, hide=True)
-        offset = CombineXYZ(tree, location=(4, -2), z=height.std_out,
+        offset = CombineXYZ(tree, location=(3, -2), z=height.std_out,
                             name="Lift", parent=frame, hide=True)
-        lifted = SetPosition(tree, location=(5, 0),
-                             geometry=stored.geometry_out,
+        lifted = SetPosition(tree, location=(4, 0),
                              offset=offset.std_out, name="Displace",
                              parent=frame)
         geometry = lifted.geometry_out
 
+        customs = []
         if self.shade_smooth:
-            smooth = SetShadeSmooth(tree, location=(6, 0), geometry=geometry,
+            smooth = SetShadeSmooth(tree, location=(5, 0),
                                     name="Smooth", parent=frame)
             geometry = smooth.geometry_out
+            customs.append(smooth)
 
         if self.paint is not None:
-            painted = SetMaterial(tree, location=(7, 0), geometry=geometry,
+            painted = SetMaterial(tree, location=(5, 0),
                                   material=self._texture(), name="Paint",
                                   parent=frame)
             self.material = painted.material
             self.materials.append(painted.material)
+            customs.append(painted)
             geometry = painted.geometry_out
+
+        create_geometry_line(tree,[grid,uv,stored,amp_store,lifted]+customs)
         return geometry
 
     # ------------------------------------------------------------------
