@@ -1039,7 +1039,7 @@ class GaussianCloudModifier(SpatialDistributionModifier):
         function = make_function(tree, location=location,
                                  aux_functions={"r": "pos,c,sub,length"},
                                  functions={"density":
-                                            "0,r,r,*,%s,/,-,exp" % (2 * self.sigma ** 2)},
+                                                "0,r,r,*,%s,/,-,exp" % (2 * self.sigma ** 2)},
                                  inputs=["pos", "c"], outputs=["density"],
                                  vectors=["pos", "c"],
                                  scalars=["r", "density"],
@@ -1351,7 +1351,7 @@ class PolarGridModifier(GeometryNodesModifier):
                  ray_resolution=33, radius=None, thickness=0.02,
                  square_cells=True, transition=0.0, horizontal_color="drawing",
                  vertical_color="custom1", circle_color="joker",
-                 ray_color="example", name="PolarGrid", **kwargs):
+                 ray_color="example", name="PolarGrid", half=False,**kwargs):
         if horizontals < 2 or verticals < 2:
             raise ValueError("a grid needs at least two lines each way, "
                              "got %d and %d" % (horizontals, verticals))
@@ -1378,6 +1378,7 @@ class PolarGridModifier(GeometryNodesModifier):
         self.vertical_color = vertical_color
         self.circle_color = circle_color
         self.ray_color = ray_color
+        self.half = half
         self.kwargs = kwargs
         # kept because the materials are named after the tree: two panels of
         # the same modifier are two node groups, and their four ramps should
@@ -1391,13 +1392,26 @@ class PolarGridModifier(GeometryNodesModifier):
         self.transition_node = InputValue(tree, location=(0, 2),
                                           value=self.transition,
                                           name="Transition")
-        circles = self._family(tree, "horizontal", location=(2, 0))
+        circles = self._family(tree, "horizontal", location=(2, 4))
         rays = self._family(tree, "vertical", location=(2, -4))
         joined = JoinGeometry(tree, location=(11, 0), name="JoinGrid")
         tree.links.new(circles, joined.geometry_in)
         tree.links.new(rays, joined.geometry_in)
-        tree.links.new(joined.geometry_out,
-                       self.group_outputs.inputs["Geometry"])
+        self.group_outputs.location=(17*200,0)
+
+        if self.half:
+            pos = Position(tree,location = (14,0),hide=True)
+            selector = make_function(tree,name="Selector",
+                        functions={
+                            "select":"pos_x,-0.01,<"
+                        },inputs=["pos"],outputs=["select"],
+                        scalars=["select"],vectors=["pos"])
+            tree.links.new(pos.std_out,selector.inputs["pos"])
+            del_geo = DeleteGeometry(tree,name="DeleteHalf",selection=selector.outputs["select"])
+            create_geometry_line(tree,[joined,del_geo],out=self.group_outputs.inputs[0])
+        else:
+            create_geometry_line(tree,[joined],out=self.group_outputs.inputs[0])
+
 
     # ------------------------------------------------------------------
     def _family(self, tree, kind, location=(0, 0)):
@@ -1860,37 +1874,47 @@ class WaveVisualizationModifier(GeometryNodesModifier):
     """
 
     def __init__(self, name="WaveVisualization", size=8.0, resolution=301,
-                 sources=((0.0, 0.0),), wavelength=0.8, frequency=1.0,
+                 sources=None, wavelength=0.8, frequency=1.0,
                  amplitude=0.25, source_radius=None, attribute="result",
                  material="interference", shade_smooth=True, **kwargs):
+
+        # initialize fields
         self.name = name
         self.size = size
         self.resolution = resolution
-        self.sources = [Vector((s[0], s[1], 0)) for s in sources]
-        if not self.sources:
-            raise ValueError("a wave needs at least one source")
+        if sources is None:
+            self.mode = "PLANAR"
+        else:
+            self.mode = "CIRCULAR"
+            self.sources = [Vector((s[0], s[1], 0)) for s in sources]
+
         self.wavelength = wavelength
         self.frequency = frequency
+        self.period = 1 / frequency
         self.amplitude = amplitude
         # the same default as interference_texture, so that the two clamps
         # coincide when neither is given explicitly
         self.source_radius = wavelength / 20 if source_radius is None \
             else source_radius
+
         self.attribute = attribute
         self.paint = material
         self.shade_smooth = shade_smooth
         self.kwargs = kwargs
+
         # filled in by _geometry_frame; the scene needs it to reach the
         # shader's Time value
         self.material = None
+
         super().__init__(name=name, automatic_layout=False, **kwargs)
 
     # ------------------------------------------------------------------
     def create_node(self, tree, **kwargs):
+        # three simple frames that structure the geometry node setup
         control = self._control_frame(tree)
         elongation = self._wave_frame(tree, control)
-        geometry = self._geometry_frame(tree, control,elongation)
-        self.group_outputs.location = (9*200,0)
+        geometry = self._geometry_frame(tree, control, elongation)
+        self.group_outputs.location = (9 * 200, 0)
         tree.links.new(geometry, self.group_outputs.inputs["Geometry"])
 
     # ------------------------------------------------------------------
@@ -1914,32 +1938,48 @@ class WaveVisualizationModifier(GeometryNodesModifier):
                           name="Clock", parent=frame)
         wavelength = InputValue(tree, location=(0, 0), value=self.wavelength,
                                 name="Wavelength", parent=frame)
-        frequency = InputValue(tree, location=(0, -1), value=self.frequency,
-                               name="Frequency", parent=frame)
+        period = InputValue(tree, location=(0, -1), value=self.frequency,
+                            name="Period", parent=frame)
         amplitude = InputValue(tree, location=(0, -2), value=self.amplitude,
                                name="Amplitude", parent=frame)
-        sources = [InputVector(tree, location=(0, -3 - j), vector=source,
-                               name="Source%d" % j, hide=True, parent=frame)
-                   for j, source in enumerate(self.sources)]
+        width = InputValue(tree,location=(0,-3),value=self.size,name="Width",parent=frame)
+
+        if self.mode=="CIRCULAR":
+            sources = [InputVector(tree, location=(0, -3 - j), vector=source,
+                                   name="Source%d" % j, hide=True, parent=frame)
+                       for j, source in enumerate(self.sources)]
+        else:
+            sources = []
         return {"time": clock.std_out,
                 "wavelength": wavelength.std_out,
-                "frequency": frequency.std_out,
+                "period": period.std_out,
                 "amplitude": amplitude.std_out,
+                "width":width.std_out,
                 "sources": [s.std_out for s in sources]}
 
     # ------------------------------------------------------------------
     def _wave_frame(self, tree, control):
-        r"""u(r, t), the whole of it, as one function group.
+        r"""
+        depending on the ``self.mode`` variable
+
+        a plane wave
+        u(r,x) = A sin(k x-w t)
+        or a circular wave
+        u(r, t)
+
+        is implemented in the geometry node
 
         The auxiliaries are the arithmetic worth naming, and they are shared
         rather than repeated: ``k`` and ``amp`` are computed once for all
         sources, and each source's ``r`` is used twice - once clamped into the
         Bessel argument, and once (through it) by both cylinder functions.
 
-        ``amp`` is ``A pi / sqrt(lambda)``, which looks arbitrary and is not:
+        ``amp`` is ``A pi / sqrt(lambda)`` restores the asymptotic property:
         :math:`J_0(x) \sim \sqrt{2/\pi x}\cos(x - \pi/4)`, so a far-field
         amplitude of :math:`A/\sqrt r` needs a factor
-        :math:`\sqrt{\pi k/2} = \pi/\sqrt\lambda`. It is built from the
+        :math:`\sqrt{\pi k/2} = \pi/\sqrt\lambda`.
+
+        It is built from the
         ``Wavelength`` socket rather than baked in as a number, so a scene
         that sweeps the wavelength keeps the same wave height as it goes.
 
@@ -1950,44 +1990,52 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         position = Position(tree, location=(0, -1), name="GridPosition",
                             hide=True, parent=frame)
 
-        n = len(self.sources)
-        aux = {}
-        aux["k"] = "%s,wavelength,/" % tau
-        aux["wt"] = "time,frequency,*,%s,*" % tau
-        aux["amp"] = "amplitude,pi,*,wavelength,sqrt,/"
-        for j in range(n):
-            # the grid is still flat where this is evaluated, so the distance
-            # in the plane is the distance in space
-            aux["r%d" % j] = "pos,c%d,sub,length" % j
-        for j in range(n):
-            # x = k r, held off the pole of Y0
-            aux["x%d" % j] = "r%d,%s,max,k,*" % (j, repr(self.source_radius))
-        for j in range(n):
-            # Re[H0(kr) exp(-i w t)], the outgoing wave
-            aux["w%d" % j] = ("amp,x{0},j0,wt,cos,*,"
-                              "x{0},y0,wt,sin,*,+,*".format(j))
-        aux["u"] = ",".join("w%d" % j for j in range(n)) + ",+" * (n - 1)
+        if self.mode == "PLANAR":
+            n = 0  # no sources
+            aux = {
+                "k": "%s,wavelength,/" % tau,
+                "wt": "%s,period,/,time,*" % tau,
+                "u": "amplitude,k,pos_x,*,wt,-,sin,*"
+            }
+        else:
+            n = len(self.sources)
+            aux = {
+                "k": "%s,wavelength,/" % tau,
+                "wt": "%s,period,/,time,*" % tau,
+                "amp": "amplitude,pi,*,wavelength,sqrt,/"
+            }
+            for j in range(n):
+                # the grid is still flat where this is evaluated, so the distance
+                # in the plane is the distance in space
+                aux["r%d" % j] = "pos,c%d,sub,length" % j
+            for j in range(n):
+                # x = k r, held off the pole of Y0
+                aux["x%d" % j] = "r%d,%s,max,k,*" % (j, repr(self.source_radius))
+            for j in range(n):
+                # Re[H0(kr) exp(-i w t)], the outgoing wave
+                aux["w%d" % j] = ("amp,x{0},j0,wt,cos,*,"
+                                  "x{0},y0,wt,sin,*,+,*".format(j))
+            aux["u"] = ",".join("w%d" % j for j in range(n)) + ",+" * (n - 1)
 
-        names = ["pos", "time", "frequency", "wavelength", "amplitude"] \
-                + ["c%d" % j for j in range(n)]
+        names = ["pos", "time", "period", "wavelength", "amplitude"] + ["c%d" % j for j in range(n)]
         wave = make_function(tree, location=(1, 0), name="Elongation",
                              functions={"elongation": "u"},
                              aux_functions=aux,
                              inputs=names, outputs=["elongation"],
                              vectors=["pos"] + ["c%d" % j for j in range(n)],
-                             scalars=["time", "frequency", "wavelength",
+                             scalars=["time", "period", "wavelength",
                                       "amplitude", "elongation"] + list(aux),
                              custom_ops=BESSEL_OPS, parent=frame, hide=False)
 
         tree.links.new(position.std_out, wave.inputs["pos"])
-        for key in ("time", "frequency", "wavelength", "amplitude"):
+        for key in ("time", "period", "wavelength", "amplitude"):
             tree.links.new(control[key], wave.inputs[key])
         for j, source in enumerate(control["sources"]):
             tree.links.new(source, wave.inputs["c%d" % j])
         return wave.outputs["elongation"]
 
     # ------------------------------------------------------------------
-    def _geometry_frame(self, tree, control,elongation):
+    def _geometry_frame(self, tree, control, elongation):
         """Grid -> uv -> store -> lift -> paint.
 
         The order is the argument. See the class docstring for why the store
@@ -1998,7 +2046,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         """
         frame = Frame(tree, location=(1, 2), label="Geometry",
                       name="GeometryFrame")
-        grid = Grid(tree, location=(0, 0), size_x=self.size, size_y=self.size,
+        grid = Grid(tree, location=(0, 0), size_x=self.size, size_y=control["width"],
                     vertices_x=self.resolution, vertices_y=self.resolution,
                     name="Grid", parent=frame)
 
@@ -2013,9 +2061,9 @@ class WaveVisualizationModifier(GeometryNodesModifier):
                                      domain="POINT", name=self.attribute,
                                      value=elongation, parent=frame)
 
-        amp_store = StoreNamedAttribute(tree,location=(3,0),data_type="FLOAT",
-                                        domain="POINT",name="amplitude",
-                                        value=control["amplitude"],parent=frame)
+        amp_store = StoreNamedAttribute(tree, location=(3, 0), data_type="FLOAT",
+                                        domain="POINT", name="amplitude",
+                                        value=control["amplitude"], parent=frame)
 
         # read back rather than reusing the socket: this is what makes the
         # elongation the thing that moves the surface, and it costs one node
@@ -2045,7 +2093,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
             customs.append(painted)
             geometry = painted.geometry_out
 
-        create_geometry_line(tree,[grid,uv,stored,amp_store,lifted]+customs)
+        create_geometry_line(tree, [grid, uv, stored, amp_store, lifted] + customs)
         return geometry
 
     # ------------------------------------------------------------------
