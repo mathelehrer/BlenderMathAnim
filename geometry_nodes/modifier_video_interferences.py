@@ -2256,7 +2256,9 @@ class DrumModeModifier(GeometryNodesModifier):
         same reason as in :class:`WaveVisualizationModifier`: a field is
         evaluated on the geometry the node receives, so an attribute stored
         after the lift would measure r on the *lifted* surface, where it is
-        no longer the r the formula means.
+        no longer the r the formula means. ``Amplitude`` is stored beside it
+        for the material's sake, which is what lets the standard graph shader
+        paint this surface too.
 
     The dials, reachable with
     ``ibpy.get_geometry_node_from_modifier(modifier, label)``:
@@ -2301,8 +2303,14 @@ class DrumModeModifier(GeometryNodesModifier):
         :func:`~appearance.textures.gradient_from_attribute`, so crest and
         trough take opposite colours and the nodal lines are the colour in
         between - the whole point of a mode, drawn on the surface that has it.
-        A palette name or a ``bpy.types.Material`` is set as it stands;
-        ``None`` leaves the disc unpainted.
+        ``"function"`` uses the project's standard graph shader,
+        :func:`~appearance.textures.function_texture`, instead: it forms
+        u = elongation/amplitude out of the two stored attributes and adds the
+        emission that goes as u^2, so a drum wears the same material as the
+        function tubes and the wave surfaces of the same video (see
+        ``InterferenceScene.drum_visualisation2``). A palette name or a
+        ``bpy.types.Material`` is set as it stands; ``None`` leaves the disc
+        unpainted.
     :param colors: the three palette colours of that ramp, trough to crest.
     :param shade_smooth: smooth-shade the result.
     :param kwargs: passed on to the material (``emission``, ...) and to
@@ -2366,7 +2374,7 @@ class DrumModeModifier(GeometryNodesModifier):
         control = self._control_frame(tree)
         membrane = self._membrane_frame(tree, control)
         elongation = self._mode_frame(tree, control)
-        geometry = self._geometry_frame(tree, membrane, elongation)
+        geometry = self._geometry_frame(tree, membrane, elongation, control)
         tree.links.new(geometry, self.group_outputs.inputs["Geometry"])
 
     # ------------------------------------------------------------------
@@ -2514,8 +2522,17 @@ class DrumModeModifier(GeometryNodesModifier):
         return switch.std_out
 
     # ------------------------------------------------------------------
-    def _geometry_frame(self, tree, membrane, elongation):
+    def _geometry_frame(self, tree, membrane, elongation, control):
         """Store -> read back -> lift -> smooth -> paint.
+
+        The second attribute, ``amplitude``, is the crest height the dial is
+        currently on, written onto every point. Nothing in *this* tree reads
+        it - it is there for the material, which needs the elongation and the
+        scale it is to be measured against as two attributes of the geometry
+        rather than as numbers baked into the shader when it was built. That
+        is the convention :func:`~appearance.textures.function_texture` and
+        :class:`WaveVisualizationModifier` already share, and storing it here
+        is what lets ``material="function"`` work on a drum.
 
         :return: the geometry socket for the group output.
         """
@@ -2526,12 +2543,17 @@ class DrumModeModifier(GeometryNodesModifier):
                                      value=elongation, parent=frame)
         tree.links.new(membrane, stored.geometry_in)
 
+        amp_store = StoreNamedAttribute(tree, location=(1, 0), data_type="FLOAT",
+                                        domain="POINT", name="amplitude",
+                                        value=control["amplitude"], parent=frame)
+        tree.links.new(stored.geometry_out, amp_store.geometry_in)
+
         height = NamedAttribute(tree, location=(1, -2), data_type="FLOAT",
                                 name=self.attribute, parent=frame, hide=True)
         offset = CombineXYZ(tree, location=(2, -2), z=height.std_out,
                             name="Lift", parent=frame, hide=True)
         lifted = SetPosition(tree, location=(3, 0),
-                             geometry=stored.geometry_out,
+                             geometry=amp_store.geometry_out,
                              offset=offset.std_out, name="Displace",
                              parent=frame)
         geometry = lifted.geometry_out
@@ -2557,8 +2579,26 @@ class DrumModeModifier(GeometryNodesModifier):
         The ramp is fed ``u/(2A) + 0.5``, so it runs from trough at 0 through
         the nodal value at 0.5 to crest at 1 - which puts the nodal diameters
         and circles on the surface as the one colour that does not move.
+
+        ``material="function"`` asks for the project's standard graph shader,
+        :func:`~appearance.textures.function_texture`, instead - the one the
+        function tubes and the wave surfaces of this video already wear. It
+        does the same thing by a different route: it reads the elongation and
+        the ``amplitude`` attribute the geometry frame stores beside it,
+        forms u = elongation/amplitude itself, and adds an emission that goes
+        as u^2 and an alpha that can be made to follow it. Painting a drum
+        with the same shader as the graphs is what makes the surface read as
+        the *same quantity* plotted on a disc.
         """
-        if not isinstance(self.paint, str) or self.paint != "elongation":
+        if not isinstance(self.paint, str):
+            return self.paint
+        if self.paint == "function":
+            from appearance.textures import function_texture
+            return function_texture(name=self.name + "Texture",
+                                    attribute=self.attribute,
+                                    scale_attribute="amplitude",
+                                    **self.kwargs)
+        if self.paint != "elongation":
             return self.paint
         from appearance.textures import gradient_from_attribute
         from utils.constants import COLOR_NAMES, COLORS_SCALED

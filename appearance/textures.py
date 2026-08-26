@@ -1885,10 +1885,21 @@ def function_texture(name="Function", **kwargs):
         :func:`~interface.ibpy.customize_material` (``roughness``, ...).
     """
     attribute = get_from_kwargs(kwargs, "attribute", "result")
+    zero_color=get_from_kwargs(kwargs,"zero_color","background")
     scale_attribute = get_from_kwargs(kwargs, "scale_attribute", "amplitude")
+
+    if zero_color=="text":
+        zero=[1,1,1,1]
+        start = 0.2
+        end = 0.8
+    else:
+        zero=[0,0,0,1]
+        start = 0
+        end = 0
+
     gradient = get_from_kwargs(kwargs, "gradient",
-                               {0: [1, 0.16, 0.767, 1], 0.5: [0, 0, 0, 1],
-                                1: [0.095, 0.983, 1, 1]})
+                               {start: [1, 0.16, 0.767, 1], 0.5: zero,
+                                end: [0.095, 0.983, 1, 1]})
     alpha_intensity = get_from_kwargs(kwargs, "alpha_intensity", 0.5)
     # customize_material reads 'alpha' too, and would write it into the
     # shader's Alpha socket, which is driven here; it belongs on the mixer
