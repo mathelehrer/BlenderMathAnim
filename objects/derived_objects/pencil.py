@@ -42,3 +42,6 @@ class Pencil(BObject):
     def disappear(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
         self.mine.disappear(begin_time=begin_time,transition_time=transition_time)
         self.wood.disappear(begin_time=begin_time,transition_time=transition_time)
+
+    def change_pencil_color(self,new_color="text",begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        return self.mine.change_color(new_color=new_color,begin_time=begin_time,transition_time=transition_time)
