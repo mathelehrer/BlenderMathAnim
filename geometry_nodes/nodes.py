@@ -1708,6 +1708,40 @@ class CurveToMesh(GreenNode):
                 self.tree.links.new(scale, self.node.inputs["Scale"])
 
 
+class GreasePencilToCurves(GreenNode):
+    """The strokes of a grease pencil geometry, as curves.
+
+    A grease pencil component is layers of drawings, not points, so the
+    ordinary curve and point nodes see nothing in it until it has been
+    through here. Mind ``layers_as_instances``, which blender defaults to
+    **True**: the curves then arrive one instance per layer, and anything
+    that reads points - ``Curve to Mesh``, ``Attribute Statistic``, a
+    ``Position`` field - still finds none until a
+    :class:`RealizeInstances` follows. Pass ``False``, or realize.
+    """
+
+    def __init__(self, tree, location=(0, 0), grease_pencil=None,
+                 selection=None, layers_as_instances=True, **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeGreasePencilToCurves")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_in = self.node.inputs["Grease Pencil"]
+        self.geometry_out = self.node.outputs["Curves"]
+
+        if grease_pencil is not None:
+            self.tree.links.new(grease_pencil, self.geometry_in)
+        if selection is not None:
+            if isinstance(selection, bool):
+                self.node.inputs["Selection"].default_value = selection
+            else:
+                self.tree.links.new(selection, self.node.inputs["Selection"])
+        if isinstance(layers_as_instances, bool):
+            self.node.inputs["Layers as Instances"].default_value = layers_as_instances
+        else:
+            self.tree.links.new(layers_as_instances,
+                                self.node.inputs["Layers as Instances"])
+
+
 # String operations
 class ValueToString(BlueNode):
     def __init__(self, tree, location=(0, 0), value=0, data_type="INT", **kwargs):
