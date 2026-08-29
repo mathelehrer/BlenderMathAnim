@@ -389,7 +389,7 @@ class Pen2CurveObject(Cube):
 
     def __init__(self, filename="envelope_calculation.json", page_width=1.0,
                  ink_width=None, ink_height=None, orientation="FRONT",
-                 center="ink", ink=None, radius=(0.04, 0.05),
+                 center="ink", ink=None, radius=(0.01, 0.011),
                  hide_viewport=True, pencil=None, hide_pencil=True,
                  progress=0.0, start_index=0, use_pressure=True,
                  samples_per_px=0.35, seed=0, name="Pen2Curve", **kwargs):
@@ -492,6 +492,10 @@ class Pen2CurveObject(Cube):
         pause in between - the pen would carry on writing while nothing is
         supposed to be happening.
 
+        :param to_value:
+        :param from_value:
+        :param transition_time:
+        :param begin_time:
         :param linear: keyframe interpolation. A hand that accelerates into
             the page and coasts to a halt is the eased default, and it is
             wrong: writing happens at the speed of writing. Pass ``False``

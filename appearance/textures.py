@@ -1926,6 +1926,7 @@ def function_texture(name="Function", **kwargs):
     normalized = MathNode(tree, location=(-2.7, -0.6), operation="DIVIDE",
                           input0=shifted.std_out, input1=scale.fac_out,
                           name="Rescaled")
+
     factor = MathNode(tree, location=(-1.6, -0.5), operation="DIVIDE",
                       input0=normalized.std_out, input1=2.0, name="RampFactor")
 

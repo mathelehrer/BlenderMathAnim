@@ -60,6 +60,7 @@ excludes the object itself while the modifier still reads its geometry
 from the viewport depsgraph, and the drawing disappears while you work on it.
 :class:`~objects.pen2curve.Pen2CurveObject` sets this up.
 """
+from math import pi
 
 from geometry_nodes.geometry_nodes_modifier import GeometryNodesModifier
 from geometry_nodes.nodes import (AttributeStatistic, BooleanMath, CompareNode,
@@ -68,7 +69,7 @@ from geometry_nodes.nodes import (AttributeStatistic, BooleanMath, CompareNode,
                                   ObjectInfo, Position, RandomValue,
                                   RealizeInstances, SampleIndex, SetCurveRadius,
                                   SetPosition, TransformGeometry,
-                                  create_geometry_line)
+                                  create_geometry_line, make_function)
 from interface.ibpy import Vector
 
 
@@ -129,9 +130,11 @@ class Pen2CurveModifier(GeometryNodesModifier):
     """
 
     def __init__(self, source=None, pencil=None,
-                 pencil_rotation=(1.9477872848510742, -1.2374383211135864, 0.0),
+                 pencil_rotation=(135/180*pi, -1.2374383211135864, 0.0),
                  pencil_scale=0.75, progress=0.0, start_index=0, scale=1.0,
                  radius=(0.04, 0.05), seed=0, name="Pen2CurveModifier", **kwargs):
+        self.start_node = None
+        self.progress_node = None
         if source is None:
             raise ValueError("Pen2CurveModifier needs the grease pencil object "
                              "that holds the strokes")
@@ -239,14 +242,22 @@ class Pen2CurveModifier(GeometryNodesModifier):
                                transform_space="ORIGINAL",
                                name="PencilPart%d" % i)
             tree.links.new(piece.geometry_out, parts.geometry_in)
+
+        pen_selector = make_function(tree, name="PenSelector",
+                                     functions={
+                                         "delete": "progress,0,>,progress,1,<,and,not"
+                                     }, inputs=["progress"], outputs=["delete"],
+                                     scalars=["progress", "delete"], vectors=[], location=(-5, 2))
+        tree.links.new(self.progress_node.std_out,pen_selector.inputs["progress"])
+        delete_geometry = DeleteGeometry(tree, location=(-4, 2.1), selection=pen_selector.outputs["delete"])
         # how the pencil is held: leaning back over its own tip, which is
         # where its origin is, so that moving the origin to a point of the
         # drawing puts the tip on the ink rather than the middle of the shaft
         posed = TransformGeometry(tree, location=(1.7, 1.7),
-                                  geometry=parts.geometry_out,
                                   rotation=self.pencil_rotation,
                                   scale=self.pencil_scale, name="PencilPose")
 
+        create_geometry_line(tree, [parts, delete_geometry, posed])
         tip = MathNode(tree, location=(-0.8, 0.3), operation="FLOOR",
                        inputs0=pen.std_out, name="PenPoint")
         where = SampleIndex(tree, location=(0.6, 1.3), data_type="FLOAT_VECTOR",
