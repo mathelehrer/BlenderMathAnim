@@ -8327,6 +8327,61 @@ BESSEL_OPS = {
 }
 
 
+def wave_front_gate(distance, tag="0", clock="time,impact,-"):
+    r"""RPN for the causal envelope of a wave that started at a given moment.
+
+    A steady-state solution - the Hankel sum of
+    :class:`~geometry_nodes.modifier_video_interferences.WaveVisualizationModifier`,
+    or the far-field sine of
+    :func:`~appearance.textures.interference_texture` - is the field of a
+    source that has been ringing since forever, and is non-zero everywhere at
+    every instant. A splash is the other thing: nothing until the stone lands,
+    then news of it spreading outwards at the phase speed :math:`c=\lambda f`.
+    Multiplying the steady state by
+
+    .. math::
+        \mathrm{env}(r,t)=S\!\left(\frac{c\,(t-t_0)-r}{\Delta}\right),
+        \qquad S(x)=\hat x^{2}(3-2\hat x),\quad \hat x=\clamp_{[0,1]}(x),
+
+    is what turns one into the other. The smoothstep is the workspace's usual
+    ease, and its zero slope at both ends is what keeps the edge of the
+    disturbance from reading as a crease in the surface.
+
+    Before the impact :math:`c(t-t_0)` is negative, so the envelope is zero
+    everywhere and the surface is flat. That clamp is the whole of why the
+    splash happens once, and once only.
+
+    **This is a look, not a solution.** The wave equation has no solution that
+    is exactly a steady state behind a sharp edge, and a real front disperses
+    and rings. What the envelope does get right is the two things an audience
+    actually reads: that nothing moves before the impact, and that the
+    disturbance reaches radius r at the time r/c.
+
+    It lives here, rather than in either caller, because it has two callers
+    that must agree exactly. The geometry lifts the surface and the shader
+    paints it, each recomputing the field from scratch; a material that gated
+    differently from the tree would paint fringes onto water the geometry has
+    left provably flat. One expression, no drift.
+
+    The names it reads - ``wavelength``, ``frequency``, ``edge``, and whatever
+    ``clock`` refers to - have to exist as inputs or aux entries of the same
+    ``make_function`` call, and the entries it returns have to be inserted
+    into ``aux_functions`` **before** the expression that multiplies by them:
+    aux is emitted in insertion order.
+
+    :param distance: RPN for the distance from the source - ``r0`` for a
+        circular wave, or a coordinate for a plane wave, whose front is a line.
+    :param tag: suffix distinguishing this source's names from the others'.
+    :param clock: RPN for the time since the impact.
+    :return: ``{"reach<tag>": ..., "gate<tag>": ..., "env<tag>": ...}``.
+    """
+    return {
+        "reach" + tag: "wavelength,frequency,*,%s,*" % clock,
+        "gate" + tag: "reach%s,%s,-,edge,/,0,max,1,min" % (tag, distance),
+        "env" + tag: "gate{0},gate{0},*,3,2,gate{0},*,-,*".format(tag),
+    }
+
+
 def bessel_jm_rpn(argument, order, prefix="bessel", floor=0.01):
     r"""RPN for :math:`J_m` of any integer order, from :math:`J_0` and :math:`J_1`.
 

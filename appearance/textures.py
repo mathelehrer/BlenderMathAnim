@@ -9,7 +9,7 @@ import numpy as np
 from sympy import Symbol, re, im, false
 
 from extended_math_nodes.generic_nodes import SphericalHarmonics200, CMBNode
-from geometry_nodes.nodes import make_function, BESSEL_OPS
+from geometry_nodes.nodes import make_function, BESSEL_OPS, wave_front_gate
 from interface import ibpy
 from interface.ibpy import customize_material, make_alpha_frame, create_group_from_vector_function, \
     Vector, set_material, create_iterator_group, get_obj, animate_sky_background, \
@@ -1663,6 +1663,21 @@ def interference_texture(name="Interference", **kwargs):
     :param time: t. A plain value rather than a clock, because the shader
         editor has no equivalent of ``Scene Time``; a scene animates it with
         ``ibpy.change_default_value``.
+    :param front: gate every source with an expanding causal envelope - flat
+        until ``impact``, then spreading at :math:`c=\lambda f`. Off by
+        default. It applies to all three models, and it must be set to match
+        whatever geometry the material is painted onto: the shader recomputes
+        the whole sum from the uv, so a material gated differently from the
+        surface would paint fringes onto water that is provably flat. The
+        expression is
+        :func:`~geometry_nodes.nodes.wave_front_gate`, shared with
+        :class:`~geometry_nodes.modifier_video_interferences.WaveVisualizationModifier`
+        for exactly that reason.
+    :param impact: when the sources start, in the same units as ``time``. Also
+        the origin of the phase. The ``Impact`` dial.
+    :param front_width: how far the envelope takes to reach the full steady
+        state, in the same units as ``wavelength``. Defaults to one
+        wavelength. The ``FrontWidth`` dial.
     :param gradient: ``{position: rgba}`` stops of the colour ramp. The
         default runs red -> black -> green, so crest and trough get opposite
         hues and the undisturbed surface is black.
@@ -1685,6 +1700,11 @@ def interference_texture(name="Interference", **kwargs):
     model = get_from_kwargs(kwargs, "model", "farfield")
     source_radius = get_from_kwargs(kwargs, "source_radius", None)
     uv_scale = get_from_kwargs(kwargs, "uv_scale", (1, 1))
+    front = get_from_kwargs(kwargs, "front", False)
+    impact = get_from_kwargs(kwargs, "impact", 0.0)
+    front_width = get_from_kwargs(kwargs, "front_width", None)
+    if front_width is None:
+        front_width = wavelength
     if not hasattr(uv_scale, "__len__"):
         uv_scale = (uv_scale, uv_scale)
     if model not in ("farfield", "hankel", "bessel"):
@@ -1737,10 +1757,25 @@ def interference_texture(name="Interference", **kwargs):
                                   x=x.std_out, y=y.std_out,
                                   name="Center%d" % j))
 
+    # the transient. The two dials exist only when there is a front, so that
+    # a material built without one is exactly the material it always was
+    if front:
+        impact_node = InputValue(tree, location=(-6, 3.5), value=impact,
+                                 name="Impact")
+        edge_node = InputValue(tree, location=(-6, 4), value=front_width,
+                               name="FrontWidth")
+    clock = "time,impact,-" if front else "time"
+
     n = len(centers)
     aux = {}
     for j in range(n):
         aux["r%d" % j] = "uv,c%d,sub,uvscale,mul,length" % j
+    # before the waves that multiply by them: aux entries are emitted in
+    # insertion order, so an env defined afterwards is not yet a name
+    if front:
+        for j in range(n):
+            aux.update(wave_front_gate('r%d' % j, str(j), clock))
+    tail = (lambda j: ",env%d,*" % j) if front else (lambda j: "")
 
     if model == "farfield":
         for j in range(n):
@@ -1753,11 +1788,11 @@ def interference_texture(name="Interference", **kwargs):
             # port bit-exact against the blend instead of merely equal.
             aux["w%d" % j] = ("amplitude,r%d,sqrt,/,"
                               "r%d,wavelength,/,%s,*,"
-                              "time,frequency,*,%s,*,-,sin,*"
-                              % (j, j, tau, tau))
+                              "%s,frequency,*,%s,*,-,sin,*"
+                              % (j, j, tau, clock, tau)) + tail(j)
     else:
         aux["k"] = "%s,wavelength,/" % tau
-        aux["wt"] = "time,frequency,*,%s,*" % tau
+        aux["wt"] = "%s,frequency,*,%s,*" % (clock, tau)
         # The Bessel models are normalised so that `amplitude` keeps meaning
         # what it means for "farfield" - the amplitude one source would have
         # at r = 1 - which is what lets the model be switched without also
@@ -1775,13 +1810,14 @@ def interference_texture(name="Interference", **kwargs):
             if model == "hankel":
                 # Re[H0(kr) exp(-i w t)] - the outgoing wave
                 aux["w%d" % j] = ("amp,x{0},j0,wt,cos,*,"
-                                  "x{0},y0,wt,sin,*,+,*".format(j))
+                                  "x{0},y0,wt,sin,*,+,*".format(j)) + tail(j)
             else:
                 # J0(kr) cos(wt) - the standing wave, finite at the source
-                aux["w%d" % j] = "amp,x{0},j0,wt,cos,*,*".format(j)
+                aux["w%d" % j] = "amp,x{0},j0,wt,cos,*,*".format(j) + tail(j)
     aux["total"] = ",".join("w%d" % j for j in range(n)) + ",+" * (n - 1)
 
     names = ["uv", "uvscale", "time", "frequency", "wavelength", "amplitude"] \
+            + (["impact", "edge"] if front else []) \
             + ["c%d" % j for j in range(n)]
     intensity = make_function(tree, location=(-3, 0), name="Intensity",
                               node_group_type="Shader",
@@ -1793,6 +1829,7 @@ def interference_texture(name="Interference", **kwargs):
                                       + ["c%d" % j for j in range(n)],
                               scalars=["time", "frequency", "wavelength",
                                        "amplitude", "factor", "alpha"]
+                                      + (["impact", "edge"] if front else [])
                                       + list(aux),
                               custom_ops={} if model == "farfield"
                                          else BESSEL_OPS,
@@ -1804,6 +1841,9 @@ def interference_texture(name="Interference", **kwargs):
     links.new(frequency_node.std_out, intensity.inputs["frequency"])
     links.new(wavelength_node.std_out, intensity.inputs["wavelength"])
     links.new(amplitude_node.std_out, intensity.inputs["amplitude"])
+    if front:
+        links.new(impact_node.std_out, intensity.inputs["impact"])
+        links.new(edge_node.std_out, intensity.inputs["edge"])
     for j, center in enumerate(centers):
         links.new(center.std_out, intensity.inputs["c%d" % j])
 

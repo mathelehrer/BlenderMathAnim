@@ -153,7 +153,8 @@ from geometry_nodes.nodes import (BESSEL_OPS, BooleanMath, CombineXYZ, CubeMesh,
                                   SetMaterial, SetPosition,
                                   SetShadeSmooth, StoreNamedAttribute, TransformGeometry,
                                   VolumeCube, WireFrame, bessel_jm_rpn, make_function,
-                                  split_rpn, create_geometry_line)
+                                  split_rpn, create_geometry_line,
+                                  wave_front_gate)
 from interface.ibpy import Vector
 
 pi = np.pi
@@ -1871,12 +1872,39 @@ class WaveVisualizationModifier(GeometryNodesModifier):
     :param shade_smooth: smooth-shade the result. A displaced grid is a
         polyhedron, and at 300 vertices a side the facets are exactly the size
         of the fringes.
+    :param front: gate the field with an expanding causal envelope, so that
+        the surface is flat until ``impact`` and the disturbance then spreads
+        outwards at the phase speed :math:`c=\lambda f` - a stone dropped in a
+        pond rather than a source that has been ringing for ever. Off by
+        default, which is the steady state every existing scene was composed
+        against. See :func:`~geometry_nodes.nodes.wave_front_gate`, and note
+        that it is **a look, not a solution**: the wave equation has no
+        solution that is exactly the steady state behind a sharp edge.
+    :param impact: the scene time, in seconds, at which the source starts.
+        The phase is measured from it as well, so the wave leaves the source
+        at zero elongation instead of picking up mid-cycle. Reachable as the
+        ``Impact`` dial, in the tree and in the material both.
+    :param front_width: how far the envelope takes to go from nothing to the
+        full steady state, in blender units. Defaults to one wavelength, which
+        is about the narrowest that does not read as a crease in the surface.
+        The ``FrontWidth`` dial.
+
+    .. note::
+        The ``Frequency`` dial used to be built under the name ``Period``
+        while holding a frequency, and the wave frame divided by it - which is
+        the identity at ``f = 1`` (what every existing sub-scene passes) and
+        wrong everywhere else, disagreeing with both the shader and
+        :meth:`elongation_numpy`. It now computes ``time,frequency,*,tau,*``,
+        the association the docstring above always claimed and the one
+        :func:`~appearance.textures.interference_texture` uses. Nothing reads
+        the old name, and at ``f = 1`` nothing moves.
     """
 
     def __init__(self, name="WaveVisualization", size=8.0, resolution=301,
                  sources=None, wavelength=0.8, frequency=1.0,
                  amplitude=0.25, source_radius=None, attribute="result",
-                 material="interference", shade_smooth=True, **kwargs):
+                 material="interference", shade_smooth=True,
+                 front=False, impact=0.0, front_width=None, **kwargs):
 
         # initialize fields
         self.name = name
@@ -1896,6 +1924,12 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         # coincide when neither is given explicitly
         self.source_radius = wavelength / 20 if source_radius is None \
             else source_radius
+
+        # the transient: a front expanding at the phase speed, ahead of which
+        # the surface has not heard about the source yet
+        self.front = front
+        self.impact = impact
+        self.front_width = wavelength if front_width is None else front_width
 
         self.attribute = attribute
         self.paint = material
@@ -1938,11 +1972,23 @@ class WaveVisualizationModifier(GeometryNodesModifier):
                           name="Clock", parent=frame)
         wavelength = InputValue(tree, location=(0, 0), value=self.wavelength,
                                 name="Wavelength", parent=frame)
-        period = InputValue(tree, location=(0, -1), value=self.frequency,
-                            name="Period", parent=frame)
+        # named for what it holds. It used to be called "Period" while
+        # carrying a frequency, and the wave frame divided by it - which is
+        # the identity at f = 1 and wrong everywhere else. See _wave_frame.
+        frequency = InputValue(tree, location=(0, -1), value=self.frequency,
+                               name="Frequency", parent=frame)
         amplitude = InputValue(tree, location=(0, -2), value=self.amplitude,
                                name="Amplitude", parent=frame)
         width = InputValue(tree,location=(0,-3),value=self.size,name="Width",parent=frame)
+
+        if self.front:
+            impact = InputValue(tree, location=(-2, 0), value=self.impact,
+                                name="Impact", parent=frame)
+            edge = InputValue(tree, location=(-2, -1), value=self.front_width,
+                              name="FrontWidth", parent=frame)
+            transient = {"impact": impact.std_out, "edge": edge.std_out}
+        else:
+            transient = {}
 
         if self.mode=="CIRCULAR":
             sources = [InputVector(tree, location=(0, -3 - j), vector=source,
@@ -1950,12 +1996,12 @@ class WaveVisualizationModifier(GeometryNodesModifier):
                        for j, source in enumerate(self.sources)]
         else:
             sources = []
-        return {"time": clock.std_out,
-                "wavelength": wavelength.std_out,
-                "period": period.std_out,
-                "amplitude": amplitude.std_out,
-                "width":width.std_out,
-                "sources": [s.std_out for s in sources]}
+        return dict({"time": clock.std_out,
+                     "wavelength": wavelength.std_out,
+                     "frequency": frequency.std_out,
+                     "amplitude": amplitude.std_out,
+                     "width":width.std_out,
+                     "sources": [s.std_out for s in sources]}, **transient)
 
     # ------------------------------------------------------------------
     def _wave_frame(self, tree, control):
@@ -1990,18 +2036,38 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         position = Position(tree, location=(0, -1), name="GridPosition",
                             hide=True, parent=frame)
 
+        # the clock the wave is a function of. Without a front it is the scene
+        # clock; with one it is measured from the impact, so that the phase at
+        # the source is zero when the creature lands rather than wherever the
+        # scene happens to have got to
+        clock = "time,impact,-" if self.front else "time"
+
         if self.mode == "PLANAR":
             n = 0  # no sources
             aux = {
                 "k": "%s,wavelength,/" % tau,
-                "wt": "%s,period,/,time,*" % tau,
+                "wt": "%s,frequency,*,%s,*" % (clock, tau),
                 "u": "amplitude,k,pos_x,*,wt,-,sin,*"
             }
+            if self.front:
+                # A plane wave has no source point to measure from - it comes
+                # from x = -infinity - so a transient one needs an emitter
+                # named explicitly, and the grid's own leading edge is the
+                # only one the modifier knows about. The wave is then
+                # generated at x = -size/2 and marches in from the left, which
+                # is what "the wave arrives" looks like on a finite grid.
+                # Gating on pos_x itself would instead say the wave had
+                # already reached everything to the left of the front, which
+                # is the steady state again.
+                aux.pop("u")
+                aux.update(wave_front_gate("pos_x,%s,+" % repr(0.5 * self.size),
+                                           "0", clock))
+                aux["u"] = "amplitude,k,pos_x,*,wt,-,sin,*,env0,*"
         else:
             n = len(self.sources)
             aux = {
                 "k": "%s,wavelength,/" % tau,
-                "wt": "%s,period,/,time,*" % tau,
+                "wt": "%s,frequency,*,%s,*" % (clock, tau),
                 "amp": "amplitude,pi,*,wavelength,sqrt,/"
             }
             for j in range(n):
@@ -2012,23 +2078,34 @@ class WaveVisualizationModifier(GeometryNodesModifier):
                 # x = k r, held off the pole of Y0
                 aux["x%d" % j] = "r%d,%s,max,k,*" % (j, repr(self.source_radius))
             for j in range(n):
+                # the gate goes in before the wave that multiplies by it:
+                # aux entries are emitted in insertion order, so an env
+                # defined afterwards is not yet a name when w reads it
+                if self.front:
+                    aux.update(wave_front_gate("r%d" % j, str(j), clock))
                 # Re[H0(kr) exp(-i w t)], the outgoing wave
                 aux["w%d" % j] = ("amp,x{0},j0,wt,cos,*,"
-                                  "x{0},y0,wt,sin,*,+,*".format(j))
+                                  "x{0},y0,wt,sin,*,+,*".format(j)
+                                  + (",env%d,*" % j if self.front else ""))
             aux["u"] = ",".join("w%d" % j for j in range(n)) + ",+" * (n - 1)
 
-        names = ["pos", "time", "period", "wavelength", "amplitude"] + ["c%d" % j for j in range(n)]
+        names = ["pos", "time", "frequency", "wavelength", "amplitude"] \
+                + (["impact", "edge"] if self.front else []) \
+                + ["c%d" % j for j in range(n)]
         wave = make_function(tree, location=(1, 0), name="Elongation",
                              functions={"elongation": "u"},
                              aux_functions=aux,
                              inputs=names, outputs=["elongation"],
                              vectors=["pos"] + ["c%d" % j for j in range(n)],
-                             scalars=["time", "period", "wavelength",
-                                      "amplitude", "elongation"] + list(aux),
+                             scalars=["time", "frequency", "wavelength",
+                                      "amplitude", "elongation"]
+                                     + (["impact", "edge"] if self.front else [])
+                                     + list(aux),
                              custom_ops=BESSEL_OPS, parent=frame, hide=False)
 
         tree.links.new(position.std_out, wave.inputs["pos"])
-        for key in ("time", "period", "wavelength", "amplitude"):
+        for key in ("time", "frequency", "wavelength", "amplitude") \
+                + (("impact", "edge") if self.front else ()):
             tree.links.new(control[key], wave.inputs[key])
         for j, source in enumerate(control["sources"]):
             tree.links.new(source, wave.inputs["c%d" % j])
@@ -2117,6 +2194,11 @@ class WaveVisualizationModifier(GeometryNodesModifier):
             uv_scale=(self.size, self.size),
             wavelength=self.wavelength, frequency=self.frequency,
             amplitude=self.amplitude, source_radius=self.source_radius,
+            # the same three numbers the tree was built with. The shader
+            # recomputes the sum independently, so an ungated material would
+            # paint fringes on water that is provably flat
+            front=self.front, impact=self.impact,
+            front_width=self.front_width,
             **self.kwargs)
 
     # ------------------------------------------------------------------
@@ -2136,14 +2218,20 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         from scipy.special import j0, y0
         points = np.asarray(points, dtype=float)[:, :2]
         k = tau / self.wavelength
-        wt = seconds * self.frequency * tau
+        elapsed = seconds - self.impact if self.front else seconds
+        wt = elapsed * self.frequency * tau
         amp = self.amplitude * pi / np.sqrt(self.wavelength)
+        reach = self.wavelength * self.frequency * elapsed
         total = np.zeros(len(points))
         for source in self.sources:
             radius = np.linalg.norm(points - np.array([source.x, source.y]),
                                     axis=1)
             x = np.maximum(radius, self.source_radius) * k
-            total += amp * (j0(x) * np.cos(wt) + y0(x) * np.sin(wt))
+            wave = amp * (j0(x) * np.cos(wt) + y0(x) * np.sin(wt))
+            if self.front:
+                gate = np.clip((reach - radius) / self.front_width, 0.0, 1.0)
+                wave = wave * gate * gate * (3 - 2 * gate)
+            total += wave
         return total
 
 
