@@ -1,8 +1,8 @@
 import colorsys
 import time
 
-import bmesh
 import bpy
+import bmesh
 
 from appearance import textures
 from appearance.textures import apply_material

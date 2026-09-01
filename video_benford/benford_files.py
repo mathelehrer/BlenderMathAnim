@@ -2,7 +2,7 @@ import os
 import numpy as np
 
 
-def scan_files_with_sizes_recursive(directory, max_number=np.Inf):
+def scan_files_with_sizes_recursive(directory, max_number=np.inf):
     results = {}
     for root, dirs, files in os.walk(directory):
         for name in files:

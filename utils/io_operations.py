@@ -4,7 +4,7 @@ import numpy as np
 
 from utils.constants import DATA_DIR
 
-def list_files_with_sizes_recursive(directory: str, follow_links: bool = False,max_number=np.Inf):
+def list_files_with_sizes_recursive(directory: str, follow_links: bool = False,max_number=np.inf):
     results = {}
     for root, dirs, files in os.walk(directory, followlinks=follow_links):
         for name in files:

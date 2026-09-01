@@ -320,14 +320,8 @@ class Node:
                                  hide=hide, mute=mute, node_height=200,
                                  data_type=data_type)
         if type == "STRING_TO_CURVES":
-            font = attributes["font"]
-            overflow = attributes["overflow"]
-            align_x = attributes["align_x"]
-            align_y = attributes["align_y"]
-            pivot_mode = attributes["pivot_mode"]
             return StringToCurves(tree, location=location, name=name, label=label, hide=hide, mute=mute,
-                                  node_height=200,
-                                  font=font, overflow=overflow, align_x=align_x, align_y=align_y, pivot_mode=pivot_mode)
+                                  node_height=200)
         if type == "STRING_JOIN":
             return StringJoin(tree, location=location, name=name, label=label, hide=hide, mute=mute, node_height=200)
         if type == "SLICE_STRING":

@@ -133,11 +133,9 @@ class BenfordDiagram(BObject):
         self.modifier = BenfordDiagramModifier(**kwargs)
         self.geo.add_mesh_modifier(type="NODES", node_modifier=self.modifier)
 
-
         number_material = get_texture(get_from_kwargs(kwargs,"numer_material","joker"))
         highlighted_number_material = get_texture(get_from_kwargs(kwargs,"highlighted_number_material","custom1"))
         bar_material = get_texture(get_from_kwargs(kwargs,"bar_material","custom3"))
-
 
         gnmod = ibpy.get_geometry_nodes_modifier(self.geo)
         if gnmod is not None and gnmod.type == "NODES":
