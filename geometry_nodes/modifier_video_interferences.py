@@ -136,6 +136,11 @@ Classes:
     radiates into, sin(alpha_n) = n lambda / g, drawn as rays from the centre
     of the array. The prediction to hold an interference pattern against, and
     it moves when the wavelength does.
+:class:`Slicer`
+    the only one here that *takes* geometry rather than building it: it throws
+    away everything on the far side of a plane, so a solid can be opened up
+    and its inside shown. One dial, ``SlicerValue``, is where the plane sits,
+    and keyframing it cuts the object open on camera.
 """
 import numpy as np
 
@@ -155,7 +160,10 @@ from geometry_nodes.nodes import (BESSEL_OPS, BooleanMath, CombineXYZ, CubeMesh,
                                   VolumeCube, WireFrame, bessel_jm_rpn, make_function,
                                   split_rpn, create_geometry_line,
                                   wave_front_gate)
-from interface.ibpy import Vector
+from interface import ibpy
+from interface.ibpy import Vector, get_geometry_node_from_modifier
+from objects.slide import DEFAULT_MATERIAL
+from utils.constants import DEFAULT_SCENE_DURATION, DEFAULT_ANIMATION_TIME
 
 pi = np.pi
 tau = 2 * pi
@@ -1982,11 +1990,12 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         width = InputValue(tree,location=(0,-3),value=self.size,name="Width",parent=frame)
 
         if self.front:
+            ease_in = InputValue(tree,location=(-2,1),value=0,name="EaseIn",parent=frame)
             impact = InputValue(tree, location=(-2, 0), value=self.impact,
                                 name="Impact", parent=frame)
             edge = InputValue(tree, location=(-2, -1), value=self.front_width,
                               name="FrontWidth", parent=frame)
-            transient = {"impact": impact.std_out, "edge": edge.std_out}
+            transient = {"impact": impact.std_out, "edge": edge.std_out,"ease_in":ease_in.std_out}
         else:
             transient = {}
 
@@ -2090,22 +2099,27 @@ class WaveVisualizationModifier(GeometryNodesModifier):
             aux["u"] = ",".join("w%d" % j for j in range(n)) + ",+" * (n - 1)
 
         names = ["pos", "time", "frequency", "wavelength", "amplitude"] \
-                + (["impact", "edge"] if self.front else []) \
+                + (["impact", "edge","ease_in"] if self.front else []) \
                 + ["c%d" % j for j in range(n)]
+
+        if self.front:
+            function = "u,ease_in,*"
+        else:
+            function = "u"
         wave = make_function(tree, location=(1, 0), name="Elongation",
-                             functions={"elongation": "u"},
+                             functions={"elongation": function},
                              aux_functions=aux,
                              inputs=names, outputs=["elongation"],
                              vectors=["pos"] + ["c%d" % j for j in range(n)],
                              scalars=["time", "frequency", "wavelength",
                                       "amplitude", "elongation"]
-                                     + (["impact", "edge"] if self.front else [])
+                                     + (["impact", "edge","ease_in"] if self.front else [])
                                      + list(aux),
                              custom_ops=BESSEL_OPS, parent=frame, hide=False)
 
         tree.links.new(position.std_out, wave.inputs["pos"])
         for key in ("time", "frequency", "wavelength", "amplitude") \
-                + (("impact", "edge") if self.front else ()):
+                + (("impact", "edge","ease_in") if self.front else ()):
             tree.links.new(control[key], wave.inputs[key])
         for j, source in enumerate(control["sources"]):
             tree.links.new(source, wave.inputs["c%d" % j])
@@ -2233,6 +2247,11 @@ class WaveVisualizationModifier(GeometryNodesModifier):
                 wave = wave * gate * gate * (3 - 2 * gate)
             total += wave
         return total
+
+    def ease_in(self,begin_time=0,transition_time=DEFAULT_ANIMATION_TIME):
+        ease_in_node = get_geometry_node_from_modifier(self,"EaseIn")
+        ibpy.change_default_value(ease_in_node,from_value=0,to_value=1,begin_time=begin_time,transition_time=transition_time)
+        return begin_time+transition_time
 
 
 # ---------------------------------------------------------------------------
@@ -2743,3 +2762,169 @@ class DrumModeModifier(GeometryNodesModifier):
         wt = tau * self.frequency * alpha / BESSEL_ZEROS[0][0] * seconds
         angle = np.cos(m * np.arctan2(points[:, 1], points[:, 0])) if m else 1.0
         return self.amplitude / peak * jv(m, x) * angle * np.cos(wt)
+
+
+class Slicer(GeometryNodesModifier):
+    r"""Everything on the far side of a plane, thrown away.
+
+    The one modifier in this module that *takes* geometry instead of building
+    it: the incoming mesh goes through a single ``Delete Geometry`` whose
+    selection is the half space
+
+    .. math::
+        \vec{x}\cdot\hat{n} > s ,
+
+    with :math:`\hat{n}` the ``Direction`` dial (z by default) and :math:`s`
+    the ``SlicerValue`` one. So the default cuts the lid off at a height, and
+    ramping ``SlicerValue`` down runs the cut through the object - which is
+    what opens a whistle up on camera and shows the pipe inside it::
+
+        slicer = Slicer(value=0.25)
+        whistle.add_mesh_modifier(type='NODES', node_modifier=slicer)
+        slicer.slice(to_value=0.1, begin_time=1, transition_time=2)
+
+    **This is a cut, not a section.** Deleting points removes every face that
+    used one, so what is left is the mesh's own polygons up to the plane and
+    an open, slightly ragged rim - the inside of a hollow object becomes
+    visible through it, and there is no flat cap over the cut. A cap needs a
+    boolean against a half-space solid, which costs a manifold mesh and a
+    great deal more time per frame; for a shell (a pipe, a bell, a whistle)
+    the open cut is also the *honest* picture, since a capped one would show
+    a lid that is not there.
+
+    **Which space the plane is in.** ``Position`` is the object's own local
+    coordinates, so the plane is carried along by the object's transform: a
+    whistle that is rotated keeps its cut, and ``SlicerValue`` stays the
+    number it was. Slicing along a *world* axis of an object that is turned
+    means turning ``Direction`` by the same amount.
+
+    The dials, reachable with
+    ``ibpy.get_geometry_node_from_modifier(modifier, label)`` (:meth:`dial`):
+
+    ``SlicerValue``
+        where the plane sits, measured along ``Direction``. Above the
+        object's extent nothing is removed, below it nothing is left.
+    ``Direction``
+        the normal of the cutting plane, pointing at the half that goes.
+        Need not be normalised - if it is not, ``SlicerValue`` is measured in
+        units of its length, which is why :meth:`bounds` reports what the
+        object's extent actually is in that measure.
+
+    :param name: name of the node group, and of the modifier in the stack.
+    :param direction: ``"x"``, ``"y"``, ``"z"`` (the default), their negatives
+        (``"-z"``), or any vector. The half space it points into is the one
+        that is removed.
+    :param value: what ``SlicerValue`` starts at.
+    :param domain: what is selected and deleted. ``"POINT"`` (the default)
+        deletes a vertex and every face that used it, so nothing sticks out
+        past the plane. ``"FACE"`` evaluates the test at face centres instead,
+        which leaves the faces that straddle the plane in place and cuts about
+        half a polygon higher, but keeps the rim tidier on a coarse mesh.
+    :param invert: keep the half that would be cut and remove the other one.
+    :param kwargs: passed on to
+        :class:`~geometry_nodes.geometry_nodes_modifier.GeometryNodesModifier`.
+    """
+
+    _AXES = {"x": (1, 0, 0), "y": (0, 1, 0), "z": (0, 0, 1),
+             "-x": (-1, 0, 0), "-y": (0, -1, 0), "-z": (0, 0, -1)}
+
+    def __init__(self, name="Slicer", direction="z", value=0.0,
+                 domain="POINT", invert=False, **kwargs):
+        self.direction = self.axis(direction)
+        self.value = value
+        self.domain = domain
+        self.invert = invert
+        # filled in by create_node, so that slice() has the dial to keyframe
+        # without going back through the node tree by name
+        self.slicer_value = None
+        super().__init__(name=name, automatic_layout=True,
+                         group_input=True, group_output=True, **kwargs)
+
+    # ------------------------------------------------------------------
+    @classmethod
+    def axis(cls, direction):
+        """The plane normal as a ``Vector``, from a name or a vector."""
+        if isinstance(direction, str):
+            key = direction.strip().lower()
+            if key not in cls._AXES:
+                raise ValueError("slicing direction %r is not one of %s, and "
+                                 "not a vector either"
+                                 % (direction, sorted(cls._AXES)))
+            return Vector(cls._AXES[key])
+        return Vector(direction)
+
+    # ------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        geometry = self.group_inputs.outputs["Geometry"]
+
+        direction = InputVector(tree, location=(-4, -1), vector=self.direction,
+                                name="Direction")
+        self.slicer_value = InputValue(tree, location=(-4, -2),
+                                       value=self.value, name="SlicerValue")
+        position = Position(tree, location=(-4, 0), name="SlicePosition",
+                            hide=True)
+
+        # the half space, as one dot product against one number. The float the
+        # comparison leaves is wired straight into Selection, which blender
+        # reads as a boolean - the house style of the other culls in this
+        # module (SpatialDistributionModifier.constraint, PolarGridModifier's
+        # "DeleteHalf").
+        cut = "pos,dir,dot,value,%s" % ("<" if self.invert else ">")
+        selection = make_function(tree, location=(-2, -1), name="SliceSelection",
+                                  functions={"cut": cut},
+                                  inputs=["pos", "dir", "value"],
+                                  outputs=["cut"],
+                                  vectors=["pos", "dir"],
+                                  scalars=["value", "cut"])
+        tree.links.new(position.std_out, selection.inputs["pos"])
+        tree.links.new(direction.std_out, selection.inputs["dir"])
+        tree.links.new(self.slicer_value.std_out, selection.inputs["value"])
+
+        slice_off = DeleteGeometry(tree, location=(0, 0), domain=self.domain,
+                                   mode="ALL", geometry=geometry,
+                                   selection=selection.outputs["cut"],
+                                   name="SliceCut")
+        tree.links.new(slice_off.geometry_out,
+                       self.group_outputs.inputs["Geometry"])
+
+    # ------------------------------------------------------------------
+    def dial(self, label="SlicerValue"):
+        """The node a scene animates, by the name the tree gave it."""
+        return get_geometry_node_from_modifier(self, label)
+
+    def slice(self, to_value, from_value=None, begin_time=0,
+              transition_time=DEFAULT_ANIMATION_TIME):
+        """Run the cutting plane to ``to_value`` and return when it arrives.
+
+        ``from_value=None`` picks the plane up wherever the last call left it
+        (``value`` at first), which is what makes a sequence of calls read as
+        one continuous cut. It is *not* passed on as ``None``:
+        :func:`ibpy.change_default_value` writes no keyframe at all for a
+        start it is not given, and the dial would then hold ``to_value`` from
+        the first frame of the scene rather than move to it.
+
+        :return: ``begin_time + transition_time``, the project's convention
+            for chaining a scene's ``t0``.
+        """
+        if from_value is None:
+            from_value = self.value
+        self.value = to_value
+        return ibpy.change_default_value(self.slicer_value.std_out,
+                                         from_value=from_value,
+                                         to_value=to_value,
+                                         begin_time=begin_time,
+                                         transition_time=transition_time)
+
+    # ------------------------------------------------------------------
+    def bounds(self, bob):
+        """How far ``bob`` reaches along ``Direction``, as ``(min, max)``.
+
+        The two values ``SlicerValue`` has to run between for a cut to go all
+        the way through: at the maximum nothing is removed yet, at the minimum
+        nothing is left. Measured on the object's own mesh in its own local
+        coordinates, which is the space the plane lives in.
+        """
+        obj = ibpy.get_obj(bob)
+        corners = np.array([list(corner) for corner in obj.bound_box])
+        reach = corners @ np.array(self.direction)
+        return float(reach.min()), float(reach.max())

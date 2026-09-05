@@ -24,7 +24,7 @@ from shader_nodes.shader_nodes import (Mapping, AttributeNode, HueSaturationValu
                                        Displacement, ShaderNode, MixShader,
                                        TextureCoordinate, ColorRamp, ShaderFrame,
                                        ShaderRepeatZone, BrightContrast, RGB, PrincipledBSDF, OnRightNode, CombineXYZ,
-                                       IfNode, Mix, MixNode, VoronoiTexture, OutputMaterial)
+                                       IfNode, Mix, MixNode, VoronoiTexture, OutputMaterial, NoiseTexture)
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
@@ -420,6 +420,64 @@ def create_crystal_material(**kwargs):
     return material
 
 
+def make_water_texture(**kwargs):
+    """
+    a noise-driven water surface, built node by node from ``shader_nodes``
+    wrappers rather than :func:`create_from_xml` (``video_interferences/
+    shader.xml`` is the design reference, not something this loads).
+
+    A 4D Noise Texture reads its (x, y) position from the surface's own UV -
+    fed by a Texture Coordinate node, so the pattern rides with the mesh
+    rather than with world space - and its 4th, W, dimension from a plain
+    "time" Value node with no driver of its own. A scene that wants the
+    surface to churn ramps that node by hand::
+
+        clock = ibpy.get_node_from_shader(material, "time")
+        ibpy.change_default_value(clock, from_value=0, to_value=10,
+                                  begin_time=0, transition_time=10)
+
+    exactly the pattern :class:`~geometry_nodes.modifier_video_interferences.
+    WaveVisualizationModifier`'s docstring uses for its own "Time" node.
+
+    The noise's Factor output does double duty, the same value driving both
+    the colour (through a two-stop blue ColorRamp) and the Displacement, so
+    the crests of the bump map are exactly the light patches of the paint.
+    """
+    material = bpy.data.materials.new(name="water_texture")
+    material.use_nodes = True
+    tree = material.node_tree
+    nodes = tree.nodes
+    links = tree.links
+
+    bsdf = nodes.get("Principled BSDF")
+    bsdf.inputs["Roughness"].default_value = 0
+    bsdf.inputs["IOR"].default_value=1.333
+    out = nodes.get("Material Output")
+
+    time = InputValue(tree, location=(-5, 0.5), value=0,
+                      name="Value", label="time", hide=False)
+    coords = TextureCoordinate(tree, location=(-5, -0.5), std_out="UV",
+                               hide=False)
+    noise = NoiseTexture(tree, location=(-3, 0), noise_dimensions="4D",
+                         noise_type="FBM", normalize=True,
+                         scale=12.59999942779541, detail=2.0,
+                         std_out="Factor", vector=coords.std_out,
+                         w=time.std_out, hide=False)
+    ramp = ColorRamp(tree, location=(-1.5, 0.8), factor=noise.std_out,
+                     values=[0.5135952234268188, 1.0],
+                     colors=[[0.012386882677674294, 0.003408308606594801, 1.0, 1.0],
+                             [0.0, 0.45388323068618774, 1.0, 1.0]],
+                     interpolation="LINEAR", hide=False)
+    displacement = Displacement(tree, location=(0.7, -1.4),
+                                height=noise.std_out,
+                                scale=0.11999999731779099, hide=False)
+
+    links.new(ramp.std_out, bsdf.inputs["Base Color"])
+    links.new(displacement.std_out, out.inputs["Displacement"])
+
+    return material
+
+
 def get_texture(material, **kwargs):
     """
     this method is intended to supersed the get_material method
@@ -466,6 +524,8 @@ def get_texture(material, **kwargs):
             material = make_hue_material(**kwargs)
         elif material == 'gold':
             material = make_gold_material(**kwargs)
+        elif material == 'water_texture':
+            material = make_water_texture(**kwargs)
         elif material == "billiards_cloth_material":
             material = billiards_cloth_material(**kwargs)
         elif material == "billiard_ball_material":
@@ -831,9 +891,10 @@ def apply_material(obj, col, shading=None, recursive=False, type_req=None, inten
 
     # settings for eevee
     for slot in obj.material_slots:
-        slot.material.blend_method = 'HASHED'
-        if blender_version() < (4, 3):
-            slot.material.shadow_method = 'HASHED'
+        if slot.material is not None:
+            slot.material.blend_method = 'HASHED'
+            if blender_version() < (4, 3):
+                slot.material.shadow_method = 'HASHED'
 
     if 'uv_alpha_frame' in kwargs:
         uv_alpha_frame = kwargs.pop('uv_alpha_frame')

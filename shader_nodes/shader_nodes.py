@@ -547,7 +547,7 @@ class Mapping(ShaderNode):
 class NoiseTexture(ShaderNode):
     def __init__(self, tree, location=(0, 0), noise_dimensions='3D', noise_type='FBM', normalize=True,
                  color_dictionary={}, std_out="Color",
-                 scale=5, detail=2, **kwargs):
+                 scale=5, detail=2, vector=None, w=None, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeTexNoise")
 
         super().__init__(tree, location, **kwargs)
@@ -558,6 +558,22 @@ class NoiseTexture(ShaderNode):
         self.node.normalize = normalize
         for key, value in color_dictionary.items():
             self.node.color_ramp.elements[key].color = parse_vector(value)
+
+        # only present when noise_dimensions is not '1D' - a plain float
+        # "position" makes no sense there
+        if vector is not None:
+            if isinstance(vector, (list, tuple, Vector)):
+                self.node.inputs['Vector'].default_value = vector
+            else:
+                self.tree.links.new(vector, self.node.inputs['Vector'])
+
+        # only present for '1D'/'4D' - the extra dimension a scene ramps by
+        # hand to animate the pattern (see WaveVisualizationModifier's Time)
+        if w is not None:
+            if isinstance(w, (int, float)):
+                self.node.inputs['W'].default_value = w
+            else:
+                self.tree.links.new(w, self.node.inputs['W'])
 
         if isinstance(scale, (int, float)):
             self.node.inputs['Scale'].default_value = scale

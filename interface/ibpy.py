@@ -2433,6 +2433,10 @@ def get_material(material, **kwargs):
             # material - the material keeps the name it is known by here
             material = base_mixing(**{key: value for key, value in kwargs.items()
                                       if key != "name"})
+        elif material == 'water_texture':
+            # imported here for the same reason as 'BaseMixing' above
+            from appearance.textures import make_water_texture
+            material = make_water_texture(**kwargs)
         else:
             if material not in bpy.data.materials:
                 # return default drawing material
