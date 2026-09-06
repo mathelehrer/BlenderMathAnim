@@ -32,7 +32,7 @@ class CoxeterDynkinDiagram:
         self.create_graph()
 
     @classmethod
-    def from_graph(cls,graph:nx.Graph)->CoxeterDynkinDiagram:
+    def from_graph(cls, graph: nx.Graph) -> CoxeterDynkinDiagram:
         """
         create a diagram from a graph
         this is useful to convert sub-graphs into diagrams
@@ -42,9 +42,9 @@ class CoxeterDynkinDiagram:
         # create diagram string from graph
         nodes = list(graph.nodes)
         n = max([node[1] for node in nodes])
-        for i in range(n+1):
-            diagram_string+=". "
-        diagram_string=diagram_string[:-1]
+        for i in range(n + 1):
+            diagram_string += ". "
+        diagram_string = diagram_string[:-1]
 
         # deal with branches
         connection_count = {}
@@ -58,63 +58,63 @@ class CoxeterDynkinDiagram:
         new_weights = weights
 
         # relocated branch node, when the diagram becomes linear (put the nodes with the lowest connectivity at the start and the end
-        if all(val<=2 for key,val in connection_count.items()):
+        if all(val <= 2 for key, val in connection_count.items()):
             positions = list(connection_count.keys())
-            positions.sort() # make sure that the branch point is at the end
-            if len(positions)>0:
-                if connection_count[positions[0]]==2 and connection_count[positions[-1]]==1:
-                    connection_count[positions[0]-1]=connection_count[positions[-1]]
+            positions.sort()  # make sure that the branch point is at the end
+            if len(positions) > 0:
+                if connection_count[positions[0]] == 2 and connection_count[positions[-1]] == 1:
+                    connection_count[positions[0] - 1] = connection_count[positions[-1]]
                     connection_count.pop(positions[-1])
 
                     new_nodes = []
                     for node in nodes:
-                        if node[1]==positions[-1]:
-                            new_nodes.append((node[0],positions[0]-1))
+                        if node[1] == positions[-1]:
+                            new_nodes.append((node[0], positions[0] - 1))
                         else:
                             new_nodes.append(node)
 
                     new_edges = []
                     for edge in graph.edges:
-                        if edge[0][1]==positions[-1]:
-                            new_edge=((edge[0][0],positions[0]-1),edge[1])
-                        elif edge[1][1]==positions[-1]:
-                            new_edge=(edge[0],(edge[1][0],positions[0]-1))
+                        if edge[0][1] == positions[-1]:
+                            new_edge = ((edge[0][0], positions[0] - 1), edge[1])
+                        elif edge[1][1] == positions[-1]:
+                            new_edge = (edge[0], (edge[1][0], positions[0] - 1))
                         else:
                             new_edge = edge
-                        if new_edge[0][1]>new_edge[1][1]:
-                            new_edge = (new_edge[1],new_edge[0])
+                        if new_edge[0][1] > new_edge[1][1]:
+                            new_edge = (new_edge[1], new_edge[0])
                         new_edges.append(new_edge)
 
-                    new_weights={}
-                    for edge,weight in weights.items():
+                    new_weights = {}
+                    for edge, weight in weights.items():
                         if edge in new_edges:
-                            new_weights[edge]=weight
+                            new_weights[edge] = weight
                         else:
-                            if edge[0][1]==positions[-1]:
-                                new_weights[((edge[0][0],positions[0]-1),edge[1])]=weight
+                            if edge[0][1] == positions[-1]:
+                                new_weights[((edge[0][0], positions[0] - 1), edge[1])] = weight
                             else:
-                                new_weights[(((edge[1][0],positions[0]-1)),edge[0])]=weight
+                                new_weights[(((edge[1][0], positions[0] - 1)), edge[0])] = weight
 
         for node in new_nodes:
             label, pos = node
-            diagram_string = diagram_string[:2*pos] + label + diagram_string[2*pos+1:]
+            diagram_string = diagram_string[:2 * pos] + label + diagram_string[2 * pos + 1:]
 
-        for edge,weight in new_weights.items():
-            if connection_count[edge[0][1]]<3 and connection_count[edge[1][1]]<3:
-                diagram_string = diagram_string[:2*edge[0][1]+1]+str(weight)+diagram_string[2*edge[0][1]+2:]
+        for edge, weight in new_weights.items():
+            if connection_count[edge[0][1]] < 3 and connection_count[edge[1][1]] < 3:
+                diagram_string = diagram_string[:2 * edge[0][1] + 1] + str(weight) + diagram_string[2 * edge[0][1] + 2:]
             else:
-                if connection_count[edge[0][1]]>2:
-                    branch_from =edge[0][1]
+                if connection_count[edge[0][1]] > 2:
+                    branch_from = edge[0][1]
                     branch_to = edge[1][1]
                 else:
                     branch_from = edge[1][1]
                     branch_to = edge[0][1]
                 l = letters[branch_from]
 
-                diagram_string = diagram_string[:2*branch_to+2]+"*"+l+str(weight)+diagram_string[2*branch_to+2:]
+                diagram_string = diagram_string[:2 * branch_to + 2] + "*" + l + str(weight) + diagram_string[
+                    2 * branch_to + 2:]
 
         return cls(diagram_string)
-
 
     def create_graph(self):
         """
@@ -577,13 +577,13 @@ class CoxeterDynkinDiagram:
             dimensions.append(count)
         return rows, sub_diagrams, dimensions
 
-    def contains(self,diagram):
-        return nx.is_isomorphic(self.graph.subgraph(diagram.graph.nodes),diagram.graph)
+    def contains(self, diagram):
+        return nx.is_isomorphic(self.graph.subgraph(diagram.graph.nodes), diagram.graph)
 
     def get_maximal_diagram_string(self):
-        return self.diagram_string.replace("o","x")
+        return self.diagram_string.replace("o", "x")
 
-    def get_maximal_orthogonal_contraction(self,diagram)->int:
+    def get_maximal_orthogonal_contraction(self, diagram) -> int:
         """
         computation of the factor, by which a diagonal element of the incidence matrix is contracted in comparsion to the full incidence matrix
         We need to find the vertex count of the subgraph that only contains "o" and is not connected to the 'x' of the diagram
@@ -610,7 +610,7 @@ class CoxeterDynkinDiagram:
         nodes = list(self.graph.nodes)
         sub_nodes = list(diagram.graph.nodes)
 
-        complement_nodes = [node for node in nodes if node[0]=='o']
+        complement_nodes = [node for node in nodes if node[0] == 'o']
         edges = list(self.graph.edges)
 
         for edge in edges:
@@ -619,7 +619,7 @@ class CoxeterDynkinDiagram:
             if edge[0] in complement_nodes and edge[1] in sub_nodes:
                 complement_nodes.remove(edge[0])
 
-        if len(complement_nodes)==0:
+        if len(complement_nodes) == 0:
             return 1
         sub_graph = self.graph.subgraph(complement_nodes)
         sub_diagram = CoxeterDynkinDiagram.from_graph(sub_graph)
@@ -629,23 +629,24 @@ class CoxeterDynkinDiagram:
         return self.diagram_string
 
     def __repr__(self):
-        return "Diagram("+self.diagram_string+")"
+        return "Diagram(" + self.diagram_string + ")"
+
 
 class IncidenceMatrix:
     def __init__(self, diagram_string):
         self.diagram = CoxeterDynkinDiagram(diagram_string)
         self.max_diagram = CoxeterDynkinDiagram(self.diagram.get_maximal_diagram_string())
 
-        self.max_matrix,self.max_dimensions = self.compute_largest_incidence_matrix()
-        self.max_rows,self_max_sub_diagrams,self.max_dimensions = self.max_diagram.get_subdiagrams()
+        self.max_matrix, self.max_dimensions = self.compute_largest_incidence_matrix()
+        self.max_rows, self_max_sub_diagrams, self.max_dimensions = self.max_diagram.get_subdiagrams()
 
         if not 'o' in diagram_string:
-            self.rows=self.max_rows
+            self.rows = self.max_rows
             self.matrix = self.max_matrix
             self.dimensions = self.max_dimensions
         else:
             self.rows, self.sub_diagrams, self.dimensions = self.diagram.get_subdiagrams()
-            self.matrix,self.dimension = self.compute_incidence_matrix()
+            self.matrix, self.dimension = self.compute_incidence_matrix()
 
     def print_largest_table(self):
         """
@@ -659,7 +660,7 @@ class IncidenceMatrix:
         # create column matrix to determine the custom width of each column
         col_matrix = array.transpose()
         widths = [max([len(row) for row in self.max_rows])] + [max([len(str(entry)) for entry in column]) for column in
-                                                           col_matrix]
+                                                               col_matrix]
 
         top = "+" + "-" * widths[0] + "+"
         sep = "|" + "-" * widths[0] + "+"
@@ -718,12 +719,12 @@ class IncidenceMatrix:
         # create column matrix to determine the custom width of each column
         col_matrix = array.transpose()
         widths = [max([len(row) for row in self.rows])] + [max([len(str(entry)) for entry in column]) for column in
-                                                      col_matrix]
+                                                           col_matrix]
 
         top = "+" + "-" * widths[0] + "+"
         sep = "|" + "-" * widths[0] + "+"
         count = 0
-        for d in self.dimensions: # dimensions capture the size for each section of the table (that belongs to one particular part, eg vertices, edges, faces, etc.)
+        for d in self.dimensions:  # dimensions capture the size for each section of the table (that belongs to one particular part, eg vertices, edges, faces, etc.)
             for i in range(count, count + d):
                 top += "-" * widths[i + 1] + " "
                 sep += "-" * widths[i + 1] + " "
@@ -744,17 +745,17 @@ class IncidenceMatrix:
             for d in self.dimensions:  # dimensions capture the size for each section of the table (that belongs to one particular part, eg vertices, edges, faces, etc.)
                 for c in range(count, count + d):
                     entry = self.matrix[r][c]
-                    if entry==-1:
+                    if entry == -1:
                         entry = "*"
                     else:
                         entry = str(entry)
-                    width = widths[c+1]
-                    while len(entry)<width:
-                        entry=" "+entry # padding for right alignment
-                    row_string+=entry+" "
-                row_string=row_string[:-1]+"|"
-                count+=d
-            table += row_string+ "\n"
+                    width = widths[c + 1]
+                    while len(entry) < width:
+                        entry = " " + entry  # padding for right alignment
+                    row_string += entry + " "
+                row_string = row_string[:-1] + "|"
+                count += d
+            table += row_string + "\n"
             if r == dim - 1:
                 if dim_sel < len(self.dimensions):
                     table += sep + "\n"
@@ -773,7 +774,7 @@ class IncidenceMatrix:
         array = np.array(self.matrix)
         col_matrix = array.transpose()
         widths = [max([len(row) for row in self.rows])] + [max([len(str(entry)) for entry in column]) for column in
-                                                      col_matrix]
+                                                           col_matrix]
         lines = []
 
         lines.append(r"\fbox{\tt " + self.diagram.diagram_string + r"}\\")
@@ -953,27 +954,27 @@ class IncidenceMatrix:
         for d, sub_dias in sub_diagrams.items():
             for sub in sub_dias:
                 if row_counter == 0:
-                    matrix[0][0]=order
+                    matrix[0][0] = order
                 else:
-                    matrix[row_counter][0]=sub.get_vertex_count()
-                row_counter+=1
+                    matrix[row_counter][0] = sub.get_vertex_count()
+                row_counter += 1
 
         # prepare lower-off-diagonal parts (only relevant for dim>2)
         for d in range(dim, 2, -1):
-            row_start = sum(dimensions[:d-1])
-            subs = sub_diagrams[d-1]
+            row_start = sum(dimensions[:d - 1])
+            subs = sub_diagrams[d - 1]
             for r, sub in enumerate(subs):
                 sub_im = IncidenceMatrix(sub.diagram_string)
                 sub_matrix, sub_dimensions = sub_im.compute_largest_incidence_matrix()
                 # we need the entries of the last diagonal and need to place them, where the corresponding sub_row fits into the row of the current row
                 # for example x3x3x
                 sub_rows, subsub_dias, sub_dimensions = sub.get_subdiagrams()
-                for sub_dim,subsubs in subsub_dias.items():
-                    if sub_dim>0: # we can start with edges, vertices are done already
+                for sub_dim, subsubs in subsub_dias.items():
+                    if sub_dim > 0:  # we can start with edges, vertices are done already
                         sub_start = sum(sub_dimensions[:sub_dim])
                         for i, subsub in enumerate(subsubs):
                             position = row_strings.index(subsub.diagram_string)
-                            matrix[row_start+r][position] = sub_matrix[sub_start+i, sub_start+i]
+                            matrix[row_start + r][position] = sub_matrix[sub_start + i, sub_start + i]
 
         # compute last diagonal part
         # it uses the fact that the total vertex count is related to the product of [fnfn]_{ii}*[fnf(n-1)]_{ij}*[f(n-1)f(n-2)]_{jk}*...*2
@@ -1013,7 +1014,7 @@ class IncidenceMatrix:
             subs = sub_diagrams[sub_dim]
             subsubs = sub_diagrams[sub_dim - 1]
             # compute off-diagonal part
-            for  sub in subs:
+            for sub in subs:
                 col = row_strings.index(sub.diagram_string)
                 for subsub in subsubs:
                     row = row_strings.index(subsub.diagram_string)
@@ -1131,40 +1132,39 @@ class IncidenceMatrix:
         row_strings, sub_diagrams, dimensions = self.diagram.get_subdiagrams()
         matrix = self.max_matrix.copy()
         max_rows = self.max_rows.copy()
-        surviving_row_patterns = [row.replace('o','x') for row in self.rows]
+        surviving_row_patterns = [row.replace('o', 'x') for row in self.rows]
         # delete unvalid rows and columns
         rows_to_remove = []
-        for r,row in enumerate(self.max_rows):
+        for r, row in enumerate(self.max_rows):
             if not row in surviving_row_patterns:
                 rows_to_remove.append(r)
 
         # remove from large indices to smaller indices
         for r in reversed(rows_to_remove):
-            matrix = np.delete(matrix,r,axis=0)
-            matrix = np.delete(matrix,r,axis=1)
+            matrix = np.delete(matrix, r, axis=0)
+            matrix = np.delete(matrix, r, axis=1)
             max_rows.remove(self.max_rows[r])
 
-
         # for each o, we have to half the number of elements in the diagonal once for each active orthogonal dimension
-        sub_rows,sub_diagrams,sub_dimensions = self.diagram.get_subdiagrams()
+        sub_rows, sub_diagrams, sub_dimensions = self.diagram.get_subdiagrams()
         sub_diagrams.pop(0)
 
-        matrix[0][0]=self.diagram.get_vertex_count()
+        matrix[0][0] = self.diagram.get_vertex_count()
 
-        for sub_dim,subs in sub_diagrams.items():
+        for sub_dim, subs in sub_diagrams.items():
             for sub in subs:
                 row = self.rows.index(sub.diagram_string)
                 # remaining diagonals
-                if row>0:
+                if row > 0:
                     matrix[row][0] = sub.get_vertex_count()  # first column
-                    matrix[row][row] = matrix[row][row] //self.diagram.get_maximal_orthogonal_contraction(sub)
+                    matrix[row][row] = matrix[row][row] // self.diagram.get_maximal_orthogonal_contraction(sub)
 
         # now, we repeat the analysis from the large_incidence_matrix
         # start with the lower left part of the matrix  (they are taken from sub-diagrams)
 
         # Populates matrix from subdiagram incidence matrices, that are computed recursively from dimension 2
         for d in range(dim, 2, -1):
-            subs = sub_diagrams[d-1]
+            subs = sub_diagrams[d - 1]
             for sub in subs:
                 sub_im = IncidenceMatrix(sub.diagram_string)
                 sub_matrix, sub_dimensions = sub_im.compute_incidence_matrix()
@@ -1173,12 +1173,12 @@ class IncidenceMatrix:
                 # for example x3x3x
                 row = row_strings.index(sub.diagram_string)
                 sub_rows, subsub_dias, sub_dimensions = sub.get_subdiagrams()
-                for sub_dim,subsubs in subsub_dias.items():
-                    if sub_dim>0: # we can start with edges, vertices are done already
+                for sub_dim, subsubs in subsub_dias.items():
+                    if sub_dim > 0:  # we can start with edges, vertices are done already
                         sub_start = sum(sub_dimensions[:sub_dim])
                         for i, subsub in enumerate(subsubs):
                             position = row_strings.index(subsub.diagram_string)
-                            matrix[row][position] = sub_matrix[sub_start+i, sub_start+i]
+                            matrix[row][position] = sub_matrix[sub_start + i, sub_start + i]
 
         # compute the upper part of the matrix from the lower part
         sub_rows, sub_diagrams, sub_dimensions = self.diagram.get_subdiagrams()
@@ -1193,13 +1193,9 @@ class IncidenceMatrix:
                     for col_sub in col_subs:
                         col = row_strings.index(col_sub.diagram_string)
                         if col_sub.contains(row_sub):
-                            matrix[row][col] = matrix[col][col]*matrix[col][row]//matrix[row][row]
-
-
-
+                            matrix[row][col] = matrix[col][col] * matrix[col][row] // matrix[row][row]
 
         return matrix, dimensions
-
 
 
 if __name__ == '__main__':
@@ -1213,12 +1209,12 @@ if __name__ == '__main__':
     # D4
     # solids = ("o3x3o *b3o","o3o3o *b3x","o3o3x *b3x","o3x3o *b3x","o3x3x *b3x","x3o3x *b3x","x3x3x *b3x")
     # F4
-    # solids = ("o3o4o3x", "o3o4x3o", "o3o4x3x", "x3o4o3x", "o3x4o3x", "o3x4x3o", "o3x4x3x", "x3o4x3x", "x3x4x3x")
+    solids = ("o3o4o3x", "o3o4x3o", "o3o4x3x", "x3o4o3x", "o3x4o3x", "o3x4x3o", "o3x4x3x", "x3o4x3x", "x3x4x3x")
     # H4
-    solids = ("x3o3o5o","o3o3o5x","o3x3o5o","o3o3x5o",
-              "x3x3o5o","o3o3x5x","x3o3o5x","o3x3o5x","o3x3x5o","x3o3x5o",
-              "o3x3x5x","x3o3x5x","x3x3o5x","x3x3x5o",
-              "x3x3x5x")
+    # solids = ("x3o3o5o", "o3o3o5x", "o3x3o5o", "o3o3x5o",
+    #           "x3x3o5o", "o3o3x5x", "x3o3o5x", "o3x3o5x", "o3x3x5o", "x3o3x5o",
+    #           "o3x3x5x", "x3o3x5x", "x3x3o5x", "x3x3x5o",
+    #           "x3x3x5x")
 
     for solid in solids:
         im = IncidenceMatrix(solid)

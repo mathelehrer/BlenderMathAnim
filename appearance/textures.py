@@ -451,7 +451,7 @@ def make_water_texture(**kwargs):
 
     bsdf = nodes.get("Principled BSDF")
     bsdf.inputs["Roughness"].default_value = 0
-    bsdf.inputs["IOR"].default_value=1.333
+    bsdf.inputs["IOR"].default_value = 1.333
     out = nodes.get("Material Output")
 
     time = InputValue(tree, location=(-5, 0.5), value=0,
@@ -1893,7 +1893,7 @@ def interference_texture(name="Interference", **kwargs):
                                       + (["impact", "edge"] if front else [])
                                       + list(aux),
                               custom_ops={} if model == "farfield"
-                                         else BESSEL_OPS,
+                              else BESSEL_OPS,
                               hide=False)
     links = tree.links
     links.new(uv.std_out, intensity.inputs["uv"])
@@ -1986,20 +1986,22 @@ def function_texture(name="Function", **kwargs):
         :func:`~interface.ibpy.customize_material` (``roughness``, ...).
     """
     attribute = get_from_kwargs(kwargs, "attribute", "result")
-    zero_color=get_from_kwargs(kwargs,"zero_color","background")
+    zero_color = get_from_kwargs(kwargs, "zero_color", "background")
     scale_attribute = get_from_kwargs(kwargs, "scale_attribute", "amplitude")
 
-    if zero_color=="text":
-        zero=[1,1,1,1]
+    if zero_color == "text":
+        zero = 0.5
+        z_color = [1,1,1,1]
         start = 0.2
         end = 0.8
     else:
-        zero=[0,0,0,1]
+        z_color = ibpy.get_color_from_string(zero_color)
+        zero=0.5
         start = 0
         end = 0
 
     gradient = get_from_kwargs(kwargs, "gradient",
-                               {start: [1, 0.16, 0.767, 1], 0.5: zero,
+                               {start: [1, 0.16, 0.767, 1], zero: z_color,
                                 end: [0.095, 0.983, 1, 1]})
     alpha_intensity = get_from_kwargs(kwargs, "alpha_intensity", 0.5)
     # customize_material reads 'alpha' too, and would write it into the
@@ -4302,7 +4304,7 @@ def make_checker_material(**kwargs):
     nodes = color.node_tree.nodes
     if coords is None:
         input = nodes.new('ShaderNodeTexCoord')
-        input_out = input.outputs['UV'] # small bug fix
+        input_out = input.outputs['UV']  # small bug fix
     else:
         input = nodes.new('ShaderNodeTexCoord')
         input_out = input.outputs[coords]
@@ -4704,7 +4706,7 @@ def make_scattering_material(**kwargs):
 
 
 def make_marble_material(**kwargs):
-    dark = get_from_kwargs(kwargs,"dark",1)
+    dark = get_from_kwargs(kwargs, "dark", 1)
     color = bpy.data.materials.new(name='marble')
     color.use_nodes = True
     nodes = color.node_tree.nodes
@@ -4718,7 +4720,7 @@ def make_marble_material(**kwargs):
 
     ramp = nodes.new(type='ShaderNodeValToRGB')
     ramp.color_ramp.elements[0].position = 0.386
-    ramp.color_ramp.elements[0].color = [dark,dark,dark,1]
+    ramp.color_ramp.elements[0].color = [dark, dark, dark, 1]
     ramp.color_ramp.elements[1].position = 0.745
     ramp.color_ramp.elements[1].color = [0.010, 0.034, 0.047, 1]
 
@@ -4726,7 +4728,7 @@ def make_marble_material(**kwargs):
     links.new(ramp.outputs['Color'], bump.inputs['Height'])
 
     noise = nodes.new(type='ShaderNodeTexNoise')
-    noise.inputs['Scale'].default_value =4.55
+    noise.inputs['Scale'].default_value = 4.55
     noise.inputs['Detail'].default_value = 16
     links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
 
@@ -4742,6 +4744,7 @@ def make_marble_material(**kwargs):
     coords = nodes.new(type='ShaderNodeTexCoord')
     links.new(coords.outputs['Generated'], noise2.inputs['Vector'])
     return color
+
 
 def make_metal_materials():
     for i in range(1, 10):
@@ -5264,6 +5267,7 @@ def monte_carlo_mandel(bob, **kwargs):
     material.cycles.displacement_method = 'DISPLACEMENT'  # for real displacement
     material.use_nodes = True
 
+
 def penrose_material(base_color, contrast=1, **kwargs):
     material = bpy.data.materials.new(name='Penrose')
     if 'emission' in kwargs:
@@ -5358,6 +5362,7 @@ def penrose_material(base_color, contrast=1, **kwargs):
 
     return material
 
+
 def make_logo_material(**kwargs):
     material = bpy.data.materials.new(name='Logo')
     if 'emission' in kwargs:
@@ -5385,15 +5390,15 @@ def make_logo_material(**kwargs):
     length += 1
 
     sep_xyz = nodes.new(type='ShaderNodeSeparateXYZ')
-    sep_xyz.location = (length*width,-300)
-    length +=1
+    sep_xyz.location = (length * width, -300)
+    length += 1
 
     combine_xyz = nodes.new(type="ShaderNodeCombineXYZ")
-    combine_xyz.location = (length*width,-300)
-    links.new(attribute.outputs["Vector"],sep_xyz.inputs["Vector"])
+    combine_xyz.location = (length * width, -300)
+    links.new(attribute.outputs["Vector"], sep_xyz.inputs["Vector"])
 
-    links.new(sep_xyz.outputs["X"],combine_xyz.inputs["Y"])
-    links.new(sep_xyz.outputs["Y"],combine_xyz.inputs["X"])
+    links.new(sep_xyz.outputs["X"], combine_xyz.inputs["Y"])
+    links.new(sep_xyz.outputs["Y"], combine_xyz.inputs["X"])
 
     div = nodes.new(type='ShaderNodeVectorMath')
     div.operation = 'DIVIDE'
@@ -5401,7 +5406,7 @@ def make_logo_material(**kwargs):
     if 'scaling' in kwargs:
         scaling = kwargs.pop('scaling')
     else:
-        scaling = [107]*3
+        scaling = [107] * 3
     div.inputs[1].default_value = scaling
     links.new(combine_xyz.outputs['Vector'], div.inputs[0])
     length += 1
@@ -5409,7 +5414,7 @@ def make_logo_material(**kwargs):
     shift = nodes.new(type='ShaderNodeVectorMath')
     shift.operation = 'ADD'
     shift.location = (length * width, -300)
-    shift.inputs[1].default_value = [0.51,0.5,0]
+    shift.inputs[1].default_value = [0.51, 0.5, 0]
     links.new(div.outputs['Vector'], shift.inputs[0])
     length += 1
 
@@ -5424,6 +5429,8 @@ def make_logo_material(**kwargs):
     # material.shadow_method = 'HASHED'
 
     return material
+
+
 def material_clean_up():
     # Function for removing some duplicate materials from repeated imports
     for mat in bpy.data.materials:
@@ -5919,6 +5926,7 @@ def make_hex_tile_tunnel_material(name="HexTileTunnel", **kwargs):
 
     return mat
 
+
 # hat tile fractal texture
 
 def _prepare_coordinates(tree, location):
@@ -5938,17 +5946,19 @@ def _prepare_coordinates(tree, location):
     # similarity transformation
     B00, B01 = 0.3454915028125263, -0.0892055224432725
     B10, B11 = -0.09549150281252629, 0.34380717944894684
-    tex = TextureCoordinate(tree, std_out='Object', location=(x-1, y), hide=False)
-    scale = InputValue(tree,location=(x-1,y-2),hide=True,value=1,name="Scale")
-    shift_x = InputValue(tree,location=(x-1,y-2.5),hide=True,value=0,name="ShiftX")
-    shift_y = InputValue(tree,location=(x-1,y-3),hide=True,value=0,name="ShiftY")
-    combine = CombineXYZ(tree,location=(x,-2.5),hide=True,x=shift_x.std_out,y=shift_y.std_out,z=0,name="CombinedShift")
-    scaling = make_function(tree,functions={"coords":"coords,1,scl,/,scale,shift,add"},inputs=["scl","coords","shift"],
-                            outputs=["coords"],scalars=["scl"],location=(x,y),
-                            vectors=["coords","shift"],node_group_type="Shader",hide=True)
-    tree.links.new(scale.std_out,scaling.inputs["scl"])
-    tree.links.new(tex.std_out,scaling.inputs["coords"])
-    tree.links.new(combine.std_out,scaling.inputs["shift"])
+    tex = TextureCoordinate(tree, std_out='Object', location=(x - 1, y), hide=False)
+    scale = InputValue(tree, location=(x - 1, y - 2), hide=True, value=1, name="Scale")
+    shift_x = InputValue(tree, location=(x - 1, y - 2.5), hide=True, value=0, name="ShiftX")
+    shift_y = InputValue(tree, location=(x - 1, y - 3), hide=True, value=0, name="ShiftY")
+    combine = CombineXYZ(tree, location=(x, -2.5), hide=True, x=shift_x.std_out, y=shift_y.std_out, z=0,
+                         name="CombinedShift")
+    scaling = make_function(tree, functions={"coords": "coords,1,scl,/,scale,shift,add"},
+                            inputs=["scl", "coords", "shift"],
+                            outputs=["coords"], scalars=["scl"], location=(x, y),
+                            vectors=["coords", "shift"], node_group_type="Shader", hide=True)
+    tree.links.new(scale.std_out, scaling.inputs["scl"])
+    tree.links.new(tex.std_out, scaling.inputs["coords"])
+    tree.links.new(combine.std_out, scaling.inputs["shift"])
     # transform to UV basis
 
     g_basis = make_function(tree, functions={
@@ -5996,6 +6006,7 @@ def _prepare_coordinates(tree, location):
     frame.add(base_constant, g_torus, g_torus_raw, triangle_selector, g_basis)
 
     return g_torus, base_constant
+
 
 def _make_colors(tree, inFractal, out, location):
     (x, y) = location
@@ -6059,7 +6070,8 @@ def _make_colors(tree, inFractal, out, location):
                      interpolation="LINEAR",
                      location=(x + 2, y), hide=False)
 
-    alpha_factor = Mix(tree,location=(x+5,y),name="AlphaFactor",data_type="FLOAT",color2=ramp.outputs["Alpha"],color1=0)
+    alpha_factor = Mix(tree, location=(x + 5, y), name="AlphaFactor", data_type="FLOAT", color2=ramp.outputs["Alpha"],
+                       color1=0)
 
     bsdf = PrincipledBSDF(tree,
                           base_color=ramp.std_out,
@@ -6067,14 +6079,14 @@ def _make_colors(tree, inFractal, out, location):
                           location=(x + 4, y), hide=True)
     links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
 
-
     frame = ShaderFrame(tree, label="Generate Colors", location=location, color=(0.2, 0.3, 0.5))
     frame.add(*[bsdf, ramp, to_color_index, prims])
+
 
 def hat_tile_fractal(**kwargs):
     """
     """
-    depth_value = get_from_kwargs(kwargs,"depth",10)
+    depth_value = get_from_kwargs(kwargs, "depth", 10)
 
     phi = (1 + math.sqrt(5)) / 2
     phi2 = phi + 1
@@ -6112,19 +6124,19 @@ def hat_tile_fractal(**kwargs):
 
     check = make_function(tree, name="TriangleSelection",
                           aux_functions={
-                                       "cond": f"uv_y,{r32},<,uv_y,{r3},uv_x,*,<,*",
-                                       "cond2": "result,0,=",
-                                       "cond3": f"uv_y,{r3},1,uv_x,-,*,>"
-                                   },
+                              "cond": f"uv_y,{r32},<,uv_y,{r3},uv_x,*,<,*",
+                              "cond2": "result,0,=",
+                              "cond3": f"uv_y,{r3},1,uv_x,-,*,>"
+                          },
                           functions={
-                                       "result": "1,cond2,-,result,*,"  # already difierent from zero
-                                                 "cond2,cond,*,base,3,i,*,+,*,+,"  # in triangle, just add one
-                                                 "cond2,cond,*,1,inFractal,-,*,cond3,*,2,*,+,"  # not in fractal but cond3, just add 2
-                                                 "cond2,cond,*,inFractal,*,+"  # in fractal, add onother one
-                                   }, inputs=["uv", "result", "base", "i", "inFractal"], outputs=["result"], hide=True,
+                              "result": "1,cond2,-,result,*,"  # already difierent from zero
+                                        "cond2,cond,*,base,3,i,*,+,*,+,"  # in triangle, just add one
+                                        "cond2,cond,*,1,inFractal,-,*,cond3,*,2,*,+,"  # not in fractal but cond3, just add 2
+                                        "cond2,cond,*,inFractal,*,+"  # in fractal, add onother one
+                          }, inputs=["uv", "result", "base", "i", "inFractal"], outputs=["result"], hide=True,
                           integers=["i", "result", "base", "cond", "cond2", "cond3", "inFractal"],
                           vectors=["uv"],
-                          node_group_type="Shader", location=(-2,-2))
+                          node_group_type="Shader", location=(-2, -2))
     links.new(rz.iteration, check.inputs["i"])
     links.new(rz.outputs["uv"], check.inputs["uv"])
     links.new(rz.outputs["base"], check.inputs["base"])
@@ -6146,7 +6158,7 @@ def hat_tile_fractal(**kwargs):
     links.new(base.outputs['base'], rz.node.inputs['base'])
 
     # second repeatzone: IFS bisection for fractal membership
-    depth = InputValue(tree, name="Depth", location=(-12, 7.0), value=depth_value,hide=True)
+    depth = InputValue(tree, name="Depth", location=(-12, 7.0), value=depth_value, hide=True)
     rz2 = ShaderRepeatZone(tree, location=(-10, 6), node_width=6, iterations=depth.std_out)
     rz2.add_socket('VECTOR', 'uv')
     rz2.add_socket('INT', 'isTrap')
@@ -6158,7 +6170,7 @@ def hat_tile_fractal(**kwargs):
     rz2.add_socket('INT', 'exit')
     rz2.repeat_input.inputs['isTrap'].default_value = 1
 
-    links.new(rz2.outputs["uv"],rz2.repeat_output.inputs["uv"])
+    links.new(rz2.outputs["uv"], rz2.repeat_output.inputs["uv"])
     # rz2 receives the same initial UV that feeds rz (before any rotation)
     links.new(rz.repeat_input.outputs['uv'], rz2.repeat_input.inputs['uv'])
 
@@ -6182,44 +6194,44 @@ def hat_tile_fractal(**kwargs):
     links.new(vec_c.std_out, rz2.repeat_input.inputs['c'])
     links.new(vec_d.std_out, rz2.repeat_input.inputs['d'])
 
-
     # create firs set of auxiliary variables
-    inputs = ["a","b","c","d"]
-    aux1 = ["e1","e2","f1","f2","g1"]
+    inputs = ["a", "b", "c", "d"]
+    aux1 = ["e1", "e2", "f1", "f2", "g1"]
 
     custom_ops = {
         "mix": {
             "type": "ShaderNodeMix",
             "settings": {"data_type": "VECTOR", "factor_mode": "UNIFORM",
                          "clamp_factor": False},
-            "inputs": ("B", "A","Factor"),  # Factor written first (3rd pop); A/B swapped so "f,X,Y,mix" == lerp(X,Y,f) to match algorithm.txt's mix[X,Y,f]=X(1-f)+Yf. (Was ("A","B",...) which gave lerp(Y,X,f); that collapsed the cond5 region and produced a stray parallelogram at depth 2.)
+            "inputs": ("B", "A", "Factor"),
+            # Factor written first (3rd pop); A/B swapped so "f,X,Y,mix" == lerp(X,Y,f) to match algorithm.txt's mix[X,Y,f]=X(1-f)+Yf. (Was ("A","B",...) which gave lerp(Y,X,f); that collapsed the cond5 region and produced a stray parallelogram at depth 2.)
             "output": "Result",
             "label": "mix",
         },
-        "onRight":{
+        "onRight": {
             "type": OnRightNode,
-            "inputs": ("A","B","Position"),
+            "inputs": ("A", "B", "Position"),
             "output": "Result",
             "label": "onRight"
         },
         "ifv": {
             "type": IfNode,
             "class_kwargs": {"data_type": "VECTOR"},
-            "inputs": ( "Yes", "No","Condition"),
+            "inputs": ("Yes", "No", "Condition"),
             "output": "Result",
             "label": "ifv",
         },
         "iff": {
             "type": IfNode,
             "class_kwargs": {"data_type": "FLOAT"},
-            "inputs": ( "Yes", "No","Condition"),
+            "inputs": ("Yes", "No", "Condition"),
             "output": "Result",
             "label": "iff",
         },
         "ifi": {
             "type": IfNode,
             "class_kwargs": {"data_type": "INT"},
-            "inputs": ( "Yes", "No","Condition"),
+            "inputs": ("Yes", "No", "Condition"),
             "output": "Result",
             "label": "ifi",
         },
@@ -6228,67 +6240,69 @@ def hat_tile_fractal(**kwargs):
     # phi2 = phi2/(phi2-1)
     make_aux1 = make_function(tree, name="aux1",
                               aux_functions={
-                                           "e1":f"1,{phi2},/,b,a,mix",
-                                            "e2":f"{phim1},c,d,mix"
-                                       }, custom_ops=custom_ops, functions={
-            "e1":"e1",
-            "e2":"e2",
-            "f1":"b,a,e1,sub,add",
-            "g1":"d,e1,a,sub,add",
-            "f2":"b,d,e2,sub,add"
-        }, node_group_type="Shader", inputs=inputs, outputs=aux1, vectors=inputs+aux1,
-                              hide=True, location=[-9,5])
+                                  "e1": f"1,{phi2},/,b,a,mix",
+                                  "e2": f"{phim1},c,d,mix"
+                              }, custom_ops=custom_ops, functions={
+            "e1": "e1",
+            "e2": "e2",
+            "f1": "b,a,e1,sub,add",
+            "g1": "d,e1,a,sub,add",
+            "f2": "b,d,e2,sub,add"
+        }, node_group_type="Shader", inputs=inputs, outputs=aux1, vectors=inputs + aux1,
+                              hide=True, location=[-9, 5])
     for v in inputs:
-        links.new(rz2.outputs[v],make_aux1.inputs[v])
+        links.new(rz2.outputs[v], make_aux1.inputs[v])
 
     # there is some potential for optimization, since a few of the aux2 variables are identical
     # can be later optimized with claude
 
-    aux2 = ["a1","b1","c1","d1","k1","l1","m1","n1","a2","b2","c2","d2","k2","l2"] # stands for the greek letters alpha1, beta1, etc.
+    aux2 = ["a1", "b1", "c1", "d1", "k1", "l1", "m1", "n1", "a2", "b2", "c2", "d2", "k2",
+            "l2"]  # stands for the greek letters alpha1, beta1, etc.
 
     make_aux2 = make_function(tree, name="aux2",
                               custom_ops=custom_ops, functions={
-            "a1":f"{phim1},a,e1,mix",
-            "b1":f"{phim1},d,e1,mix",
-            "c1":f"{phim1},d,e1,mix",
-            "d1":f"{phim1},g1,e1,mix",
-            "k1":f"{phim1},g1,e1,mix",
-            "l1":f"{phim1},f1,c,mix",
-            "m1":f"{phim1},b,c,mix",
-            "n1":f"{phim1},f1,c,mix",
+            "a1": f"{phim1},a,e1,mix",
+            "b1": f"{phim1},d,e1,mix",
+            "c1": f"{phim1},d,e1,mix",
+            "d1": f"{phim1},g1,e1,mix",
+            "k1": f"{phim1},g1,e1,mix",
+            "l1": f"{phim1},f1,c,mix",
+            "m1": f"{phim1},b,c,mix",
+            "n1": f"{phim1},f1,c,mix",
             "a2": f"{phim1},d,a,mix",
             "b2": f"{phim1},e2,a,mix",
             "c2": f"{phim1},e2,a,mix",
             "d2": f"{phim1},f2,c,mix",
             "k2": f"{phim1},f2,c,mix",
             "l2": f"{phim1},b,c,mix",
-        }, node_group_type="Shader", inputs=inputs+aux1, outputs=aux2, vectors=inputs + aux1+aux2,
+        }, node_group_type="Shader", inputs=inputs + aux1, outputs=aux2, vectors=inputs + aux1 + aux2,
                               hide=True, location=[-8, 5])
     for v in inputs:
         links.new(rz2.outputs[v], make_aux2.inputs[v])
     for v in aux1:
         links.new(make_aux1.outputs[v], make_aux2.inputs[v])
 
-    conds = ["cond"+str(i+1) for i in range(14)]
+    conds = ["cond" + str(i + 1) for i in range(14)]
 
     make_cond = make_function(tree, name="cond",
                               custom_ops=custom_ops, functions={
-            "cond1":"uv,d,e1,onRight",
-            "cond2":"uv,a1,b1,onRight",
-            "cond3":"uv,g1,e1,onRight",
-            "cond4":"uv,c1,d1,onRight",
-            "cond5":"uv,c,f1,onRight",
-            "cond6":"uv,k1,f1,onRight",
-            "cond7":"uv,l1,g1,onRight",
-            "cond8":"uv,m1,n1,onRight",
-            "cond9":"uv,e2,a,onRight",
-            "cond10":"uv,a2,b2,onRight",
-            "cond11":"uv,c,f2,onRight",
-            "cond12":"uv,c2,f2,onRight",
-            "cond13":"uv,d2,e2,onRight",
-            "cond14":"uv,l2,k2,onRight",
+            "cond1": "uv,d,e1,onRight",
+            "cond2": "uv,a1,b1,onRight",
+            "cond3": "uv,g1,e1,onRight",
+            "cond4": "uv,c1,d1,onRight",
+            "cond5": "uv,c,f1,onRight",
+            "cond6": "uv,k1,f1,onRight",
+            "cond7": "uv,l1,g1,onRight",
+            "cond8": "uv,m1,n1,onRight",
+            "cond9": "uv,e2,a,onRight",
+            "cond10": "uv,a2,b2,onRight",
+            "cond11": "uv,c,f2,onRight",
+            "cond12": "uv,c2,f2,onRight",
+            "cond13": "uv,d2,e2,onRight",
+            "cond14": "uv,l2,k2,onRight",
 
-        }, node_group_type="Shader", inputs=inputs + aux1+aux2+["uv"], outputs=conds, vectors=inputs + aux1 + aux2+["uv"],
+        }, node_group_type="Shader", inputs=inputs + aux1 + aux2 + ["uv"], outputs=conds,
+                              vectors=inputs + aux1 + aux2 + ["uv"],
                               integers=conds,
                               hide=True, location=[-7, 5])
 
@@ -6303,9 +6317,9 @@ def hat_tile_fractal(**kwargs):
     variables_vector = ["a", "b", "c", "d"]
     variables_scalar = ["isTrap", "result", "exit"]
 
-    update_vectors = ["new_a","new_b","new_c","new_d"]
-    update_scalars = ["new_isTrap","new_result","new_exit"]
-    updates = update_scalars+update_vectors
+    update_vectors = ["new_a", "new_b", "new_c", "new_d"]
+    update_scalars = ["new_isTrap", "new_result", "new_exit"]
+    updates = update_scalars + update_vectors
     # update_values = make_function_with_aux(tree,name="updateValues",custom_ops=custom_ops,
     #                                        functions={
     #                                            "new_a":"exit,isTrap,cond1,a,d,ifv,cond2,cond3,a,g1,ifv,cond4,cond5,a,k1,ifv,cond7,a,f1,ifv,ifv,ifv,ifv,cond8,cond9,a,e2,ifv,cond10,cond11,a,cond12,a,c2,ifv,ifv,cond13,a,f2,ifv,ifv,ifv,ifv",
@@ -6337,54 +6351,55 @@ def hat_tile_fractal(**kwargs):
     #      to the readout, as before).
     update_values = make_function(tree, name="updateValuesTmp", custom_ops=custom_ops,
                                   functions={
-                                               "new_a":"isTrap,cond1,cond2,a,d,ifv,cond3,cond4,a,g1,ifv,cond5,cond6,a,k1,ifv,cond8,a,f1,ifv,ifv,ifv,ifv,cond9,cond10,a,e2,ifv,cond11,cond12,a,cond13,a,c2,ifv,ifv,cond14,a,f2,ifv,ifv,ifv,ifv",
-                                               "new_b":"isTrap,cond1,cond2,b,a,ifv,cond3,cond4,b,d,ifv,cond5,cond6,b,f1,ifv,cond8,b,b,ifv,ifv,ifv,ifv,cond9,cond10,b,d,ifv,cond11,cond12,b,cond13,b,f2,ifv,ifv,cond14,b,b,ifv,ifv,ifv,ifv",
-                                               "new_c":"isTrap,cond1,cond2,c,a1,ifv,cond3,cond4,c,c1,ifv,cond5,cond6,c,l1,ifv,cond8,c,m1,ifv,ifv,ifv,ifv,cond9,cond10,c,a2,ifv,cond11,cond12,c,cond13,c,d2,ifv,ifv,cond14,c,l2,ifv,ifv,ifv,ifv",
-                                               "new_d":"isTrap,cond1,cond2,d,b1,ifv,cond3,cond4,d,d1,ifv,cond5,cond6,d,g1,ifv,cond8,d,n1,ifv,ifv,ifv,ifv,cond9,cond10,d,b2,ifv,cond11,cond12,d,cond13,d,e2,ifv,ifv,cond14,d,k2,ifv,ifv,ifv,ifv",
-                                               "new_isTrap":"isTrap,cond1,cond2,isTrap,1,ifi,cond3,cond4,isTrap,1,ifi,cond5,cond6,isTrap,0,ifi,cond8,isTrap,1,ifi,ifi,ifi,ifi,cond9,cond10,isTrap,1,ifi,cond11,cond12,isTrap,cond13,isTrap,0,ifi,ifi,cond14,isTrap,1,ifi,ifi,ifi,ifi",
-                                               "new_result":"isTrap,cond1,1,result,-,cond3,1,result,-,cond5,cond6,1,result,-,result,ifi,result,ifi,ifi,ifi,cond9,1,result,-,cond11,cond12,1,result,-,result,ifi,result,ifi,ifi,ifi",
-                                               "new_exit":"isTrap,cond1,cond2,1,exit,ifi,cond3,cond4,1,exit,ifi,cond5,cond6,1,cond7,1,exit,ifi,ifi,cond8,1,exit,ifi,ifi,ifi,ifi,cond9,cond10,1,exit,ifi,cond11,cond12,1,cond13,1,exit,ifi,ifi,cond14,1,exit,ifi,ifi,ifi,ifi"
-                                           },
-                                  node_group_type="Shader", inputs=variables_scalar+variables_vector + aux1 + aux2 +conds,
-                                  outputs=updates, vectors=inputs + aux1 + aux2 +update_vectors+variables_vector,
-                                  integers=conds+update_scalars+variables_scalar,
-                                  hide=True, location=[-6,8]
+                                      "new_a": "isTrap,cond1,cond2,a,d,ifv,cond3,cond4,a,g1,ifv,cond5,cond6,a,k1,ifv,cond8,a,f1,ifv,ifv,ifv,ifv,cond9,cond10,a,e2,ifv,cond11,cond12,a,cond13,a,c2,ifv,ifv,cond14,a,f2,ifv,ifv,ifv,ifv",
+                                      "new_b": "isTrap,cond1,cond2,b,a,ifv,cond3,cond4,b,d,ifv,cond5,cond6,b,f1,ifv,cond8,b,b,ifv,ifv,ifv,ifv,cond9,cond10,b,d,ifv,cond11,cond12,b,cond13,b,f2,ifv,ifv,cond14,b,b,ifv,ifv,ifv,ifv",
+                                      "new_c": "isTrap,cond1,cond2,c,a1,ifv,cond3,cond4,c,c1,ifv,cond5,cond6,c,l1,ifv,cond8,c,m1,ifv,ifv,ifv,ifv,cond9,cond10,c,a2,ifv,cond11,cond12,c,cond13,c,d2,ifv,ifv,cond14,c,l2,ifv,ifv,ifv,ifv",
+                                      "new_d": "isTrap,cond1,cond2,d,b1,ifv,cond3,cond4,d,d1,ifv,cond5,cond6,d,g1,ifv,cond8,d,n1,ifv,ifv,ifv,ifv,cond9,cond10,d,b2,ifv,cond11,cond12,d,cond13,d,e2,ifv,ifv,cond14,d,k2,ifv,ifv,ifv,ifv",
+                                      "new_isTrap": "isTrap,cond1,cond2,isTrap,1,ifi,cond3,cond4,isTrap,1,ifi,cond5,cond6,isTrap,0,ifi,cond8,isTrap,1,ifi,ifi,ifi,ifi,cond9,cond10,isTrap,1,ifi,cond11,cond12,isTrap,cond13,isTrap,0,ifi,ifi,cond14,isTrap,1,ifi,ifi,ifi,ifi",
+                                      "new_result": "isTrap,cond1,1,result,-,cond3,1,result,-,cond5,cond6,1,result,-,result,ifi,result,ifi,ifi,ifi,cond9,1,result,-,cond11,cond12,1,result,-,result,ifi,result,ifi,ifi,ifi",
+                                      "new_exit": "isTrap,cond1,cond2,1,exit,ifi,cond3,cond4,1,exit,ifi,cond5,cond6,1,cond7,1,exit,ifi,ifi,cond8,1,exit,ifi,ifi,ifi,ifi,cond9,cond10,1,exit,ifi,cond11,cond12,1,cond13,1,exit,ifi,ifi,cond14,1,exit,ifi,ifi,ifi,ifi"
+                                  },
+                                  node_group_type="Shader",
+                                  inputs=variables_scalar + variables_vector + aux1 + aux2 + conds,
+                                  outputs=updates, vectors=inputs + aux1 + aux2 + update_vectors + variables_vector,
+                                  integers=conds + update_scalars + variables_scalar,
+                                  hide=True, location=[-6, 8]
                                   )
 
-    for v in variables_scalar+variables_vector:
+    for v in variables_scalar + variables_vector:
         links.new(rz2.outputs[v], update_values.inputs[v])
     for v in aux1:
         links.new(make_aux1.outputs[v], update_values.inputs[v])
     for v in aux2:
         links.new(make_aux2.outputs[v], update_values.inputs[v])
     for v in conds:
-        links.new(make_cond.outputs[v],update_values.inputs[v])
+        links.new(make_cond.outputs[v], update_values.inputs[v])
 
-    variables_vector = ["a","b","c","d"]
-    variables_scalar = ["isTrap","result","exit"]
+    variables_vector = ["a", "b", "c", "d"]
+    variables_scalar = ["isTrap", "result", "exit"]
 
-    variables = variables_scalar+variables_vector
+    variables = variables_scalar + variables_vector
     update_variables = make_function(tree, name="exitCheck", custom_ops=custom_ops,
                                      functions={
-                                               "a": "1,exit,-,new_a,a,ifv",
-                                               "b": "1,exit,-,new_b,b,ifv",
-                                               "c": "1,exit,-,new_c,c,ifv",
-                                               "d": "1,exit,-,new_d,d,ifv",
-                                               "isTrap": "1,exit,-,new_isTrap,isTrap,ifi",
-                                               "result": "1,exit,-,new_result,result,ifi",
-                                               "exit": "1,exit,-,new_exit,exit,ifi"
-                                           },
-                                     node_group_type="Shader", inputs=variables+updates,
+                                         "a": "1,exit,-,new_a,a,ifv",
+                                         "b": "1,exit,-,new_b,b,ifv",
+                                         "c": "1,exit,-,new_c,c,ifv",
+                                         "d": "1,exit,-,new_d,d,ifv",
+                                         "isTrap": "1,exit,-,new_isTrap,isTrap,ifi",
+                                         "result": "1,exit,-,new_result,result,ifi",
+                                         "exit": "1,exit,-,new_exit,exit,ifi"
+                                     },
+                                     node_group_type="Shader", inputs=variables + updates,
                                      outputs=variables, vectors=variables_vector + update_vectors,
-                                     integers=variables_scalar+ update_scalars,
+                                     integers=variables_scalar + update_scalars,
                                      hide=True, location=[-5, 5]
                                      )
 
     for v in variables:
-        links.new(rz2.outputs[v],update_variables.inputs[v])
-        links.new(update_variables.outputs[v],rz2.repeat_output.inputs[v])
+        links.new(rz2.outputs[v], update_variables.inputs[v])
+        links.new(update_variables.outputs[v], rz2.repeat_output.inputs[v])
     for v in updates:
-        links.new(update_values.outputs[v],update_variables.inputs[v])
+        links.new(update_values.outputs[v], update_variables.inputs[v])
 
     # algorithm.txt:54  ->  If[exit == 0, True, nfl]
     # result only holds nfl on the iteration that exits; points that never exit
