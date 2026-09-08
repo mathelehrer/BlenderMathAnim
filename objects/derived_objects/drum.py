@@ -444,7 +444,7 @@ class DrumModeModifier(GeometryNodesModifier):
     def __init__(self, name="DrumMode", radius=3.0, radial=100, angular=180,
                  modes=((0, 1), (1, 1), (2, 1), (0, 2), (3, 1), (1, 2)),
                  mode=0, amplitude=0.5, frequency=0.4, start_time=0.0,
-                 normalize=True, attribute="result",
+                 normalize=True, attribute="result", ease_in = 0,
                  material=get_texture("function", alpha_intensity=0.9),
                  shade_smooth=True, wireframe=False, **kwargs):
         """
@@ -469,6 +469,7 @@ class DrumModeModifier(GeometryNodesModifier):
         self.amplitude = amplitude
         self.frequency = frequency
         self.start_time = start_time
+        self.ease_in = ease_in
         self.normalize = normalize
         self.attribute = attribute
         self.paint = material
@@ -680,7 +681,7 @@ class DrumModeModifier(GeometryNodesModifier):
 
         struck = CompareNode(tree, location=(4, -1), data_type="FLOAT",
                              operation="GREATER_EQUAL", inputs0=control["time"],
-                             inputs1=0, name="Struck", parent=frame, hide=True)
+                             inputs1=-self.ease_in, name="Struck", parent=frame, hide=True)
         strike = Switch(tree, location=(5, 0), input_type="FLOAT",
                         switch=struck.std_out, false=0, true=elongation,
                         name="Strike", parent=frame)
