@@ -144,6 +144,7 @@ Classes:
 """
 import numpy as np
 
+from appearance.textures import get_texture
 from geometry_nodes.geometry_nodes_modifier import GeometryNodesModifier
 from geometry_nodes.nodes import (BESSEL_OPS, BooleanMath, CombineXYZ, CubeMesh,
                                   CurveCircle, CurveLine, CurveToMesh,
@@ -154,7 +155,7 @@ from geometry_nodes.nodes import (BESSEL_OPS, BooleanMath, CombineXYZ, CubeMesh,
                                   InstanceOnPoints, JoinGeometry, MathNode,
                                   MergeByDistance, MeshToVolume,
                                   NamedAttribute, Points, Position, RandomValue,
-                                  RealizeInstances, ResampleCurve, SceneTime,
+                                  RealizeInstances, Reroute, ResampleCurve, SceneTime,
                                   SetMaterial, SetPosition,
                                   SetShadeSmooth, StoreNamedAttribute, TransformGeometry,
                                   VolumeCube, WireFrame, bessel_jm_rpn, make_function,
@@ -164,6 +165,7 @@ from interface import ibpy
 from interface.ibpy import Vector, get_geometry_node_from_modifier
 from objects.slide import DEFAULT_MATERIAL
 from utils.constants import DEFAULT_SCENE_DURATION, DEFAULT_ANIMATION_TIME
+from utils.kwargs import get_from_kwargs
 
 pi = np.pi
 tau = 2 * pi
@@ -427,6 +429,32 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         """
         return None
 
+    def region_bounds(self, tree, frame=None, location=(0, 0)):
+        """The two corners of the box the candidates are drawn in, as *sockets*.
+
+        ``(None, None)``, the default, leaves the ``UniformDraw`` node with the
+        constants that ``size`` and ``center`` work out to, which is a box that
+        cannot move once the tree is built. A subclass that wants one of its
+        sides on a dial - the pipe of :class:`AcousticModifier`, whose length
+        a scene ramps - builds the nodes for it here, inside ``frame``, and
+        hands back the corners.
+
+        Only the box path uses this; the two volume paths scatter into a
+        volume rather than drawing coordinates.
+        """
+        return None, None
+
+    def extra_attributes(self, tree, location=(0, 0)):
+        """``[(name, socket)]`` to hang on the surviving points, besides f.
+
+        ``intensity`` is stored by :meth:`_sampling_frame` for every modifier
+        here, because a material needs it; anything else a *material* has to
+        know is listed here instead. :class:`AcousticModifier` stores its
+        amplitude that way, so the shader can tell a quiet wave from a loud
+        one rather than having to guess what the peak of ``intensity`` means.
+        """
+        return []
+
     def estimate_mean_density(self, samples=200000, seed=1234):
         """<f> over the box by Monte Carlo, which is the acceptance rate.
 
@@ -457,6 +485,9 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         candidates, position = self._region_frame(tree)
         points = self._sampling_frame(tree, candidates, position)
         geometry = self._display_frame(tree, points)
+        # the coordinates in the three frames are absolute (see
+        # :meth:`_region_frame`), so the output node is placed by hand too
+        self.group_outputs.location = (19 * 200, 3 * 100)
         tree.links.new(geometry, self.group_outputs.inputs["Geometry"])
 
     # ------------------------------------------------------------------
@@ -487,10 +518,19 @@ class SpatialDistributionModifier(GeometryNodesModifier):
             the price of that same soft boundary - and of a point count that
             comes out 13-14% under ``count``.
         """
+        # every frame here sits at the origin and every node carries the
+        # coordinate it is actually drawn at, so that the two ways a node ends
+        # up in a frame - the ``parent`` keyword and ``Frame.add`` - agree.
+        # Blender shrinks a frame around its children when the tree is opened,
+        # which is what gives the frames their own place.
         frame = Frame(tree, location=(0, 0), label="Region", name="RegionFrame")
-        position = Position(tree, location=(0, 0), hide=True, parent=frame)
+        position = Position(tree, location=(3, 7), hide=True)
 
         if self.method == "grid":
+            # the grid evaluates f in this frame, so the field belongs here;
+            # the other two read it downstream, in the sampling frame
+            frame.add(position)
+            position.node.location = (0, 0)
             density = self.density(tree, position.std_out, location=(1, 0))
             if density is not None:
                 density.node.parent = frame.node
@@ -530,12 +570,14 @@ class SpatialDistributionModifier(GeometryNodesModifier):
                                                name="Scatter", parent=frame)
             return scatter.geometry_out, position
 
-        cloud = Points(tree, location=(3, 0), count=self.candidates,
+        cloud = Points(tree, location=(6, 2), count=self.candidates,
                        name="Candidates", parent=frame)
-        draw = RandomValue(tree, location=(3, -1), data_type="FLOAT_VECTOR",
-                           min=self.box_min, max=self.box_max, seed=self.seed,
-                           name="UniformDraw", parent=frame)
-        placed = SetPosition(tree, location=(4, 0), geometry=cloud.geometry_out,
+        low, high = self.region_bounds(tree, frame=frame, location=(4, -1))
+        draw = RandomValue(tree, location=(7, 0), data_type="FLOAT_VECTOR",
+                           min=self.box_min if low is None else low,
+                           max=self.box_max if high is None else high,
+                           seed=self.seed, name="UniformDraw", parent=frame)
+        placed = SetPosition(tree, location=(8, 2), geometry=cloud.geometry_out,
                              position=draw.std_out, name="Uniform", parent=frame)
         return placed.geometry_out, position
 
@@ -557,60 +599,76 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         conditions are fields evaluated on the point itself, so the whole
         cull is still a single node.
         """
-        frame = Frame(tree, location=(6, 0), label="Sampling",
+        frame = Frame(tree, location=(0, 0), label="Sampling",
                       name="SamplingFrame")
         points = candidates
         density = None
         discard = None
 
+        if self.method != "grid":
+            # the field is read here, by f and by the region test, so this is
+            # where it is drawn - it was left out of the region frame for it
+            frame.add(position)
+
         if self.method == "rejection":
-            density = self.density(tree, position.std_out, location=(0, -1))
+            density = self.density(tree, position.std_out, location=(4, 5))
             if density is not None:
                 density.node.parent = frame.node
                 # one uniform draw per point, compared against f: the point
                 # survives where its draw falls under the curve
-                draw = RandomValue(tree, location=(0, -2), data_type="FLOAT",
+                draw = RandomValue(tree, location=(5, 9), data_type="FLOAT",
                                    min=0.0, max=1.0, seed=self.seed + 1,
                                    name="RejectionDraw", parent=frame)
-                test = make_function(tree, location=(1, -1),
+                test = make_function(tree, location=(7, 8),
                                      functions={"reject": "u,f,>"},
                                      inputs=["u", "f"], outputs=["reject"],
                                      scalars=["u", "f", "reject"],
-                                     name="RejectionTest", hide=True)
+                                     name="RejectionTest", hide=False)
                 test.parent = frame.node
                 tree.links.new(draw.std_out, test.inputs["u"])
                 tree.links.new(density, test.inputs["f"])
                 discard = test.outputs["reject"]
         elif self.method == "uniform" or self.color_by_density \
                 or self.emission_by_density:
-            density = self.density(tree, position.std_out, location=(0, -1))
+            density = self.density(tree, position.std_out, location=(4, 5))
             if density is not None:
                 density.node.parent = frame.node
 
         # the region the points are confined to, on top of the box they were
         # drawn in - the pipe wall, for the modifier that has one
-        outside = self.constraint(tree, position.std_out, location=(1, -3))
+        outside = self.constraint(tree, position.std_out, location=(6, 5))
         if outside is not None:
             outside.node.parent = frame.node
             if discard is None:
                 discard = outside
             else:
-                either = BooleanMath(tree, location=(2, -2), operation="OR",
+                either = BooleanMath(tree, location=(9, 6), operation="OR",
                                      inputs0=discard, inputs1=outside,
-                                     name="RejectOrOutside", hide=True,
+                                     name="RejectOrOutside", hide=False,
                                      parent=frame)
                 discard = either.std_out
 
         if discard is not None:
-            cull = DeleteGeometry(tree, location=(2, 0), domain="POINT",
+            cull = DeleteGeometry(tree, location=(11, 8), domain="POINT",
                                   geometry=points, selection=discard,
                                   name="Reject", parent=frame)
             points = cull.geometry_out
 
+        # whatever else the material has to know, one store each, upstream of
+        # the intensity store so that the geometry line ends in the same node
+        extras = self.extra_attributes(tree, location=(12, 10))
+        for i, (attribute, value) in enumerate(extras):
+            store = StoreNamedAttribute(tree, location=(13 - len(extras) + i, 10),
+                                        name=attribute, data_type="FLOAT",
+                                        domain="POINT", value=value)
+            store.node.parent = frame.node
+            tree.links.new(points, store.geometry_in)
+            points = store.geometry_out
+
         if density is not None:
             # carried on the points so that a material can read it; the value
             # is f at the point's own position, i.e. the local intensity
-            store = StoreNamedAttribute(tree, location=(3, 0), name="intensity",
+            store = StoreNamedAttribute(tree, location=(13, 10), name="intensity",
                                         data_type="FLOAT", domain="POINT",
                                         value=density)
             store.node.parent = frame.node
@@ -622,17 +680,17 @@ class SpatialDistributionModifier(GeometryNodesModifier):
     # ------------------------------------------------------------------
     def _display_frame(self, tree, points):
         """A small sphere on every point, painted, plus the optional box."""
-        frame = Frame(tree, location=(11, 0), label="Display",
+        frame = Frame(tree, location=(0, 0), label="Display",
                       name="DisplayFrame")
-        ball = IcoSphere(tree, location=(0, -1), radius=self.radius,
+        ball = IcoSphere(tree, location=(14, 2), radius=self.radius,
                          subdivisions=self.subdivisions, name="Ball",
                          parent=frame)
-        instances = InstanceOnPoints(tree, location=(1, 0), points=points,
+        instances = InstanceOnPoints(tree, location=(15, 3), points=points,
                                      instance=ball.geometry_out,
                                      name="Instances", parent=frame)
         # realised, not left as instances, so that the ``intensity``
         # attribute reaches the shader on the mesh domain it reads
-        realized = RealizeInstances(tree, location=(2, 0), name="Realize",
+        realized = RealizeInstances(tree, location=(16, 3), name="Realize",
                                     parent=frame)
         tree.links.new(instances.geometry_out, realized.geometry_in)
         geometry = realized.geometry_out
@@ -641,7 +699,7 @@ class SpatialDistributionModifier(GeometryNodesModifier):
             # a material the caller built and handed over, ready to go: it
             # reads the `intensity` attribute stored above like the two
             # builders below, only it was not built here
-            painted = SetMaterial(tree, location=(3, 0), geometry=geometry,
+            painted = SetMaterial(tree, location=(17, 3), geometry=geometry,
                                   material=self.material, name="PaintPoints",
                                   parent=frame)
             self.materials.append(painted.material)
@@ -658,7 +716,7 @@ class SpatialDistributionModifier(GeometryNodesModifier):
                                                color=self.color,
                                                strength=self.kwargs.get("emission", 10),
                                                **self.kwargs)
-            painted = SetMaterial(tree, location=(3, 0), geometry=geometry,
+            painted = SetMaterial(tree, location=(17, 3), geometry=geometry,
                                   material=material, name="PaintPoints",
                                   parent=frame)
             self.materials.append(painted.material)
@@ -671,34 +729,34 @@ class SpatialDistributionModifier(GeometryNodesModifier):
                                                function="fac",
                                                gradient=self.gradient,
                                                **self.kwargs)
-            painted = SetMaterial(tree, location=(3, 0), geometry=geometry,
+            painted = SetMaterial(tree, location=(17, 3), geometry=geometry,
                                   material=material, name="PaintPoints",
                                   parent=frame)
             self.materials.append(painted.material)
             geometry = painted.geometry_out
         elif self.color is not None:
-            painted = SetMaterial(tree, location=(3, 0), geometry=geometry,
+            painted = SetMaterial(tree, location=(17, 3), geometry=geometry,
                                   material=self.color, name="PaintPoints",
                                   parent=frame, **self.kwargs)
             self.materials.append(painted.material)
             geometry = painted.geometry_out
 
         if self.box_color is not None:
-            box = CubeMesh(tree, location=(0, -3), size=self.size,
+            box = CubeMesh(tree, location=(14, -1), size=self.size,
                            name="BoxOutline", parent=frame)
-            shifted = TransformGeometry(tree, location=(1, -3),
+            shifted = TransformGeometry(tree, location=(15, -1),
                                         geometry=box.geometry_out,
                                         translation=self.center,
                                         name="PlaceBoxOutline", parent=frame)
-            wires = WireFrame(tree, location=(2, -3), radius=self.box_radius,
+            wires = WireFrame(tree, location=(16, -1), radius=self.box_radius,
                               geometry=shifted.geometry_out, name="BoxWires",
                               parent=frame)
-            box_paint = SetMaterial(tree, location=(3, -3),
+            box_paint = SetMaterial(tree, location=(17, -1),
                                     geometry=wires.geometry_out,
                                     material=self.box_color, name="PaintBox",
                                     parent=frame, **self.kwargs)
             self.materials.append(box_paint.material)
-            joined = JoinGeometry(tree, location=(4, 0), name="JoinDisplay",
+            joined = JoinGeometry(tree, location=(18, 3), name="JoinDisplay",
                                   parent=frame)
             tree.links.new(box_paint.geometry_out, joined.geometry_in)
             tree.links.new(geometry, joined.geometry_in)
@@ -1136,13 +1194,27 @@ class AcousticModifier(SpatialDistributionModifier):
     the cylinder does not fill is 1 - pi/4 = 21% of the candidates, and
     :meth:`estimate_mean_density` knows that too.
 
+    Its *length* is a dial as well, and the other kind: ``Length`` is wired
+    into the corners the candidates are drawn between (see
+    :meth:`region_bounds`), so ramping it stretches the box itself rather than
+    what is sampled in it. The candidate count is fixed when the modifier is
+    built, so the cloud thins as the pipe grows.
+
+    The points carry two attributes out of the sampling frame: ``intensity``,
+    which is f where the point sits, and ``Amplitude``, which is what the
+    ``Amplitude`` dial reads at that moment (see :meth:`extra_attributes`).
+    The second is there because the first cannot be read without it - f runs
+    -A..A, so how far a point is from resting air is a question about both.
+
     The dials, reachable with
     ``ibpy.get_geometry_node_from_modifier(modifier, label)``: ``Amplitude``,
-    ``Wavelength``, ``Period``, ``PipeRadius``. Ramping ``Wavelength`` walks
-    the pipe through its harmonics, which is what the script's
-    lambda in {2.00, 2.57, 3.60, 6.00, 18.0} m is a list of.
+    ``Wavelength``, ``Period``, ``Length``, ``PipeRadius``. The first four sit
+    together in the ``Control`` frame; the last one sits by the wall it is
+    read by. Ramping ``Wavelength`` walks the pipe through its harmonics,
+    which is what the script's lambda in {2.00, 2.57, 3.60, 6.00, 18.0} m is a
+    list of.
 
-    :param length: the pipe, along x.
+    :param length: the pipe, along x - and where the ``Length`` dial starts.
     :param pipe_radius: R, its radius about the x axis.
     :param amplitude: A.
     :param wavelength: lambda, in the same units as the pipe.
@@ -1165,6 +1237,9 @@ class AcousticModifier(SpatialDistributionModifier):
         self.wavelength = wavelength
         self.period = period
         self.intensity = ACOUSTIC_PLANE_WAVE if intensity is None else intensity
+        self.color = get_from_kwargs(kwargs,"color",None)
+        if self.color is not None:
+            material = material or get_texture(self.color,**kwargs)
         if material is None:
             # imported here rather than at module level: appearance.textures
             # imports geometry_nodes.nodes, and the other two builders in this
@@ -1175,6 +1250,72 @@ class AcousticModifier(SpatialDistributionModifier):
                          size=(length, 2 * pipe_radius, 2 * pipe_radius),
                          method=method, count=count, radius=radius,
                          material=material, **kwargs)
+
+    # ------------------------------------------------------------------
+    def _control_frame(self, tree):
+        """The frame the dials live in, built on first use.
+
+        Both halves of the tree ask for it: the length is read in the region
+        frame, where the box is drawn, and the other four in the sampling
+        frame, where the wave is evaluated. Gathering them here is what makes
+        the dials a *panel* rather than four value nodes scattered along the
+        left edge of the tree.
+        """
+        if not hasattr(self, "control_frame"):
+            self.control_frame = Frame(tree, location=(0, 0), label="Control",
+                                       name="ControlFrame")
+        return self.control_frame
+
+    # ------------------------------------------------------------------
+    def region_bounds(self, tree, frame=None, location=(0, 0)):
+        """The two corners of the box, with the pipe's length on a dial.
+
+        ``Length`` is the fifth dial, and the only one that moves the *box*
+        rather than the wave in it: the candidates are drawn between
+        -L/2 and L/2 along x, and the two corners are built out of one value
+        node so that a scene can ramp L and watch the pipe grow. The number of
+        candidates is fixed when the modifier is built, so a longer pipe is a
+        thinner cloud - lengthening it by half empties it by a third.
+
+        The sides stay at the radius the pipe was built with. The wall (see
+        :meth:`constraint`) is what narrows the cylinder, and it culls against
+        ``PipeRadius``, so a box that followed that dial would only move the
+        corner the wall throws away anyway.
+        """
+        x, y = location
+        length = InputValue(tree, location=(1, 5), value=self.length,
+                            name="Length", parent=self._control_frame(tree))
+        # one reroute, because the dial is a frame away and both corners read
+        # it: without it the same wire is drawn across the tree twice
+        relay = Reroute(tree, location=(x, y), ins=length.std_out, parent=frame)
+        # named around "Length": the dials are looked up by a substring of
+        # their label, and a node called ...Length would answer to it first
+        half_min = MathNode(tree, location=(x + 1, y + 1), operation="MULTIPLY",
+                            inputs0=relay.std_out, inputs1=-0.5,
+                            name="MinusHalfSpan", parent=frame)
+        half_max = MathNode(tree, location=(x + 1, y - 1), operation="MULTIPLY",
+                            inputs0=relay.std_out, inputs1=0.5,
+                            name="HalfSpan", parent=frame)
+        low = CombineXYZ(tree, location=(x + 2, y + 1), x=half_min.std_out,
+                         y=self.box_min.y, z=self.box_min.z,
+                         name="BoxMin", parent=frame)
+        high = CombineXYZ(tree, location=(x + 2, y - 1), x=half_max.std_out,
+                          y=self.box_max.y, z=self.box_max.z,
+                          name="BoxMax", parent=frame)
+        return low.std_out, high.std_out
+
+    # ------------------------------------------------------------------
+    def extra_attributes(self, tree, location=(0, 0)):
+        """``Amplitude``, so that the shader knows how loud the wave is.
+
+        ``intensity`` alone cannot say it: it is f at the point, and f runs
+        -A..A, so a point at 0.5 is resting air whatever A is, and the peaks
+        move with A rather than the ramp. Handing the material the amplitude
+        as well lets it read the two apart.
+        """
+        if not hasattr(self, "amplitude_node"):
+            return []
+        return [("Amplitude", self.amplitude_node.std_out)]
 
     # ------------------------------------------------------------------
     def density(self, tree, position, location=(0, 0)):
@@ -1196,16 +1337,19 @@ class AcousticModifier(SpatialDistributionModifier):
 
         # the dials, built once and reused if density() is called again
         if not hasattr(self, "amplitude_node"):
-            self.amplitude_node = InputValue(tree, location=(x - 2, y + 3),
+            panel = self._control_frame(tree)
+            self.amplitude_node = InputValue(tree, location=(1, 3),
                                              value=self.amplitude,
-                                             name="Amplitude")
-            self.wavelength_node = InputValue(tree, location=(x - 2, y + 2),
+                                             name="Amplitude", parent=panel)
+            self.wavelength_node = InputValue(tree, location=(1, 2),
                                               value=self.wavelength,
-                                              name="Wavelength")
-            self.period_node = InputValue(tree, location=(x - 2, y + 1),
-                                          value=self.period, name="Period")
+                                              name="Wavelength", parent=panel)
+            self.period_node = InputValue(tree, location=(1, 1),
+                                          value=self.period, name="Period",
+                                          parent=panel)
             # and the reason the wave travels with no keyframe in the tree
-            self.clock = SceneTime(tree, location=(x - 2, y), name="Clock")
+            self.clock = SceneTime(tree, location=(1, 0), name="Clock",
+                                   parent=panel)
 
         for socket, dial in (("amplitude", self.amplitude_node),
                              ("wavelength", self.wavelength_node),
@@ -1223,13 +1367,15 @@ class AcousticModifier(SpatialDistributionModifier):
             functions={"outside": "pos_y,pos_y,*,pos_z,pos_z,*,+,rad,rad,*,>"},
             inputs=["pos", "rad"], outputs=["outside"],
             vectors=["pos"], scalars=["rad", "outside"],
-            name="PipeWall", hide=True)
+            name="PipeWall", hide=False)
         tree.links.new(position, wall.inputs["pos"])
 
         if not hasattr(self, "pipe_radius_node"):
-            self.pipe_radius_node = InputValue(tree, location=(x - 2, y - 1),
+            # left out of the control frame on purpose: it is a dial of the
+            # *region*, and it sits by the wall it is read by
+            self.pipe_radius_node = InputValue(tree, location=(x - 1, y - 2),
                                                value=self.pipe_radius,
-                                               name="PipeRadius", hide=True)
+                                               name="PipeRadius")
         tree.links.new(self.pipe_radius_node.std_out, wall.inputs["rad"])
         return wall.outputs["outside"]
 

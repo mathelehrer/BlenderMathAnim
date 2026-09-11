@@ -1,0 +1,6 @@
+\contentsline {section}{\numberline {1}Why an approximation at all}{1}{section.1}%
+\contentsline {section}{\numberline {2}Small argument: $0 < x \le 3$}{1}{section.2}%
+\contentsline {section}{\numberline {3}Large argument: $3 \le x < \infty $}{2}{section.3}%
+\contentsline {section}{\numberline {4}How the two branches are joined}{3}{section.4}%
+\contentsline {section}{\numberline {5}Accuracy actually achieved}{3}{section.5}%
+\contentsline {section}{\numberline {6}Where this lives in the code}{4}{section.6}%
