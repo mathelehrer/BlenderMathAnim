@@ -285,7 +285,7 @@ def build_grease_pencil(name, strokes, ink=None, frame=1, hide_viewport=True):
     # which is what Object Info needs. hide_viewport does the same for the
     # viewport, where the depsgraph does drop it: the modifier then shows
     # nothing until the frame is rendered
-    hide_from_camera(obj, hide_viewport)
+    # hide_from_camera(obj, hide_viewport)
 
     slots = {}
     for stroke in strokes:

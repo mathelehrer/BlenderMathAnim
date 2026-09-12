@@ -518,6 +518,8 @@ def get_texture(material, **kwargs):
             material = interference_texture(**kwargs)
         elif material == 'function':
             material = function_texture(**kwargs)
+        elif material == 'acoustic':
+            material = acoustic_texture(**kwargs)
         elif material == 'iteration':
             material = make_iteration_material(**kwargs)
         elif material == 'hue':
@@ -1937,9 +1939,9 @@ def function_texture(name="Function", **kwargs):
 
     ``Base Color`` and ``Emission Color``
         a ramp on ``(u + 1)/2``, so 0 is a trough, 0.5 the zero crossing and 1
-        a crest. The default gradient runs red -> black -> green: opposite
-        hues for opposite signs, and a curve that goes black exactly where it
-        crosses the axis.
+        a crest. The default gradient runs magenta -> ``zero_color`` -> cyan:
+        opposite hues for opposite signs, and a curve that goes the colour of
+        the background exactly where it crosses the axis.
     ``Emission Strength``
         :math:`u^2` - the energy, so crest and trough glow equally and the
         zero crossings are dark. It is a socket driven by the attribute, which
@@ -1977,7 +1979,11 @@ def function_texture(name="Function", **kwargs):
         ``amplitude``. It is a per-point attribute rather than a number so
         that a scene which ramps the amplitude keeps the colours where they
         are - the crest stays green as it grows.
-    :param gradient: ``{position: rgba}`` for the ramp.
+    :param zero_color: what the zero crossing is painted, and where the two
+        outer stops sit. ``"text"`` gives white at 0.5 with the hues pulled in
+        to 0.2 and 0.8; anything else is a palette name for the middle stop,
+        with magenta at 0 and cyan at 1.
+    :param gradient: ``{position: rgba}`` for the ramp, overriding that.
     :param alpha_intensity: how much of the alpha follows :math:`u^2`.
     :param alpha: where the global fade starts, the factor of the
         ``AlphaFactor`` mixer. 1 by default, so a material that is never
@@ -1998,7 +2004,7 @@ def function_texture(name="Function", **kwargs):
         z_color = ibpy.get_color_from_string(zero_color)
         zero=0.5
         start = 0
-        end = 0
+        end = 1
 
     gradient = get_from_kwargs(kwargs, "gradient",
                                {start: [1, 0.16, 0.767, 1], zero: z_color,
@@ -2067,39 +2073,46 @@ def function_texture(name="Function", **kwargs):
 
 
 def acoustic_texture(name="acoustic", **kwargs):
-    r"""Compressions and rarefactions of a sound wave, read off ``intensity``.
+    r"""Compressions and rarefactions of a sound wave, painted by its own value.
 
-    Ported from ``video_interferences/shader.xml`` as it stands after the
-    organ-pipe pass, and the material
-    :class:`~geometry_nodes.modifier_video_interferences.AcousticModifier`
-    hangs on its points. One geometry attribute, ``intensity``, drives all
-    three of the sockets that matter, and it is the *signed* elongation of
-    the wave rescaled to run 0..1, so f = 0.5 is undisturbed air:
+    The material
+    :class:`~geometry_nodes.modifier_interferences.AcousticModifier` hangs on
+    its points, and the sibling of :func:`function_texture`: the graphs of the
+    interference video and the cloud in the organ pipe are the same wave, so
+    they are read off the same pair of attributes and painted with the same
+    gradient. ``Elongation`` is the signed elongation s at the point and
+    ``Amplitude`` is the A it was drawn at, and everything below is
+    u = s / A, which runs -1..1.
 
-    ``Base Color`` / ``Emission Color``
-        a ramp on the attribute itself, with the blend's three stops - red at
-        0.29, blue at 0.5, green at 0.74. Rarefaction and compression get
-        opposite hues and the ramp is symmetric about the resting value, so a
-        travelling wave reads as bands of colour moving down the pipe.
-
+    ``Base Color`` and ``Emission Color``
+        the ramp of :func:`function_texture`, on the same coordinate
+        ``(u + 1)/2``: 0 is a rarefaction, 0.5 undisturbed air and 1 a
+        compression. So a slab of air in the pipe and the crest of the graph
+        above it come out the same colour.
     ``Alpha`` and ``Emission Strength``
-        both follow d = |2f - 1|, the distance from that resting value, which
-        is 0 at the nodes and 1 at a full crest or trough. So the wave is *cut
-        out of* the cloud rather than painted on it: the air that is not
-        moving goes transparent and dark, and only the compressions and
-        rarefactions are left glowing. The alpha is what makes a cloud of ten
-        thousand spheres legible at all - without it the points in front of a
-        crest veil the crest.
+        both follow d = |u|, which is 0 for air at rest and 1 at a full crest
+        or trough. The wave is therefore *cut out of* the cloud rather than
+        painted on it: undisturbed air goes transparent and dark, and only the
+        compressions and rarefactions are left glowing. The alpha is what
+        makes a cloud of ten thousand spheres legible at all - without it the
+        points in front of a crest veil the crest.
 
-    :param name: material name. The scenes call it ``"acoustic"``.
-    :param attribute: the attribute to read, ``intensity`` as
-        :class:`~geometry_nodes.modifier_video_interferences.SpatialDistributionModifier`
+    :param name: material name. The scenes ask for it as ``"acoustic"``.
+    :param attribute: the attribute holding the elongation, ``Elongation``
+        as :class:`~geometry_nodes.modifier_interferences.AcousticModifier`
         stores it.
+    :param scale_attribute: the attribute it is measured against,
+        ``Amplitude``. A per-point attribute rather than a number, so that a
+        scene which ramps the amplitude keeps the colours where they are.
     :param attr_type: ``GEOMETRY``, ``INSTANCER``, ``OBJECT``, ...
-    :param gradient: ``{position: rgba}`` stops of the ramp.
+    :param zero_color: what undisturbed air is painted, and where the outer
+        stops sit - exactly as in :func:`function_texture`. ``"text"`` gives
+        white at 0.5 with the two hues pulled in to 0.2 and 0.8; anything else
+        is a palette name for the middle stop.
+    :param gradient: ``{position: rgba}`` stops of the ramp, overriding that.
     :param emission_strength: what d is multiplied by on its way to
-        ``Emission Strength``. The blend's 5 is bright enough to bloom; pair
-        it with ``compositions.create_glow_composition``.
+        ``Emission Strength``. 5 is bright enough to bloom; pair it with
+        ``compositions.create_glow_composition``.
     :param alpha: where the global fade starts, the factor of the
         ``AlphaFactor`` mixer - the same arrangement as
         :func:`function_texture`, and for the same reason: ``Alpha`` is a
@@ -2107,12 +2120,25 @@ def acoustic_texture(name="acoustic", **kwargs):
         shader's ``Alpha`` default, would otherwise do nothing at all.
     :param kwargs: passed on to :func:`~interface.ibpy.customize_material`.
     """
-    attribute = get_from_kwargs(kwargs, "attribute", "intensity")
+    attribute = get_from_kwargs(kwargs, "attribute", "Elongation")
+    scale_attribute = get_from_kwargs(kwargs, "scale_attribute", "Amplitude")
     attr_type = get_from_kwargs(kwargs, "attr_type", "GEOMETRY")
+    zero_color = get_from_kwargs(kwargs, "zero_color", "background")
+
+    if zero_color == "text":
+        zero = 0.5
+        z_color = [1, 1, 1, 1]
+        start = 0.2
+        end = 0.8
+    else:
+        z_color = ibpy.get_color_from_string(zero_color)
+        zero = 0.5
+        start = 0
+        end = 1
+
     gradient = get_from_kwargs(kwargs, "gradient",
-                               {0.2909: [1, 0, 0.00048, 1],
-                                0.5: [0.0139, 0, 1, 1],
-                                0.7364: [0.014, 1, 0, 1]})
+                               {start: [1, 0.16, 0.767, 1], zero: z_color,
+                                end: [0.095, 0.983, 1, 1]})
     emission_strength = get_from_kwargs(kwargs, "emission_strength", 5)
     # customize_material reads 'alpha' too, and would write it into the
     # shader's Alpha socket, which is driven here; it belongs on the mixer
@@ -2126,36 +2152,35 @@ def acoustic_texture(name="acoustic", **kwargs):
     # `use_nodes` hands out for free would only be in the way
     tree.nodes.clear()
 
-    value = AttributeNode(tree, location=(-4.5, 0), attribute_name=attribute,
-                          attribute_type=attr_type, name="IntensityAttribute",
+    value = AttributeNode(tree, location=(-4.7, 0.3), attribute_name=attribute,
+                          attribute_type=attr_type, name="ElongationAttribute",
+                          hide=False)
+    scale = AttributeNode(tree, location=(-4.7, -0.6),
+                          attribute_name=scale_attribute,
+                          attribute_type=attr_type, name="ScaleAttribute",
                           hide=True)
-    ramp = ColorRamp(tree, location=(-2.6, 0.6), factor=value.fac_out,
+
+    # (s + A)/A/2 = (u + 1)/2, the ramp's coordinate. Written one operation per
+    # node, as function_texture has it: each of these is a socket a scene can
+    # reach, and the pair (Shifted, Rescaled) is where the resting value of the
+    # medium is written down
+    shifted = MathNode(tree, location=(-3.7, -0.1), operation="ADD",
+                       input0=value.fac_out, input1=scale.fac_out,
+                       name="Shifted")
+    normalized = MathNode(tree, location=(-2.7, -0.6), operation="DIVIDE",
+                          input0=shifted.std_out, input1=scale.fac_out,
+                          name="Rescaled")
+    factor = MathNode(tree, location=(-1.6, -0.5), operation="DIVIDE",
+                      input0=normalized.std_out, input1=2.0,
+                      name="RampFactor")
+    ramp = ColorRamp(tree, location=(-0.6, 0.9), factor=factor.std_out,
                      values=list(gradient.keys()),
                      colors=[list(color) for color in gradient.values()],
                      interpolation="LINEAR", color_mode="RGB", hide=False)
 
-    # d = |2f - 1|, one operation per node as the blend has it: each of these
-    # is a socket a scene can reach, and the pair (Doubled, Centered) is where
-    # the resting value of the medium is written down
-    doubled = MathNode(tree, location=(-3.5, -1.0), operation="MULTIPLY",
-                       input0=value.fac_out, input1=2.0, name="Doubled")
-    centered = MathNode(tree, location=(-2.6, -1.0), operation="SUBTRACT",
-                        input0=doubled.std_out, input1=1.0, name="Centered")
-    deviation = MathNode(tree, location=(-1.7, -1.0), operation="ABSOLUTE",
-                         input0=centered.std_out, name="Deviation")
-    glow = MathNode(tree, location=(-0.8, -1.5), operation="MULTIPLY",
-                    input0=deviation.std_out, input1=emission_strength,
-                    name="EmissionStrength")
-    # the global fade: the alpha above, mixed against nothing at all
-    fade = MixNode(tree, location=(-0.8, -0.5), data_type="FLOAT",
-                   factor=alpha, caseA=0.0, caseB=deviation.std_out,
-                   clamp_factor=True, factor_mode="UNIFORM",
-                   name="AlphaFactor", hide=False)
-
-    bsdf = PrincipledBSDF(tree, location=(1.0, 0.0), base_color=ramp.std_out,
+    bsdf = PrincipledBSDF(tree, location=(1.5, 0.0), base_color=ramp.std_out,
                           emission_color=ramp.std_out,
-                          emission_strength=glow.std_out,
-                          alpha=fade.std_out,
+                          emission_strength=ramp.std_out,
                           distribution="MULTI_GGX", hide=False)
     OutputMaterial(tree, location=(3.0, 0.0), surface=bsdf.std_out, hide=False)
 

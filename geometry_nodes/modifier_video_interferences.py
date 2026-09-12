@@ -106,12 +106,12 @@ Classes:
 :class:`GaussianCloudModifier`
     f = a gaussian blob — a distribution with a known answer, which is what
     the verification harness leans on.
-:class:`AcousticModifier`
+:class:`~geometry_nodes.modifier_interferences.AcousticModifier`
     the organ pipe: a *cylinder* of points, drawn from a travelling plane
-    wave A sin(2 pi x/lambda - 2 pi t/T). Two firsts here — the distribution
-    is handed in as an RPN **string** rather than written in python, and the
-    region is narrowed by a second field, the pipe wall, OR-ed into the same
-    cull as the rejection test (:meth:`SpatialDistributionModifier.constraint`).
+    wave A sin(2 pi x/lambda - 2 pi t/T). It used to be a subclass of
+    :class:`SpatialDistributionModifier` and is now a self-contained modifier
+    in :mod:`geometry_nodes.modifier_interferences`, one function per node
+    frame, so that the whole pipe can be read in one file.
 :class:`PolarGridModifier`
     not a cloud at all, and the only one here that is about *coordinates*
     rather than about a field: a panel ruled with horizontal and vertical
@@ -227,11 +227,11 @@ def rpn_numpy(expression, variables):
     expressions in numpy.
 
     The mirror of the node group, for a formula that only exists as a string -
-    :class:`AcousticModifier` takes its distribution that way, and <f> (and so
-    the number of candidates the sampler has to draw) cannot be measured
-    without evaluating it. Values in ``variables`` may be scalars or arrays,
-    and numpy's broadcasting does the rest, so one call evaluates the formula
-    at every point of an ``(n, 3)`` cloud at once.
+    a modifier that takes its distribution that way cannot measure <f> (and so
+    the number of candidates the sampler has to draw) without evaluating it.
+    Values in ``variables`` may be scalars or arrays, and numpy's broadcasting
+    does the rest, so one call evaluates the formula at every point of an
+    ``(n, 3)`` cloud at once.
 
     Tokens are looked up **as operators first**, exactly as ``make_function``
     does it, so the same trap is here: a variable called ``length`` is the
@@ -398,6 +398,17 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         super().__init__(name=name, automatic_layout=False,
                          group_input=(shape == "input"))
 
+        # ------------------------------------------------------------------
+
+    def create_node(self, tree, **kwargs):
+        candidates, position = self._region_frame(tree)
+        points = self._sampling_frame(tree, candidates, position)
+        geometry = self._display_frame(tree, points)
+        # the coordinates in the three frames are absolute (see
+        # :meth:`_region_frame`), so the output node is placed by hand too
+        self.group_outputs.location = (19 * 200, 3 * 100)
+        tree.links.new(geometry, self.group_outputs.inputs["Geometry"])
+
     # ------------------------------------------------------------------
     # the distribution: one method in nodes, one in numpy, same function
     # ------------------------------------------------------------------
@@ -419,9 +430,8 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         The other half of :meth:`density`, and the one that is about the
         *region* rather than the distribution: the candidates are drawn in a
         box, and a subclass that wants them inside something else - a
-        cylinder, a sphere, the pipe of
-        :class:`AcousticModifier` - says so here. The socket is OR-ed with the
-        rejection test in :meth:`_sampling_frame`, so the geometry is culled
+        cylinder, a sphere, an organ pipe - says so here. The socket is OR-ed
+        with the rejection test in :meth:`_sampling_frame`, so the geometry is culled
         by the same ``Delete Geometry`` node as the distribution and costs
         nothing extra.
 
@@ -435,9 +445,8 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         ``(None, None)``, the default, leaves the ``UniformDraw`` node with the
         constants that ``size`` and ``center`` work out to, which is a box that
         cannot move once the tree is built. A subclass that wants one of its
-        sides on a dial - the pipe of :class:`AcousticModifier`, whose length
-        a scene ramps - builds the nodes for it here, inside ``frame``, and
-        hands back the corners.
+        sides on a dial - a pipe whose length a scene ramps - builds the nodes
+        for it here, inside ``frame``, and hands back the corners.
 
         Only the box path uses this; the two volume paths scatter into a
         volume rather than drawing coordinates.
@@ -449,9 +458,9 @@ class SpatialDistributionModifier(GeometryNodesModifier):
 
         ``intensity`` is stored by :meth:`_sampling_frame` for every modifier
         here, because a material needs it; anything else a *material* has to
-        know is listed here instead. :class:`AcousticModifier` stores its
-        amplitude that way, so the shader can tell a quiet wave from a loud
-        one rather than having to guess what the peak of ``intensity`` means.
+        know is listed here instead. A wave modifier stores its amplitude that
+        way, so the shader can tell a quiet wave from a loud one rather than
+        having to guess what the peak of ``intensity`` means.
         """
         return []
 
@@ -480,15 +489,6 @@ class SpatialDistributionModifier(GeometryNodesModifier):
         """
         return self.candidates * self.mean_density
 
-    # ------------------------------------------------------------------
-    def create_node(self, tree, **kwargs):
-        candidates, position = self._region_frame(tree)
-        points = self._sampling_frame(tree, candidates, position)
-        geometry = self._display_frame(tree, points)
-        # the coordinates in the three frames are absolute (see
-        # :meth:`_region_frame`), so the output node is placed by hand too
-        self.group_outputs.location = (19 * 200, 3 * 100)
-        tree.links.new(geometry, self.group_outputs.inputs["Geometry"])
 
     # ------------------------------------------------------------------
     def _region_frame(self, tree):
@@ -1121,313 +1121,6 @@ class GaussianCloudModifier(SpatialDistributionModifier):
         points = np.asarray(points, dtype=float)
         radius = np.linalg.norm(points - np.array(self.center, dtype=float), axis=1)
         return np.exp(-radius ** 2 / (2 * self.sigma ** 2))
-
-
-#: the distribution :class:`AcousticModifier` is built around, as an RPN
-#: string: A sin(2 pi x / lambda - 2 pi t / T), a plane wave running down the
-#: pipe. Every symbol in it is a socket of the ``Intensity`` group, so the
-#: formula can be swapped for another one without touching the tree.
-ACOUSTIC_PLANE_WAVE = ("amplitude,2,pi,*,wavelength,/,x,*,"
-                       "2,pi,*,period,/,time,*,-,sin,*")
-
-#: the same wave read as an *air density* rather than an elongation,
-#: (1 + A sin(...))/2, which is the variant that stays inside [0, 1]: the
-#: sampler then keeps points everywhere and merely piles them up in the
-#: compressions, and 0.5 - the resting density - is where
-#: :func:`~appearance.textures.acoustic_texture` puts its transparent,
-#: undisturbed air.
-ACOUSTIC_AIR_DENSITY = "1,%s,+,2,/" % ACOUSTIC_PLANE_WAVE
-
-
-class AcousticModifier(SpatialDistributionModifier):
-    r"""Air in an organ pipe: points drawn from a sound wave, inside a cylinder.
-
-    The tree of ``video_interferences/tmp.xml``, and the cloud the script's
-    organ pipe asks for. Two things separate it from the modifiers above, and
-    they are the two halves of :meth:`_sampling_frame`:
-
-    **The distribution is a string.** :meth:`density` does not know what f is;
-    it builds whatever RPN expression ``intensity`` holds into the
-    ``Intensity`` group, over the symbols
-
-    ``x``, ``y``, ``z``
-        the sampled position, component by component - and ``pos``, the
-        position itself, for the vector operators.
-    ``amplitude``, ``wavelength``, ``period``
-        A, lambda and T, each a ``Value`` node of the same name (capitalised:
-        ``Amplitude``, ``Wavelength``, ``Period``) that a scene can ramp.
-    ``time``
-        t, off ``Scene Time -> Seconds``.
-
-    plus numbers and ``pi``. The default is :data:`ACOUSTIC_PLANE_WAVE`,
-
-    .. math:: f(x, t) = A \sin\!\Big(\frac{2\pi}{\lambda}x
-                                   - \frac{2\pi}{T}t\Big),
-
-    the plane wave of the script, and because ``time`` comes off the clock it
-    travels down the pipe without a keyframe, as
-    :class:`RealInterferenceModifier` does. Any other formula in those symbols
-    is one argument away - a *standing* wave, say, which is the pipe's own
-    solution rather than the wave running through it::
-
-        "amplitude,2,pi,*,wavelength,/,x,*,sin,*,2,pi,*,period,/,time,*,cos,*"
-
-    **Sign, and what the sampler does with it.** f as written runs -A..A,
-    while a rejection test only ever accepts with probability f: the negative
-    half-cycles - the rarefactions - are *empty*, and what travels down the
-    pipe is a train of bands of points, one per compression. That is a fair
-    picture of a sound wave, and it is the one the default draws.
-    :meth:`estimate_mean_density` accounts for it exactly (it averages f
-    clipped to [0, 1], which is the acceptance rate), so ``count`` still means
-    what it says. Pass :data:`ACOUSTIC_AIR_DENSITY` instead for the other
-    reading, where the whole pipe stays populated and only the *density* of
-    the points ripples - that is the one
-    :func:`~appearance.textures.acoustic_texture` was drawn around, since its
-    ramp and its alpha both take 0.5 for undisturbed air.
-
-    **The pipe is a constraint, not a mesh.** The candidates are drawn in the
-    bounding box, and :meth:`constraint` throws away the ones with
-    y^2 + z^2 > R^2 - one ``PipeWall`` function node in the sampling frame,
-    OR-ed into the same ``Delete Geometry`` as the rejection test. So the
-    cylinder costs one node rather than a ``Mesh to Volume``, and its radius
-    is a dial (``PipeRadius``) a scene can open up. The corner of the box that
-    the cylinder does not fill is 1 - pi/4 = 21% of the candidates, and
-    :meth:`estimate_mean_density` knows that too.
-
-    Its *length* is a dial as well, and the other kind: ``Length`` is wired
-    into the corners the candidates are drawn between (see
-    :meth:`region_bounds`), so ramping it stretches the box itself rather than
-    what is sampled in it. The candidate count is fixed when the modifier is
-    built, so the cloud thins as the pipe grows.
-
-    The points carry two attributes out of the sampling frame: ``intensity``,
-    which is f where the point sits, and ``Amplitude``, which is what the
-    ``Amplitude`` dial reads at that moment (see :meth:`extra_attributes`).
-    The second is there because the first cannot be read without it - f runs
-    -A..A, so how far a point is from resting air is a question about both.
-
-    The dials, reachable with
-    ``ibpy.get_geometry_node_from_modifier(modifier, label)``: ``Amplitude``,
-    ``Wavelength``, ``Period``, ``Length``, ``PipeRadius``. The first four sit
-    together in the ``Control`` frame; the last one sits by the wall it is
-    read by. Ramping ``Wavelength`` walks the pipe through its harmonics,
-    which is what the script's lambda in {2.00, 2.57, 3.60, 6.00, 18.0} m is a
-    list of.
-
-    :param length: the pipe, along x - and where the ``Length`` dial starts.
-    :param pipe_radius: R, its radius about the x axis.
-    :param amplitude: A.
-    :param wavelength: lambda, in the same units as the pipe.
-    :param period: T, in seconds - the clock is ``Scene Time -> Seconds``, so
-        this is real time and the wave moves at lambda/T units per second.
-    :param intensity: the RPN string above, or ``None`` for the plane wave.
-    :param material: what to paint the points with;
-        :func:`~appearance.textures.acoustic_texture` under the name
-        ``acoustic`` by default, which reads the ``intensity`` attribute this
-        modifier stores.
-    """
-
-    def __init__(self, length=9.0, pipe_radius=1.0, amplitude=1.0,
-                 wavelength=tau, period=tau, intensity=None,
-                 method="rejection", count=30000, radius=0.01, material=None,
-                 name="Acoustic", **kwargs):
-        self.length = length
-        self.pipe_radius = pipe_radius
-        self.amplitude = amplitude
-        self.wavelength = wavelength
-        self.period = period
-        self.intensity = ACOUSTIC_PLANE_WAVE if intensity is None else intensity
-        self.color = get_from_kwargs(kwargs,"color",None)
-        if self.color is not None:
-            material = material or get_texture(self.color,**kwargs)
-        if material is None:
-            # imported here rather than at module level: appearance.textures
-            # imports geometry_nodes.nodes, and the other two builders in this
-            # module are pulled in the same way for the same reason
-            from appearance.textures import acoustic_texture
-            material = acoustic_texture(name="acoustic")
-        super().__init__(name=name,
-                         size=(length, 2 * pipe_radius, 2 * pipe_radius),
-                         method=method, count=count, radius=radius,
-                         material=material, **kwargs)
-
-    # ------------------------------------------------------------------
-    def _control_frame(self, tree):
-        """The frame the dials live in, built on first use.
-
-        Both halves of the tree ask for it: the length is read in the region
-        frame, where the box is drawn, and the other four in the sampling
-        frame, where the wave is evaluated. Gathering them here is what makes
-        the dials a *panel* rather than four value nodes scattered along the
-        left edge of the tree.
-        """
-        if not hasattr(self, "control_frame"):
-            self.control_frame = Frame(tree, location=(0, 0), label="Control",
-                                       name="ControlFrame")
-        return self.control_frame
-
-    # ------------------------------------------------------------------
-    def region_bounds(self, tree, frame=None, location=(0, 0)):
-        """The two corners of the box, with the pipe's length on a dial.
-
-        ``Length`` is the fifth dial, and the only one that moves the *box*
-        rather than the wave in it: the candidates are drawn between
-        -L/2 and L/2 along x, and the two corners are built out of one value
-        node so that a scene can ramp L and watch the pipe grow. The number of
-        candidates is fixed when the modifier is built, so a longer pipe is a
-        thinner cloud - lengthening it by half empties it by a third.
-
-        The sides stay at the radius the pipe was built with. The wall (see
-        :meth:`constraint`) is what narrows the cylinder, and it culls against
-        ``PipeRadius``, so a box that followed that dial would only move the
-        corner the wall throws away anyway.
-        """
-        x, y = location
-        length = InputValue(tree, location=(1, 5), value=self.length,
-                            name="Length", parent=self._control_frame(tree))
-        # one reroute, because the dial is a frame away and both corners read
-        # it: without it the same wire is drawn across the tree twice
-        relay = Reroute(tree, location=(x, y), ins=length.std_out, parent=frame)
-        # named around "Length": the dials are looked up by a substring of
-        # their label, and a node called ...Length would answer to it first
-        half_min = MathNode(tree, location=(x + 1, y + 1), operation="MULTIPLY",
-                            inputs0=relay.std_out, inputs1=-0.5,
-                            name="MinusHalfSpan", parent=frame)
-        half_max = MathNode(tree, location=(x + 1, y - 1), operation="MULTIPLY",
-                            inputs0=relay.std_out, inputs1=0.5,
-                            name="HalfSpan", parent=frame)
-        low = CombineXYZ(tree, location=(x + 2, y + 1), x=half_min.std_out,
-                         y=self.box_min.y, z=self.box_min.z,
-                         name="BoxMin", parent=frame)
-        high = CombineXYZ(tree, location=(x + 2, y - 1), x=half_max.std_out,
-                          y=self.box_max.y, z=self.box_max.z,
-                          name="BoxMax", parent=frame)
-        return low.std_out, high.std_out
-
-    # ------------------------------------------------------------------
-    def extra_attributes(self, tree, location=(0, 0)):
-        """``Amplitude``, so that the shader knows how loud the wave is.
-
-        ``intensity`` alone cannot say it: it is f at the point, and f runs
-        -A..A, so a point at 0.5 is resting air whatever A is, and the peaks
-        move with A rather than the ramp. Handing the material the amplitude
-        as well lets it read the two apart.
-        """
-        if not hasattr(self, "amplitude_node"):
-            return []
-        return [("Amplitude", self.amplitude_node.std_out)]
-
-    # ------------------------------------------------------------------
-    def density(self, tree, position, location=(0, 0)):
-        x, y = location
-        function = make_function(
-            tree, location=location,
-            functions={"density": self.intensity},
-            # the components, so that a formula can be written in x, y, z
-            # rather than in pos_x, pos_y, pos_z - the pipe runs along x and
-            # the formulas that go in here are about x
-            aux_functions={"x": "pos_x", "y": "pos_y", "z": "pos_z"},
-            inputs=["pos", "amplitude", "wavelength", "period", "time"],
-            outputs=["density"],
-            vectors=["pos"],
-            scalars=["amplitude", "wavelength", "period", "time",
-                     "x", "y", "z", "density"],
-            name="Intensity", hide=False)
-        tree.links.new(position, function.inputs["pos"])
-
-        # the dials, built once and reused if density() is called again
-        if not hasattr(self, "amplitude_node"):
-            panel = self._control_frame(tree)
-            self.amplitude_node = InputValue(tree, location=(1, 3),
-                                             value=self.amplitude,
-                                             name="Amplitude", parent=panel)
-            self.wavelength_node = InputValue(tree, location=(1, 2),
-                                              value=self.wavelength,
-                                              name="Wavelength", parent=panel)
-            self.period_node = InputValue(tree, location=(1, 1),
-                                          value=self.period, name="Period",
-                                          parent=panel)
-            # and the reason the wave travels with no keyframe in the tree
-            self.clock = SceneTime(tree, location=(1, 0), name="Clock",
-                                   parent=panel)
-
-        for socket, dial in (("amplitude", self.amplitude_node),
-                             ("wavelength", self.wavelength_node),
-                             ("period", self.period_node),
-                             ("time", self.clock)):
-            tree.links.new(dial.std_out, function.inputs[socket])
-        return function.outputs["density"]
-
-    # ------------------------------------------------------------------
-    def constraint(self, tree, position, location=(0, 0)):
-        """The pipe wall: true for the candidates outside the cylinder."""
-        x, y = location
-        wall = make_function(
-            tree, location=location,
-            functions={"outside": "pos_y,pos_y,*,pos_z,pos_z,*,+,rad,rad,*,>"},
-            inputs=["pos", "rad"], outputs=["outside"],
-            vectors=["pos"], scalars=["rad", "outside"],
-            name="PipeWall", hide=False)
-        tree.links.new(position, wall.inputs["pos"])
-
-        if not hasattr(self, "pipe_radius_node"):
-            # left out of the control frame on purpose: it is a dial of the
-            # *region*, and it sits by the wall it is read by
-            self.pipe_radius_node = InputValue(tree, location=(x - 1, y - 2),
-                                               value=self.pipe_radius,
-                                               name="PipeRadius")
-        tree.links.new(self.pipe_radius_node.std_out, wall.inputs["rad"])
-        return wall.outputs["outside"]
-
-    # ------------------------------------------------------------------
-    def density_numpy(self, points, seconds=0.0):
-        """The same formula, in numpy, at one instant.
-
-        ``seconds`` is the scene time the tree reads off the clock; the
-        default 0 is the frame the modifier is built on.
-        """
-        points = np.asarray(points, dtype=float)
-        values = rpn_numpy(self.intensity,
-                           {"pos": points,
-                            "x": points[:, 0], "y": points[:, 1],
-                            "z": points[:, 2],
-                            "amplitude": self.amplitude,
-                            "wavelength": self.wavelength,
-                            "period": self.period,
-                            "time": seconds})
-        return np.broadcast_to(np.asarray(values, dtype=float),
-                               (len(points),)).copy()
-
-    def inside_numpy(self, points):
-        """True for the points the pipe wall keeps - the mirror of
-        :meth:`constraint`."""
-        points = np.asarray(points, dtype=float)
-        return (points[:, 1] ** 2 + points[:, 2] ** 2
-                <= self.pipe_radius ** 2)
-
-    # ------------------------------------------------------------------
-    def estimate_mean_density(self, samples=200000, seed=1234):
-        """The acceptance rate of the whole sampling frame, not just of f.
-
-        Two things the base class's version does not know about. The pipe
-        throws away the corners of the box - that is a factor pi/4 for a
-        cylinder inscribed in its own bounding box, and it is measured here
-        rather than assumed, since :meth:`inside_numpy` is free to be any
-        region. And a point is accepted with probability *clip(f, 0, 1)*, not
-        f: where the wave is negative the acceptance is zero, not negative,
-        and averaging f raw would report ~0 for a plane wave and ask the
-        sampler for millions of candidates to make up for it.
-        """
-        rng = np.random.default_rng(seed)
-        points = rng.uniform(np.array(self.box_min), np.array(self.box_max),
-                             size=(samples, 3))
-        values = np.asarray(self.density_numpy(points), dtype=float)
-        peak = values.max() if len(values) else 1.0
-        if peak > 1 + 1e-6:
-            print("Warning: %s density peaks at %.3f > 1; the distribution "
-                  "will be clipped there." % (type(self).__name__, peak))
-        accepted = np.clip(values, 0.0, 1.0) * self.inside_numpy(points)
-        return float(np.clip(accepted.mean(), 1e-6, 1.0))
 
 
 class PolarGridModifier(GeometryNodesModifier):
