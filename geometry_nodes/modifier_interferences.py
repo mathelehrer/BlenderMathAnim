@@ -429,7 +429,7 @@ class AiryDiscModifier(GeometryNodesModifier):
                                   begin_time=0, transition_time=6)
     """
 
-    def __init__(self, radius=1.0, rings=3, edge="peak", aperture=0.25,
+    def __init__(self, radius=1.0, rings=3, edge="peak", aperture=0.289,
                  wavelength=0.02, distance=10.0, radial=300, angular=256,
                  gamma=1.0, epsilon=1e-3, color="important",
                  dark="background", clip=0.25, gradient=None,
