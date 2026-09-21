@@ -835,7 +835,6 @@ class SimpleTexBObject(SVGBObject):
                                  frame_duration=transition_time * FRAME_RATE)
         return begin_time + transition_time
 
-
     def align(self, other, char_index=0, other_char_index=0):
         # align with other
         diff = other.ref_obj.location[0] - self.ref_obj.location[0]
