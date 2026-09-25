@@ -136,11 +136,13 @@ def create_glow_composition(threshold=1,type='BLOOM',size=4,**kwargs):
         links = bpy.context.scene.compositing_node_group.links
 
 
-    if blender_version()<(5,0):
-        composite = nodes["Composite"]
-        set_alpha = nodes["Set Alpha"]
-    else:
-        set_alpha = nodes.new(type="CompositorNodeSetAlpha")
+    transparent=get_from_kwargs(kwargs,"transparent",False)
+    if not transparent:
+        if blender_version()<(5,0):
+            composite = nodes["Composite"]
+            set_alpha = nodes["Set Alpha"]
+        else:
+            set_alpha = nodes.new(type="CompositorNodeSetAlpha")
 
     layers = nodes["Render Layers"]
     viewer = nodes["Viewer"]
@@ -152,22 +154,29 @@ def create_glow_composition(threshold=1,type='BLOOM',size=4,**kwargs):
         glare.quality='HIGH'
         glare.size=size
         glare.threshold =threshold
-        set_alpha.mode = "REPLACE_ALPHA"
+        if not transparent:
+            set_alpha.mode = "REPLACE_ALPHA"
     else:
         glare.inputs["Threshold"].default_value=threshold
 
         glare.inputs["Type"].default_value=de_capitalize(type)
         glare.inputs["Quality"].default_value="High"
         glare.inputs["Size"].default_value=size
-        set_alpha.inputs["Type"].default_value="Replace Alpha"
+        if not transparent:
+            set_alpha.inputs["Type"].default_value="Replace Alpha"
         tint = get_from_kwargs(kwargs,"tint",Vector([1,1,1,1]))
         glare.inputs["Tint"].default_value=tint
 
     links.new(layers.outputs["Image"],glare.inputs["Image"])
 
-    links.new(glare.outputs["Image"],set_alpha.inputs["Image"])
-    links.new(set_alpha.outputs["Image"],viewer.inputs["Image"])
-    links.new(set_alpha.outputs["Image"],out.inputs["Image"])
+    if not transparent:
+        links.new(glare.outputs["Image"],set_alpha.inputs["Image"])
+        links.new(set_alpha.outputs["Image"],viewer.inputs["Image"])
+        links.new(set_alpha.outputs["Image"],out.inputs["Image"])
+    else:
+        links.new(glare.outputs["Image"], viewer.inputs["Image"])
+        links.new(glare.outputs["Image"], out.inputs["Image"])
+
     return glare
 
 def set_alpha_composition(**kwargs):
