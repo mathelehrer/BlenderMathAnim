@@ -1815,6 +1815,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         """
         frame = Frame(tree, location=(0, 0), label="Control",
                       name="ControlFrame")
+        size = InputValue(tree,location=(0,2),value=self.size,label="Size",hide=True,parent=frame)
         clock = SceneTime(tree, location=(0, 1), std_out="Seconds",
                           name="Clock", parent=frame)
         wavelength = InputValue(tree, location=(0, 0), value=self.wavelength,
@@ -1844,7 +1845,8 @@ class WaveVisualizationModifier(GeometryNodesModifier):
                        for j, source in enumerate(self.sources)]
         else:
             sources = []
-        return dict({"time": clock.std_out,
+        return dict({"size":size.std_out,
+                     "time": clock.std_out,
                      "wavelength": wavelength.std_out,
                      "frequency": frequency.std_out,
                      "amplitude": amplitude.std_out,
@@ -1976,7 +1978,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         """
         frame = Frame(tree, location=(1, 2), label="Geometry",
                       name="GeometryFrame")
-        grid = Grid(tree, location=(0, 0), size_x=self.size, size_y=control["width"],
+        grid = Grid(tree, location=(0, 0), size_x=control["size"], size_y=control["width"],
                     vertices_x=self.resolution, vertices_y=self.resolution,
                     name="Grid", parent=frame)
 
