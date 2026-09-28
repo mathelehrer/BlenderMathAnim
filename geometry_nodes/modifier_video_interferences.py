@@ -1436,12 +1436,22 @@ class FarFieldModifier(GeometryNodesModifier):
     animates the dials of the interference material - which is what keeps
     the two synchronised: one list of wavelengths, keyframed twice.
 
+    ``Ratio`` scales the wavelength the angles are computed from, so a
+    modifier can follow one colour of
+    :func:`~appearance.textures.rgb_interference_texture`, which derives
+    its three wavelengths from one ``Wavelength`` dial the same way. One
+    modifier per colour, each with its colour's ratio, then takes the same
+    keyframes as the material and draws that colour's beams.
+
     :param spacing: g, the distance between neighbouring sources, in the
         same units as ``wavelength``.
     :param wavelength: lambda at build time; the dial a scene ramps.
+    :param ratio: the wavelength the rays are drawn for is
+        ``ratio * Wavelength``. The ``Ratio`` dial; 1 by default.
     :param max_order: highest |n| built. Orders beyond
-        ``spacing/wavelength`` never appear, so this only has to cover the
-        shortest wavelength a scene reaches: ``int(g/lambda_min)``.
+        ``spacing/(ratio*wavelength)`` never appear, so this only has to
+        cover the shortest wavelength a scene reaches:
+        ``int(g/(ratio*lambda_min))``.
     :param reach: how long the rays are, in blender units.
     :param radius: tube radius.
     :param resolution: vertices of the circular profile. Eight is plenty
@@ -1454,14 +1464,22 @@ class FarFieldModifier(GeometryNodesModifier):
     :param color: palette name for the tubes, or ``None`` to leave them
         unpainted. ``emission`` and the rest of ``customize_material``'s
         keywords come through ``kwargs``.
+    :param zeroth_color: palette name for the n = 0 ray alone; ``None``
+        paints it with ``color`` like the rest.
+    :param draw_zeroth: whether this modifier draws the n = 0 ray at all.
+        sin(alpha_0) = 0 at every wavelength, so several modifiers over one
+        array - one per colour - would all draw the same ray on top of each
+        other and z-fight. Leave it on for exactly one of them.
     """
 
-    def __init__(self, spacing=1.0, wavelength=0.5, max_order=3,
+    def __init__(self, spacing=1.0, wavelength=0.5, ratio=1.0, max_order=3,
                  reach=2.5, radius=0.008, resolution=8,
                  axis=(1, 0, 0), normal=(0, 0, 1),
-                 color="text", name="FarField", **kwargs):
+                 color="text", zeroth_color=None, draw_zeroth=True,
+                 name="FarField", **kwargs):
         self.spacing = spacing
         self.wavelength = wavelength
+        self.ratio = ratio
         self.max_order = int(max_order)
         self.reach = reach
         self.radius = radius
@@ -1469,6 +1487,8 @@ class FarFieldModifier(GeometryNodesModifier):
         self.axis = Vector(axis).normalized()
         self.normal = Vector(normal).normalized()
         self.color = color
+        self.zeroth_color = color if zeroth_color is None else zeroth_color
+        self.draw_zeroth = draw_zeroth
         self.kwargs = kwargs
         self.orders = list(range(-self.max_order, self.max_order + 1))
         super().__init__(name=name, automatic_layout=False)
@@ -1489,6 +1509,7 @@ class FarFieldModifier(GeometryNodesModifier):
         radiated are absent rather than NaN.
         """
         lam = self.wavelength if wavelength is None else wavelength
+        lam = lam * self.ratio
         angles = {}
         for order in self.orders:
             sine = order * lam / self.spacing
@@ -1516,6 +1537,10 @@ class FarFieldModifier(GeometryNodesModifier):
                                        value=self.spacing, parent=dials)
         self.reach_node = InputValue(tree, location=(0, -1), name="Reach",
                                      value=self.reach, parent=dials)
+        # created after `Wavelength`, and not called "WavelengthRatio", since
+        # the dials are found by substring and in creation order
+        self.ratio_node = InputValue(tree, location=(0, 2), name="Ratio",
+                                     value=self.ratio, parent=dials)
         axis = InputVector(tree, location=(0, -2), vector=self.axis,
                            name="ArrayAxis", parent=dials)
         normal = InputVector(tree, location=(0, -3), vector=self.normal,
@@ -1527,7 +1552,7 @@ class FarFieldModifier(GeometryNodesModifier):
         functions = {}
         for order in self.orders:
             tag = self._tag(order)
-            aux["s" + tag] = "%s,lam,*,gap,/" % repr(float(order))
+            aux["s" + tag] = "%s,lam,*,ratio,*,gap,/" % repr(float(order))
             aux["e" + tag] = "s%s,abs,1,<" % tag
             aux["c" + tag] = "1,s{0},s{0},*,-,0,max,sqrt".format(tag)
             functions["dir" + tag] = "up,c{0},scale,axis,s{0},scale,add".format(tag)
@@ -1538,45 +1563,68 @@ class FarFieldModifier(GeometryNodesModifier):
         # length and the group would build and compute something else
         function = make_function(tree, location=(4, 0),
                                  functions=functions, aux_functions=aux,
-                                 inputs=["lam", "gap", "reach", "axis", "up"],
+                                 inputs=["lam", "ratio", "gap", "reach", "axis", "up"],
                                  outputs=list(functions),
                                  vectors=["axis", "up"]
                                          + ["dir" + self._tag(n) for n in self.orders],
-                                 scalars=["lam", "gap", "reach"] + list(aux)
+                                 scalars=["lam", "ratio", "gap", "reach"] + list(aux)
                                          + ["end" + self._tag(n) for n in self.orders],
                                  name="MaximaDirections", hide=True)
         links.new(self.wavelength_node.std_out, function.inputs["lam"])
+        links.new(self.ratio_node.std_out, function.inputs["ratio"])
         links.new(self.spacing_node.std_out, function.inputs["gap"])
         links.new(self.reach_node.std_out, function.inputs["reach"])
         links.new(axis.std_out, function.inputs["axis"])
         links.new(normal.std_out, function.inputs["up"])
 
         rays = Frame(tree, location=(8, 0), label="Rays", name="RaysFrame")
+        profile = CurveCircle(tree, location=(2, 1), radius=self.radius,
+                              resolution=self.resolution, name="RayProfile",
+                              parent=rays)
+
+        def tube(curve, location, name):
+            return CurveToMesh(tree, location=location, curve=curve,
+                               profile_curve=profile.geometry_out,
+                               fill_caps=True, name=name,
+                               parent=rays).geometry_out
+
+        def paint(geometry, color, location, name):
+            if color is None:
+                return geometry
+            painted = SetMaterial(tree, location=location, geometry=geometry,
+                                  material=color, name=name, parent=rays,
+                                  **self.kwargs)
+            self.materials.append(painted.material)
+            return painted.geometry_out
+
+        # the zeroth order is its own branch: it is the same ray for every
+        # wavelength, so it gets its own colour, or is left to another host
+        painted = []
+        if self.draw_zeroth:
+            zeroth = CurveLine(tree, location=(0, 0), mode="DIRECTION",
+                               start=Vector(), direction=function.outputs["dir0"],
+                               length=function.outputs["end0"],
+                               name="Order0", parent=rays)
+            painted.append(paint(tube(zeroth.geometry_out, (3, 0), "ZerothTube"),
+                                 self.zeroth_color, (4, 0), "PaintZeroth"))
+
         lines = []
-        for i, order in enumerate(self.orders):
+        for i, order in enumerate(o for o in self.orders if o != 0):
             tag = self._tag(order)
-            line = CurveLine(tree, location=(0, -i), mode="DIRECTION",
+            line = CurveLine(tree, location=(0, -1 - i), mode="DIRECTION",
                              start=Vector(),
                              direction=function.outputs["dir" + tag],
                              length=function.outputs["end" + tag],
                              name="Order%s" % tag, parent=rays)
             lines.append(line.geometry_out)
-        joined = JoinGeometry(tree, location=(2, 0), geometry=lines,
-                              name="JoinRays", parent=rays)
-        profile = CurveCircle(tree, location=(2, -len(lines)), radius=self.radius,
-                              resolution=self.resolution, name="RayProfile",
-                              parent=rays)
-        tubes = CurveToMesh(tree, location=(3, 0), curve=joined.geometry_out,
-                            profile_curve=profile.geometry_out, fill_caps=True,
-                            name="RayTubes", parent=rays)
-        geometry = tubes.geometry_out
+        if lines:
+            joined = JoinGeometry(tree, location=(2, -1), geometry=lines,
+                                  name="JoinRays", parent=rays)
+            painted.append(paint(tube(joined.geometry_out, (3, -1), "RayTubes"),
+                                 self.color, (4, -1), "PaintRays"))
 
-        if self.color is not None:
-            painted = SetMaterial(tree, location=(4, 0), geometry=geometry,
-                                  material=self.color, name="PaintRays",
-                                  parent=rays, **self.kwargs)
-            self.materials.append(painted.material)
-            geometry = painted.geometry_out
+        geometry = JoinGeometry(tree, location=(5, 0), geometry=painted,
+                                name="JoinPainted", parent=rays).geometry_out
 
         links.new(geometry, self.group_outputs.inputs["Geometry"])
 

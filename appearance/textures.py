@@ -516,6 +516,8 @@ def get_texture(material, **kwargs):
             material = hat_tile_fractal(**kwargs)
         elif material == 'interference':
             material = interference_texture(**kwargs)
+        elif material == 'rgb_interference':
+            material = rgb_interference_texture(**kwargs)
         elif material == 'function':
             material = function_texture(**kwargs)
         elif material == 'acoustic':
@@ -1628,6 +1630,88 @@ def gradient_from_attribute(name="AngleDisplacement", **kwargs):
     return mat
 
 
+def _interference_intensity(tree, n, model="farfield", source_radius=0.01,
+                            front=False, location=(-3, 0), name="Intensity"):
+    """The ``Intensity`` group of :func:`interference_texture`, unwired.
+
+    One :func:`~geometry_nodes.nodes.make_function` node that sums the waves
+    of ``n`` sources and hands out ``factor = (sum + 1)/2`` and
+    ``alpha = sum**2``. Its inputs are ``uv``, ``uvscale``, ``time``,
+    ``frequency``, ``wavelength``, ``amplitude``, ``impact`` and ``edge``
+    (only with ``front``) and ``c0 .. c<n-1>``; wiring them is the caller's
+    business, which is what lets :func:`rgb_interference_texture` feed three
+    of these from one set of dials.
+    """
+    clock = "time,impact,-" if front else "time"
+    aux = {}
+    for j in range(n):
+        aux["r%d" % j] = "uv,c%d,sub,uvscale,mul,length" % j
+    # before the waves that multiply by them: aux entries are emitted in
+    # insertion order, so an env defined afterwards is not yet a name
+    if front:
+        for j in range(n):
+            aux.update(wave_front_gate('r%d' % j, str(j), clock))
+    tail = (lambda j: ",env%d,*" % j) if front else (lambda j: "")
+
+    if model == "farfield":
+        for j in range(n):
+            # A/sqrt(r) sin(2 pi r/lambda - 2 pi f t), associated exactly as
+            # the blend does it - (r/lambda)*2pi and (t*f)*2pi rather than the
+            # algebraically identical (2pi*r)/lambda and (2pi*f)*t. At t = 72
+            # the phase runs to ~2500 radians, where a float32 ulp is 2.4e-4,
+            # so the two groupings disagree in the last bit and a fringe edge
+            # lands on the other side of a pixel. Matching the order makes the
+            # port bit-exact against the blend instead of merely equal.
+            aux["w%d" % j] = ("amplitude,r%d,sqrt,/,"
+                              "r%d,wavelength,/,%s,*,"
+                              "%s,frequency,*,%s,*,-,sin,*"
+                              % (j, j, tau, clock, tau)) + tail(j)
+    else:
+        aux["k"] = "%s,wavelength,/" % tau
+        aux["wt"] = "%s,frequency,*,%s,*" % (clock, tau)
+        # The Bessel models are normalised so that `amplitude` keeps meaning
+        # what it means for "farfield" - the amplitude one source would have
+        # at r = 1 - which is what lets the model be switched without also
+        # re-tuning the picture. J0(x) ~ sqrt(2/(pi x)) cos(x - pi/4) far out,
+        # so matching A/sqrt(r) needs a factor sqrt(pi k/2) = pi/sqrt(lambda).
+        # It is computed from the Wavelength socket rather than baked in as a
+        # number, so that a scene which animates the wavelength stays
+        # normalised as it goes.
+        aux["amp"] = "amplitude,pi,*,wavelength,sqrt,/"
+        for j in range(n):
+            # x = k r, held off the origin: Y0 has a logarithmic pole there,
+            # and a source of radius a rather than a true point is the
+            # physical reading of the clamp anyway
+            aux["x%d" % j] = "r%d,%s,max,k,*" % (j, repr(source_radius))
+            if model == "hankel":
+                # Re[H0(kr) exp(-i w t)] - the outgoing wave
+                aux["w%d" % j] = ("amp,x{0},j0,wt,cos,*,"
+                                  "x{0},y0,wt,sin,*,+,*".format(j)) + tail(j)
+            else:
+                # J0(kr) cos(wt) - the standing wave, finite at the source
+                aux["w%d" % j] = "amp,x{0},j0,wt,cos,*,*".format(j) + tail(j)
+    aux["total"] = ",".join("w%d" % j for j in range(n)) + ",+" * (n - 1)
+
+    names = ["uv", "uvscale", "time", "frequency", "wavelength", "amplitude"] \
+            + (["impact", "edge"] if front else []) \
+            + ["c%d" % j for j in range(n)]
+    return make_function(tree, location=location, name=name,
+                         node_group_type="Shader",
+                         functions={"factor": "total,1,+,2,/",
+                                    "alpha": "total,2,**"},
+                         aux_functions=aux,
+                         inputs=names, outputs=["factor", "alpha"],
+                         vectors=["uv", "uvscale"]
+                                 + ["c%d" % j for j in range(n)],
+                         scalars=["time", "frequency", "wavelength",
+                                  "amplitude", "factor", "alpha"]
+                                 + (["impact", "edge"] if front else [])
+                                 + list(aux),
+                         custom_ops={} if model == "farfield"
+                         else BESSEL_OPS,
+                         hide=False)
+
+
 def interference_texture(name="Interference", **kwargs):
     r"""The 2D interference pattern of N circular waves, painted on a surface.
 
@@ -1827,76 +1911,11 @@ def interference_texture(name="Interference", **kwargs):
                                  name="Impact")
         edge_node = InputValue(tree, location=(-6, 4), value=front_width,
                                name="FrontWidth")
-    clock = "time,impact,-" if front else "time"
 
-    n = len(centers)
-    aux = {}
-    for j in range(n):
-        aux["r%d" % j] = "uv,c%d,sub,uvscale,mul,length" % j
-    # before the waves that multiply by them: aux entries are emitted in
-    # insertion order, so an env defined afterwards is not yet a name
-    if front:
-        for j in range(n):
-            aux.update(wave_front_gate('r%d' % j, str(j), clock))
-    tail = (lambda j: ",env%d,*" % j) if front else (lambda j: "")
-
-    if model == "farfield":
-        for j in range(n):
-            # A/sqrt(r) sin(2 pi r/lambda - 2 pi f t), associated exactly as
-            # the blend does it - (r/lambda)*2pi and (t*f)*2pi rather than the
-            # algebraically identical (2pi*r)/lambda and (2pi*f)*t. At t = 72
-            # the phase runs to ~2500 radians, where a float32 ulp is 2.4e-4,
-            # so the two groupings disagree in the last bit and a fringe edge
-            # lands on the other side of a pixel. Matching the order makes the
-            # port bit-exact against the blend instead of merely equal.
-            aux["w%d" % j] = ("amplitude,r%d,sqrt,/,"
-                              "r%d,wavelength,/,%s,*,"
-                              "%s,frequency,*,%s,*,-,sin,*"
-                              % (j, j, tau, clock, tau)) + tail(j)
-    else:
-        aux["k"] = "%s,wavelength,/" % tau
-        aux["wt"] = "%s,frequency,*,%s,*" % (clock, tau)
-        # The Bessel models are normalised so that `amplitude` keeps meaning
-        # what it means for "farfield" - the amplitude one source would have
-        # at r = 1 - which is what lets the model be switched without also
-        # re-tuning the picture. J0(x) ~ sqrt(2/(pi x)) cos(x - pi/4) far out,
-        # so matching A/sqrt(r) needs a factor sqrt(pi k/2) = pi/sqrt(lambda).
-        # It is computed from the Wavelength socket rather than baked in as a
-        # number, so that a scene which animates the wavelength stays
-        # normalised as it goes.
-        aux["amp"] = "amplitude,pi,*,wavelength,sqrt,/"
-        for j in range(n):
-            # x = k r, held off the origin: Y0 has a logarithmic pole there,
-            # and a source of radius a rather than a true point is the
-            # physical reading of the clamp anyway
-            aux["x%d" % j] = "r%d,%s,max,k,*" % (j, repr(source_radius))
-            if model == "hankel":
-                # Re[H0(kr) exp(-i w t)] - the outgoing wave
-                aux["w%d" % j] = ("amp,x{0},j0,wt,cos,*,"
-                                  "x{0},y0,wt,sin,*,+,*".format(j)) + tail(j)
-            else:
-                # J0(kr) cos(wt) - the standing wave, finite at the source
-                aux["w%d" % j] = "amp,x{0},j0,wt,cos,*,*".format(j) + tail(j)
-    aux["total"] = ",".join("w%d" % j for j in range(n)) + ",+" * (n - 1)
-
-    names = ["uv", "uvscale", "time", "frequency", "wavelength", "amplitude"] \
-            + (["impact", "edge"] if front else []) \
-            + ["c%d" % j for j in range(n)]
-    intensity = make_function(tree, location=(-3, 0), name="Intensity",
-                              node_group_type="Shader",
-                              functions={"factor": "total,1,+,2,/",
-                                         "alpha": "total,2,**"},
-                              aux_functions=aux,
-                              inputs=names, outputs=["factor", "alpha"],
-                              vectors=["uv", "uvscale"]
-                                      + ["c%d" % j for j in range(n)],
-                              scalars=["time", "frequency", "wavelength",
-                                       "amplitude", "factor", "alpha"]
-                                      + (["impact", "edge"] if front else [])
-                                      + list(aux),
-                              custom_ops={} if model == "farfield"
-                              else BESSEL_OPS,
-                              hide=False)
+    intensity = _interference_intensity(tree, len(centers), model=model,
+                                        source_radius=source_radius,
+                                        front=front, location=(-3, 0),
+                                        name="Intensity")
     links = tree.links
     links.new(uv.std_out, intensity.inputs["uv"])
     links.new(uvscale.std_out, intensity.inputs["uvscale"])
@@ -1920,6 +1939,169 @@ def interference_texture(name="Interference", **kwargs):
                           alpha=intensity.outputs["alpha"],
                           distribution="MULTI_GGX", hide=False)
     OutputMaterial(tree, location=(3, 0), surface=bsdf.std_out, hide=False)
+
+    customize_material(mat, **kwargs)
+    return mat
+
+
+def rgb_interference_texture(name="RGBInterference", **kwargs):
+    r""":func:`interference_texture` three times over, in red, green and blue.
+
+    The same row of sources radiates three colours at once, each at its own wavelength, and each
+    colour is summed and ramped on its own - exactly the single-colour
+    texture - before the three are recombined as the r, g and b of one
+    colour. Where the three patterns agree the surface goes white, where
+    only one is bright it shows that one's hue, so the picture is the white
+    light of a grating split into its components.
+
+    Everything but the wavelength is shared: one ``Time``, ``Frequency``,
+    ``Amplitude``, ``UVScale`` and one set of ``Center<j>X/Y``, reachable
+    by the same names as in :func:`interference_texture`. The wavelength is
+    one ``Wavelength`` dial times a fixed ratio per colour - ``RatioR``,
+    ``RatioG``, ``RatioB``, 1, 0.9 and 0.8 in the blend - so a scene that
+    sweeps ``Wavelength`` moves all three together and they keep their
+    proportion. The channel wavelengths are the Math nodes ``LambdaR``,
+    ``LambdaG`` and ``LambdaB``.
+
+    The alpha is the sum of the three energies, as in the blend: a point
+    is opaque if any colour is bright there.
+
+    :param ratios: ``(r, g, b)`` wavelength of each colour relative to the
+        ``Wavelength`` dial. Red is the longest of visible light and blue
+        the shortest, which is what the default's order stands for.
+    :param gradient_colors: the colour each channel is ramped to, crest and
+        trough alike, with black at the undisturbed surface. Only the
+        channel's own component is kept, so these are best left as the pure
+        primaries they default to.
+
+    Every other keyword - ``sources``, ``wavelength``, ``frequency``,
+    ``amplitude``, ``time``, ``model``, ``uv_scale``, ``source_radius``,
+    ``front``, ``impact``, ``front_width``, ``emission_strength`` - means
+    what it means for :func:`interference_texture`.
+    """
+    sources = get_from_kwargs(kwargs, "sources",
+                              [(0, 0), (0, 0.25), (0, 0.5), (0, 0.75), (0, 1)])
+    wavelength = get_from_kwargs(kwargs, "wavelength", 0.14)
+    ratios = get_from_kwargs(kwargs, "ratios", (1, 0.9, 0.8))
+    frequency = get_from_kwargs(kwargs, "frequency", 5.43)
+    amplitude = get_from_kwargs(kwargs, "amplitude", 0.2)
+    time = get_from_kwargs(kwargs, "time", 0)
+    gradient_colors = get_from_kwargs(kwargs, "gradient_colors",
+                                      ([1, 0, 0, 1], [0, 1, 0, 1], [0, 0, 1, 1]))
+    emission_strength = get_from_kwargs(kwargs, "emission_strength", 0.5)
+    model = get_from_kwargs(kwargs, "model", "farfield")
+    source_radius = get_from_kwargs(kwargs, "source_radius", None)
+    uv_scale = get_from_kwargs(kwargs, "uv_scale", (1, 1))
+    front = get_from_kwargs(kwargs, "front", False)
+    impact = get_from_kwargs(kwargs, "impact", 0.0)
+    front_width = get_from_kwargs(kwargs, "front_width", None)
+    if front_width is None:
+        front_width = wavelength
+    if not hasattr(uv_scale, "__len__"):
+        uv_scale = (uv_scale, uv_scale)
+    if model not in ("farfield", "hankel", "bessel"):
+        raise ValueError("model is 'farfield', 'hankel' or 'bessel', "
+                         "not %r" % model)
+    if source_radius is None:
+        # the shortest of the three wavelengths decides, so that no channel
+        # gets a clamp wider than a twentieth of its own wavelength
+        source_radius = wavelength * min(ratios) / 20
+
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+    mat.name = name
+    tree = mat.node_tree
+    tree.nodes.clear()
+
+    uv = TextureCoordinate(tree, location=(-8, 0), std_out="UV",
+                           name="Surface", hide=False)
+    time_node = InputValue(tree, location=(-8, 2), value=time, name="Time")
+    frequency_node = InputValue(tree, location=(-8, 1.5), value=frequency,
+                                name="Frequency")
+    # created before the ratios and the Lambda nodes, so that a lookup of
+    # "Wavelength" by name finds the dial and nothing else
+    wavelength_node = InputValue(tree, location=(-8, 1), value=wavelength,
+                                 name="Wavelength")
+    amplitude_node = InputValue(tree, location=(-8, 0.5), value=amplitude,
+                                name="Amplitude")
+    scale_x = InputValue(tree, location=(-8, 3), value=uv_scale[0],
+                         name="UVScaleX")
+    scale_y = InputValue(tree, location=(-8, 2.5), value=uv_scale[1],
+                         name="UVScaleY")
+    uvscale = CombineXYZ(tree, location=(-7, 2.75), x=scale_x.std_out,
+                         y=scale_y.std_out, name="UVScale")
+
+    centers = []
+    for j, (cx, cy) in enumerate(sources):
+        x = InputValue(tree, location=(-8, -0.5 - j), value=cx,
+                       name="Center%dX" % j)
+        y = InputValue(tree, location=(-8, -1 - j), value=cy,
+                       name="Center%dY" % j)
+        centers.append(CombineXYZ(tree, location=(-7, -0.75 - j),
+                                  x=x.std_out, y=y.std_out,
+                                  name="Center%d" % j))
+
+    if front:
+        impact_node = InputValue(tree, location=(-8, 3.5), value=impact,
+                                 name="Impact")
+        edge_node = InputValue(tree, location=(-8, 4), value=front_width,
+                               name="FrontWidth")
+
+    links = tree.links
+    channels = []
+    for c, (tag, ratio) in enumerate(zip("RGB", ratios)):
+        row = 6 - 6 * c
+        ratio_node = InputValue(tree, location=(-6, row + 1), value=ratio,
+                                name="Ratio" + tag)
+        lam = MathNode(tree, location=(-5, row + 1), operation="MULTIPLY",
+                       input0=wavelength_node.std_out,
+                       input1=ratio_node.std_out, name="Lambda" + tag)
+        intensity = _interference_intensity(tree, len(centers), model=model,
+                                            source_radius=source_radius,
+                                            front=front, location=(-3, row),
+                                            name="Intensity" + tag)
+        links.new(uv.std_out, intensity.inputs["uv"])
+        links.new(uvscale.std_out, intensity.inputs["uvscale"])
+        links.new(time_node.std_out, intensity.inputs["time"])
+        links.new(frequency_node.std_out, intensity.inputs["frequency"])
+        links.new(lam.std_out, intensity.inputs["wavelength"])
+        links.new(amplitude_node.std_out, intensity.inputs["amplitude"])
+        if front:
+            links.new(impact_node.std_out, intensity.inputs["impact"])
+            links.new(edge_node.std_out, intensity.inputs["edge"])
+        for j, center in enumerate(centers):
+            links.new(center.std_out, intensity.inputs["c%d" % j])
+
+        color = list(gradient_colors[c])
+        ramp = ColorRamp(tree, location=(-1, row + 1),
+                         factor=intensity.outputs["factor"],
+                         values=[0, 0.5, 1],
+                         colors=[color, [0, 0, 0, 1], color],
+                         interpolation="LINEAR", hide=False,
+                         name="Ramp" + tag)
+        # the channel's own component and nothing else, so that the three
+        # ramps add up to one colour instead of bleeding into each other
+        split = SeparateXYZ(tree, location=(1, row + 1), vector=ramp.std_out,
+                            name="Split" + tag)
+        channels.append((split, c, intensity.outputs["alpha"]))
+
+    rgb = CombineXYZ(tree, location=(2, 0),
+                     x=channels[0][0].std_out_x,
+                     y=channels[1][0].std_out_y,
+                     z=channels[2][0].std_out_z, name="RGB")
+    alpha = MathNode(tree, location=(1, -2), operation="ADD",
+                     input0=channels[0][2], input1=channels[1][2],
+                     name="AlphaRG")
+    alpha = MathNode(tree, location=(2, -2), operation="ADD",
+                     input0=alpha.std_out, input1=channels[2][2],
+                     name="AlphaRGB")
+
+    bsdf = PrincipledBSDF(tree, location=(4, 0), base_color=rgb.std_out,
+                          emission_color=rgb.std_out,
+                          emission_strength=emission_strength,
+                          alpha=alpha.std_out,
+                          distribution="MULTI_GGX", hide=False)
+    OutputMaterial(tree, location=(6, 0), surface=bsdf.std_out, hide=False)
 
     customize_material(mat, **kwargs)
     return mat
