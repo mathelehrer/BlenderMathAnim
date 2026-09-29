@@ -1783,6 +1783,34 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         full steady state, in blender units. Defaults to one wavelength, which
         is about the narrowest that does not read as a crease in the surface.
         The ``FrontWidth`` dial.
+    :param time_shift: seconds added to the clock before it is turned into a
+        phase, the ``TimeShift`` dial. Only the phase reads it - fronts and
+        impacts stay on scene time. It is what lets a sub-scene pick up the
+        wave of the one before it: rendered from frame 1, a scene that should
+        continue a predecessor of length T passes ``T - 1/FRAME_RATE``. The
+        ``"interference"`` material does not know about it; ramp its ``Time``
+        from the shifted value if the two have to agree.
+    :param source_impacts: one entry per source, a scene time in seconds or
+        ``None``. A source with an impact is silent before it and then spreads
+        out behind the same causal envelope ``front`` uses (``Impact<j>`` and
+        ``FrontWidth`` dials), but - unlike ``front`` - its **phase stays on
+        the common clock**. That is a slit opened in a wall a plane wave has
+        been hitting all along: it starts in step with the slits that were
+        already open. Sources given ``None`` ring for ever. Not combinable
+        with ``front``, and geometry-only like ``time_shift``.
+    :param intensity: build the ``Intensity`` dial (circular waves only),
+        which turns the surface into the time-averaged intensity distribution.
+        With :math:`u = C\cos\omega t + S\sin\omega t`, where
+        :math:`C = A'\sum_j J_0(kr_j)` and :math:`S = A'\sum_j Y_0(kr_j)`
+        (each gated like its wave), the intensity is :math:`C^2 + S^2` - the
+        square of the local amplitude, so it does not move. At 1 the surface
+        is flat and the ``result`` attribute holds
+        ``IntensityGain * (C^2 + S^2)``; in between both fade linearly. The
+        colour comes from ``result``, so a ``"function"`` material paints
+        the intensity from the background colour (0) up to its crest colour.
+        Geometry-only: the ``"interference"`` material knows nothing of it.
+    :param intensity_gain: the ``IntensityGain`` dial, the factor that
+        brings :math:`C^2 + S^2` into the range of the material's ramp.
 
     .. note::
         The ``Frequency`` dial used to be built under the name ``Period``
@@ -1799,7 +1827,9 @@ class WaveVisualizationModifier(GeometryNodesModifier):
                  sources=None, wavelength=0.8, frequency=1.0,
                  amplitude=0.25, source_radius=None, attribute="result",
                  material="interference", shade_smooth=True,
-                 front=False, impact=0.0, front_width=None, **kwargs):
+                 front=False, impact=0.0, front_width=None, time_shift=0.0,
+                 source_impacts=None, intensity=False, intensity_gain=1.0,
+                 **kwargs):
 
         # initialize fields
         self.name = name
@@ -1825,6 +1855,23 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         self.front = front
         self.impact = impact
         self.front_width = wavelength if front_width is None else front_width
+        self.time_shift = time_shift
+
+        # per-source fronts: {j: impact} for the sources that start late
+        if source_impacts is None:
+            self.source_impacts = {}
+        else:
+            if front:
+                raise ValueError("source_impacts and front are exclusive")
+            if self.mode != "CIRCULAR" or len(source_impacts) != len(self.sources):
+                raise ValueError("source_impacts needs one entry per source")
+            self.source_impacts = {j: impact for j, impact in enumerate(source_impacts)
+                                   if impact is not None}
+
+        if intensity and self.mode != "CIRCULAR":
+            raise ValueError("intensity needs sources")
+        self.intensity = intensity
+        self.intensity_gain = intensity_gain
 
         self.attribute = attribute
         self.paint = material
@@ -1876,6 +1923,8 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         amplitude = InputValue(tree, location=(0, -2), value=self.amplitude,
                                name="Amplitude", parent=frame)
         width = InputValue(tree,location=(0,-3),value=self.size,name="Width",parent=frame)
+        time_shift = InputValue(tree, location=(-2, 2), value=self.time_shift,
+                                name="TimeShift", parent=frame)
 
         if self.front:
             ease_in = InputValue(tree,location=(-2,1),value=0,name="EaseIn",parent=frame)
@@ -1884,8 +1933,24 @@ class WaveVisualizationModifier(GeometryNodesModifier):
             edge = InputValue(tree, location=(-2, -1), value=self.front_width,
                               name="FrontWidth", parent=frame)
             transient = {"impact": impact.std_out, "edge": edge.std_out,"ease_in":ease_in.std_out}
+        elif self.source_impacts:
+            edge = InputValue(tree, location=(-2, -1), value=self.front_width,
+                              name="FrontWidth", parent=frame)
+            transient = {"edge": edge.std_out}
+            for j, value in self.source_impacts.items():
+                impact = InputValue(tree, location=(-3, -j), value=value,
+                                    name="Impact%d" % j, parent=frame)
+                transient["impact%d" % j] = impact.std_out
         else:
             transient = {}
+
+        if self.intensity:
+            mix = InputValue(tree, location=(-2, 3), value=0,
+                             name="Intensity", parent=frame)
+            gain = InputValue(tree, location=(-2, 4), value=self.intensity_gain,
+                              name="IntensityGain", parent=frame)
+            transient["intensity"] = mix.std_out
+            transient["gain"] = gain.std_out
 
         if self.mode=="CIRCULAR":
             sources = [InputVector(tree, location=(0, -3 - j), vector=source,
@@ -1895,6 +1960,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
             sources = []
         return dict({"size":size.std_out,
                      "time": clock.std_out,
+                     "time_shift": time_shift.std_out,
                      "wavelength": wavelength.std_out,
                      "frequency": frequency.std_out,
                      "amplitude": amplitude.std_out,
@@ -1939,12 +2005,21 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         # the source is zero when the creature lands rather than wherever the
         # scene happens to have got to
         clock = "time,impact,-" if self.front else "time"
+        # the dials the transient adds, by the names the formula reads them
+        if self.front:
+            transient = ["impact", "edge", "ease_in"]
+        elif self.source_impacts:
+            transient = ["edge"] + ["impact%d" % j for j in self.source_impacts]
+        else:
+            transient = []
+        if self.intensity:
+            transient += ["intensity", "gain"]
 
         if self.mode == "PLANAR":
             n = 0  # no sources
             aux = {
                 "k": "%s,wavelength,/" % tau,
-                "wt": "%s,frequency,*,%s,*" % (clock, tau),
+                "wt": "%s,time_shift,+,frequency,*,%s,*" % (clock, tau),
                 "u": "amplitude,k,pos_x,*,wt,-,sin,*"
             }
             if self.front:
@@ -1965,7 +2040,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
             n = len(self.sources)
             aux = {
                 "k": "%s,wavelength,/" % tau,
-                "wt": "%s,frequency,*,%s,*" % (clock, tau),
+                "wt": "%s,time_shift,+,frequency,*,%s,*" % (clock, tau),
                 "amp": "amplitude,pi,*,wavelength,sqrt,/"
             }
             for j in range(n):
@@ -1979,39 +2054,62 @@ class WaveVisualizationModifier(GeometryNodesModifier):
                 # the gate goes in before the wave that multiplies by it:
                 # aux entries are emitted in insertion order, so an env
                 # defined afterwards is not yet a name when w reads it
+                gated = self.front or j in self.source_impacts
                 if self.front:
                     aux.update(wave_front_gate("r%d" % j, str(j), clock))
-                # Re[H0(kr) exp(-i w t)], the outgoing wave
-                aux["w%d" % j] = ("amp,x{0},j0,wt,cos,*,"
-                                  "x{0},y0,wt,sin,*,+,*".format(j)
-                                  + (",env%d,*" % j if self.front else ""))
+                elif gated:
+                    # a late source: its own front, but the common phase
+                    aux.update(wave_front_gate("r%d" % j, str(j),
+                                               "time,impact%d,-" % j))
+                if self.intensity:
+                    # the two quadratures apart, so that the intensity can
+                    # be formed from them without a second Bessel evaluation
+                    gate = ",env%d,*" % j if gated else ""
+                    aux["cj%d" % j] = "amp,x%d,j0,*%s" % (j, gate)
+                    aux["sj%d" % j] = "amp,x%d,y0,*%s" % (j, gate)
+                    aux["w%d" % j] = "cj{0},wt,cos,*,sj{0},wt,sin,*,+".format(j)
+                else:
+                    # Re[H0(kr) exp(-i w t)], the outgoing wave
+                    aux["w%d" % j] = ("amp,x{0},j0,wt,cos,*,"
+                                      "x{0},y0,wt,sin,*,+,*".format(j)
+                                      + (",env%d,*" % j if gated else ""))
             aux["u"] = ",".join("w%d" % j for j in range(n)) + ",+" * (n - 1)
+            if self.intensity:
+                aux["C"] = ",".join("cj%d" % j for j in range(n)) + ",+" * (n - 1)
+                aux["S"] = ",".join("sj%d" % j for j in range(n)) + ",+" * (n - 1)
+                # the wave fades out of the surface as the intensity fades in
+                aux["uf"] = "u,1,intensity,-,*"
 
-        names = ["pos", "time", "frequency", "wavelength", "amplitude"] \
-                + (["impact", "edge","ease_in"] if self.front else []) \
-                + ["c%d" % j for j in range(n)]
+        names = ["pos", "time", "time_shift", "frequency", "wavelength",
+                 "amplitude"] + transient + ["c%d" % j for j in range(n)]
 
         if self.front:
             function = "u,ease_in,*"
+        elif self.intensity:
+            function = "uf"
         else:
             function = "u"
+        functions = {"elongation": function}
+        if self.intensity:
+            functions["value"] = "uf,C,C,*,S,S,*,+,gain,*,intensity,*,+"
         wave = make_function(tree, location=(1, 0), name="Elongation",
-                             functions={"elongation": function},
+                             functions=functions,
                              aux_functions=aux,
-                             inputs=names, outputs=["elongation"],
+                             inputs=names, outputs=list(functions),
                              vectors=["pos"] + ["c%d" % j for j in range(n)],
-                             scalars=["time", "frequency", "wavelength",
-                                      "amplitude", "elongation"]
-                                     + (["impact", "edge","ease_in"] if self.front else [])
-                                     + list(aux),
+                             scalars=["time", "time_shift", "frequency",
+                                      "wavelength", "amplitude"]
+                                     + list(functions) + transient + list(aux),
                              custom_ops=BESSEL_OPS, parent=frame, hide=False)
 
         tree.links.new(position.std_out, wave.inputs["pos"])
-        for key in ("time", "frequency", "wavelength", "amplitude") \
-                + (("impact", "edge","ease_in") if self.front else ()):
+        for key in ["time", "time_shift", "frequency", "wavelength",
+                    "amplitude"] + transient:
             tree.links.new(control[key], wave.inputs[key])
         for j, source in enumerate(control["sources"]):
             tree.links.new(source, wave.inputs["c%d" % j])
+        if self.intensity:
+            return wave.outputs["elongation"], wave.outputs["value"]
         return wave.outputs["elongation"]
 
     # ------------------------------------------------------------------
@@ -2037,8 +2135,19 @@ class WaveVisualizationModifier(GeometryNodesModifier):
                                  value=grid.node.outputs["UV Map"],
                                  parent=frame)
 
+        # with an intensity the colour and the height part ways: the colour
+        # reads the attribute, the lift its own copy of the elongation
+        if self.intensity:
+            elongation, value = elongation
+            lift_attribute = self.attribute + "Height"
+            painted_value = StoreNamedAttribute(tree, location=(2, 1), data_type="FLOAT",
+                                                domain="POINT", name=self.attribute,
+                                                value=value, parent=frame)
+        else:
+            lift_attribute = self.attribute
+            painted_value = None
         stored = StoreNamedAttribute(tree, location=(2, 0), data_type="FLOAT",
-                                     domain="POINT", name=self.attribute,
+                                     domain="POINT", name=lift_attribute,
                                      value=elongation, parent=frame)
 
         amp_store = StoreNamedAttribute(tree, location=(3, 0), data_type="FLOAT",
@@ -2049,7 +2158,7 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         # elongation the thing that moves the surface, and it costs one node
         # against a second evaluation of every Bessel group
         height = NamedAttribute(tree, location=(2, -2), data_type="FLOAT",
-                                name=self.attribute, parent=frame, hide=True)
+                                name=lift_attribute, parent=frame, hide=True)
         offset = CombineXYZ(tree, location=(3, -2), z=height.std_out,
                             name="Lift", parent=frame, hide=True)
         lifted = SetPosition(tree, location=(4, 0),
@@ -2073,7 +2182,8 @@ class WaveVisualizationModifier(GeometryNodesModifier):
             customs.append(painted)
             geometry = painted.geometry_out
 
-        create_geometry_line(tree, [grid, uv, stored, amp_store, lifted] + customs)
+        stores = [stored] if painted_value is None else [painted_value, stored]
+        create_geometry_line(tree, [grid, uv] + stores + [amp_store, lifted] + customs)
         return geometry
 
     # ------------------------------------------------------------------
@@ -2122,16 +2232,19 @@ class WaveVisualizationModifier(GeometryNodesModifier):
         points = np.asarray(points, dtype=float)[:, :2]
         k = tau / self.wavelength
         elapsed = seconds - self.impact if self.front else seconds
-        wt = elapsed * self.frequency * tau
+        wt = (elapsed + self.time_shift) * self.frequency * tau
         amp = self.amplitude * pi / np.sqrt(self.wavelength)
         reach = self.wavelength * self.frequency * elapsed
         total = np.zeros(len(points))
-        for source in self.sources:
+        for j, source in enumerate(self.sources):
             radius = np.linalg.norm(points - np.array([source.x, source.y]),
                                     axis=1)
             x = np.maximum(radius, self.source_radius) * k
             wave = amp * (j0(x) * np.cos(wt) + y0(x) * np.sin(wt))
-            if self.front:
+            if j in self.source_impacts:
+                reach = self.wavelength * self.frequency \
+                        * (seconds - self.source_impacts[j])
+            if self.front or j in self.source_impacts:
                 gate = np.clip((reach - radius) / self.front_width, 0.0, 1.0)
                 wave = wave * gate * gate * (3 - 2 * gate)
             total += wave
