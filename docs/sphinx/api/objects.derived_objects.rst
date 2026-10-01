@@ -8,6 +8,7 @@ Submodules
    :maxdepth: 4
 
    objects.derived_objects.arrow_chain
+   objects.derived_objects.drum
    objects.derived_objects.flag
    objects.derived_objects.info_panel
    objects.derived_objects.laptop
@@ -18,11 +19,12 @@ Submodules
    objects.derived_objects.rubiks_cube
    objects.derived_objects.tv
    objects.derived_objects.wall_with_door
+   objects.derived_objects.whistle
 
 Module contents
 ---------------
 
 .. automodule:: objects.derived_objects
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:

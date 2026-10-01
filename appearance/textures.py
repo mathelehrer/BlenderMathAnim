@@ -24,7 +24,7 @@ from shader_nodes.shader_nodes import (Mapping, AttributeNode, HueSaturationValu
                                        Displacement, ShaderNode, MixShader,
                                        TextureCoordinate, ColorRamp, ShaderFrame,
                                        ShaderRepeatZone, BrightContrast, RGB, PrincipledBSDF, OnRightNode, CombineXYZ,
-                                       IfNode, Mix, MixNode, VoronoiTexture, OutputMaterial, NoiseTexture)
+                                       IfNode, Mix, MixNode, MixColor, WaveLengthToRGB, VectorMathNode, VoronoiTexture, OutputMaterial, NoiseTexture)
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
@@ -522,6 +522,10 @@ def get_texture(material, **kwargs):
             material = function_texture(**kwargs)
         elif material == 'acoustic':
             material = acoustic_texture(**kwargs)
+        elif material == 'grating':
+            material = grating_texture(**kwargs)
+        elif material == 'LambdaToRGB':
+            material = lambda_to_rgb_texture(**kwargs)
         elif material == 'iteration':
             material = make_iteration_material(**kwargs)
         elif material == 'hue':
@@ -2107,6 +2111,191 @@ def rgb_interference_texture(name="RGBInterference", **kwargs):
     return mat
 
 
+def grating_texture(name="Grating", **kwargs):
+    r"""Light behind a row of slits: the field of N sources in the colour of
+    its wavelength, for one wavelength or several at once.
+
+    The shader counterpart of the last picture of
+    :class:`~geometry_nodes.modifier_video_interferences.WaveVisualizationModifier`
+    under the ``"function"`` material: every source radiates the exact
+    outgoing wave of :func:`interference_texture`'s ``"hankel"`` model,
+
+    .. math::
+        n = \frac{A\pi}{\sqrt\lambda}\sum_j \Big[J_0(kr_j)\cos\omega t
+            + Y_0(kr_j)\sin\omega t\Big]\,\mathrm{env}_j ,
+
+    and :math:`n^2` is both the emission strength and the alpha. The colour is
+    :class:`~shader_nodes.shader_nodes.WaveLengthToRGB` of the ``Wavelength``
+    dial, divided by its largest component, so every wavelength shines at full
+    strength and 570 nm is the pure yellow ``(1, 1, 0)``.
+
+    **Several wavelengths.** As in :func:`rgb_interference_texture`, the same
+    sources can radiate several colours at once, each with its own field. The
+    channels add as light does: channel c contributes the energy
+    :math:`E_c = w_c n_c^2` in its colour, the emission strength and the alpha
+    are :math:`\sum_c E_c`, and the colour is the energy-weighted mean
+    :math:`\sum_c E_c\,\mathrm{rgb}_c / \sum_c E_c` - where the patterns
+    overlap the hues mix, where only one is bright it shows its own. The
+    weight :math:`w_c` is the dial that blends a channel in and out. With a
+    single channel of weight 1 the material is the monochromatic one above.
+
+    **Units.** ``Wavelength`` is in nanometres and the geometry is in blender
+    units of ``nm_per_unit`` nanometres; the formula divides the one by the
+    other. Distances are read from the ``Object`` texture coordinate, so the
+    surface has to be a mesh whose object coordinates are world coordinates -
+    a :class:`~objects.plane.Plane` left at the origin.
+
+    Dials, reachable with ``ibpy.get_node_from_shader(material, label)``:
+    ``Time``, ``TimeShift`` (added to the phase only, as in
+    :class:`~geometry_nodes.modifier_video_interferences.WaveVisualizationModifier`),
+    ``Frequency``, ``Wavelength`` / ``Wavelength<c>`` and ``Weight<c>`` per
+    channel (channel 0's wavelength is plain ``Wavelength``), ``Amplitude``,
+    ``FrontWidth``,
+    ``HalfWidth`` (the surface is cut off at :math:`|y|` beyond it),
+    ``Center<j>X`` / ``Center<j>Y``, ``Impact<j>`` for the late sources and
+    ``AlphaFactor`` for the global fade.
+
+    :param name: material name.
+    :param sources: ``(x, y)`` of the emitters in blender units.
+    :param source_impacts: one entry per source, a time in units of ``Time``
+        or ``None``. A late source is silent before it and then spreads out at
+        :math:`c = \lambda f`, on the common phase.
+    :param wavelength: lambda in nm, for a single channel.
+    :param wavelengths: the lambdas in nm of several channels, overriding
+        ``wavelength``.
+    :param weights: the start values of the ``Weight<c>`` dials, 1 for every
+        channel by default.
+    :param nm_per_unit: nanometres per blender unit.
+    :param frequency: f, in cycles per unit of ``Time``.
+    :param amplitude: A, see the formula.
+    :param time: the start value of ``Time``.
+    :param time_shift: the ``TimeShift`` dial.
+    :param source_radius: how far off the source r is held, in blender units.
+    :param front_width: the width of a late source's front, in blender units.
+        One wavelength by default.
+    :param half_width: the ``HalfWidth`` dial.
+    :param alpha: the factor of the ``AlphaFactor`` mixer.
+    :param kwargs: passed on to
+        :func:`~interface.ibpy.customize_material` (``roughness``, ...).
+    """
+    sources = get_from_kwargs(kwargs, "sources", [(0, -4.75), (0, 4.75)])
+    source_impacts = get_from_kwargs(kwargs, "source_impacts", [None] * len(sources))
+    wavelength = get_from_kwargs(kwargs, "wavelength", 570)
+    wavelengths = get_from_kwargs(kwargs, "wavelengths", [wavelength])
+    weights = get_from_kwargs(kwargs, "weights", [1] * len(wavelengths))
+    wavelength = min(wavelengths)
+    nm_per_unit = get_from_kwargs(kwargs, "nm_per_unit", 100)
+    frequency = get_from_kwargs(kwargs, "frequency", 1)
+    amplitude = get_from_kwargs(kwargs, "amplitude", 1)
+    time = get_from_kwargs(kwargs, "time", 0)
+    time_shift = get_from_kwargs(kwargs, "time_shift", 0)
+    source_radius = get_from_kwargs(kwargs, "source_radius", wavelength / nm_per_unit / 20)
+    front_width = get_from_kwargs(kwargs, "front_width", wavelength / nm_per_unit)
+    half_width = get_from_kwargs(kwargs, "half_width", 1000)
+    alpha = kwargs.get("alpha", 1)
+
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+    mat.name = name
+    tree = mat.node_tree
+    tree.nodes.clear()
+
+    position = TextureCoordinate(tree, location=(-8, 0), std_out="Object",
+                                 name="Surface", hide=False)
+    time_node = InputValue(tree, location=(-8, 3), value=time, name="Time")
+    shift_node = InputValue(tree, location=(-8, 2.5), value=time_shift, name="TimeShift")
+    frequency_node = InputValue(tree, location=(-8, 2), value=frequency, name="Frequency")
+    wavelength_nodes = [InputValue(tree, location=(-9, 1.5 - c), value=lam,
+                                   name="Wavelength%s" % (c if c else ""))
+                        for c, lam in enumerate(wavelengths)]
+    weight_nodes = [InputValue(tree, location=(-9, 4 - c), value=weight, name="Weight%d" % c)
+                    for c, weight in enumerate(weights)]
+    amplitude_node = InputValue(tree, location=(-8, 1), value=amplitude, name="Amplitude")
+    edge_node = InputValue(tree, location=(-8, 0.5), value=front_width, name="FrontWidth")
+    half_width_node = InputValue(tree, location=(-8, -0.5), value=half_width, name="HalfWidth")
+
+    centers = []
+    impacts = {}
+    for j, ((cx, cy), impact) in enumerate(zip(sources, source_impacts)):
+        x = InputValue(tree, location=(-8, -1 - j), value=cx, name="Center%dX" % j)
+        y = InputValue(tree, location=(-8, -1.5 - j), value=cy, name="Center%dY" % j)
+        centers.append(CombineXYZ(tree, location=(-7, -1.25 - j), x=x.std_out,
+                                  y=y.std_out, name="Center%d" % j))
+        if impact is not None:
+            impacts[j] = InputValue(tree, location=(-9, -1 - j), value=impact,
+                                    name="Impact%d" % j)
+
+    aux = {"wavelength": "nm,%s,/" % repr(nm_per_unit),
+           "k": "%s,wavelength,/" % tau,
+           "wt": "time,time_shift,+,frequency,*,%s,*" % tau,
+           "amp": "amplitude,pi,*,wavelength,sqrt,/"}
+    for j in range(len(sources)):
+        aux["r%d" % j] = "pos,c%d,sub,length" % j
+        aux["x%d" % j] = "r%d,%s,max,k,*" % (j, repr(source_radius))
+        if j in impacts:
+            aux.update(wave_front_gate("r%d" % j, str(j), "time,impact%d,-" % j))
+        aux["w%d" % j] = ("amp,x{0},j0,wt,cos,*,x{0},y0,wt,sin,*,+,*".format(j)
+                          + (",env%d,*" % j if j in impacts else ""))
+    aux["n"] = ",".join("w%d" % j for j in range(len(sources))) + ",+" * (len(sources) - 1)
+
+    names = ["pos", "time", "time_shift", "frequency", "nm", "weight", "amplitude", "edge",
+             "half_width"] + ["impact%d" % j for j in impacts] + ["c%d" % j for j in range(len(sources))]
+    links = tree.links
+    energies = []
+    colors = []
+    for c, (wavelength_node, weight_node) in enumerate(zip(wavelength_nodes, weight_nodes)):
+        field = make_function(tree, location=(-5, -3 * c), name="Field%d" % c, node_group_type="Shader",
+                              functions={"energy": "n,n,*,weight,*,pos_y,abs,half_width,<,*"},
+                              aux_functions=aux, inputs=names, outputs=["energy"],
+                              vectors=["pos"] + ["c%d" % j for j in range(len(sources))],
+                              scalars=names[1:len(names) - len(sources)] + ["energy"] + list(aux),
+                              custom_ops=BESSEL_OPS, hide=False)
+        for key, node in [("pos", position), ("time", time_node), ("time_shift", shift_node),
+                          ("frequency", frequency_node), ("nm", wavelength_node),
+                          ("weight", weight_node), ("amplitude", amplitude_node),
+                          ("edge", edge_node), ("half_width", half_width_node)]:
+            links.new(node.std_out, field.inputs[key])
+        for j, impact in impacts.items():
+            links.new(impact.std_out, field.inputs["impact%d" % j])
+        for j, center in enumerate(centers):
+            links.new(center.std_out, field.inputs["c%d" % j])
+
+        rgb = WaveLengthToRGB(tree, location=(-5, 3 - 3 * c), wavelength=wavelength_node.std_out, hide=False)
+        split = SeparateXYZ(tree, location=(-4, 3 - 3 * c), vector=rgb.std_out)
+        peak = MathNode(tree, location=(-3, 3.5 - 3 * c), operation="MAXIMUM",
+                        input0=split.std_out_x, input1=split.std_out_y)
+        peak = MathNode(tree, location=(-2, 3.5 - 3 * c), operation="MAXIMUM",
+                        input0=peak.std_out, input1=split.std_out_z)
+        color = VectorMathNode(tree, location=(-1, 3 - 3 * c), operation="DIVIDE",
+                               input0=rgb.std_out, input1=peak.std_out, name="Color%d" % c)
+        energies.append(field.outputs["energy"])
+        colors.append(VectorMathNode(tree, location=(0, 3 - 3 * c), operation="SCALE",
+                                     input0=color.std_out, scale=field.outputs["energy"]).std_out)
+
+    energy = energies[0]
+    light = colors[0]
+    for e, col in zip(energies[1:], colors[1:]):
+        energy = MathNode(tree, location=(1, -2), operation="ADD", input0=energy, input1=e).std_out
+        light = VectorMathNode(tree, location=(1, 2), operation="ADD", input0=light, input1=col).std_out
+    floor = MathNode(tree, location=(2, -1), operation="MAXIMUM", input0=energy, input1=1e-6)
+    color = VectorMathNode(tree, location=(2, 2), operation="DIVIDE", input0=light,
+                           input1=floor.std_out, name="MixedColor")
+
+    fade = MixNode(tree, location=(0, -1), data_type="FLOAT",
+                   factor=alpha, caseA=0.0, caseB=energy,
+                   clamp_factor=True, factor_mode="UNIFORM",
+                   name="AlphaFactor", hide=False)
+    bsdf = PrincipledBSDF(tree, location=(1.5, 0), base_color=color.std_out,
+                          emission_color=color.std_out,
+                          emission_strength=energy,
+                          alpha=fade.std_out,
+                          distribution="MULTI_GGX", hide=False)
+    OutputMaterial(tree, location=(3, 0), surface=bsdf.std_out, hide=False)
+
+    customize_material(mat, **kwargs)
+    return mat
+
+
 def function_texture(name="Function", **kwargs):
     r"""A graph painted by its own value, read from the attributes it carries.
 
@@ -2243,12 +2432,56 @@ def function_texture(name="Function", **kwargs):
                    clamp_factor=True, factor_mode="UNIFORM",
                    name="AlphaFactor", hide=False)
 
-    bsdf = PrincipledBSDF(tree, location=(1.5, 0.0), base_color=ramp.std_out,
-                          emission_color=ramp.std_out,
+    color = RGB(tree, location=(-0.1, 1.3), color=[1, 1, 0, 1], hide=False)
+    switch = InputValue(tree, location=(-1.1, -0.2), value=0.,
+                        name="IntensitySwitch", hide=False)
+    mix = MixColor(tree, location=(0.6, 1.2), factor=switch.std_out,
+                   caseA=ramp.std_out, caseB=color.std_out,
+                   clamp_factor=True, hide=False)
+
+    bsdf = PrincipledBSDF(tree, location=(1.5, 0.0), base_color=mix.std_out,
+                          emission_color=mix.std_out,
                           emission_strength=energy.std_out,
                           alpha=fade.std_out,
                           distribution="MULTI_GGX", hide=False)
     OutputMaterial(tree, location=(3.0, 0.0), surface=bsdf.std_out, hide=False)
+
+    customize_material(mat, **kwargs)
+    return mat
+
+
+def lambda_to_rgb_texture(name="LambdaToRGB", **kwargs):
+    r"""The colour of monochromatic light, set by a wavelength dial in nm.
+
+    A ``Lambda`` value node feeds
+    :class:`~shader_nodes.shader_nodes.WaveLengthToRGB`, whose linear sRGB is
+    both the base and the emission colour of the Principled BSDF. Ramp the dial
+    to sweep the spectrum::
+
+        dial = ibpy.get_node_from_shader(material, "Lambda")
+        ibpy.change_default_value(dial, from_value=400, to_value=800,
+                                  begin_time=1, transition_time=20)
+
+    :param name: material name.
+    :param wavelength: the starting value of ``Lambda``, in nm.
+    :param emission_strength: the strength of the emission.
+    :param kwargs: passed on to
+        :func:`~interface.ibpy.customize_material` (``roughness``, ...).
+    """
+    wavelength = get_from_kwargs(kwargs, "wavelength", 400)
+    emission_strength = get_from_kwargs(kwargs, "emission_strength", 1)
+
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+    tree = mat.node_tree
+    tree.nodes.clear()
+
+    dial = InputValue(tree, location=(-2, 0), value=wavelength, name="Lambda", hide=False)
+    rgb = WaveLengthToRGB(tree, location=(-1, 0), wavelength=dial.std_out, hide=False)
+    bsdf = PrincipledBSDF(tree, location=(0, 0), base_color=rgb.std_out,
+                          emission_color=rgb.std_out, emission_strength=emission_strength,
+                          distribution="MULTI_GGX", hide=False)
+    OutputMaterial(tree, location=(1, 0), surface=bsdf.std_out, hide=False)
 
     customize_material(mat, **kwargs)
     return mat

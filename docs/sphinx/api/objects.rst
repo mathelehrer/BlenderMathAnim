@@ -60,14 +60,18 @@ Submodules
    objects.function
    objects.functions
    objects.grid
+   objects.hat_tile
    objects.image
    objects.implicit_surface
+   objects.import_bobject
    objects.isometry_cube
+   objects.ladder
    objects.logo
    objects.mandelbrot_set
    objects.morph_planning
    objects.number_line
    objects.path
+   objects.pen2curve
    objects.permutation
    objects.plane
    objects.plane_complex
@@ -78,8 +82,10 @@ Submodules
    objects.polyhedron
    objects.polytopes
    objects.quadrilateral
+   objects.rna_circle
    objects.rope
    objects.rubiks_cube
+   objects.slide
    objects.slider
    objects.solid_of_revolution
    objects.some_logo
@@ -101,5 +107,5 @@ Module contents
 
 .. automodule:: objects
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:

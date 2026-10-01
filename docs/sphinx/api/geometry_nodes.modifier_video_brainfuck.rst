@@ -1,0 +1,7 @@
+geometry\_nodes.modifier\_video\_brainfuck module
+=================================================
+
+.. automodule:: geometry_nodes.modifier_video_brainfuck
+   :members:
+   :show-inheritance:
+   :undoc-members:

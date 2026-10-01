@@ -677,6 +677,39 @@ class MixNode(ShaderNode):
             self.tree.links.new(caseB, self.node.inputs['B'])
 
 
+class MixColor(ShaderNode):
+    """``Mix`` with ``data_type='RGBA'``, wired to the colour sockets.
+
+    The sibling of :class:`MixNode` for colours: the ``A``/``B``/``Result``
+    sockets are picked by type, since a lookup by name would find the float
+    ones.
+
+    :param factor: a number or a float socket.
+    :param caseA: an rgba list or a colour socket.
+    :param caseB: an rgba list or a colour socket.
+    """
+
+    def __init__(self, tree, location, factor=0, caseA=[0, 0, 0, 1], caseB=[1, 1, 1, 1],
+                 blend_type=None, clamp_factor=None, clamp_result=None, **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeMix")
+        self.node.data_type = 'RGBA'
+        if blend_type is not None:
+            self.node.blend_type = blend_type
+        if clamp_factor is not None:
+            self.node.clamp_factor = clamp_factor
+        if clamp_result is not None:
+            self.node.clamp_result = clamp_result
+        a, b = [s for s in self.node.inputs if s.type == 'RGBA']
+        self.std_out = [s for s in self.node.outputs if s.type == 'RGBA'][0]
+        super().__init__(tree, location, **kwargs)
+
+        for socket, value in ((self.node.inputs['Factor'], factor), (a, caseA), (b, caseB)):
+            if isinstance(value, (int, float, list, tuple, Vector)):
+                socket.default_value = value
+            else:
+                self.tree.links.new(value, socket)
+
+
 class MixShader(ShaderNode):
     def __init__(self, tree, location, **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeMixShader")
@@ -1182,3 +1215,67 @@ class IfNode(ShaderNodeGroup):
             mul_no = MathNode(group_tree, operation='MULTIPLY', input0=one_minus_cond.std_out, input1=no)
             add = MathNode(group_tree, operation='ADD', input0=mul_yes.std_out, input1=mul_no.std_out)
             group_tree.links.new(add.std_out, result_in)
+
+
+class WaveLengthToRGB(ShaderNodeGroup):
+    """
+    The colour of monochromatic light: a wavelength in nm in, a linear sRGB
+    vector out.
+
+    The CIE 1931 2° colour matching functions in the multi-lobe fit of
+    Wyman, Sloan & Shirley, "Simple Analytic Approximations to the CIE XYZ
+    Color Matching Functions", JCGT 2(2), 2013: each of x̄, ȳ, z̄ is a sum of
+    piecewise Gaussians
+
+        g(λ; μ, σ₁, σ₂) = exp(-(λ-μ)²/2σ²),  σ = σ₁ for λ < μ, σ₂ otherwise,
+
+    and the XYZ they give is taken to linear sRGB (D65) by the IEC 61966-2-1
+    matrix. Colours outside the sRGB gamut - every pure spectral colour is -
+    are clipped at zero, and the result is scaled by 0.4 so that the
+    brightest component over the visible range (red, at 606 nm) stays below
+    one. The brightness follows the eye: the spectrum fades to black towards
+    400 nm and beyond 700 nm.
+
+    Linear, because that is what a shader works in; no gamma is applied.
+
+    example::
+
+        lam = InputValue(tree, value=550, name="Lambda")
+        rgb = WaveLengthToRGB(tree, wavelength=lam.std_out)
+        PrincipledBSDF(tree, base_color=rgb.std_out)
+    """
+
+    def __init__(self, tree, wavelength=550, **kwargs):
+        super().__init__(tree, inputs={"Wavelength": "FLOAT"}, outputs={"RGB": "VECTOR"},
+                         name="WaveLengthToRGB", **kwargs)
+
+        self.inputs = self.node.inputs
+        self.outputs = self.node.outputs
+        self.std_out = self.node.outputs["RGB"]
+
+        if isinstance(wavelength, (int, float)):
+            self.inputs["Wavelength"].default_value = wavelength
+        else:
+            tree.links.new(wavelength, self.inputs["Wavelength"])
+
+    def fill_group_with_node(self, group_tree, **kwargs):
+        lobes = {"x1": (599.8, 37.9, 31.0), "x2": (442.0, 16.0, 26.7), "x3": (501.1, 20.4, 26.2),
+                 "y1": (568.8, 46.9, 40.5), "y2": (530.9, 16.3, 31.1),
+                 "z1": (437.0, 11.8, 36.0), "z2": (459.0, 26.0, 13.8)}
+        aux = {}
+        for key, (mu, s1, s2) in lobes.items():
+            aux[key] = f"0,l,{mu},-,l,{mu},<,{s1},*,l,{mu},>,{s2},*,+,/,2,**,2,/,-,exp"
+        aux["X"] = "1.056,x1,*,0.362,x2,*,+,0.065,x3,*,-"
+        aux["Y"] = "0.821,y1,*,0.286,y2,*,+"
+        aux["Z"] = "1.217,z1,*,0.681,z2,*,+"
+
+        rgb = make_function(group_tree, name="CIE1931",
+                            functions={"rgb": ["3.2406,X,*,1.5372,Y,*,-,0.4986,Z,*,-,0,max,0.4,*",
+                                               "1.8758,Y,*,0.9689,X,*,-,0.0415,Z,*,+,0,max,0.4,*",
+                                               "0.0557,X,*,0.2040,Y,*,-,1.0570,Z,*,+,0,max,0.4,*"]},
+                            aux_functions=aux,
+                            inputs=["l"], outputs=["rgb"],
+                            scalars=["l"] + list(aux.keys()), vectors=["rgb"],
+                            node_group_type="Shader")
+        group_tree.links.new(self.group_inputs.outputs["Wavelength"], rgb.inputs["l"])
+        group_tree.links.new(rgb.outputs["rgb"], self.group_outputs.inputs["RGB"])

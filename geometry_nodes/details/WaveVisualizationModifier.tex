@@ -1,0 +1,303 @@
+% =====================================================================
+%  How the second slit of towards_double_slit switches on
+%  Build:  pdflatex WaveVisualizationModifier.tex   (run twice for the ToC)
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!55!black,
+    urlcolor=blue!55!black,
+    citecolor=blue!55!black,
+    pdftitle={WaveVisualizationModifier: a late source},
+    pdfauthor={BlenderMathAnim}
+}
+
+\newcommand{\node}[1]{\texttt{#1}}
+\newcommand{\clamp}{\operatorname{clamp}}
+
+\title{A Slit That Opens Late\\
+       \large How \node{WaveVisualizationModifier} lets an interference
+       pattern grow instead of appearing at once}
+\author{BlenderMathAnim --- \node{geometry\_nodes/modifier\_video\_interferences.py}}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\bigskip
+
+% =====================================================================
+\section{The question}
+% =====================================================================
+
+In \node{towards\_double\_slit} (\node{video\_interferences/scene\_interference.py})
+a single slit has been radiating for the whole of the previous scene. At
+$t_\text{open}=8\,$s the outer piece of the wall slides aside and a second
+slit opens. What the surface behind the wall then shows is \emph{not} the
+finished two-slit pattern. Instead a circular disturbance leaves the new
+slit, and only the region it has already swept over carries the hyperbolic
+nodal lines of the interference pattern; outside it the old single-slit
+wave is untouched. After about seven seconds the disturbance has crossed the
+whole surface and the stationary pattern is complete.
+
+Every wave this modifier draws is a \emph{steady state}: the field of a
+source that has been ringing for ever. Such a field is non-zero everywhere at
+every instant, so a steady-state source that is simply switched on would make
+the full pattern pop into existence in a single frame. This note explains the
+few nodes that turn ``switched on'' into ``spreading out''.
+
+% =====================================================================
+\section{The steady state}
+% =====================================================================
+
+The surface is a grid in the $x$-$y$ plane whose vertices are lifted by
+\begin{equation}
+  u(\mathbf r,t)=\sum_j w_j(\mathbf r,t),\qquad
+  w_j = A'\,\Big[J_0(k r_j)\cos\omega t+Y_0(k r_j)\sin\omega t\Big]
+      = A'\,\mathrm{Re}\!\left[H^{(1)}_0(k r_j)\,e^{-i\omega t}\right],
+  \label{eq:steady}
+\end{equation}
+with $r_j=|\mathbf r-\mathbf c_j|$ (held above \node{source\_radius} to stay
+clear of the logarithmic pole of $Y_0$), $k=2\pi/\lambda$, $\omega=2\pi f$ and
+$A'=A\pi/\sqrt\lambda$. Each $w_j$ is the exact outgoing solution of the 2+1
+dimensional wave equation for a point source at $\mathbf c_j$, and because the
+equation is linear their sum is a solution too: with two sources it is the
+two-slit pattern.
+
+The scene builds the surface behind the wall as
+\begin{verbatim}
+wave2 = WaveVisualizationModifier(name="DoubleSlitWave", size=8.0,
+            sources=((-4, 0), (-4, -a)),
+            source_impacts=(None, t_open + 0.5),
+            wavelength=1.5, frequency=1.0, amplitude=0.31,
+            material=get_texture("function", alpha_intensity=0.9),
+            source_radius=2 / 10, time_shift=time_shift,
+            intensity=True, intensity_gain=2.0)
+\end{verbatim}
+The grid has side 8 and is moved by $+4$ in $x$, so its left edge, local
+$x=-4$, lies on the wall. Source~0 is the old slit (it slides from $y=0$ to
+$y=+a$ before the second one opens); source~1 is the new slit at $y=-a$,
+$a=1.25$. The one argument that matters here is
+\node{source\_impacts}: \node{None} for the old slit, which rings for ever,
+and the time $t_1=t_\text{open}+0.5=8.5\,$s for the new one --- the middle of
+the one second during which the wall slides open.
+
+% =====================================================================
+\section{The causal envelope}
+% =====================================================================
+
+A source with an impact time $t_j$ is multiplied by an envelope that is
+zero ahead of a circle expanding from $\mathbf c_j$ at the phase speed
+$c=\lambda f$, and one behind it:
+\begin{equation}
+  \mathrm{env}_j(\mathbf r,t)=S\!\left(\frac{c\,(t-t_j)-r_j}{\Delta}\right),
+  \qquad S(x)=\hat x^{2}(3-2\hat x),\quad \hat x=\clamp_{[0,1]}(x).
+  \label{eq:env}
+\end{equation}
+\begin{itemize}[leftmargin=*]
+  \item Before the impact $c(t-t_j)<0$, so $\hat x=0$ at every vertex and the
+        source contributes nothing. The clamp is the whole reason the new slit
+        is silent until it opens.
+  \item After the impact the \emph{reach} $c(t-t_j)$ grows linearly. A vertex
+        at distance $r_j$ starts to feel the source at $t=t_j+r_j/c$ and has
+        the full steady-state contribution a time $\Delta/c$ later.
+  \item $\Delta$ is the \node{FrontWidth} dial, one wavelength by default.
+        The smoothstep $S$ has zero slope at both ends, so the edge of the
+        disturbance does not read as a crease in the surface.
+\end{itemize}
+
+The surface therefore shows
+\[
+  u = w_0 + \mathrm{env}_1\,w_1 =
+  \begin{cases}
+    w_0 & r_1 > c(t-t_1) \qquad\text{(single slit, untouched)}\\
+    w_0 + w_1 & r_1 < c(t-t_1)-\Delta \qquad\text{(full two-slit pattern)}
+  \end{cases}
+\]
+with a band of width $\Delta$ in between. The disk inside which the pattern is
+already stationary grows at speed $c$ around the new slit. That is the
+``slow growth'' seen in the shot: the interference is not faded in, it is
+\emph{carried} outwards by the front.
+
+\subsection*{How long it takes}
+With $\lambda=1.5$ and $f=1$ the front moves at $c=1.5$ units per second. The
+farthest vertex from the new slit, local $(-4,-1.25)$, is the corner $(4,4)$,
+at distance $\sqrt{8^2+5.25^2}\approx 9.6$. The front gets there after
+$6.4\,$s, and the band behind it after another $\Delta/c=1\,$s. That is the
+seven-second camera zoom that follows the opening of the slit.
+
+% =====================================================================
+\section{Two clocks: the envelope starts, the phase does not}
+% =====================================================================
+
+The crucial design decision is \emph{which} clock each part reads.
+\begin{align*}
+  \text{phase:}\quad    & \omega t \;\to\; 2\pi f\,(t+t_\text{shift})
+                          &&\text{common to all sources}\\
+  \text{envelope:}\quad & c\,(t-t_j) &&\text{per source, from its own impact}
+\end{align*}
+The phase of the late source is \emph{not} restarted at $t_j$. Physically the
+second slit is lit by the same plane wave as the first, whose crests reach the
+whole wall at once, so the moment the new slit is open it oscillates in step
+with the old one. Had its phase been measured from $t_j$ instead, the two
+slits would be out of phase by $\omega t_j$, and the central maximum would
+move off the symmetry axis.
+
+This is the difference from the other transient the modifier offers,
+\node{front=True}, which is a stone dropped into a pond: there the clock is
+$t-t_\text{impact}$ for the phase as well, so the wave leaves its source at zero
+elongation. The two options are mutually exclusive, and the constructor
+raises if both are given.
+
+\node{TimeShift} only enters the phase. It is what lets this scene continue
+the wave of \node{towards\_slit} without a jump (see
+\node{\_slit\_time\_shift}); the impacts and the fronts stay on the scene time
+of the current scene.
+
+% =====================================================================
+\section{The node setup}
+% =====================================================================
+
+The tree is three frames. Only the first two know about the late source; the
+geometry frame is the same as for any other wave.
+
+\subsection{Control frame}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+node (label) & type & role\\
+\midrule
+\node{Clock}      & Scene Time $\to$ Seconds & $t$, no keyframes needed\\
+\node{TimeShift}  & Value & added to $t$ in the phase only\\
+\node{Wavelength}, \node{Frequency} & Value & $\lambda$, $f$; also give $c=\lambda f$\\
+\node{Amplitude}  & Value & $A$\\
+\node{Source0}, \node{Source1} & Vector & $\mathbf c_0$, $\mathbf c_1$ (animatable)\\
+\node{FrontWidth} & Value & $\Delta$, built only if some source has an impact\\
+\node{Impact1}    & Value & $t_1$; one \node{Impact<j>} per late source\\
+\node{Intensity}, \node{IntensityGain} & Value & only with \node{intensity=True}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\node{Impact1} is an ordinary value node, so a scene can still move the moment
+of opening after the tree has been built:
+\verb|ibpy.get_geometry_node_from_modifier(wave2, "Impact1")|.
+
+\subsection{Wave frame}
+
+All of the arithmetic is one \node{make\_function} group named
+\node{Elongation}. Its auxiliary expressions, in reverse Polish notation and in
+the order in which they are emitted, are for the two sources of the scene
+($j=1$ is the late one):
+
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+name & RPN & meaning\\
+\midrule
+\node{k}      & \verb|tau,wavelength,/|                       & $2\pi/\lambda$\\
+\node{wt}     & \verb|time,time_shift,+,frequency,*,tau,*|    & common phase $\omega(t+t_\text{shift})$\\
+\node{amp}    & \verb|amplitude,pi,*,wavelength,sqrt,/|       & $A'$\\
+\node{r0}, \node{r1} & \verb|pos,c1,sub,length|               & $r_j$\\
+\node{x0}, \node{x1} & \verb|r1,0.2,max,k,*|                  & $k\max(r_j,r_\text{src})$\\
+\node{reach1} & \verb|wavelength,frequency,*,time,impact1,-,*| & $c\,(t-t_1)$\\
+\node{gate1}  & \verb|reach1,r1,-,edge,/,0,max,1,min|         & $\hat x$\\
+\node{env1}   & \verb|gate1,gate1,*,3,2,gate1,*,-,*|          & $S(\hat x)$\\
+\node{cj$_j$}, \node{sj$_j$} & \verb|amp,x1,j0,*,env1,*| (and \verb|y0|) & gated quadratures\\
+\node{w$_j$}  & \verb|cj1,wt,cos,*,sj1,wt,sin,*,+|            & $w_j$ of eq.~\eqref{eq:steady}, gated\\
+\node{u}      & \verb|w0,w1,+|                                & elongation\\
+\node{C}, \node{S} & \verb|cj0,cj1,+|, \verb|sj0,sj1,+|       & for the intensity\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The three entries \node{reach1}, \node{gate1}, \node{env1} are produced by
+\node{wave\_front\_gate} in \node{geometry\_nodes/nodes.py}, called as
+\begin{verbatim}
+wave_front_gate("r1", "1", "time,impact1,-")
+\end{verbatim}
+--- the third argument is exactly where the two clocks part: the gate gets
+\verb|time,impact1,-|, while \node{wt} keeps \verb|time,time_shift,+|.
+Source~0 has no impact, so it gets no gate and its \node{cj0}, \node{sj0}
+carry no \verb|env0| factor.
+
+Two details of the order matter:
+\begin{itemize}[leftmargin=*]
+  \item The gate entries are inserted into \node{aux\_functions}
+        \emph{before} the \node{w$_j$} that multiplies by them;
+        \node{make\_function} emits aux expressions in insertion order, and a
+        name defined later does not exist yet.
+  \item With \node{intensity=True} the gate multiplies the two quadratures
+        $C_j=A'J_0\,\mathrm{env}_j$ and $S_j=A'Y_0\,\mathrm{env}_j$ separately,
+        not just their combination. So the time-averaged intensity
+        $C^2+S^2$, which the \node{Intensity} dial fades the surface to, is
+        gated in the same way and grows from the new slit just like the wave.
+\end{itemize}
+
+The group has two outputs: \node{elongation} $=u\,(1-I)$ and \node{value}
+$=u(1-I)+g\,I\,(C^2+S^2)$, with $I$ the \node{Intensity} dial and $g$ the
+\node{IntensityGain}. At $I=0$, the whole of this scene until its last
+seconds, both are $u$.
+
+\subsection{Geometry frame}
+
+\[
+  \text{Grid}\to\text{store \node{UVMap}}\to\text{store \node{result}}
+  \to\text{store \node{resultHeight}}\to\text{store \node{amplitude}}
+  \to\text{Set Position}\to\text{Shade Smooth}\to\text{Set Material}
+\]
+The elongation is stored as an attribute while the grid is still flat --- a
+field stored after the lift would measure $\sqrt{r^2+u^2}$ instead of $r$ ---
+and \node{Set Position} reads it back through a \node{Named Attribute}.
+
+The colour needs no separate gating. The \node{"function"} material
+(\node{function\_texture} in \node{appearance/textures.py}) paints each point
+by its \node{result}/\node{amplitude} attribute, i.e.\ by the number the tree
+computed, gate included. This is why the scene uses it: the alternative
+\node{"interference"} material recomputes the field in the shader and knows
+about \node{front}, but not about \node{source\_impacts}, so it would paint the
+finished pattern on a surface that has not yet heard of the second slit.
+
+% =====================================================================
+\section{A look, not a solution}
+% =====================================================================
+
+Equation~\eqref{eq:env} is not what the wave equation does. The true field of
+a source switched on at $t_1$ is the retarded convolution with the 2D Green's
+function $\propto \Theta(c\tau-r)/\sqrt{c^2\tau^2-r^2}$, which has a sharp
+front at $r=c(t-t_1)$ but, unlike in three dimensions, a wake behind it: it
+approaches the steady state only slowly, with a tail decaying like a power of
+$t$.
+
+What the envelope gets right are the two things an audience actually reads:
+nothing changes at distance $r$ from the new slit before $t_1+r/c$, and behind
+the front the pattern is the stationary one. A slower, exact relaxation would
+spend most of the shot on a transient nobody is meant to look at.
+
+% =====================================================================
+\section{Checking it without Blender}
+% =====================================================================
+
+Every field built into the tree also exists in numpy.
+\node{WaveVisualizationModifier.elongation\_numpy(points, seconds)} evaluates
+eq.~\eqref{eq:steady} with \node{scipy.special.j0}/\node{y0} and applies the
+same gate per source in \node{source\_impacts}, so the build-up can be
+plotted at, say, $t=9,\,11,\,13,\,15\,$s and compared with frames of the
+render. (It ignores \node{Intensity}; at $I=0$ that is the whole of what the
+tree computes.)
+
+\end{document}
