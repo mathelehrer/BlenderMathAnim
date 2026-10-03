@@ -154,7 +154,7 @@ from geometry_nodes.nodes import (BESSEL_OPS, BesselNode, BooleanMath, CombineXY
                                   CurveCircle, CurveLine, CurveToMesh,
                                   DeleteGeometry, DistributePointsInVolume,
                                   DuplicateElements,
-                                  Frame, Grid, IcoSphere, IndexSwitch, InputInteger,
+                                  ConeMesh, CylinderMesh, Frame, Grid, IcoSphere, Index, IndexSwitch, InputInteger,
                                   InputValue, InputVector,
                                   InstanceOnPoints, JoinGeometry, MathNode,
                                   MergeByDistance, MeshLine, MeshToCurve, MeshToVolume,
@@ -162,7 +162,7 @@ from geometry_nodes.nodes import (BESSEL_OPS, BesselNode, BooleanMath, CombineXY
                                   RealizeInstances, Reroute, ResampleCurve, SceneTime,
                                   SeparateXYZ,
                                   SetMaterial, SetPosition,
-                                  SetShadeSmooth, StoreNamedAttribute, TransformGeometry,
+                                  SetShadeSmooth, StoreNamedAttribute, TransformGeometry, UVSphere,
                                   VolumeCube, WireFrame, bessel_jm_rpn, make_function,
                                   split_rpn, create_geometry_line,
                                   wave_front_gate)
@@ -3212,3 +3212,603 @@ class BesselVisualizer(GeometryNodesModifier):
                               name=label + "Material", parent=frame)
         self.materials.append(painted.material)
         return painted.geometry_out
+
+
+#: the depth of the dent a body of the given Depth/Softening makes, as a
+#: function of the distance d to it: a softened 1/d, so the bottom is round
+WELL = "depth,-1,*,{d},{d},*,softening,softening,*,/,1,+,sqrt,/"
+
+
+class GravitationalWavesModifier(GeometryNodesModifier):
+    r"""Two spheres in orbit on a wire sheet that dents under them and ripples
+    away from them.
+
+    A cartoon of a compact binary, not a solution of Einstein's equations.
+    The sheet is the familiar rubber-sheet picture of a static field - every
+    body presses a softened well :math:`-D/\sqrt{1+d^2/s^2}` into it - and
+    on top of that runs what a rotating pair of equal masses radiates to
+    lowest order, the mass quadrupole: a wave at **twice** the orbital
+    frequency with two arms,
+
+    .. math::
+        h(r,\varphi,t) = A\, g(r)\,
+            \cos 2\big(\varphi - \Omega\,(t - r/c)\big),
+        \qquad \Omega = 2\pi/T,\quad \lambda = \pi c/\Omega,
+
+    which is the two-armed spiral of every LIGO illustration: at r = 0 the
+    crests lie along the line through the bodies and they lag behind it by
+    the travel time r/c further out. The envelope g is the approximation:
+    zero inside the orbit, rising over half a wavelength (where the near zone
+    would be) and then falling like :math:`1/\sqrt{1+r/\lambda}`. A 3D wave
+    falls as 1/r, but on a sheet seen at an angle that empties the frame
+    after two rings; the gentler fall keeps the spiral readable to the edge.
+
+    The sheet is a grid of lines rather than a surface - ``lines`` curves in
+    each direction, each resampled to ``resolution`` points and swept into a
+    thin tube - so it reads as space rather than as water. The spheres sit
+    in the bottom of their own wells.
+
+    Everything is driven by ``Scene Time``, so the binary orbits and the
+    spiral runs **without a keyframe**. The dials, reachable with
+    ``ibpy.get_geometry_node_from_modifier(modifier, label)``:
+
+    ``Period``
+        T, the orbital period in seconds. The waves have period T/2.
+        Ramping it re-phases the orbit (the phase is :math:`2\pi t/T`, not an
+        integral), so a chirp has to be short or start from t = 0.
+    ``Separation``
+        distance between the two centres.
+    ``WaveSpeed``
+        c. With T it fixes the wavelength :math:`\lambda = cT/2`.
+    ``WaveAmplitude``
+        A, the height of the ripples.
+    ``Depth``, ``Softening``
+        D and s of each well: how deep, and how wide the bottom is.
+    ``Radius``
+        the radius of the spheres.
+
+    :param name: name of the node group and of the modifier.
+    :param size: edge length of the square sheet.
+    :param lines: number of grid lines in each direction.
+    :param resolution: points per grid line; the spiral needs about ten per
+        wavelength and the wells about five across ``softening``.
+    :param thickness: radius of the wire tubes.
+    :param period, separation, wave_speed, wave_amplitude, depth, softening,
+        radius: the start values of the dials above.
+    :param wire_color, sphere_color: palette names of the two materials.
+    :param wire_emission, sphere_emission: emission of the two materials;
+        the wire is unlit by default, so it reads as a surface in the scene's
+        light rather than as a glowing net.
+
+    For an overlay, the sheet alone on a transparent world::
+
+        waves = GravitationalWavesModifier(size=12, period=2, wave_speed=2)
+        sheet = Plane(name="GravitationalWaves", u=[-1, 1], v=[-1, 1])
+        sheet.add_mesh_modifier(type='NODES', node_modifier=waves)
+        sheet.appear(begin_time=0, transition_time=0)
+        amplitude = ibpy.get_geometry_node_from_modifier(waves, "WaveAmplitude")
+        ibpy.change_default_value(amplitude, from_value=0, to_value=0.25,
+                                  begin_time=1, transition_time=3)
+    """
+
+    def __init__(self, name="GravitationalWaves", size=12.0, lines=49,
+                 resolution=301, thickness=0.012, period=2.0, separation=1.2,
+                 wave_speed=2.0, wave_amplitude=0.25, depth=0.8,
+                 softening=0.35, radius=0.25, wire_color="example",
+                 sphere_color="important", wire_emission=0.0,
+                 sphere_emission=0.5, **kwargs):
+        self.size = size
+        self.lines = int(lines)
+        self.resolution = int(resolution)
+        self.thickness = thickness
+        self.period = period
+        self.separation = separation
+        self.wave_speed = wave_speed
+        self.wave_amplitude = wave_amplitude
+        self.depth = depth
+        self.softening = softening
+        self.radius = radius
+        self.wire_color = wire_color
+        self.sphere_color = sphere_color
+        self.wire_emission = wire_emission
+        self.sphere_emission = sphere_emission
+        super().__init__(name=name, automatic_layout=False, **kwargs)
+
+    # ------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._control_frame(tree)
+        sheet = self._grid_frame(tree)
+        wire = self._wave_frame(tree, control, sheet)
+        bodies = self._bodies_frame(tree, control)
+        geometry = self._display_frame(tree, control, wire, bodies)
+        self.group_outputs.location = (14 * 200, 0)
+        tree.links.new(geometry, self.group_outputs.inputs["Geometry"])
+
+    # ------------------------------------------------------------------
+    def _control_frame(self, tree):
+        frame = Frame(tree, location=(0, 0), label="Control",
+                      name="ControlFrame")
+        clock = SceneTime(tree, location=(0, 4), std_out="Seconds",
+                          name="Clock", parent=frame)
+        dials = {}
+        for row, (key, label, value) in enumerate([
+                ("period", "Period", self.period),
+                ("separation", "Separation", self.separation),
+                ("wave_speed", "WaveSpeed", self.wave_speed),
+                ("wave_amplitude", "WaveAmplitude", self.wave_amplitude),
+                ("depth", "Depth", self.depth),
+                ("softening", "Softening", self.softening),
+                ("radius", "Radius", self.radius)]):
+            dial = InputValue(tree, location=(0, 3 - row), value=value,
+                              name=label, parent=frame)
+            dials[key] = dial.std_out
+        dials["time"] = clock.std_out
+        return dials
+
+    # ------------------------------------------------------------------
+    def _grid_frame(self, tree):
+        frame = Frame(tree, location=(0, 0), label="Grid", name="GridFrame")
+        half = self.size / 2
+        # one line along x, finely resampled, copied onto every point of a
+        # coarse line along y: the rows. The columns are the rows turned by
+        # a right angle
+        row = MeshLine(tree, location=(2, 6), count=self.resolution,
+                       start_location=Vector((-half, 0, 0)),
+                       end_location=Vector((half, 0, 0)),
+                       name="Row", parent=frame)
+        row_curve = MeshToCurve(tree, location=(3, 6), mesh=row.geometry_out,
+                                name="RowCurve", parent=frame)
+        anchors = MeshLine(tree, location=(2, 5), count=self.lines,
+                           start_location=Vector((0, -half, 0)),
+                           end_location=Vector((0, half, 0)),
+                           name="RowAnchors", parent=frame)
+        rows = InstanceOnPoints(tree, location=(4, 6),
+                                points=anchors.geometry_out,
+                                instance=row_curve.geometry_out,
+                                name="Rows", parent=frame)
+        rows = RealizeInstances(tree, location=(5, 6),
+                                geometry=rows.geometry_out,
+                                name="RealizeRows", parent=frame)
+        columns = TransformGeometry(tree, location=(6, 5),
+                                    geometry=rows.geometry_out,
+                                    rotation=Vector((0, 0, pi / 2)),
+                                    name="Columns", parent=frame)
+        sheet = JoinGeometry(tree, location=(7, 6),
+                             geometry=[rows.geometry_out, columns.geometry_out],
+                             name="Sheet", parent=frame)
+        return sheet.geometry_out
+
+    # ------------------------------------------------------------------
+    def _wave_frame(self, tree, control, sheet):
+        frame = Frame(tree, location=(0, 0), label="Wells and Waves",
+                      name="WaveFrame")
+        # the sheet is still flat here, so the position is the point in the
+        # plane the height is a function of
+        position = Position(tree, location=(7, 4), name="SheetPosition",
+                            hide=True, parent=frame)
+        aux = {
+            "om": "%s,period,/" % repr(tau),
+            "ph": "om,time,*",
+            "bx": "separation,2,/,ph,cos,*",
+            "by": "separation,2,/,ph,sin,*",
+            "d0": "pos_x,bx,-,pos_x,bx,-,*,pos_y,by,-,pos_y,by,-,*,+,sqrt",
+            "d1": "pos_x,bx,+,pos_x,bx,+,*,pos_y,by,+,pos_y,by,+,*,+,sqrt",
+            "well": WELL.format(d="d0") + "," + WELL.format(d="d1") + ",+",
+            "r": "pos_x,pos_x,*,pos_y,pos_y,*,+,sqrt",
+            "phi": "pos_y,pos_x,atan2",
+            "lam": "pi,wave_speed,*,om,/",
+            # zero inside the orbit, smoothstep up over half a wavelength
+            "ramp": "r,separation,2,/,-,lam,2,/,/,0,max,1,min",
+            "env": "ramp,ramp,*,3,2,ramp,*,-,*,1,r,lam,/,+,sqrt,/",
+            "arg": "phi,ph,-,r,wave_speed,/,om,*,+,2,*",
+            "ripple": "wave_amplitude,env,*,arg,cos,*",
+        }
+        inputs = ["pos", "time", "period", "separation", "wave_speed",
+                  "wave_amplitude", "depth", "softening"]
+        height = make_function(tree, location=(8, 4), name="Height",
+                               functions={"offset": ["0", "0", "well,ripple,+"],
+                                          "ripple": "ripple"},
+                               aux_functions=aux, inputs=inputs,
+                               outputs=["offset", "ripple"],
+                               vectors=["pos", "offset"],
+                               scalars=inputs[1:] + ["ripple"] + list(aux),
+                               parent=frame, hide=False)
+        tree.links.new(position.std_out, height.inputs["pos"])
+        for key in inputs[1:]:
+            tree.links.new(control[key], height.inputs[key])
+
+        # the ripple alone is kept for the material; the well is the shape
+        ripple = StoreNamedAttribute(tree, location=(9, 6), data_type="FLOAT",
+                                     domain="POINT", name="Ripple",
+                                     value=height.outputs["ripple"],
+                                     parent=frame)
+        tree.links.new(sheet, ripple.geometry_in)
+        bent = SetPosition(tree, location=(10, 6),
+                           offset=height.outputs["offset"],
+                           name="Bend", parent=frame)
+        tree.links.new(ripple.geometry_out, bent.geometry_in)
+        return bent.geometry_out
+
+    # ------------------------------------------------------------------
+    def _bodies_frame(self, tree, control):
+        frame = Frame(tree, location=(0, 0), label="Bodies",
+                      name="BodiesFrame")
+        pair = Points(tree, location=(7, 1), count=2, name="Pair",
+                      parent=frame)
+        index = Index(tree, location=(7, 0), name="BodyIndex", hide=True,
+                      parent=frame)
+        aux = {
+            "om": "%s,period,/" % repr(tau),
+            "ph": "om,time,*",
+            "sign": "1,2,index,*,-",
+            "own": WELL.format(d="0"),
+            "other": WELL.format(d="separation"),
+        }
+        inputs = ["index", "time", "period", "separation", "depth",
+                  "softening", "radius"]
+        # each in the bottom of the dent the two wells make together, resting
+        # on it rather than sunk to the centre
+        orbit = make_function(tree, location=(8, 1), name="Orbit",
+                              functions={"center": [
+                                  "sign,separation,*,2,/,ph,cos,*",
+                                  "sign,separation,*,2,/,ph,sin,*",
+                                  "own,other,+,radius,+"]},
+                              aux_functions=aux, inputs=inputs,
+                              outputs=["center"], vectors=["center"],
+                              scalars=inputs + list(aux), parent=frame,
+                              hide=False)
+        tree.links.new(index.std_out, orbit.inputs["index"])
+        for key in inputs[1:]:
+            tree.links.new(control[key], orbit.inputs[key])
+        placed = SetPosition(tree, location=(9, 1), geometry=pair.geometry_out,
+                             position=orbit.outputs["center"],
+                             name="PlaceBodies", parent=frame)
+        ball = UVSphere(tree, location=(9, 0), radius=1, name="Ball",
+                        parent=frame)
+        bodies = InstanceOnPoints(tree, location=(10, 1),
+                                  points=placed.geometry_out,
+                                  instance=ball.geometry_out,
+                                  scale=control["radius"], name="Bodies",
+                                  parent=frame)
+        bodies = RealizeInstances(tree, location=(11, 1),
+                                  geometry=bodies.geometry_out,
+                                  name="RealizeBodies", parent=frame)
+        return bodies.geometry_out
+
+    # ------------------------------------------------------------------
+    def _display_frame(self, tree, control, wire, bodies):
+        frame = Frame(tree, location=(0, 0), label="Display",
+                      name="DisplayFrame")
+        profile = CurveCircle(tree, location=(11, 5), resolution=6,
+                              radius=self.thickness, name="WireProfile",
+                              parent=frame)
+        tubes = CurveToMesh(tree, location=(12, 6), curve=wire,
+                            profile_curve=profile.geometry_out, fill_caps=False,
+                            name="Wire", parent=frame)
+        wire_paint = SetMaterial(tree, location=(13, 6),
+                                 geometry=tubes.geometry_out,
+                                 material=get_texture(self.wire_color,
+                                                      emission=self.wire_emission),
+                                 name="PaintWire", parent=frame)
+        smooth = SetShadeSmooth(tree, location=(12, 1), geometry=bodies,
+                                name="SmoothBodies", parent=frame)
+        body_paint = SetMaterial(tree, location=(13, 1),
+                                 geometry=smooth.geometry_out,
+                                 material=get_texture(self.sphere_color,
+                                                      emission=self.sphere_emission),
+                                 name="PaintBodies", parent=frame)
+        self.materials.append(wire_paint.material)
+        self.materials.append(body_paint.material)
+        joined = JoinGeometry(tree, location=(14, 3),
+                              geometry=[wire_paint.geometry_out,
+                                        body_paint.geometry_out],
+                              name="Binary", parent=frame)
+        return joined.geometry_out
+
+    # ------------------------------------------------------------------
+    def height_numpy(self, points, seconds=0.0):
+        """The same height of the sheet, in numpy - the tree's mirror.
+
+        :param points: ``(n, 2)`` or ``(n, 3)`` positions; only x and y are read.
+        :param seconds: the scene time the tree reads off the clock.
+        """
+        points = np.asarray(points, dtype=float)
+        x, y = points[:, 0], points[:, 1]
+        om = tau / self.period
+        ph = om * seconds
+        bx, by = self.separation / 2 * np.cos(ph), self.separation / 2 * np.sin(ph)
+        well = sum(-self.depth / np.sqrt(1 + ((x - sx) ** 2 + (y - sy) ** 2)
+                                         / self.softening ** 2)
+                   for sx, sy in ((bx, by), (-bx, -by)))
+        r = np.hypot(x, y)
+        lam = pi * self.wave_speed / om
+        ramp = np.clip((r - self.separation / 2) / (lam / 2), 0, 1)
+        env = ramp * ramp * (3 - 2 * ramp) / np.sqrt(1 + r / lam)
+        arg = 2 * (np.arctan2(y, x) - ph + om * r / self.wave_speed)
+        return well + self.wave_amplitude * env * np.cos(arg)
+
+
+class ElectromagneticWaveModifier(GeometryNodesModifier):
+    r"""A linearly polarised plane light wave: rows of E and B arrows along
+    the direction of propagation, swinging back and forth in step.
+
+    The textbook picture of light. The wave runs along x, the electric field
+    points along z and the magnetic field along y, so the three are
+    mutually perpendicular, and in vacuum the two fields are in phase:
+
+    .. math::
+        \vec E = E_0\,g\,\cos(kx-\omega t)\,\hat z,\qquad
+        \vec B = \tfrac{E_0}{c}\,g\,\cos(kx-\omega t)\,\hat y,
+        \qquad k = 2\pi/\lambda,\quad \omega = 2\pi f.
+
+    (B is drawn at the height ``b_ratio`` E_0 - in SI units it would be
+    invisible.) Each field is drawn twice: as ``arrows`` arrows standing on
+    the axis, shaft plus a head that keeps its size and only shrinks as the
+    field goes through zero, and as the envelope curve through their tips.
+
+    With ``front`` the wave is *emitted*: g is a smooth step that runs from
+    the left end of the axis at the phase speed :math:`c=\lambda f`, starting
+    at ``impact``, so the field switches on behind it and is zero ahead of it.
+    Without, g = 1 and the wave fills the axis from the first frame.
+
+    Everything is driven by ``Scene Time``. The dials, reachable with
+    ``ibpy.get_geometry_node_from_modifier(modifier, label)``:
+    ``Wavelength``, ``Frequency``, ``Amplitude`` (E_0), ``Impact`` and
+    ``FrontWidth``.
+
+    :param name: name of the node group and of the modifier.
+    :param length: length of the axis, centred on the origin.
+    :param arrows: arrows per field.
+    :param resolution: points per envelope curve.
+    :param wavelength, frequency, amplitude: start values of the dials.
+    :param b_ratio: height of B relative to E.
+    :param front, impact, front_width: the emission front (see above).
+    :param thickness: radius of the arrow shafts; heads, curves and the axis
+        are sized from it.
+    :param head: length of an arrow head.
+    :param e_color, b_color, axis_color: palette names.
+    :param emission: emission of the two field materials.
+
+    Example, light switched on two seconds into the shot::
+
+        light = ElectromagneticWaveModifier(length=12, impact=2)
+        wave = Plane(name="LightWave", u=[-1, 1], v=[-1, 1])
+        wave.add_mesh_modifier(type='NODES', node_modifier=light)
+        wave.appear(begin_time=0, transition_time=0)
+    """
+
+    def __init__(self, name="ElectromagneticWave", length=12.0, arrows=49,
+                 resolution=401, wavelength=3.0, frequency=0.5,
+                 amplitude=1.5, b_ratio=0.75, front=True, impact=0.0,
+                 front_width=None, thickness=0.018, head=0.15,
+                 e_color="custom1", b_color="drawing", axis_color="text",
+                 emission=0.3, **kwargs):
+        self.length = length
+        self.arrows = int(arrows)
+        self.resolution = int(resolution)
+        self.wavelength = wavelength
+        self.frequency = frequency
+        self.amplitude = amplitude
+        self.b_ratio = b_ratio
+        self.front = front
+        self.impact = impact
+        self.front_width = wavelength / 2 if front_width is None else front_width
+        self.thickness = thickness
+        self.head = head
+        self.e_color = e_color
+        self.b_color = b_color
+        self.axis_color = axis_color
+        self.emission = emission
+        super().__init__(name=name, automatic_layout=False, **kwargs)
+
+    # ------------------------------------------------------------------
+    def create_node(self, tree, **kwargs):
+        control = self._control_frame(tree)
+        axis = self._axis_frame(tree)
+        e_field = self._field_frame(tree, control, "E", row=0)
+        b_field = self._field_frame(tree, control, "B", row=-6)
+        joined = JoinGeometry(tree, location=(15, 0),
+                              geometry=[axis, e_field, b_field],
+                              name="Light")
+        self.group_outputs.location = (16 * 200, 0)
+        tree.links.new(joined.geometry_out, self.group_outputs.inputs["Geometry"])
+
+    # ------------------------------------------------------------------
+    def _control_frame(self, tree):
+        frame = Frame(tree, location=(0, 0), label="Control",
+                      name="ControlFrame")
+        clock = SceneTime(tree, location=(0, 4), std_out="Seconds",
+                          name="Clock", parent=frame)
+        dials = {"time": clock.std_out}
+        for row, (key, label, value) in enumerate([
+                ("wavelength", "Wavelength", self.wavelength),
+                ("frequency", "Frequency", self.frequency),
+                ("amplitude", "Amplitude", self.amplitude),
+                ("impact", "Impact", self.impact),
+                ("edge", "FrontWidth", self.front_width)]):
+            dial = InputValue(tree, location=(0, 3 - row), value=value,
+                              name=label, parent=frame)
+            dials[key] = dial.std_out
+        return dials
+
+    # ------------------------------------------------------------------
+    def _axis_frame(self, tree):
+        frame = Frame(tree, location=(0, 0), label="Axis", name="AxisFrame")
+        half = self.length / 2
+        line = MeshLine(tree, location=(2, 8), count=2,
+                        start_location=Vector((-half, 0, 0)),
+                        end_location=Vector((half, 0, 0)),
+                        name="AxisLine", parent=frame)
+        curve = MeshToCurve(tree, location=(3, 8), mesh=line.geometry_out,
+                            name="AxisCurve", parent=frame)
+        profile = CurveCircle(tree, location=(3, 7), resolution=8,
+                              radius=0.6 * self.thickness,
+                              name="AxisProfile", parent=frame)
+        tube = CurveToMesh(tree, location=(4, 8), curve=curve.geometry_out,
+                           profile_curve=profile.geometry_out,
+                           name="AxisTube", parent=frame)
+        paint = SetMaterial(tree, location=(5, 8), geometry=tube.geometry_out,
+                            material=get_texture(self.axis_color),
+                            name="PaintAxis", parent=frame)
+        self.materials.append(paint.material)
+        return paint.geometry_out
+
+    # ------------------------------------------------------------------
+    def _field_frame(self, tree, control, field, row):
+        frame = Frame(tree, location=(0, 0), label="%s Field" % field,
+                      name="%sFieldFrame" % field)
+        half = self.length / 2
+        position = Position(tree, location=(2, row + 3), hide=True,
+                            name="%sPosition" % field, parent=frame)
+
+        # E stands along z; B along y, which is z turned by -90 degrees
+        # about x. A negative value turns the arrow over by another 180.
+        if field == "E":
+            scale, turn = "amplitude", "0"
+            offset = ["0", "0", "s"]
+            tip = ["0", "0", "s,sgn,shaft,*"]
+            color = self.e_color
+        else:
+            scale, turn = "amplitude,%s,*" % repr(self.b_ratio), repr(-pi / 2)
+            offset = ["0", "s", "0"]
+            tip = ["0", "s,sgn,shaft,*", "0"]
+            color = self.b_color
+        aux = {
+            "k": "%s,wavelength,/" % repr(tau),
+            "wt": "time,frequency,*,%s,*" % repr(tau),
+        }
+        if self.front:
+            # the front leaves the left end at impact and travels at
+            # c = lambda f; the field is switched on over `edge` behind it
+            aux["reach"] = ("%s,time,impact,-,wavelength,*,frequency,*,+"
+                            % repr(-half))
+            aux["g"] = "reach,pos_x,-,edge,/,0,max,1,min"
+            aux["gate"] = "g,g,*,3,2,g,*,-,*"
+        else:
+            aux["gate"] = "1"
+        aux["s"] = "%s,gate,*,k,pos_x,*,wt,-,cos,*" % scale
+        aux["shaft"] = "s,abs,%s,-,0,max" % repr(self.head)
+        inputs = ["pos", "time", "wavelength", "frequency", "amplitude",
+                  "impact", "edge"]
+        functions = {
+            "offset": offset,
+            "rotation": ["%s,s,0,<,pi,*,+" % turn, "0", "0"],
+            "shaft_scale": ["1", "1", "shaft"],
+            "tip": tip,
+            "head_scale": "s,abs,%s,/,1,min" % repr(self.head),
+            "silent": "gate,0.001,<",
+        }
+        vectors = ["pos", "offset", "rotation", "shaft_scale", "tip"]
+        values = make_function(tree, location=(3, row + 3),
+                               name="%sValues" % field,
+                               functions=functions, aux_functions=aux,
+                               inputs=inputs, outputs=list(functions),
+                               vectors=vectors,
+                               scalars=inputs[1:] + ["head_scale", "silent"]
+                                       + list(aux),
+                               parent=frame, hide=False)
+        tree.links.new(position.std_out, values.inputs["pos"])
+        for key in inputs[1:]:
+            tree.links.new(control[key], values.inputs[key])
+
+        # the arrows: a unit shaft standing on its base, stretched to
+        # length, and a head of fixed size moved to the top of the shaft
+        anchors = MeshLine(tree, location=(4, row + 2), count=self.arrows,
+                           start_location=Vector((-half, 0, 0)),
+                           end_location=Vector((half, 0, 0)),
+                           name="%sAnchors" % field, parent=frame)
+        cylinder = CylinderMesh(tree, location=(4, row + 1), vertices=12,
+                                radius=self.thickness, depth=1,
+                                name="%sShaftMesh" % field, parent=frame)
+        shaft_mesh = TransformGeometry(tree, location=(5, row + 1),
+                                       geometry=cylinder.geometry_out,
+                                       translation=Vector((0, 0, 0.5)),
+                                       name="%sShaftBase" % field,
+                                       parent=frame)
+        cone = ConeMesh(tree, location=(4, row), vertices=16,
+                        radius_bottom=3 * self.thickness, depth=self.head,
+                        name="%sHeadMesh" % field, parent=frame)
+        head_mesh = TransformGeometry(tree, location=(5, row),
+                                      geometry=cone.geometry_out,
+                                      translation=Vector((0, 0, self.head / 2)),
+                                      name="%sHeadBase" % field, parent=frame)
+        shafts = InstanceOnPoints(tree, location=(6, row + 2),
+                                  points=anchors.geometry_out,
+                                  instance=shaft_mesh.geometry_out,
+                                  rotation=values.outputs["rotation"],
+                                  scale=values.outputs["shaft_scale"],
+                                  name="%sShafts" % field, parent=frame)
+        # the offset is across the axis, so pos_x - all the field reads -
+        # is the same at the tip as at the foot
+        tips = SetPosition(tree, location=(6, row + 1),
+                           geometry=anchors.geometry_out,
+                           offset=values.outputs["tip"],
+                           name="%sTips" % field, parent=frame)
+        heads = InstanceOnPoints(tree, location=(7, row + 1),
+                                 points=tips.geometry_out,
+                                 instance=head_mesh.geometry_out,
+                                 rotation=values.outputs["rotation"],
+                                 scale=values.outputs["head_scale"],
+                                 name="%sHeads" % field, parent=frame)
+
+        # the envelope through the tips
+        line = MeshLine(tree, location=(4, row + 4), count=self.resolution,
+                        start_location=Vector((-half, 0, 0)),
+                        end_location=Vector((half, 0, 0)),
+                        name="%sLine" % field, parent=frame)
+        # ahead of the front the envelope would lie on the axis and paint
+        # it in the field's colour, so it is cut back to where the wave is
+        ahead = DeleteGeometry(tree, location=(5, row + 5),
+                               geometry=line.geometry_out,
+                               selection=values.outputs["silent"],
+                               name="%sAhead" % field, parent=frame)
+        bent = SetPosition(tree, location=(5, row + 4),
+                           geometry=ahead.geometry_out,
+                           offset=values.outputs["offset"],
+                           name="%sBend" % field, parent=frame)
+        curve = MeshToCurve(tree, location=(6, row + 4),
+                            mesh=bent.geometry_out,
+                            name="%sCurve" % field, parent=frame)
+        profile = CurveCircle(tree, location=(6, row + 3), resolution=8,
+                              radius=1.2 * self.thickness,
+                              name="%sProfile" % field, parent=frame)
+        envelope = CurveToMesh(tree, location=(7, row + 4),
+                               curve=curve.geometry_out,
+                               profile_curve=profile.geometry_out,
+                               name="%sEnvelope" % field, parent=frame)
+
+        joined = JoinGeometry(tree, location=(8, row + 2),
+                              geometry=[shafts.geometry_out, heads.geometry_out,
+                                        envelope.geometry_out],
+                              name="%sJoin" % field, parent=frame)
+        realized = RealizeInstances(tree, location=(9, row + 2),
+                                    geometry=joined.geometry_out,
+                                    name="%sRealize" % field, parent=frame)
+        smooth = SetShadeSmooth(tree, location=(10, row + 2),
+                                geometry=realized.geometry_out,
+                                name="%sSmooth" % field, parent=frame)
+        paint = SetMaterial(tree, location=(11, row + 2),
+                            geometry=smooth.geometry_out,
+                            material=get_texture(color, emission=self.emission),
+                            name="Paint%s" % field, parent=frame)
+        self.materials.append(paint.material)
+        return paint.geometry_out
+
+    # ------------------------------------------------------------------
+    def field_numpy(self, x, seconds=0.0):
+        """E_z along the axis, in numpy - the tree's mirror (B_y is
+        ``b_ratio`` times it).
+
+        :param x: positions along the axis.
+        :param seconds: the scene time the tree reads off the clock.
+        """
+        x = np.asarray(x, dtype=float)
+        if self.front:
+            reach = -self.length / 2 + (seconds - self.impact) \
+                    * self.wavelength * self.frequency
+            g = np.clip((reach - x) / self.front_width, 0, 1)
+            gate = g * g * (3 - 2 * g)
+        else:
+            gate = 1.0
+        return self.amplitude * gate * np.cos(tau / self.wavelength * x
+                                              - tau * self.frequency * seconds)
