@@ -150,7 +150,7 @@ class BDerivation:
             sigs.append(glyph_signature(i, splines, location=list(letter.ref_obj.location)))
         return sigs
 
-    def _resolve_map(self, tex, user_map, src_sigs, tgt_sigs):
+    def _resolve_map(self, tex, user_map, src_sigs, tgt_sigs, source=None):
         """Translate a substring map into pinned per-letter pairs.
 
         Accepts a dict ``{src_substr: tgt_substr | None, None: tgt_substr}``
@@ -170,7 +170,7 @@ class BDerivation:
                 for j in tex.find_letters(tgt_spec):
                     pins.append((None, j))
                 continue
-            src_indices = self.current.find_letters(src_spec)
+            src_indices = (source or self.current).find_letters(src_spec)
             if tgt_spec is None:  # forced vanish
                 for i in src_indices:
                     pins.append((i, None))
@@ -579,6 +579,42 @@ class BDerivation:
     def _step_replace(self, source, tex, plan, flight_begin, flight_time):
         morph = PairMorph(source, tex, plan)
         morph.animate(begin_time=flight_begin, transition_time=flight_time)
+
+    def replace_line(self, index, expression, map=None, auto=True, auto_threshold=None,
+                     begin_time=0, transition_time=DEFAULT_ANIMATION_TIME,
+                     **tex_overrides):
+        """Morph an EARLIER line in place (like ``step(mode='replace')``).
+
+        ``step`` always transforms the current line; this rewrites
+        ``self.lines[index]`` (negative indices allowed) in its own slot,
+        e.g. to update a premise while the current line moves on. The new
+        line takes the old one's place in ``self.lines``, so later
+        ``move``/``disappear`` calls act on it.
+
+        :return: begin_time + transition_time
+        """
+        index = index % len(self.lines)
+        source = self.lines[index]
+        tex_overrides.setdefault("name", "%s_line_%d_r%d" % (self.name, index, len(self.plans)))
+        tex = self._make_line(expression, index=index, **tex_overrides)
+        row = source.derivation_row
+        if self.display is not None:
+            self.display.add_text_in(tex, scale=self.scale, line=row,
+                                     indent=self.indent, column=self.column)
+        else:
+            base = Vector(self.location) if self.location is not None else Vector()
+            tex.ref_obj.location = base + self.line_spacing * (row - self._row0)
+        tex.derivation_row = row
+
+        src_sigs = self._signatures(source)
+        tgt_sigs = self._signatures(tex)
+        pins = self._resolve_map(tex, map, src_sigs, tgt_sigs, source=source)
+        plan = plan_transition(src_sigs, tgt_sigs, mapping=pins or None,
+                               auto=auto, auto_threshold=auto_threshold)
+        self.plans.append(plan)
+        self._step_replace(source, tex, plan, begin_time, transition_time)
+        self.lines[index] = tex
+        return begin_time + transition_time
 
     # ------------------------------------------------------------------
     # add / subtract: move a term across the '=' sign
