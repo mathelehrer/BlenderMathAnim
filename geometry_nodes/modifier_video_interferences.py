@@ -241,7 +241,7 @@ def rpn_numpy(expression, variables):
     Tokens are looked up **as operators first**, exactly as ``make_function``
     does it, so the same trap is here: a variable called ``length`` is the
     length of a vector and never the caller's variable. Name them around
-    :data:`~interface.ibpy.OPERATORS`.
+    :data:`~utils.constants.OPERATORS`.
 
     :param expression: the RPN string, e.g. ``"a,x,*,sin"``.
     :param variables: ``{name: value}``; components of a vector variable are

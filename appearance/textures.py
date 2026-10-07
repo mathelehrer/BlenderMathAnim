@@ -24,7 +24,8 @@ from shader_nodes.shader_nodes import (Mapping, AttributeNode, HueSaturationValu
                                        Displacement, ShaderNode, MixShader,
                                        TextureCoordinate, ColorRamp, ShaderFrame,
                                        ShaderRepeatZone, BrightContrast, RGB, PrincipledBSDF, OnRightNode, CombineXYZ,
-                                       IfNode, Mix, MixNode, MixColor, WaveLengthToRGB, VectorMathNode, VoronoiTexture, OutputMaterial, NoiseTexture)
+                                       IfNode, Mix, MixNode, MixColor, WaveLengthToRGB, VectorMathNode, VoronoiTexture, OutputMaterial, NoiseTexture,
+                                       CameraData)
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
 from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
 from utils.kwargs import get_from_kwargs
@@ -520,6 +521,8 @@ def get_texture(material, **kwargs):
             material = rgb_interference_texture(**kwargs)
         elif material == 'function':
             material = function_texture(**kwargs)
+        elif material == 'implicit_plot':
+            material = implicit_plot_texture(**kwargs)
         elif material == 'acoustic':
             material = acoustic_texture(**kwargs)
         elif material == 'grating':
@@ -2445,6 +2448,214 @@ def function_texture(name="Function", **kwargs):
                           alpha=fade.std_out,
                           distribution="MULTI_GGX", hide=False)
     OutputMaterial(tree, location=(3.0, 0.0), surface=bsdf.std_out, hide=False)
+
+    customize_material(mat, **kwargs)
+    return mat
+
+
+def implicit_plot_texture(name="ImplicitPlot", **kwargs):
+    r"""The curve f(x, y) = 0, drawn as a line of constant pixel width.
+
+    Here f is any RPN string in the
+    tokens ``x`` and ``y`` e.g. ``"x,3,**,y,3,**,2,*,+,x,-,y,2,*,-"``,
+    and the tree shows the computation step by step, one
+    :func:`~geometry_nodes.nodes.make_function` group per step:
+
+    ``Stencil``
+        x, y (object coordinates times ``Zoom``), the pixel size h and the
+        four neighbours :math:`x\pm h`, :math:`y\pm h`.
+    ``f(x-h,y)``, ``f(x+h,y)``, ``f(x,y-h)``, ``f(x,y+h)``
+        four copies of f, the RPN unchanged, each fed one stencil point.
+    ``gradient_function``
+        the sign of f(x, y) for the ramp, and the line.
+
+    f(x, y) itself is not evaluated: it is taken as the mean of the four
+    samples, which is off by :math:`\tfrac{h^2}{4}\Delta f` (the five-point
+    Laplacian). That moves the line by :math:`\tfrac{h}{4}\Delta f/|\nabla f|`
+    pixels, negligible unless f varies on the scale of a pixel.
+
+    The boundary between the two colours is the curve, so the curve is where
+    that colour distribution has a gradient. ``gradient_function`` takes it
+    from the four samples by central differences
+
+    .. math::
+        g_x = \frac{f(x+h,y) - f(x-h,y)}{2h},\qquad
+        g_y = \frac{f(x,y+h) - f(x,y-h)}{2h} .
+
+    Rather than thresholding the jump of the step function itself (which
+    gives a staircase line one sample wide), it uses the first-order distance
+    to the curve, :math:`d = |f|/|\nabla f|` - the curve is f = 0, and |grad f|
+    is how fast f grows away from it. Measured in pixels, :math:`d/h`, the
+    line is ``LineWidth`` pixels wide everywhere along the curve no matter
+    how steep f is there, with a one pixel linear edge for anti-aliasing.
+
+    h is the size of one pixel on the surface, in the coordinates of f: the
+    ``Camera Data`` node's view distance times the angle a pixel subtends
+    (``PixelAngle``) times ``Zoom``. ``PixelAngle`` is a driver,
+    ``sensor_width/lens/(max(res_x, res_y)*percentage/100)``: the frame's long
+    side spans sensor_width/lens radians (small-angle, default sensor fit),
+    shared out over the pixels actually rendered. It reads the active
+    camera through the scene, so a 40 % preview draws lines as many pixels
+    wide as the final render, and lens changes and camera switches are
+    followed. That makes it
+    exact for a surface seen face on by a perspective camera; an oblique
+    surface gets lines that are widened across the tilt, and the object's own
+    scale is not accounted for (scale the coordinates with ``zoom`` instead).
+    At a singular point - the node of a nodal cubic - grad f vanishes, d is
+    unbounded below and the line correctly thickens into a blob.
+
+    Dials, reachable with ``ibpy.get_node_from_shader(material, label)``:
+
+    ``Regions``
+        1 shows the sign areas (``negative_color``/``positive_color``), 0
+        replaces them with ``backdrop_color``; ramp it to go from the xml's
+        picture to the bare curve.
+    ``LineWidth``
+        the width of the curve, in pixels. 0 hides it.
+    ``Zoom``
+        function units per object unit, x = zoom * object x.
+    ``PixelAngle``
+        driven; see above.
+
+    :param name: material name.
+    :param function: the RPN of f(x, y).
+    :param zoom: initial ``Zoom``.
+    :param line_width: initial ``LineWidth``, in pixels.
+    :param regions: initial ``Regions``.
+    :param negative_color: rgba or palette name where f < 0.
+    :param positive_color: rgba or palette name where f > 0.
+    :param backdrop_color: rgba or palette name behind the bare curve.
+    :param line_color: rgba or palette name of the curve.
+    :param emission: emission strength of the colour.
+    :param alpha: initial factor of the ``AlphaFactor`` fade.
+    :param kwargs: passed on to :func:`~interface.ibpy.customize_material`.
+    """
+    function = get_from_kwargs(kwargs, "function", "x,3,**,y,3,**,2,*,+,x,-,y,2,*,-")
+    zoom = get_from_kwargs(kwargs, "zoom", 1.0)
+    line_width = get_from_kwargs(kwargs, "line_width", 3.0)
+    regions = get_from_kwargs(kwargs, "regions", 1.0)
+    alpha = get_from_kwargs(kwargs, "alpha", 1.0)
+    emission = get_from_kwargs(kwargs, "emission", 0.5)
+
+    def _rgba(color):
+        return list(get_color_from_string(color)) if isinstance(color, str) else list(color)
+
+    negative_color = _rgba(get_from_kwargs(kwargs, "negative_color", [0, 0, 0, 1]))
+    positive_color = _rgba(get_from_kwargs(kwargs, "positive_color", [1.0, 0.9264838695526123, 0.0, 1.0]))
+    backdrop_color = _rgba(get_from_kwargs(kwargs, "backdrop_color", [0, 0, 0, 1]))
+    line_color = _rgba(get_from_kwargs(kwargs, "line_color", [1, 1, 1, 1]))
+
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+    mat.name = name
+    tree = mat.node_tree
+    tree.nodes.clear()
+
+    position = TextureCoordinate(tree, location=(-11.0, 2.1), std_out="Object", hide=False)
+    distance = CameraData(tree, location=(-11.0, 0.5), std_out="View Distance", hide=False)
+    pixel = InputValue(tree, location=(-11.0, -0.5), value=36 / 50 / 1920,
+                       name="PixelAngle", hide=False)
+    scene = bpy.context.scene
+    # the camera is read through the scene, so it is whichever is active; with
+    # none (yet) the targets fall back to blender's 36 mm sensor and 50 mm lens
+    ibpy.attach_driver(tree, 'nodes["PixelAngle"].outputs[0].default_value',
+                       "sw/lens/(max(rx,ry)*pct/100)",
+                       {"rx": (scene, "render.resolution_x"),
+                        "ry": (scene, "render.resolution_y"),
+                        "pct": (scene, "render.resolution_percentage"),
+                        "sw": {"id": scene, "data_path": "camera.data.sensor_width",
+                               "use_fallback_value": True, "fallback_value": 36.0},
+                        "lens": {"id": scene, "data_path": "camera.data.lens",
+                                 "use_fallback_value": True, "fallback_value": 50.0}})
+    zoom_node = InputValue(tree, location=(-11.0, -1.2), value=zoom, name="Zoom", hide=False)
+    width = InputValue(tree, location=(-11.0, -1.9), value=line_width, name="LineWidth", hide=False)
+
+    links = tree.links
+
+    # the stencil: the point in function units, h (one pixel in function
+    # units) and the four neighbours h away
+    stencil = make_function(tree, location=(-9.5, 0.5), name="Stencil",
+                            node_group_type="Shader",
+                            functions={"x": "u", "y": "v",
+                                       "xm": "u,step,-", "xp": "u,step,+",
+                                       "ym": "v,step,-", "yp": "v,step,+",
+                                       "h": "step"},
+                            aux_functions={"u": "pos_x,zoom,*", "v": "pos_y,zoom,*",
+                                           "step": "view,pixel,*,zoom,*"},
+                            inputs=["pos", "view", "pixel", "zoom"],
+                            outputs=["x", "y", "xm", "xp", "ym", "yp", "h"],
+                            vectors=["pos"],
+                            scalars=["view", "pixel", "zoom", "x", "y", "xm", "xp",
+                                     "ym", "yp", "h", "u", "v", "step"],
+                            hide=False)
+    for key, node in (("pos", position), ("view", distance), ("pixel", pixel),
+                      ("zoom", zoom_node)):
+        links.new(node.std_out, stencil.inputs[key])
+
+    # f itself, four times over: each node is the user's RPN unchanged, it is
+    # only fed a different point of the stencil
+    samples = {}
+    for row, (key, label, x, y) in enumerate((("fxm", "f(x-h,y)", "xm", "y"),
+                                              ("fxp", "f(x+h,y)", "xp", "y"),
+                                              ("fym", "f(x,y-h)", "x", "ym"),
+                                              ("fyp", "f(x,y+h)", "x", "yp"))):
+        sample = make_function(tree, location=(-7.5, 1.9 - 1.2 * row), name=label,
+                               node_group_type="Shader",
+                               functions={"f": function},
+                               inputs=["x", "y"], outputs=["f"],
+                               scalars=["x", "y", "f"], hide=False)
+        sample.label = label
+        links.new(stencil.outputs[x], sample.inputs["x"])
+        links.new(stencil.outputs[y], sample.inputs["y"])
+        samples[key] = sample.outputs["f"]
+
+    # the gradient by central differences, and from it the distance to the
+    # curve in pixels: |f|/|grad f| in function units, over h
+    gradient = make_function(tree, location=(-5.5, 0.5), name="gradient_function",
+                             node_group_type="Shader",
+                             functions={"region": "f0,0,>",
+                                        # the trailing factor fades a line
+                                        # thinner than a pixel instead of
+                                        # leaving its anti-aliased edge behind
+                                        "line": "width,2,/,0.5,+,dpx,-,0,max,1,min,"
+                                                "width,1,min,*"},
+                             # f(x, y) as the mean of its four neighbours
+                             aux_functions={"f0": "fxm,fxp,+,fym,+,fyp,+,4,/",
+                                            "gx": "fxp,fxm,-,2,/,h,/",
+                                            "gy": "fyp,fym,-,2,/,h,/",
+                                            # floored so that a critical point
+                                            # of f is a wide line, not a 1/0
+                                            "grad": "gx,gx,*,gy,gy,*,+,sqrt,0.000000001,max",
+                                            "dpx": "f0,abs,grad,/,h,/"},
+                             inputs=["fxm", "fxp", "fym", "fyp", "h", "width"],
+                             outputs=["region", "line"],
+                             scalars=["f0", "fxm", "fxp", "fym", "fyp", "h", "width",
+                                      "region", "line", "gx", "gy", "grad", "dpx"],
+                             hide=False)
+    for key, socket in samples.items():
+        links.new(socket, gradient.inputs[key])
+    links.new(stencil.outputs["h"], gradient.inputs["h"])
+    links.new(width.std_out, gradient.inputs["width"])
+
+    ramp = ColorRamp(tree, location=(-3.0, 1.1), factor=gradient.outputs["region"],
+                     values=[0.0, 1.0], colors=[negative_color, positive_color],
+                     interpolation="LINEAR", color_mode="RGB", name="SignRamp", hide=False)
+    regions_node = InputValue(tree, location=(-3.0, -0.5), value=regions, name="Regions", hide=False)
+    backdrop = MixColor(tree, location=(-1.6, 0.8), factor=regions_node.std_out,
+                        caseA=backdrop_color, caseB=ramp.std_out,
+                        clamp_factor=True, name="Backdrop", hide=False)
+    curve = MixColor(tree, location=(-0.6, 0.6), factor=gradient.outputs["line"],
+                     caseA=backdrop.std_out, caseB=line_color,
+                     clamp_factor=True, name="Curve", hide=False)
+    fade = MixNode(tree, location=(-0.6, -0.6), data_type="FLOAT",
+                   factor=alpha, caseA=0.0, caseB=1.0,
+                   clamp_factor=True, factor_mode="UNIFORM",
+                   name="AlphaFactor", hide=False)
+
+    bsdf = PrincipledBSDF(tree, location=(0.4, 0.9), base_color=curve.std_out,
+                          emission_color=curve.std_out, emission_strength=emission,
+                          alpha=fade.std_out, distribution="MULTI_GGX", hide=False)
+    OutputMaterial(tree, location=(1.8, 0.9), surface=bsdf.std_out, hide=False)
 
     customize_material(mat, **kwargs)
     return mat

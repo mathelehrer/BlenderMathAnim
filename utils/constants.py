@@ -484,3 +484,20 @@ BACK = Vector([0, 1, 0])
 FRONT = Vector([0, -1, 0])
 
 SMALL_BUFF = 0.25
+
+'''
+RPN operators
+'''
+# the tokens make_function (geometry_nodes.nodes) and ExpressionConverter
+# (mathematics.parsing.parser) read as operators rather than as variables
+# where as '*' is the ordinary multiplication for scalars, 'mul' is the corresponding vector operator
+OPERATORS = ['*', 'mul', '%', 'mod', '/', 'div', '+', 'add', '-', 'sub', '**', 'sin', 'cos', 'tan', '^', 'lg',
+             'sqrt', 'exp', 'abs', 'min', 'max', '<', '>', 'sgn', 'round', 'floor', 'vfloor', 'ceil','frac',
+             'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'length', 'scale', 'sqrt', '=', 'dot','°',
+             'cross', 'rot', 'axis_rot', 'rot2euler', 'axis_angle_euler', 'not', 'normalize', 'and', 'or', "rot_vec",
+             "inv_rot",
+             'cadd', 'csub', 'cmul', 'cdiv', 'cscale', 'cconj', 'cabs',"cexp"]
+# operators that return data of type VECTOR
+VECTOR_OPERATORS = ['mul', 'mod', 'div', 'add', 'sub', 'scale', 'vfloor', 'cross', 'rot', 'axis_rot', 'rot2euler',
+                    'axis_angle_euler', 'normalize', "rot_vec", "inv_rot",
+                    'cadd', 'csub', 'cmul', 'cdiv', 'cscale', 'cconj', 'cabs','cexp']

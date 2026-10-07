@@ -8,8 +8,9 @@ import numpy as np
 from mathutils import Vector, Matrix, Euler, Quaternion
 
 from interface.interface_constants import EMISSION, TRANSMISSION, BLENDER_EEVEE, blender_version
+from mathematics.parsing.parser import ExpressionConverter
 from utils.color_conversion import get_color_from_string, get_color
-from utils.constants import BLEND_DIR, FRAME_RATE, OBJECT_APPEARANCE_TIME, OSL_DIR, COLOR_NAMES, IMG_DIR, \
+from utils.constants import OPERATORS, VECTOR_OPERATORS, BLEND_DIR, FRAME_RATE, OBJECT_APPEARANCE_TIME, OSL_DIR, COLOR_NAMES, IMG_DIR, \
     DEFAULT_ANIMATION_TIME, RES_HDRI_DIR, FINAL_DIR, VID_DIR, SPECIALS, COLORS, APPEND_DIR
 from utils.geometry import BoundingBox
 from utils.kwargs import get_from_kwargs
@@ -37,17 +38,6 @@ SOCKET_TYPES = (
     'TEXTURE', 'MATERIAL')
 DATA_TYPES = ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2', 'QUATERNION')
 
-# where as '*' is the ordinary multiplication for scalars, 'mul' is the corresponding vector operator
-OPERATORS = ['*', 'mul', '%', 'mod', '/', 'div', '+', 'add', '-', 'sub', '**', 'sin', 'cos', 'tan', '^', 'lg',
-             'sqrt', 'exp', 'abs', 'min', 'max', '<', '>', 'sgn', 'round', 'floor', 'vfloor', 'ceil','frac',
-             'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'length', 'scale', 'sqrt', '=', 'dot','°',
-             'cross', 'rot', 'axis_rot', 'rot2euler', 'axis_angle_euler', 'not', 'normalize', 'and', 'or', "rot_vec",
-             "inv_rot",
-             'cadd', 'csub', 'cmul', 'cdiv', 'cscale', 'cconj', 'cabs',"cexp"]
-# operators that return data of type VECTOR
-VECTOR_OPERATORS = ['mul', 'mod', 'div', 'add', 'sub', 'scale', 'vfloor', 'cross', 'rot', 'axis_rot', 'rot2euler',
-                    'axis_angle_euler', 'normalize', "rot_vec", "inv_rot",
-                    'cadd', 'csub', 'cmul', 'cdiv', 'cscale', 'cconj', 'cabs','cexp']
 
 
 # ############################################################################
@@ -7470,38 +7460,107 @@ def set_linear_fcurves(bob):
                     kp.interpolation = 'LINEAR'
 
 
-def _rpn_to_infix(rpn, var_expr='t'):
-    """Convert a comma-separated RPN string (the convention used by ``make_function``
-    and ``GeoCurve``) into an infix Python expression string.
+def attach_driver(owner, data_path, expression="var", variables={}, index=-1,
+                  driver_type='SCRIPTED', use_self=False):
+    """Drive the property ``data_path`` of ``owner`` by a driver.
 
-    The single variable ``t`` is replaced by ``var_expr`` (wrapped in
-    parentheses), so the caller can inline an arbitrary sub-expression for the
-    curve parameter. Only the operators/functions of Blender's *safe* driver
-    expression evaluator are emitted, so the result can be used directly as a
-    driver expression without enabling Python auto-execution.
+    Any existing driver on the same property is replaced. The driver's
+    f-curve is emptied before it is returned: on bpy 5.x ``driver_add`` hands
+    out a curve with bezier keys at (0, 0) and (1, 1), and the driver value
+    is mapped through them - which snaps everything within ~1e-4 of a key to
+    the key, so a driver that computes 5e-5 delivers 0. Emptied, the curve
+    passes the driver value through unchanged.
+
+    :param owner: what carries the property - an ID (object, material,
+        node tree, scene, ...), any struct inside one (a node socket, a
+        modifier, ...) or a BObject, which is resolved with :func:`get_obj`.
+    :param data_path: the property, relative to ``owner``
+        (``"location"``, ``"default_value"``,
+        ``'nodes["Value"].outputs[0].default_value'``).
+    :param expression: the driver expression in terms of the variable names.
+        Expressions that stay within Blender's simple-expression subset
+        (arithmetic, ``min``/``max``, ``sin``/``cos``/..., ``frame``) run
+        without Python auto-execution. Ignored unless ``driver_type`` is
+        ``'SCRIPTED'``.
+    :param variables: ``{name: spec}``, one driver variable per entry. A spec
+        is either
+
+        ``(id, path)``
+            a ``SINGLE_PROP`` variable reading the property ``path`` of the
+            ID ``id``. The path may run through pointers:
+            ``(scene, "camera.data.lens")`` follows whichever camera is
+            active.
+        a dict
+            ``{"type": <variable type>, ...}`` for any variable type, with
+            ``"id"`` (or ``"ids"`` for the two targets of ``LOC_DIFF`` /
+            ``ROTATION_DIFF``) and any further :class:`bpy.types.DriverTarget`
+            settings as keys, applied to every target. For example
+            ``{"type": "TRANSFORMS", "id": obj, "transform_type": "LOC_Z",
+            "transform_space": "WORLD_SPACE"}`` or ``{"type": "CONTEXT_PROP",
+            "context_property": "ACTIVE_SCENE", "data_path": "frame_current"}``.
+    :param index: the component of an array property (``0`` for x of a
+        location); ``-1`` drives a scalar property, or every component of an
+        array property with the same driver.
+    :param driver_type: ``'SCRIPTED'``, or ``'AVERAGE'``, ``'SUM'``,
+        ``'MIN'``, ``'MAX'`` to combine the variables without an expression.
+    :param use_self: expose the owner as ``self`` in the expression (needs
+        Python auto-execution).
+    :return: the driver f-curve, or the list of them when ``index=-1`` hits an
+        array property.
+
+    Example - a value node that holds the angle one pixel of the render
+    subtends, following resolution changes, lens changes and camera
+    switches::
+
+        attach_driver(tree, 'nodes["PixelAngle"].outputs[0].default_value',
+                      "sw/lens/(max(rx,ry)*pct/100)",
+                      {"rx": (scene, "render.resolution_x"),
+                       "ry": (scene, "render.resolution_y"),
+                       "pct": (scene, "render.resolution_percentage"),
+                       "sw": (scene, "camera.data.sensor_width"),
+                       "lens": (scene, "camera.data.lens")})
     """
-    unary = {'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
-             'sqrt', 'exp', 'log', 'abs', 'floor', 'ceil'}
-    binary = {'+', '-', '*', '/', '**', '%'}
-    stack = []
-    for token in rpn.split(','):
-        token = token.strip()
-        if token == '':
-            continue
-        if token == 't':
-            stack.append('(' + var_expr + ')')
-        elif token in unary:
-            a = stack.pop()
-            stack.append('%s(%s)' % (token, a))
-        elif token in binary:
-            b = stack.pop()
-            a = stack.pop()
-            stack.append('(%s%s%s)' % (a, token, b))
-        else:  # numeric literal
-            stack.append(token)
-    if not stack:
-        return '0'
-    return stack[-1]
+    owner = get_obj(owner)
+    try:
+        owner.driver_remove(data_path, index)
+    except (TypeError, RuntimeError):
+        pass
+    fcurves = owner.driver_add(data_path, index)
+    single = not isinstance(fcurves, (list, tuple))
+    if single:
+        fcurves = [fcurves]
+
+    for fcurve in fcurves:
+        fcurve.keyframe_points.clear()
+        for modifier in list(fcurve.modifiers):
+            fcurve.modifiers.remove(modifier)
+        driver = fcurve.driver
+        driver.type = driver_type
+        driver.use_self = use_self
+        for name, spec in variables.items():
+            variable = driver.variables.new()
+            variable.name = name
+            if isinstance(spec, dict):
+                spec = dict(spec)
+                variable.type = spec.pop("type", 'SINGLE_PROP')
+                ids = spec.pop("ids", [spec.pop("id")] if "id" in spec else [])
+            else:
+                variable.type = 'SINGLE_PROP'
+                ids, path = [spec[0]], spec[1]
+                spec = {"data_path": path}
+            for target, target_id in zip(variable.targets, ids):
+                target_id = get_obj(target_id)
+                # only a SINGLE_PROP target lets the ID type be chosen, and it
+                # has to be set before the ID or the assignment is refused
+                if variable.type == 'SINGLE_PROP':
+                    target.id_type = target_id.id_type
+                target.id = target_id
+            for target in variable.targets:
+                for key, value in spec.items():
+                    setattr(target, key, value)
+        if driver_type == 'SCRIPTED':
+            driver.expression = expression
+    return fcurves[0] if single else fcurves
 
 
 def add_driver(bob, functions, domain=[0,1], begin_time=0, transition_time=1):
@@ -7541,15 +7600,7 @@ def add_driver(bob, functions, domain=[0,1], begin_time=0, transition_time=1):
     s_expr = "(%r+%s*(%r-%r))" % (float(s0), p_expr, float(s1), float(s0))
 
     for i, rpn in enumerate(functions[:3]):
-        try:
-            obj.driver_remove('location', i)
-        except (TypeError, RuntimeError):
-            pass
-        fcurve = obj.driver_add('location', i)
-        driver = fcurve.driver
-        driver.type = 'SCRIPTED'
-        driver.use_self = False
-        driver.expression = _rpn_to_infix(rpn, var_expr=s_expr)
+        attach_driver(obj, 'location', ExpressionConverter(rpn).infix({'t': s_expr}), index=i)
     return obj
 
 

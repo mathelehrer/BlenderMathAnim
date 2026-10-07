@@ -877,6 +877,19 @@ class CombineXYZ(ShaderNode):
         self.std_out = self.node.outputs['Vector']
 
 
+class CameraData(ShaderNode):
+    """``Camera Data``: where the shaded point sits relative to the camera.
+
+    :param std_out: ``"View Vector"``, ``"View Z Depth"`` or ``"View Distance"``.
+    """
+
+    def __init__(self, tree, location=(0, 0), std_out="View Distance", **kwargs):
+        self.node = tree.nodes.new(type="ShaderNodeCameraData")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.std_out = self.node.outputs[std_out]
+
+
 class TextureCoordinate(ShaderNode):
     def __init__(self, tree, location=(0, 0), std_out="UV", **kwargs):
         self.node = tree.nodes.new(type="ShaderNodeTexCoord")

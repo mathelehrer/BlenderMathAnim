@@ -9,9 +9,10 @@ from sympy import false
 from grandalf.graphs import Vertex, Edge, Graph
 from grandalf.layouts import SugiyamaLayout, DigcoLayout
 from interface import ibpy
-from interface.ibpy import get_material, make_new_socket, OPERATORS, get_obj
+from interface.ibpy import get_material, make_new_socket, get_obj
 from interface.interface_constants import blender_version
-from utils.constants import RES_XML, RES_XML2
+from mathematics.parsing.parser import split_rpn
+from utils.constants import OPERATORS, RES_XML, RES_XML2
 from utils.kwargs import get_from_kwargs
 from utils.string_utils import parse_vector
 
@@ -7694,40 +7695,6 @@ class Structure:
         self.extra = None  # third operand slot for ternary operators
 
 
-def split_rpn(expression):
-    """Split an RPN expression into tokens on commas outside quoted literals.
-
-    The comma is what separates the tokens of a formula, so a comma that is
-    *part of* a token - the brainfuck instruction ``,``, say - has to be
-    protected. Single quotes do that::
-
-        "letter,',',in"    ->  ["letter", "','", "in"]
-        "letter,'<',in"    ->  ["letter", "'<'", "in"]
-
-    Quoting is also what tells a literal apart from an operator of the same
-    spelling: ``<`` is ``LESS_THAN`` and ``'<'`` is the character. Every
-    operator token is unquoted, so an expression written before quoting
-    existed splits exactly as it always did.
-
-    :return: the list of tokens, quotes included - :func:`build_function`
-        strips them when it reads the literal.
-    """
-    tokens, token, quoted = [], [], False
-    for character in expression:
-        if character == "'":
-            quoted = not quoted
-            token.append(character)
-        elif character == "," and not quoted:
-            tokens.append("".join(token))
-            token = []
-        else:
-            token.append(character)
-    if quoted:
-        raise ValueError("unbalanced quote in the expression %r" % expression)
-    tokens.append("".join(token))
-    return tokens
-
-
 def make_function(nodes_or_tree, functions={}, aux_functions={},
                   inputs=[], outputs=[], vectors=[], scalars=[], integers=[], rotations=[],
                   booleans=[], strings=[],
@@ -7773,7 +7740,7 @@ def make_function(nodes_or_tree, functions={}, aux_functions={},
     separator, and so on.
 
     The same trap catches *variable names*: a name that is spelled like one of
-    the tokens of :data:`~interface.ibpy.OPERATORS` is read as the operator,
+    the tokens of :data:`~utils.constants.OPERATORS` is read as the operator,
     because a token is looked up there before it is looked up among the
     inputs.  So an input called ``length`` is the length of a vector, one
     called ``min`` is the minimum of the two below it on the stack, and the
