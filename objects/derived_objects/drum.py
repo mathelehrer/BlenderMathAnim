@@ -1,4 +1,3 @@
-from appearance.textures import get_texture
 from objects.bobject import BObject
 
 import numpy as np
@@ -422,13 +421,14 @@ class DrumModeModifier(GeometryNodesModifier):
         amplitude of a membrane that was struck once.
     :param attribute: name of the float attribute the elongation is stored
         under. It displaces the surface and the material reads it back.
-    :param material: ``"elongation"`` (the default) builds a divergent colour
+    :param material: ``"elongation"`` builds a divergent colour
         ramp on that attribute through
         :func:`~appearance.textures.gradient_from_attribute`, so crest and
         trough take opposite colours and the nodal lines are the colour in
         between - the whole point of a mode, drawn on the surface that has it.
-        ``"function"`` uses the project's standard graph shader,
-        :func:`~appearance.textures.function_texture`, instead: it forms
+        ``"function"`` (the default) uses the project's standard graph shader,
+        :func:`~appearance.textures.function_texture`, instead, with an
+        ``alpha_intensity`` of 0.9 unless one is given: it forms
         u = elongation/amplitude out of the two stored attributes and adds the
         emission that goes as u^2, so a drum wears the same material as the
         function tubes and the wave surfaces of the same video (see
@@ -445,7 +445,7 @@ class DrumModeModifier(GeometryNodesModifier):
                  modes=((0, 1), (1, 1), (2, 1), (0, 2), (3, 1), (1, 2)),
                  mode=0, amplitude=0.5, frequency=0.4, start_time=0.0,
                  normalize=True, attribute="result", ease_in = 0,
-                 material=get_texture("function", alpha_intensity=0.9),
+                 material="function",
                  shade_smooth=True, wireframe=False, **kwargs):
         """
 
@@ -770,10 +770,12 @@ class DrumModeModifier(GeometryNodesModifier):
             return self.paint
         if self.paint == "function":
             from appearance.textures import function_texture
+            # built here rather than as a default argument: a material made
+            # at import time is deleted again when the scene clears bpy.data
             return function_texture(name=self.name + "Texture",
                                     attribute=self.attribute,
                                     scale_attribute="amplitude",
-                                    **self.kwargs)
+                                    **{"alpha_intensity": 0.9, **self.kwargs})
         if self.paint != "elongation":
             return self.paint
         from appearance.textures import gradient_from_attribute

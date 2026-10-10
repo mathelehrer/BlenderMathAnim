@@ -19,7 +19,7 @@ class FunctionText:
         self.header = header
         self.content = content
         self.lines = lines
-        self.empty_lines=[]
+        self.empty_lines = []
         self.parse()
 
     def parse(self):
@@ -51,14 +51,15 @@ def get_leading_spaces(text):
         text = text[1:]
     return spaces
 
+
 def prepare_colors(text, isheader=False):
     builtin = ['import', 'as', 'from', 'def', 'class', 'if', 'not', 'return', 'else', 'None', 'and', 'or', 'elif',
-               'for', 'in', 'while', 'yield',"contiue","except",]
-    builtin2 = ['super', 'range', 'len', 'print', 'list', 'int', 'open', 'enumerate','str','OSError',]
+               'for', 'in', 'while', 'yield', "contiue", "except", ]
+    builtin2 = ['super', 'range', 'len', 'print', 'list', 'int', 'open', 'enumerate', 'str', 'OSError', ]
     self = 'self'
     override = '__'
     digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-    operator = ['>','<','+','-','*','/','**','%']
+    operator = ['>', '<', '+', '-', '*', '/', '**', '%']
     text = text.strip()  # remove leading spaces
     words = text.split(' ')
     n_letters = 0
@@ -77,9 +78,9 @@ def prepare_colors(text, isheader=False):
             for i in range(ids[0], ids[1] + 2):
                 colors[pos + i] = 'code_override'
         elif isheader and '(' in word:
-            id0 =word.find('(')
-            for i in range(0,id0):
-                colors[pos+i]='example'
+            id0 = word.find('(')
+            for i in range(0, id0):
+                colors[pos + i] = 'example'
         if self in word:
             index = word.find(self)
             for i in range(index, index + 4):
@@ -104,7 +105,7 @@ def prepare_colors(text, isheader=False):
                     if word[index - 1] not in ['=', '(', ' ']:
                         isword = False
                 if len(bi) < len(word) - index:  # make sure there are not letters after the builtin word
-                    if word[index +len(bi)] not in ['=', ')',':']:
+                    if word[index + len(bi)] not in ['=', ')', ':']:
                         isword = False
                 if isword:
                     for i in range(index, index + len(bi)):
@@ -123,7 +124,7 @@ def prepare_colors(text, isheader=False):
             if not isheader:  # keywords are only highlighted in function calls and not in function definitions
                 index = word.find("=")
                 if index > 0:
-                    if word[index - 1] not in operator :
+                    if word[index - 1] not in operator:
                         bracket_index = word.find('(')
                         if -1 < bracket_index < index:
                             start = bracket_index + 1
@@ -145,23 +146,25 @@ class ClassText:
     def parse(self, content):
         fcn = []
         inside = False
-        header_line=0 # for functions without def (main)
-        for l,line in enumerate(content):
-            if not inside and line=='!': # ignore empty lines between functions
-                continue
+        header_line = 0  # for functions without def (main)
+        for l, line in enumerate(content):
+            # if not inside and line == '!':  # ignore empty lines between functions
+            #     continue
             if 'def' in line or 'if __name__' in line:
                 inside = True
                 if not fcn:
                     fcn = [line]
                     header_line = l
                 else:
-                    self.functions.append(FunctionText(fcn[0], fcn[1:],lines=range(header_line,l))) # exclusive right boundary
+                    self.functions.append(
+                        FunctionText(fcn[0], fcn[1:], lines=range(header_line, l)))  # exclusive right boundary
                     fcn = [line]
                     header_line = l
             else:
                 fcn.append(line)
         if fcn:
-            self.functions.append(FunctionText(fcn[0], fcn[1:],lines=range(header_line,len(content)))) # exclusive right boundary
+            self.functions.append(
+                FunctionText(fcn[0], fcn[1:], lines=range(header_line, len(content))))  # exclusive right boundary
 
     def number_of_lines(self):
         n_lines = 1  # header + empty line
@@ -242,7 +245,7 @@ class CodeParser(BObject):
 
         for line in lines:
             if len(line) == 0:
-                line='!'
+                line = '!'
             if 'import' in line or 'from' in line:
                 imports.append(line)
             else:
@@ -257,7 +260,7 @@ class CodeParser(BObject):
             elif not cls and 'class' in line:
                 cls = [line]  # add first line to class
             elif cls:
-                if line[0] == ' ' or line[0]=='!':  # tabs in the file get converted in to spaces
+                if line[0] == ' ' or line[0] == '!':  # tabs in the file get converted in to spaces
                     cls.append(line)
                 elif 'class' in line:
                     self.classes.append(ClassText(cls[0], cls[1:]))
@@ -299,7 +302,7 @@ class CodeParser(BObject):
         if 'back' in kwargs:
             back = kwargs.pop('back')
         else:
-            back=False
+            back = False
 
         if 'indent' in kwargs:
             indent = kwargs.pop('indent')
@@ -310,62 +313,64 @@ class CodeParser(BObject):
             all = True
 
         elif function is not None:
-            if len(self.classes)>0:
+            if len(self.classes) > 0:
                 fcn = cls.functions[function]
                 lines = fcn.lines
                 all = False
             else:
                 all = True
 
-        if len(self.indents)>0:
+        if len(self.indents) > 0:
             indents = self.indents[class_index]
         else:
             indents = 0
 
         # calculate time per char
-        sum = 0
+        summe = 0
         chars = []
         if all:
-            chars.append(len(cls.header.replace(" ","")))
-            sum+=chars[-1]
+            chars.append(len(cls.header.replace(" ", "")))
+            summe += chars[-1]
             for fcn in cls.functions:
-                chars.append(len(fcn.header.strip().replace(" ","")))
-                sum+=chars[-1]
+                chars.append(len(fcn.header.strip().replace(" ", "")))
+                summe += chars[-1]
                 for line in fcn.content:
-                    chars.append(len(line.strip().replace(" ","")))
-                    sum += chars[-1]
+                    chars.append(len(line.strip().replace(" ", "")))
+                    summe += chars[-1]
         else:
             fcn = cls.functions[function]
             if function == 0:
-                chars.append(len(cls.header.strip().replace(" ","")))
-                lines =range(lines[0],lines[-1]+2) # extend range to include the class declaration
-                sum=chars[-1]
+                chars.append(len(cls.header.strip().replace(" ", "")))
+                lines = range(lines[0], lines[-1] + 2)  # extend range to include the class declaration
+                summe = chars[-1]
             else:
-                lines = range(lines[0]+1,lines[-1]+2) # shift the range by one accounting for the class declaration
-            chars.append(len(fcn.header.strip().replace(" ","")))
+                lines = range(lines[0] + 1,
+                              lines[-1] + 2)  # shift the range by one accounting for the class declaration
+            chars.append(len(fcn.header.strip().replace(" ", "")))
             for line in fcn.content:
-                chars.append(len(line.strip().replace(" ","")))
-                sum += chars[-1]
+                chars.append(len(line.strip().replace(" ", "")))
+                summe += chars[-1]
 
-        dt = np.minimum(1 / 50, transition_time / sum)
-        t0=begin_time
+        dt = np.minimum(1 / 50, transition_time / summe)
+        t0 = begin_time
         for i, line in enumerate(lines):
-            if len(self.objects[class_index][line].letters)==1:# work around to create empty lines
-               code_display.add_empty_line()
+            if len(self.objects[class_index][line].letters) == 1:  # work around to create empty lines
+                code_display.add_empty_line()
             elif back:
                 t0 = code_display.write_text_in_back(self.objects[class_index][line], begin_time=t0,
+                                                     transition_time=chars[i] * dt,
+                                                     indent=indent + indents[line] * 0.15)
+            else:
+                t0 = code_display.write_text(self.objects[class_index][line], begin_time=t0,
                                              transition_time=chars[i] * dt,
                                              indent=indent + indents[line] * 0.15)
-            else:
-                t0 = code_display.write_text(self.objects[class_index][line], begin_time=t0, transition_time=chars[i]*dt,
-                                    indent=indent + indents[line] * 0.15)
-            t0+=2/FRAME_RATE # add two frames at the end of each line
-        return begin_time + dt*sum
+            t0 += 2 / FRAME_RATE  # add two frames at the end of each line
+        return begin_time + dt * summe
 
     def write_in_back(self, code_display, class_index=0, function=None, begin_time=0,
-                      transition_time=DEFAULT_ANIMATION_TIME,**kwargs):
+                      transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         return self.write(code_display, class_index=class_index, function=function, begin_time=begin_time,
-                      transition_time=transition_time,back=True,**kwargs)
+                          transition_time=transition_time, back=True, **kwargs)
 
     def appear(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, clear_data=False, silent=False):
         n_lines = 0

@@ -7149,6 +7149,8 @@ def add_sub_division_surface_modifier(b_obj, level=2, adaptive_subdivision=False
     modifier = obj.modifiers.new(name='smooth', type='SUBSURF')
     if modifier:
         modifier.render_levels = level
+        # the viewport shows the same subdivision unless told otherwise
+        modifier.levels = get_from_kwargs(kwargs, "viewport_levels", level)
         subdivision_type = get_from_kwargs(kwargs, "subdivision_type", "CATMULL_CLARK")
         modifier.subdivision_type = subdivision_type
     return modifier

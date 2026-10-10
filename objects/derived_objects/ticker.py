@@ -38,7 +38,7 @@ class Ticker(BObject):
     """
 
     def __init__(self, entries, width=15, height=0.4, separator=r"\qquad ", color="text",
-                 band_color="example", band_alpha=0.15, text_size="small", text_shift=-0.05,
+                 band_color="joker", band_alpha=0.15, text_size="small", text_shift=-0.05,
                  **kwargs):
         self.kwargs = kwargs
         name = self.get_from_kwargs('name', 'Ticker')
@@ -62,6 +62,7 @@ class Ticker(BObject):
 
     def appear(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, **kwargs):
         """Fade the band in; the line only shows once it runs."""
+        super().appear(begin_time=begin_time, transition_time=transition_time)
         self.band.appear(alpha=self.band_alpha, begin_time=begin_time,
                          transition_time=transition_time)
         return begin_time + transition_time

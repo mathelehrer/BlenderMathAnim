@@ -10,15 +10,24 @@ from utils.constants import DEFAULT_ANIMATION_TIME
 
 
 class MagnifyingGlass(BObject):
-    """A magnifying glass whose lens shows a picture of its own.
+    """A magnifying glass that magnifies an image plane, and can show a picture of its own.
 
-    The lens does not magnify what lies behind it; it is a window onto an
-    image - typically a close-up of the thing it hovers over, such as the
-    inside of a node group held over the group node. Which part of the
-    image the window shows, and how much of it, can be animated, so the
-    picture can be scrolled past under the lens. Until it is switched on
-    (:meth:`switch_on`) the lens is clear glass and lets through what lies
-    behind it.
+    Held over ``background`` - a plane wearing an image material - the lens
+    shows that image magnified ``magnification`` times about the lens
+    centre, wherever the glass is moved. Off the plane's image it is clear.
+    The magnification is done in the lens shader, not by refraction: the
+    lens samples the background's image at the point behind it, pulled
+    towards the lens centre by ``1/magnification``. That renders the same
+    in EEVEE and Cycles and on a transparent film, but it magnifies only
+    that one image, not other objects behind the glass. The background has
+    to face the same way as the glass and must not be scaled on the object.
+    Without a background the lens is plain clear glass.
+
+    Switched on (:meth:`switch_on`), the lens crossfades to a picture of
+    its own, ``src`` - typically a close-up of the thing it hovers over,
+    such as the inside of a node group held over the group node. Which part
+    of the picture the lens shows, and how much of it, can be animated, so
+    the picture can be scrolled past under the lens.
 
     Rim, lens and handle are children of an empty that carries the
     location and rotation, so the glass moves as one with :meth:`move_to`.
@@ -31,7 +40,7 @@ class MagnifyingGlass(BObject):
     repeats the border pixels, so a window larger than the image shows a
     screenshot's background colour there rather than nothing.
 
-    :param src: image file in ``media/raster``.
+    :param src: image file in ``media/raster`` shown when switched on.
     :param radius: radius of the lens.
     :param window: diameter of the visible window in image heights; 1 shows
         the full height of the image across the lens.
@@ -42,12 +51,17 @@ class MagnifyingGlass(BObject):
     :param rim_color: color of rim.
     :param handle_color: color of the handle.
     :param emission: emission strength of the lens image.
-    :param on: whether the lens shows its image from the start.
+    :param on: whether the lens shows ``src`` from the start.
+    :param background: the image plane (a BObject) the lens magnifies.
+    :param magnification: how many times the lens magnifies the background.
 
     Example::
 
+        tree = Plane(u=[-3, 3], v=[-1, 1], rotation_euler=[pi / 2, 0, 0],
+                     color="image", src="bessel_node0.png", resolution=1)
         glass = MagnifyingGlass("bessel_node1.png", radius=1.6, window=1.2,
-                                center=(0.1, 0.5), location=[-3.8, -0.5, 2.4])
+                                center=(0.1, 0.5), background=tree, magnification=2,
+                                location=[-3.8, -0.5, 2.4])
         glass.appear(begin_time=0, transition_time=0.3)
         glass.switch_on(begin_time=1)
         glass.look_at(0.9, 0.5, begin_time=1.5, transition_time=10)
@@ -55,7 +69,8 @@ class MagnifyingGlass(BObject):
 
     def __init__(self, src, radius=1, window=1, center=(0.5, 0.5),
                  handle_angle=-np.pi / 4, handle_length=None,
-                 rim_color="text", handle_color="drawing", emission=1, on=False, **kwargs):
+                 rim_color="text", handle_color="drawing", emission=1, on=False,
+                 background=None, magnification=2, **kwargs):
         self.kwargs = kwargs
         name = self.get_from_kwargs('name', 'MagnifyingGlass')
         if handle_length is None:
@@ -81,17 +96,72 @@ class MagnifyingGlass(BObject):
         image = next(node for node in nodes if node.type == 'TEX_IMAGE')
         image.extension = 'EXTEND'
 
-        # the switch: the image's alpha, scaled by a factor before it reaches
-        # the material's AlphaFactor (which appear/disappear keep for fading)
         tree = ibpy.get_material_of(self.lens).node_tree
-        alpha_factor = next(node for node in nodes if node.label == 'AlphaFactor')
-        self.switch = tree.nodes.new('ShaderNodeMath')
-        self.switch.operation = 'MULTIPLY'
+        links = tree.links
+
+        # the magnified background: a point q of the lens, in the lens' own
+        # frame, sits in front of the background point p (in the plane's
+        # frame); its magnified image is p - q (1 - 1/M). Turned into the
+        # plane's Generated coordinates, i.e. its bounding box mapped to [0,1]^2
+        behind = tree.nodes.new('ShaderNodeTexImage')
+        behind.location = (-900, 400)
+        behind.extension = 'CLIP'
+        if background is not None:
+            plane = ibpy.get_obj(background)
+            behind.image = next(node.image for node in plane.active_material.node_tree.nodes
+                                if node.type == 'TEX_IMAGE')
+            corners = [Vector(c) for c in plane.bound_box]
+            low = Vector([min(c.x for c in corners), min(c.y for c in corners), 0])
+            size = Vector([max(c.x for c in corners) - low.x, max(c.y for c in corners) - low.y, 1])
+
+            on_plane = tree.nodes.new('ShaderNodeTexCoord')
+            on_plane.object = plane
+            on_lens = tree.nodes.new('ShaderNodeTexCoord')
+            pull = tree.nodes.new('ShaderNodeVectorMath')
+            pull.operation = 'SCALE'
+            pull.inputs['Scale'].default_value = 1 - 1 / magnification
+            seen = tree.nodes.new('ShaderNodeVectorMath')
+            seen.operation = 'SUBTRACT'
+            shifted = tree.nodes.new('ShaderNodeVectorMath')
+            shifted.operation = 'SUBTRACT'
+            shifted.inputs[1].default_value = low
+            generated = tree.nodes.new('ShaderNodeVectorMath')
+            generated.operation = 'DIVIDE'
+            generated.inputs[1].default_value = size
+            for i, node in enumerate([on_plane, on_lens, pull, seen, shifted, generated]):
+                node.location = (-2600 + 280 * i, 600 - 120 * (i % 2))
+            links.new(on_lens.outputs['Object'], pull.inputs[0])
+            links.new(on_plane.outputs['Object'], seen.inputs[0])
+            links.new(pull.outputs['Vector'], seen.inputs[1])
+            links.new(seen.outputs['Vector'], shifted.inputs[0])
+            links.new(shifted.outputs['Vector'], generated.inputs[0])
+            links.new(generated.outputs['Vector'], behind.inputs['Vector'])
+
+        # the switch: 0 shows the magnified background, 1 the lens' own
+        # picture. Colour and alpha are crossfaded; the alpha goes on into the
+        # material's AlphaFactor, which appear/disappear keep for fading
+        self.switch = tree.nodes.new('ShaderNodeValue')
         self.switch.label = 'Switch'
-        self.switch.location = (-650, -400)
-        self.switch.inputs[1].default_value = 1 if on else 0
-        tree.links.new(image.outputs['Alpha'], self.switch.inputs[0])
-        tree.links.new(self.switch.outputs[0], alpha_factor.inputs[1])
+        self.switch.location = (-1100, -600)
+        self.switch.outputs[0].default_value = 1 if on else 0
+        color = tree.nodes.new('ShaderNodeMix')
+        color.data_type = 'RGBA'
+        color.location = (-650, 200)
+        alpha = tree.nodes.new('ShaderNodeMix')
+        alpha.data_type = 'FLOAT'
+        alpha.location = (-650, -400)
+        for target in [link.to_socket for link in tree.links
+                       if link.from_socket == image.outputs['Color']]:
+            links.new(color.outputs[2], target)
+        alpha_factor = next(node for node in nodes if node.label == 'AlphaFactor')
+        links.new(alpha.outputs[0], alpha_factor.inputs[1])
+        links.new(self.switch.outputs[0], color.inputs['Factor'])
+        links.new(self.switch.outputs[0], alpha.inputs['Factor'])
+        links.new(behind.outputs['Color'], color.inputs[6])
+        links.new(image.outputs['Color'], color.inputs[7])
+        links.new(behind.outputs['Alpha'], alpha.inputs[2])
+        links.new(image.outputs['Alpha'], alpha.inputs[3])
+
         self.aspect = image.image.size[0] / image.image.size[1]
         self.window = window
         self.center = Vector(center)
@@ -102,19 +172,19 @@ class MagnifyingGlass(BObject):
                          no_material=True, **kwargs)
 
     def switch_on(self, begin_time=0, transition_time=0.5):
-        """Fade the image in on the lens, which was clear glass until then.
+        """Crossfade the lens from the magnified background to its own picture.
 
         :return: the time the lens is fully on.
         """
-        return ibpy.change_default_value(self.switch.inputs[1], 0, 1, begin_time=begin_time,
+        return ibpy.change_default_value(self.switch, 0, 1, begin_time=begin_time,
                                          transition_time=transition_time)
 
     def switch_off(self, begin_time=0, transition_time=0.5):
-        """Fade the image out again, back to clear glass.
+        """Crossfade back from the lens' own picture to the magnified background.
 
         :return: the time the lens is fully off.
         """
-        return ibpy.change_default_value(self.switch.inputs[1], 1, 0, begin_time=begin_time,
+        return ibpy.change_default_value(self.switch, 1, 0, begin_time=begin_time,
                                          transition_time=transition_time)
 
     def window_scale(self, window):

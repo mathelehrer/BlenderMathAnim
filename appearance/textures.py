@@ -27,7 +27,8 @@ from shader_nodes.shader_nodes import (Mapping, AttributeNode, HueSaturationValu
                                        IfNode, Mix, MixNode, MixColor, WaveLengthToRGB, VectorMathNode, VoronoiTexture, OutputMaterial, NoiseTexture,
                                        CameraData)
 from utils.color_conversion import rgb2hsv, hsv2rgb, get_color, get_color_from_string
-from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR
+from utils.constants import COLORS, COLORS_SCALED, COLOR_NAMES, IMG_DIR, SHADER_XML, FRAME_RATE, VID_DIR, \
+    OPERATORS
 from utils.kwargs import get_from_kwargs
 
 tau = 2 * np.pi
@@ -2458,16 +2459,21 @@ def implicit_plot_texture(name="ImplicitPlot", **kwargs):
 
     Here f is any RPN string in the
     tokens ``x`` and ``y`` e.g. ``"x,3,**,y,3,**,2,*,+,x,-,y,2,*,-"``,
-    and the tree shows the computation step by step, one
+    plus any parameters declared in ``params``, and the tree shows the computation step by step, one
     :func:`~geometry_nodes.nodes.make_function` group per step:
 
     ``Stencil``
         x, y (object coordinates times ``Zoom``), the pixel size h and the
         four neighbours :math:`x\pm h`, :math:`y\pm h`.
     ``f(x-h,y)``, ``f(x+h,y)``, ``f(x,y-h)``, ``f(x,y+h)``
-        four copies of f, the RPN unchanged, each fed one stencil point.
+        four copies of f, the RPN unchanged, each fed one stencil point and
+        every parameter.
     ``gradient_function``
-        the sign of f(x, y) for the ramp, and the line.
+        the sign of f(x, y) for the ramp, the line, and f(x, y) itself, which
+        drives the ``Displacement`` node: the surface is lifted by
+        ``DisplacementScale`` * f along its normal (world units). That needs
+        geometry to move - give the object a subdivision surface, e.g.
+        ``smooth=5``.
 
     f(x, y) itself is not evaluated: it is taken as the mean of the four
     samples, which is off by :math:`\tfrac{h^2}{4}\Delta f` (the five-point
@@ -2514,14 +2520,27 @@ def implicit_plot_texture(name="ImplicitPlot", **kwargs):
         the width of the curve, in pixels. 0 hides it.
     ``Zoom``
         function units per object unit, x = zoom * object x.
+    ``DisplacementScale``
+        height per unit of f; 0 keeps the surface flat.
     ``PixelAngle``
         driven; see above.
+    one Value node per parameter
+        named after it, e.g. ``a``; animate it to deform the curve. Fetch it
+        with ``material.node_tree.nodes["a"]`` -
+        ``ibpy.get_node_from_shader`` matches substrings, and ``"a"`` is in
+        ``"PixelAngle"``.
 
     :param name: material name.
     :param function: the RPN of f(x, y).
+    :param params: ``{name: initial value}`` of the parameters the RPN uses
+        besides ``x`` and ``y``, e.g. ``{"a": 1, "b": -2}``. A name must not
+        be spelled like an RPN operator (see
+        :func:`~geometry_nodes.nodes.make_function`), nor be ``x``, ``y``,
+        ``pi`` or ``result``.
     :param zoom: initial ``Zoom``.
     :param line_width: initial ``LineWidth``, in pixels.
     :param regions: initial ``Regions``.
+    :param displacement_scale: initial ``DisplacementScale``.
     :param negative_color: rgba or palette name where f < 0.
     :param positive_color: rgba or palette name where f > 0.
     :param backdrop_color: rgba or palette name behind the bare curve.
@@ -2531,9 +2550,15 @@ def implicit_plot_texture(name="ImplicitPlot", **kwargs):
     :param kwargs: passed on to :func:`~interface.ibpy.customize_material`.
     """
     function = get_from_kwargs(kwargs, "function", "x,3,**,y,3,**,2,*,+,x,-,y,2,*,-")
+    params = get_from_kwargs(kwargs, "params", {})
+    # make_function reads an operator-named input as the operator, silently
+    reserved = [key for key in params if key in OPERATORS or key in ("x", "y", "pi", "result")]
+    if reserved:
+        raise ValueError(f"implicit_plot: parameter names {reserved} are reserved")
     zoom = get_from_kwargs(kwargs, "zoom", 1.0)
     line_width = get_from_kwargs(kwargs, "line_width", 3.0)
     regions = get_from_kwargs(kwargs, "regions", 1.0)
+    displacement_scale = get_from_kwargs(kwargs, "displacement_scale", 0.0)
     alpha = get_from_kwargs(kwargs, "alpha", 1.0)
     emission = get_from_kwargs(kwargs, "emission", 0.5)
 
@@ -2569,6 +2594,9 @@ def implicit_plot_texture(name="ImplicitPlot", **kwargs):
                                  "use_fallback_value": True, "fallback_value": 50.0}})
     zoom_node = InputValue(tree, location=(-11.0, -1.2), value=zoom, name="Zoom", hide=False)
     width = InputValue(tree, location=(-11.0, -1.9), value=line_width, name="LineWidth", hide=False)
+    param_nodes = {key: InputValue(tree, location=(-9.5, -1.5 - 0.7 * row), value=value,
+                                   name=key, hide=False)
+                   for row, (key, value) in enumerate(params.items())}
 
     links = tree.links
 
@@ -2593,7 +2621,7 @@ def implicit_plot_texture(name="ImplicitPlot", **kwargs):
         links.new(node.std_out, stencil.inputs[key])
 
     # f itself, four times over: each node is the user's RPN unchanged, it is
-    # only fed a different point of the stencil
+    # only fed a different point of the stencil, and the same parameters
     samples = {}
     for row, (key, label, x, y) in enumerate((("fxm", "f(x-h,y)", "xm", "y"),
                                               ("fxp", "f(x+h,y)", "xp", "y"),
@@ -2601,19 +2629,22 @@ def implicit_plot_texture(name="ImplicitPlot", **kwargs):
                                               ("fyp", "f(x,y+h)", "x", "yp"))):
         sample = make_function(tree, location=(-7.5, 1.9 - 1.2 * row), name=label,
                                node_group_type="Shader",
-                               functions={"f": function},
-                               inputs=["x", "y"], outputs=["f"],
-                               scalars=["x", "y", "f"], hide=False)
+                               functions={"result": function},
+                               inputs=["x", "y", *params], outputs=["result"],
+                               scalars=["x", "y", "result", *params], hide=False)
         sample.label = label
         links.new(stencil.outputs[x], sample.inputs["x"])
         links.new(stencil.outputs[y], sample.inputs["y"])
-        samples[key] = sample.outputs["f"]
+        for param, node in param_nodes.items():
+            links.new(node.std_out, sample.inputs[param])
+        samples[key] = sample.outputs["result"]
 
     # the gradient by central differences, and from it the distance to the
     # curve in pixels: |f|/|grad f| in function units, over h
     gradient = make_function(tree, location=(-5.5, 0.5), name="gradient_function",
                              node_group_type="Shader",
                              functions={"region": "f0,0,>",
+                                        "f": "f0",
                                         # the trailing factor fades a line
                                         # thinner than a pixel instead of
                                         # leaving its anti-aliased edge behind
@@ -2628,9 +2659,9 @@ def implicit_plot_texture(name="ImplicitPlot", **kwargs):
                                             "grad": "gx,gx,*,gy,gy,*,+,sqrt,0.000000001,max",
                                             "dpx": "f0,abs,grad,/,h,/"},
                              inputs=["fxm", "fxp", "fym", "fyp", "h", "width"],
-                             outputs=["region", "line"],
+                             outputs=["region", "line", "f"],
                              scalars=["f0", "fxm", "fxp", "fym", "fyp", "h", "width",
-                                      "region", "line", "gx", "gy", "grad", "dpx"],
+                                      "region", "line", "f", "gx", "gy", "grad", "dpx"],
                              hide=False)
     for key, socket in samples.items():
         links.new(socket, gradient.inputs[key])
@@ -2655,7 +2686,15 @@ def implicit_plot_texture(name="ImplicitPlot", **kwargs):
     bsdf = PrincipledBSDF(tree, location=(0.4, 0.9), base_color=curve.std_out,
                           emission_color=curve.std_out, emission_strength=emission,
                           alpha=fade.std_out, distribution="MULTI_GGX", hide=False)
-    OutputMaterial(tree, location=(1.8, 0.9), surface=bsdf.std_out, hide=False)
+    material_out = OutputMaterial(tree, location=(1.8, 0.9), surface=bsdf.std_out, hide=False)
+
+    # f as height along the normal
+    height_scale = InputValue(tree, location=(-0.6, -1.7), value=displacement_scale,
+                              name="DisplacementScale", hide=False)
+    displace = Displacement(tree, location=(0.7, -1.7), height=gradient.outputs["f"],
+                            midlevel=0, scale=height_scale.std_out, space="WORLD", hide=False)
+    links.new(displace.std_out, material_out.node.inputs["Displacement"])
+    mat.displacement_method = "DISPLACEMENT"
 
     customize_material(mat, **kwargs)
     return mat
