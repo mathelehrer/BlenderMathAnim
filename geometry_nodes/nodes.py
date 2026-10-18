@@ -2573,8 +2573,13 @@ class ConvexHull(GreenNode):
 
 class BoundingBox(GreenNode):
     def __init__(self, tree, location=(0, 0),
-                 geometry=None, **kwargs
+                 geometry=None, use_radius=None, **kwargs
                  ):
+        """
+        :param use_radius: blender 5.x widens the box of a curve by its radius
+            (the socket defaults to on, radius 1 for a text curve); ``None``
+            leaves the socket alone
+        """
         self.node = tree.nodes.new(type="GeometryNodeBoundBox")
         super().__init__(tree, location=location, **kwargs)
 
@@ -2587,6 +2592,8 @@ class BoundingBox(GreenNode):
 
         if geometry:
             self.tree.links.new(geometry, self.node.inputs["Geometry"])
+        if use_radius is not None and "Use Radius" in self.node.inputs:
+            self.node.inputs["Use Radius"].default_value = use_radius
 
 
 class MeshBoolean(GreenNode):
