@@ -1575,6 +1575,38 @@ def base_mixing(name="BaseMixing", colors=None, scale=8.3, randomness=1.0,
     return mat
 
 
+def two_sided_material(front=(0.9, 0.62, 0.18, 1), back=(0.32, 0.08, 0.55, 1), name="TwoSided", **kwargs):
+    """
+    one colour on the front of a face, another on its back, decided by the Backfacing output
+    of the shader's Geometry node - the way the eversion films paint the outside and the
+    inside of a sphere
+
+    :param front: colour of the front faces, a palette name or an rgba list
+    :param back: colour of the back faces, a palette name or an rgba list
+    :param name: name of the material
+    :param kwargs: passed to customize_material (roughness, metallic, ...)
+    :return: the material
+    """
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+    customize_material(mat, **kwargs)
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    bsdf = nodes.get("Principled BSDF")
+
+    geometry = nodes.new("ShaderNodeNewGeometry")
+    geometry.location = (-600, 200)
+    mix = nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    mix.location = (-300, 200)
+    for socket, color in (("A", front), ("B", back)):
+        rgba = list(color) if isinstance(color, (list, tuple)) else get_color_from_string(color)
+        mix.inputs[socket].default_value = rgba if rgba is not None else [1, 1, 1, 1]
+    links.new(geometry.outputs["Backfacing"], mix.inputs["Factor"])
+    links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
+    return mat
+
+
 def gradient_from_attribute(name="AngleDisplacement", **kwargs):
     """
     create an angle size dependent color

@@ -859,8 +859,16 @@ class SubdivisionSurface(GreenNode):
         self.node = tree.nodes.new(type="GeometryNodeSubdivisionSurface")
         super().__init__(tree, location=location, **kwargs)
 
-        self.node.uv_smooth = uv_smooth
-        self.node.boundary_smooth = boundary_smooth
+        if hasattr(self.node, "uv_smooth"):  # blender 4.x: node properties
+            self.node.uv_smooth = uv_smooth
+            self.node.boundary_smooth = boundary_smooth
+        else:  # blender 5.x: menu sockets, addressed by the item's label
+            labels = {"NONE": "None", "PRESERVE_CORNERS": "Keep Corners",
+                      "PRESERVE_CORNERS_AND_JUNCTIONS": "Keep Corners, Junctions",
+                      "PRESERVE_CORNERS_JUNCTIONS_AND_CONCAVE": "Keep Corners, Junctions, Concave",
+                      "PRESERVE_BOUNDARIES": "Keep Boundaries", "SMOOTH_ALL": "All", "ALL": "All"}
+            self.node.inputs["UV Smooth"].default_value = labels[uv_smooth]
+            self.node.inputs["Boundary Smooth"].default_value = labels[boundary_smooth]
         self.geometry_out = self.node.outputs["Mesh"]
         self.geometry_in = self.node.inputs["Mesh"]
 
