@@ -85,10 +85,11 @@ def prepare_colors(text, isheader=False):
             index = word.find(self)
             for i in range(index, index + 4):
                 colors[pos + i] = 'code_self'
-        if "'" in word:
-            ids = list(find_all(word, "'"))
-            for i in range(ids[0], ids[1] + 1):
-                colors[pos + i] = 'code_string'
+        for quote in ("'", '"'):
+            if word.count(quote) >= 2:
+                ids = list(find_all(word, quote))
+                for i in range(ids[0], ids[1] + 1):
+                    colors[pos + i] = 'code_string'
         for digit in digits:
             if digit in word:
                 indices = [pos for pos, char in enumerate(word) if char == digit]

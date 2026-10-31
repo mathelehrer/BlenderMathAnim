@@ -6,7 +6,7 @@ from objects.bobject import BObject
 from objects.cylinder import Cylinder
 from objects.plane import Plane
 from objects.tex_bobject import SimpleTexBObject, TexBObject
-from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME, BACK, DOWN, UP
+from utils.constants import OBJECT_APPEARANCE_TIME, DEFAULT_ANIMATION_TIME, BACK, DOWN, UP, FRAME_RATE
 
 
 class Display(Plane):
@@ -696,8 +696,16 @@ class CodeDisplay(Display):
             cls = self.code_parser.classes[class_index]
             n_lines = cls.number_of_lines()
 
+        # the text floats a little higher than on a plain display, to leave room
+        # for the highlight bar between the text and the surface (at 0.025)
+        kwargs.setdefault('standard_shift', [0, 0, 0.03])
         super().__init__(number_of_lines=n_lines, **kwargs)
         self.current_line = 0
+        self.highlighter = None
+        # (location, scale) of the bar while it is shown, None while it is hidden
+        self.highlighted = None
+        # True while the back faces the viewer, after turn(); the bar follows the text there
+        self.back = False
 
     def write_text(self, text, **kwargs):
         t0 = super().write_text_in(text, line=self.current_line, **kwargs)
@@ -714,7 +722,80 @@ class CodeDisplay(Display):
 
     def turn(self, flat=False, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME, reverse=False):
         self.current_line = 0  # start from the top again
+        self.back = not reverse
         return super().turn(flat=flat, begin_time=begin_time, transition_time=transition_time, reverse=reverse)
+
+    def highlight(self, line, lines=1, color="gray_2", emission=0.3, begin_time=0,
+                  transition_time=DEFAULT_ANIMATION_TIME / 4):
+        """Lay a bar behind ``lines`` lines of the display, starting with ``line``.
+
+        The first call fades the bar in on its line; every further call slides
+        it to the new line (and stretches it, when ``lines`` changes), so that a
+        run of calls follows the execution of the code like a debugger. After
+        :meth:`unhighlight` the next call puts the bar on its line before it
+        fades in again. ``color`` and ``emission`` are only read on the first call.
+        After :meth:`turn` the bar lies behind the text on the back; unhighlight
+        before turning, a bar that is shown turns over with the display.
+
+        Line ``k`` is the ``k``-th line written by :meth:`write_text`, empty lines
+        counted from 0; for code written by :meth:`CodeParser.write` that is line
+        ``k`` of the source file once its import lines are taken out.
+
+        Example, a loop whose body is executed three times::
+
+            display.highlight(0, begin_time=t0)                 # for x in ...
+            for x in range(3):
+                t0 = display.highlight(1, begin_time=t0 + 0.5)  # paint(x, x)
+                t0 = display.highlight(0, begin_time=t0 + 0.5)
+            display.unhighlight(begin_time=t0 + 0.5)
+
+        Returns:
+            the time at which the bar has arrived.
+        """
+        # the bar centre sits a little above the point at which the text is anchored
+        height = -self.line_spacing.y
+        center = self.text_start[0].y + (line + (lines - 1) / 2) * self.line_spacing.y + 0.05 * height
+        side = -1 if self.back else 1
+        location = Vector([0, center, side * (0.025 + self.standard_shift[2]) / 2])
+        # on the back the bar is mirrored, so that its face, not its culled back, looks at the viewer
+        scale = Vector([0.98, 0.9 * lines * height, side])
+
+        if self.highlighter is None:
+            self.highlighter = Plane(u=[-1, 1], v=[-0.5, 0.5], resolution=0, color=color,
+                                     emission=emission, shadow=False, name=self.ref_obj.name + "Highlight")
+            self.highlighter.ref_obj.parent = self.ref_obj
+
+        bar = self.highlighter
+        if self.highlighted is None:
+            # jump there in the frame before the bar fades in
+            start = max(0, begin_time - 1 / FRAME_RATE)
+            bar.ref_obj.scale = scale
+            ibpy.insert_keyframe(bar.ref_obj, "scale", start * FRAME_RATE)
+            bar.move_to(target_location=location, from_location=location, begin_time=start,
+                        transition_time=0, verbose=False)
+            bar.appear(begin_time=begin_time, transition_time=transition_time, silent=True)
+        else:
+            old_location, old_scale = self.highlighted
+            bar.move_to(target_location=location, from_location=old_location, begin_time=begin_time,
+                        transition_time=transition_time, verbose=False)
+            if old_scale != scale:
+                bar.rescale(rescale=[s / o for s, o in zip(scale, old_scale)], from_scale=old_scale,
+                            begin_time=begin_time, transition_time=transition_time)
+        self.highlighted = (location, scale)
+        return begin_time + transition_time
+
+    def unhighlight(self, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME / 4):
+        """Fade the bar of :meth:`highlight` out where it is."""
+        if self.highlighted is not None:
+            self.highlighter.disappear(begin_time=begin_time, transition_time=transition_time)
+            # hold the bar where it is until it has gone, the next highlight jumps from here
+            location, scale = self.highlighted
+            self.highlighter.move_to(target_location=location, from_location=location,
+                                     begin_time=begin_time + transition_time, transition_time=0, verbose=False)
+            self.highlighter.ref_obj.scale = scale
+            ibpy.insert_keyframe(self.highlighter.ref_obj, "scale", (begin_time + transition_time) * FRAME_RATE)
+            self.highlighted = None
+        return begin_time + transition_time
 
 
 class GlassDisplay(Display):
