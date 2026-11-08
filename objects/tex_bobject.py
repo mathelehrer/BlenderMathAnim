@@ -471,7 +471,7 @@ class SimpleTexBObject(SVGBObject):
             if box[0] < x_min:
                 x_min = box[0]
             if box[3] > x_max:
-                x_max = box[0]
+                x_max = box[3]
             if box[1] < y_min:
                 y_min = box[1]
             if box[4] > y_max:
@@ -760,7 +760,7 @@ class SimpleTexBObject(SVGBObject):
                 apply_material(curve3, self.outlined, emission=0)
 
                 if not self.shadow:
-                    curve3.visible_shadow = False
+                    ibpy.set_shadow_of_object(curve3, False)
 
             apply_material(curve, self.color_map[letter], emission=self.emission, brighter=self.brighter, **self.kwargs)
             apply_material(curve2, self.color_map[letter], emission=50, brighter=self.brighter, **self.kwargs)
@@ -1938,7 +1938,7 @@ class MultiLineTexBObject(SimpleTexBObject):
 
         if not self.shadow:
             for c in self.ref_obj.children:
-                bpy.data.objects[c.name].visible_shadow = False
+                ibpy.set_shadow_of_object(c, False)
 
     #######################
     # animation functions #

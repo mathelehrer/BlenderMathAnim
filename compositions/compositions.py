@@ -1,6 +1,7 @@
 import bpy
 
 from appearance.textures import get_color
+from interface.ibpy import new_compositing_node_group
 from interface.interface_constants import blender_version
 from mathutils import Vector
 from utils.constants import DEFAULT_ANIMATION_TIME
@@ -18,8 +19,7 @@ def create_alpha_over_composition(color="background"):
     if blender_version() >= (5, 1):
         # scene.node_tree / scene.use_nodes were removed in Blender 5.1,
         # the compositor is now a standalone node group datablock
-        bpy.ops.node.new_compositing_node_group(name="MyComposition")
-        bpy.context.scene.compositing_node_group = bpy.data.node_groups["MyComposition"]
+        new_compositing_node_group(name="MyComposition")
         nodes = bpy.context.scene.compositing_node_group.nodes
         links = bpy.context.scene.compositing_node_group.links
         composite = nodes["Group Output"]
@@ -84,8 +84,7 @@ def create_star_glow_composition():
     if blender_version() >= (5, 1):
         # scene.node_tree / scene.use_nodes were removed in Blender 5.1,
         # the compositor is now a standalone node group datablock
-        bpy.ops.node.new_compositing_node_group(name="MyComposition")
-        bpy.context.scene.compositing_node_group = bpy.data.node_groups["MyComposition"]
+        new_compositing_node_group(name="MyComposition")
         nodes = bpy.context.scene.compositing_node_group.nodes
         links = bpy.context.scene.compositing_node_group.links
         composite = nodes["Group Output"]
@@ -130,8 +129,7 @@ def create_glow_composition(threshold=1,type='BLOOM',size=4,**kwargs):
         nodes = bpy.context.scene.node_tree.nodes
         links = bpy.context.scene.node_tree.links
     else:
-        bpy.ops.node.new_compositing_node_group(name="MyComposition")
-        bpy.context.scene.compositing_node_group = bpy.data.node_groups["MyComposition"]
+        new_compositing_node_group(name="MyComposition")
         nodes = bpy.context.scene.compositing_node_group.nodes
         links = bpy.context.scene.compositing_node_group.links
 
@@ -190,8 +188,7 @@ def set_alpha_composition(**kwargs):
         nodes = bpy.context.scene.node_tree.nodes
         links = bpy.context.scene.node_tree.links
     else:
-        bpy.ops.node.new_compositing_node_group(name="MyComposition")
-        bpy.context.scene.compositing_node_group = bpy.data.node_groups["MyComposition"]
+        new_compositing_node_group(name="MyComposition")
         nodes = bpy.context.scene.compositing_node_group.nodes
         links = bpy.context.scene.compositing_node_group.links
 
@@ -221,8 +218,7 @@ def create_bloom_and_streak_composition():
     if blender_version() >= (5, 1):
         # scene.node_tree / scene.use_nodes were removed in Blender 5.1,
         # the compositor is now a standalone node group datablock
-        bpy.ops.node.new_compositing_node_group(name="MyComposition")
-        bpy.context.scene.compositing_node_group = bpy.data.node_groups["MyComposition"]
+        new_compositing_node_group(name="MyComposition")
         nodes = bpy.context.scene.compositing_node_group.nodes
         links = bpy.context.scene.compositing_node_group.links
         composite = nodes["Group Output"]

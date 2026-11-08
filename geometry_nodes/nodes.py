@@ -790,6 +790,22 @@ class FlipFaces(GreenNode):
             self.tree.links.new(selection, self.node.inputs["Selection"])
 
 
+class Triangulate(GreenNode):
+    """Every face cut into triangles, so that each face has exactly three corners."""
+
+    def __init__(self, tree, location=(0, 0), mesh=None, selection=None, **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeTriangulate")
+        super().__init__(tree, location=location, **kwargs)
+
+        self.geometry_out = self.node.outputs["Mesh"]
+        self.geometry_in = self.node.inputs["Mesh"]
+
+        if mesh is not None:
+            self.tree.links.new(mesh, self.node.inputs["Mesh"])
+        if selection is not None:
+            self.tree.links.new(selection, self.node.inputs["Selection"])
+
+
 class MeshToCurve(GreenNode):
     def __init__(self, tree, location=(0, 0),
                  mesh=None,
@@ -819,6 +835,7 @@ class MeshToPoints(GreenNode):
                  mesh=None,
                  selection=None,
                  position=None,
+                 mode="VERTICES",
                  **kwargs):
         """
         :param tree:
@@ -826,10 +843,13 @@ class MeshToPoints(GreenNode):
         :param mesh:
         :param selection:
         :param position:
+        :param mode: "VERTICES", "EDGES", "FACES" or "CORNERS": one point per element of that domain,
+            carrying the element's attributes
         :param kwargs:
         """
         self.node = tree.nodes.new(type="GeometryNodeMeshToPoints")
         super().__init__(tree, location=location, **kwargs)
+        self.node.mode = mode
 
         self.geometry_out = self.node.outputs["Points"]
         self.geometry_in = self.node.inputs["Mesh"]
@@ -1002,6 +1022,22 @@ class CornersOfFace(RedNode):
             self.tree.links.new(sort_index, self.node.inputs["Sort Index"])
 
         self.std_out = self.node.outputs[std_out]
+
+
+class VertexOfCorner(RedNode):
+    """The vertex a face corner sits on; ``corner_index`` defaults to the corner itself."""
+
+    def __init__(self, tree, location=(0, 0), corner_index=None, **kwargs):
+        self.node = tree.nodes.new(type="GeometryNodeVertexOfCorner")
+        super().__init__(tree, location=location, **kwargs)
+
+        if corner_index is not None:
+            if isinstance(corner_index, int):
+                self.node.inputs["Corner Index"].default_value = corner_index
+            else:
+                self.tree.links.new(corner_index, self.node.inputs["Corner Index"])
+
+        self.std_out = self.node.outputs["Vertex Index"]
 
 
 # curves

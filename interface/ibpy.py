@@ -789,22 +789,74 @@ def is_linked(obj):
 # ============================================================================
 
 def set_shadow(value):
-    for light in bpy.data.lights:
-        if blender_version() < (5, 0):
-            light.cycles.cast_shadow = value
-        else:
-            light.use_shadow = value
+    """Switch shadow casting of every light on or off.
 
-
-def set_shadow_of_object(b_object, shadow=True):
+    ``Light.use_shadow`` is the one switch for EEVEE and Cycles (``light.cycles.cast_shadow`` is gone).
     """
-    :param b_object:
-    :param shadow:
-    :return:
+    for light in bpy.data.lights:
+        light.use_shadow = value
+
+
+def set_shadow_of_object(b_object, shadow=True, reflections=None):
+    """Whether an object casts shadows, and optionally whether it shows up in reflections.
+
+    ``Object.visible_shadow`` is respected by EEVEE and Cycles alike. Shadows and reflections are
+    independent: an object without a shadow still appears in mirrors unless ``reflections=False``.
+
+    :param b_object: a BObject or a blender object
+    :param shadow: cast shadows
+    :param reflections: visible in glossy reflections; ``None`` leaves the setting as it is
     """
     obj = get_obj(b_object)
     obj.visible_shadow = shadow
-    obj.visible_glossy = shadow
+    if reflections is not None:
+        obj.visible_glossy = reflections
+
+
+def set_material_shadow(material, cast=False):
+    """Whether the surfaces of one material cast shadows, in EEVEE and Cycles.
+
+    ``Object.visible_shadow`` (:func:`set_shadow_of_object`) is all or nothing for an object; a
+    geometry-nodes object that carries several parts can only switch shadows per material. With
+    ``cast=False`` the material's surface shader is mixed with a Transparent BSDF on shadow rays
+    (Light Path "Is Shadow Ray"), so light passes it while the camera sees it unchanged.
+    ``cast=True`` takes the mix out again. Calling it twice with the same value changes nothing.
+
+    :param material: a material or the name of one
+    """
+    material = bpy.data.materials[material] if isinstance(material, str) else material  # the material itself, no copy
+    if not material.use_nodes:
+        material.use_nodes = True
+    nodes, links = material.node_tree.nodes, material.node_tree.links
+    output = next((n for n in nodes if n.type == "OUTPUT_MATERIAL" and n.is_active_output), None)
+    if output is None or not output.inputs["Surface"].links:
+        return material
+    mix = nodes.get("NoShadowMix")
+    if cast:
+        if mix is not None:  # reconnect the original shader and drop the helper nodes
+            shader = mix.inputs[1].links[0].from_socket if mix.inputs[1].links else None
+            if shader is not None:
+                links.new(shader, output.inputs["Surface"])
+            for name in ("NoShadowMix", "NoShadowPath", "NoShadowTransparent"):
+                if nodes.get(name) is not None:
+                    nodes.remove(nodes[name])
+        return material
+    if mix is not None:
+        return material
+    shader = output.inputs["Surface"].links[0].from_socket
+    path = nodes.new("ShaderNodeLightPath")
+    transparent = nodes.new("ShaderNodeBsdfTransparent")
+    mix = nodes.new("ShaderNodeMixShader")
+    for node, name, offset in ((path, "NoShadowPath", (-200, 300)), (transparent, "NoShadowTransparent", (-200, -200)),
+                               (mix, "NoShadowMix", (0, 0))):
+        node.name = node.label = name
+        node.location = (output.location[0] + offset[0], output.location[1] + offset[1])
+    output.location = (output.location[0] + 200, output.location[1])
+    links.new(path.outputs["Is Shadow Ray"], mix.inputs["Fac"])
+    links.new(shader, mix.inputs[1])
+    links.new(transparent.outputs["BSDF"], mix.inputs[2])
+    links.new(mix.outputs["Shader"], output.inputs["Surface"])
+    return material
 
 
 def is_hidden(obj):
@@ -6296,6 +6348,22 @@ def empty_blender_view3d():
     space.show_gizmo_camera_dof_distance = False
 
 
+def new_compositing_node_group(name="MyComposition"):
+    """A fresh compositing node group (Render Layers -> Group Output and Viewer), made the scene's compositor.
+
+    Blender 5 keeps the compositor in a node-group datablock. The operator names a second group
+    "MyComposition.001" and so on, so the group it created has to be found as the one that is new, not by
+    its name - looking it up by name returns the first group ever made and edits that one instead.
+
+    :return: the node group (``.nodes``, ``.links``)
+    """
+    before = set(bpy.data.node_groups.keys())
+    bpy.ops.node.new_compositing_node_group(name=name)
+    group = next(g for g in bpy.data.node_groups if g.name not in before)
+    bpy.context.scene.compositing_node_group = group
+    return group
+
+
 def create_composition(denoising=None):
     """
     create after render image processing
@@ -6308,8 +6376,7 @@ def create_composition(denoising=None):
         nodes = bpy.context.scene.node_tree.nodes
         links = bpy.context.scene.node_tree.links
     else:
-        bpy.ops.node.new_compositing_node_group(name="MyComposition")
-        bpy.context.scene.compositing_node_group = bpy.data.node_groups["MyComposition"]
+        new_compositing_node_group(name="MyComposition")
         nodes = bpy.context.scene.compositing_node_group.nodes
         links = bpy.context.scene.compositing_node_group.links
 
@@ -6323,10 +6390,15 @@ def create_composition(denoising=None):
     if denoising:
         denoise = nodes.new(type="CompositorNodeDenoise")
         links.new(layers.outputs["Image"], denoise.inputs["Image"])
-        links.new(denoise.outputs["Image"], composite.inputs["Image"])
         if blender_version() < (5, 0):
             links.new(denoise.outputs["Image"], set_alpha_node.inputs["Image"])
             links.new(set_alpha_node.outputs["Image"], composite.inputs["Image"])
+        else:
+            # blender 5 has no Composite node: the group output is the result, fed through a reroute
+            # that also feeds the viewer; the denoiser goes in front of it, so both see the denoised image
+            reroute = nodes.get("Reroute")
+            target = reroute.inputs[0] if reroute is not None else nodes["Group Output"].inputs["Image"]
+            links.new(denoise.outputs["Image"], target)
     else:
         if blender_version() < (5, 0):
             links.new(layers.outputs["Image"], set_alpha_node.inputs["Image"])

@@ -4,7 +4,7 @@ import bpy
 import numpy as np
 
 from appearance.textures import apply_material
-from interface.ibpy import link, set_bevel_factor_and_keyframe, set_alpha_and_keyframe, fade_in, fade_out, \
+from interface.ibpy import set_shadow_of_object, link, set_bevel_factor_and_keyframe, set_alpha_and_keyframe, fade_in, fade_out, \
     recursive_link
 from objects.bobject import BObject
 from objects.svg_bobject import SVGBObject
@@ -49,7 +49,7 @@ class Voter(SVGBObject):
         self.shadow = self.get_from_kwargs('shadow', True)
         if not self.shadow:
             for c in self.ref_obj.children:
-                bpy.data.objects[c.name].visible_shadow = False
+                set_shadow_of_object(c, False)
 
     def appear(self,
                begin_time=0,
