@@ -1607,6 +1607,94 @@ def two_sided_material(front=(0.9, 0.62, 0.18, 1), back=(0.32, 0.08, 0.55, 1), n
     return mat
 
 
+def thin_glass_material(name="ThinGlass", color=(0.97, 0.98, 1.0, 1), ior=1.25, roughness=0.12, alpha=1,
+                        studio=False, rim=0.15, rim_blend=0.2, rim_color=(0.85, 0.9, 1.0, 1), base=0.0):
+    """
+    a thin glass shell: transparent, with reflections that grow towards the rim (Fresnel), and no
+    refraction, so that whatever lies behind the surface stays undistorted and readable - meant for
+    open surfaces like the projective hemisphere, where real (refracting) glass would bend the
+    background into the picture and hide the curves on the far side
+
+    The reflections are slightly frosted (``roughness``), so that the environment shows as soft
+    highlights rather than as a sharp image. The whole shader is mixed with a Transparent BSDF by a
+    node labelled ``AlphaFactor``: that is the opacity control that ibpy's alpha functions
+    (set_alpha_for_material, change_alpha_of_material, fade_in/fade_out) find and keyframe.
+
+    Works in Cycles and EEVEE.
+
+    :param color: tint of the transmitted light
+    :param ior: index of refraction of the Fresnel term only (how strongly the reflections grow at the
+        rim); 1.5 gives a sharp, mirror-like look, 1.25 a softer one
+    :param roughness: of the reflections
+    :param alpha: initial opacity (AlphaFactor)
+    :param studio: replace the environment reflections by a faint emitted rim (Layer Weight Facing), so
+        that the HDRI is not mirrored in the surface; ``ior`` and ``roughness`` are then unused
+    :param rim: brightness of the studio rim
+    :param rim_blend: Layer Weight blend, how far the rim reaches into the surface
+    :param rim_color: colour of the studio rim
+    :param base: constant studio glow added to the rim, for flat panes that face the camera and have no rim
+    :return: the material
+    """
+    mat = bpy.data.materials.new(name=name)
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    for node in list(nodes):
+        if node.type != "OUTPUT_MATERIAL":
+            nodes.remove(node)
+    output = next(node for node in nodes if node.type == "OUTPUT_MATERIAL")
+    output.location = (600, 0)
+
+    tinted = nodes.new("ShaderNodeBsdfTransparent")
+    tinted.inputs["Color"].default_value = list(color)
+    tinted.location = (-400, 0)
+    if studio:
+        # a fake studio light: faint emission growing towards the silhouette, nothing reflected
+        weight = nodes.new("ShaderNodeLayerWeight")
+        weight.inputs["Blend"].default_value = rim_blend
+        weight.location = (-800, -200)
+        strength = nodes.new("ShaderNodeMath")
+        strength.operation = "MULTIPLY_ADD"
+        strength.inputs[1].default_value = rim
+        strength.inputs[2].default_value = base
+        strength.location = (-600, -200)
+        links.new(weight.outputs["Facing"], strength.inputs[0])
+        emission = nodes.new("ShaderNodeEmission")
+        emission.inputs["Color"].default_value = list(rim_color)
+        emission.location = (-400, -200)
+        links.new(strength.outputs["Value"], emission.inputs["Strength"])
+        glass = nodes.new("ShaderNodeAddShader")
+        links.new(tinted.outputs["BSDF"], glass.inputs[0])
+        links.new(emission.outputs["Emission"], glass.inputs[1])
+    else:
+        fresnel = nodes.new("ShaderNodeFresnel")
+        fresnel.inputs["IOR"].default_value = ior
+        fresnel.location = (-400, 200)
+        glossy = nodes.new("ShaderNodeBsdfGlossy")
+        glossy.inputs["Roughness"].default_value = roughness
+        glossy.location = (-400, -200)
+        glass = nodes.new("ShaderNodeMixShader")
+        links.new(fresnel.outputs["Fac"], glass.inputs["Fac"])
+        links.new(tinted.outputs["BSDF"], glass.inputs[1])
+        links.new(glossy.outputs["BSDF"], glass.inputs[2])
+    glass.label = "Glass"
+    glass.location = (-100, 0)
+
+    # opacity: 0 = fully transparent, 1 = the glass
+    clear = nodes.new("ShaderNodeBsdfTransparent")
+    clear.location = (100, 200)
+    fade = nodes.new("ShaderNodeMixShader")
+    fade.label = "AlphaFactor"
+    fade.inputs["Fac"].default_value = alpha
+    fade.location = (300, 0)
+    links.new(clear.outputs["BSDF"], fade.inputs[1])
+    links.new(glass.outputs["Shader"], fade.inputs[2])
+    links.new(fade.outputs["Shader"], output.inputs["Surface"])
+    if hasattr(mat, "surface_render_method"):
+        mat.surface_render_method = "DITHERED"
+    return mat
+
+
 def gradient_from_attribute(name="AngleDisplacement", **kwargs):
     """
     create an angle size dependent color

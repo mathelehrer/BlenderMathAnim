@@ -2694,7 +2694,11 @@ def set_vertex_colors(bob, colors):
 
 def change_alpha_of_material(mat, from_value=0, to_value=1, begin_time=0, transition_time=DEFAULT_ANIMATION_TIME):
     nodes = mat.node_tree.nodes
-    # check for AlphaFactor
+    # an explicit opacity control (a mix node labelled AlphaFactor, see set_alpha_for_material) comes first
+    alpha_node = next((n for n in nodes if "AlphaFactor" in n.label), None)
+    if alpha_node is not None:
+        return change_default_value(alpha_node.inputs[0], from_value=from_value, to_value=to_value,
+                                    begin_time=begin_time, transition_time=transition_time)
 
     if "Principled BSDF" in nodes:
         return change_default_value(nodes["Principled BSDF"].inputs['Alpha'], from_value=from_value, to_value=to_value,
@@ -8395,3 +8399,29 @@ def to_vector(z):
         return Vector(z)
     else:
         return z
+
+
+def animated_node_value(node, frame, index=0):
+    """The value of a Value or Vector input node of a node tree at ``frame``, as its keyframes give it.
+
+    For a Value node the keyframes sit on ``outputs[0].default_value``, for a Vector node on ``vector``
+    (component ``index``). Without keyframes the static value is returned. Used to let objects outside
+    a geometry-nodes tree follow an animated dial exactly (first used in video_elliptic_curves).
+    """
+    tree = node.id_data
+    prefix = 'nodes["%s"].' % node.name
+    animation = tree.animation_data
+    if animation is not None and animation.action is not None:
+        for fcurve in iter_action_fcurves(animation.action):
+            if fcurve.data_path.startswith(prefix) and fcurve.array_index == index:
+                return fcurve.evaluate(frame)
+    if hasattr(node, "vector"):
+        return node.vector[index]
+    return node.outputs[0].default_value
+
+
+def keyframe_location(bob, location, frame):
+    """Sets the location of an object and keys it at ``frame``."""
+    obj = get_obj(bob)
+    obj.location = location
+    obj.keyframe_insert(data_path="location", frame=frame)
