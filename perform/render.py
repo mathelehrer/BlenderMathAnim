@@ -13,7 +13,7 @@ sys.path.append('/blender_scripts')
 sys.path.append('/blender_scripts/tools')
 
 
-def render_with_skips(start, stop, debug=True, overwrite=True):
+def render_with_skips(start, stop, debug=True, overwrite=True, filepath=RENDER_DIR):
     """
     Take start and stop, and render animation only for animated
     frames. Still frames, are substituted into the output folder
@@ -66,7 +66,7 @@ def render_with_skips(start, stop, debug=True, overwrite=True):
 
     # render animation, skipping the still frames and
     # filling them in as copies of their equivalents
-    filepath = RENDER_DIR
+    os.makedirs(filepath, exist_ok=True)
     scene = bpy.context.scene
 
     scene.render.engine = 'CYCLES'

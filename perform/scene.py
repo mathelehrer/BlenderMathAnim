@@ -14,7 +14,7 @@ from interface import ibpy
 from interface.interface_constants import blender_version
 from perform.render import render_with_skips
 from utils.constants import DEFAULT_SCENE_BUFFER, LIGHT_TYPE, CAMERA_LOCATION, CAMERA_ANGLE, FRAME_RATE, COLORS_SCALED, \
-    DEFAULT_SCENE_DURATION, SAMPLE_COUNT, LIGHT_SAMPLING_THRESHOLD, RESOLUTION_PERCENTAGE, RENDER_DIR, \
+    DEFAULT_SCENE_DURATION, SAMPLE_COUNT, LIGHT_SAMPLING_THRESHOLD, RESOLUTION_PERCENTAGE, RENDER_DIR, FILM_DIR, \
     BLEND_FRM_RATE_DIR, COLOR_NAMES, COLORS, FONT_DIR, ensure_runtime_directories
 from utils.kwargs import get_from_kwargs
 
@@ -23,6 +23,10 @@ OLDSCHOOL = "AcPlus IBM VGA 8x16 Regular"
 class Scene(object):
     def __init__(self, **kwargs):
         ensure_runtime_directories()
+        # name of the video, used for the render directory /filme/<video_name>_<scene_name>/
+        # default: the directory of the script that defines the subclass, without the "video_" prefix
+        self.video_name = kwargs.pop('video_name', None) or self.default_video_name()
+        self.scene_name = ""
         self.kwargs = kwargs;
         self.is_created = False
         try:
@@ -39,6 +43,27 @@ class Scene(object):
             raise Warning('Must define self.sub_scenes in subclass of Scene')
 
         self.set_sub_scene_timing()
+
+    def default_video_name(self):
+        directory = os.path.basename(os.path.dirname(os.path.abspath(inspect.getfile(self.__class__))))
+        if directory.startswith("video_"):
+            directory = directory[len("video_"):]
+        return directory
+
+    def render_directory(self, name=None):
+        """
+        Directory for the rendered images: /filme/<video_name>_<scene_name>/
+        It is created, when it does not exist.
+
+        :param name: name of the sub scene, defaults to the last played sub scene
+        :return: the path of the directory
+        """
+        if name is None:
+            name = self.scene_name
+        folder = self.video_name + "_" + name if name else self.video_name
+        path = os.path.join(FILM_DIR, folder)
+        os.makedirs(path, exist_ok=True)
+        return path
 
     def set_sub_scene_timing(self):
         start = 0
@@ -61,7 +86,9 @@ class Scene(object):
                 subs = self.sub_scenes[name]
                 duration = subs['duration']
 
-        initialize_blender(start,duration,resolution=resolution, **self.kwargs)
+        self.scene_name = name if name else ""
+        initialize_blender(start,duration,resolution=resolution,render_dir=self.render_directory(),
+                           clear_previous=self.is_created, **self.kwargs)
         #initialize_blender(total_duration=self.duration, **self.kwargs)
         if name:
             if hasattr(self, name):
@@ -78,18 +105,72 @@ class Scene(object):
         end = time.time()
         print(end - start," seconds elapsed.")
 
+    def parse_selection(self, selection):
+        """
+        Translate the user's choice into a list of sub scene names.
+
+        Accepted forms (indices refer to the numbered list of sub scenes, ranges are inclusive):
+          ""            -> sub scene 0
+          "3"           -> sub scene 3
+          "0-9", "[0-9]"-> sub scenes 0 to 9
+          "1,4,7-9"     -> sub scenes 1, 4, 7, 8, 9
+          "pixel_lines" -> the sub scene with this name
+
+        :param selection: the string typed by the user
+        :return: list of sub scene names in the order given
+        """
+        names = list(self.sub_scenes.keys())
+        selection = selection.strip().strip("[]").strip()
+        if len(selection) == 0:
+            return names[:1]
+        selected = []
+        for part in selection.split(","):
+            part = part.strip()
+            if part in self.sub_scenes:
+                selected.append(part)
+            elif "-" in part:
+                first, last = (int(bound) for bound in part.split("-", 1))
+                step = 1 if last >= first else -1
+                selected += [names[i] for i in range(first, last + step, step)]
+            else:
+                selected.append(names[int(part)])
+        return selected
+
+    def choose_and_create(self, resolution=[1920, 1080], start_at_zero=True):
+        """
+        List the sub scenes, ask for a selection and create one blender file per selected sub scene.
+        See parse_selection for the accepted input.
+
+        Example (the __main__ block of a video script):
+            example = EllipticCurvesScene()
+            example.choose_and_create(resolution=[1920, 1080], start_at_zero=True)
+        """
+        names = list(self.sub_scenes.keys())
+        for i, name in enumerate(names):
+            print(i, name)
+        if len(names) == 1:
+            selected = names
+        else:
+            print("Usage: <enter> -> 0 | 3 -> sub scene 3 | 0-9 or [0-9] -> sub scenes 0 to 9 (inclusive)"
+                  " | 1,4,7-9 -> a list | pixel_lines -> by name")
+            print("A selection of several sub scenes creates one blender file per sub scene.")
+            selected = self.parse_selection(input("Choose scene(s):"))
+        print("Your choice: ", selected)
+        for name in selected:
+            self.create(name=name, resolution=resolution, start_at_zero=start_at_zero)
+
     def render(self,debug=False,overwrite=False):
         if not self.is_created:
             self.create()
         start = ibpy.start_frame()
         end = ibpy.end_frame()
-        render_with_skips(start, end,debug,overwrite)
+        render_with_skips(start, end,debug,overwrite,filepath=self.render_directory())
 
     def final_render(self,name="",debug=True,overwrite=False):
         self.load(name)
         start = ibpy.start_frame()
         end = ibpy.end_frame()
-        render_with_skips(start, end, debug, overwrite)
+        render_with_skips(start, end, debug, overwrite, filepath=self.render_directory(name))
 
     def save(self,name):
         if not self.is_created:
@@ -118,7 +199,7 @@ def is_scene(obj):
 
 
 #def initialize_blender(total_duration=DEFAULT_SCENE_DURATION, clear_blender=True, vertical=False, **kwargs):
-def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_blender=True, vertical=False, **kwargs):
+def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_blender=True, vertical=False, render_dir=RENDER_DIR, clear_previous=False, **kwargs):
     if clear_blender:  # clear objects and materials
         print('Clearing Blender data')
         for bpy_data_iter in (
@@ -131,6 +212,17 @@ def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_
                 bpy.data.worlds):
             for id_data in bpy_data_iter:
                 bpy_data_iter.remove(id_data)
+    if clear_previous:  # collections and node groups of a sub scene created before in the same session
+        # the default collection "Collection" of the startup file stays, objects are linked to it and
+        # ibpy.un_link(..., collection="Collection") relies on it
+        for collection in list(bpy.context.scene.collection.children_recursive):
+            if collection.name != "Collection":
+                bpy.data.collections.remove(collection)
+        if "Collection" not in bpy.context.scene.collection.children:
+            bpy.context.scene.collection.children.link(
+                bpy.data.collections.get("Collection") or bpy.data.collections.new("Collection"))
+        for node_group in list(bpy.data.node_groups):
+            bpy.data.node_groups.remove(node_group)
 
 
     scn = bpy.context.scene
@@ -157,7 +249,7 @@ def initialize_blender(start,duration, short=False,resolution=[1920,1080],clear_
     space.shading.type = 'RENDERED'  # set the viewport shading
     space.shading.use_compositor='ALWAYS'
 
-    bpy.data.scenes["Scene"].render.filepath = RENDER_DIR
+    bpy.data.scenes["Scene"].render.filepath = os.path.join(render_dir, "")
 
     if vertical:
         scn.render.resolution_x = resolution[1]
